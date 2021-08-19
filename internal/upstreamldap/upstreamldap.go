@@ -18,9 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
@@ -38,6 +37,7 @@ const (
 	groupSearchPageSize                     = uint32(250)
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
+	sAMAccountNameAttribute                 = "sAMAccountName"
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -109,16 +109,11 @@ type ProviderConfig struct {
 
 	// UIDAttributeParsingOverrides are mappings between an attribute name and a way to parse it as a UID when
 	// it comes out of LDAP.
-	UIDAttributeParsingOverrides []AttributeParsingOverride
+	UIDAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
 
 	// GroupNameMappingOverrides are the mappings between an attribute name and a way to parse it as a group
 	// name when it comes out of LDAP.
-	GroupAttributeParsingOverrides []AttributeParsingOverride
-}
-
-type AttributeParsingOverride struct {
-	AttributeName string
-	OverrideFunc  func(entry *ldap.Entry) (string, error)
+	GroupAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -391,15 +386,13 @@ entries:
 		if len(groupEntry.DN) == 0 {
 			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
 		}
-		for _, override := range p.c.GroupAttributeParsingOverrides {
-			if groupAttributeName == override.AttributeName {
-				overrideGroupName, err := override.OverrideFunc(groupEntry)
-				if err != nil {
-					return nil, fmt.Errorf("error finding groups for user %s: %w", userDN, err)
-				}
-				groups = append(groups, overrideGroupName)
-				continue entries
+		if overrideFunc := p.c.GroupAttributeParsingOverrides[groupAttributeName]; overrideFunc != nil {
+			overrideGroupName, err := overrideFunc(groupEntry)
+			if err != nil {
+				return nil, fmt.Errorf("error finding groups for user %s: %w", userDN, err)
 			}
+			groups = append(groups, overrideGroupName)
+			continue entries
 		}
 		// if none of the overrides matched, use the default behavior (no mapping)
 		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
@@ -638,10 +631,8 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 		)
 	}
 
-	for _, override := range p.c.UIDAttributeParsingOverrides {
-		if attributeName == override.AttributeName {
-			return override.OverrideFunc(entry)
-		}
+	if overrideFunc := p.c.UIDAttributeParsingOverrides[attributeName]; overrideFunc != nil {
+		return overrideFunc(entry)
 	}
 
 	return base64.RawURLEncoding.EncodeToString(attributeValue), nil
@@ -710,7 +701,6 @@ func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
 }
 
 func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
-	sAMAccountNameAttribute := "sAMAccountName"
 	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
 
 	if len(sAMAccountNameAttributeValues) != 1 {
@@ -734,8 +724,10 @@ func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
 	return sAMAccountName + "@" + domain, nil
 }
 
+var domainComponentsRegexp = regexp.MustCompile(",DC=|,dc=")
+
 func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
-	domainComponents := regexp.MustCompile(",DC=|,dc=").Split(distinguishedName, -1)
+	domainComponents := domainComponentsRegexp.Split(distinguishedName, -1)
 	if len(domainComponents) == 1 {
 		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
 	}

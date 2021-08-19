@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-ldap/ldap/v3"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -313,11 +315,11 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
 		Dialer:                       c.ldapDialer,
-		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 	}
 
 	if spec.GroupSearch.Attributes.GroupName == "" {
-		config.GroupAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{{AttributeName: defaultActiveDirectoryGroupNameAttributeName, OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}}
+		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){defaultActiveDirectoryGroupNameAttributeName: upstreamldap.GroupSAMAccountNameWithDomainSuffix}
 	}
 
 	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)

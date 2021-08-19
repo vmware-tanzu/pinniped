@@ -511,10 +511,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.UIDAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "objectGUID",
-					OverrideFunc:  MicrosoftUUIDFromBinary("objectGUID"),
-				}}
+				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
+					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
+				}
 				p.UserSearch.UIDAttribute = "objectGUID"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -547,10 +546,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.UIDAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "objectGUID",
-					OverrideFunc:  MicrosoftUUIDFromBinary("objectGUID"),
-				}}
+				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
+					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
+				}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -570,65 +568,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "sAMAccountName",
-					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
-				}}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{"sAMAccountName"}
-				}), expectedGroupSearchPageSize).
-					Return(&ldap.SearchResult{
-						Entries: []*ldap.Entry{
-							{
-								DN: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
-								},
-							},
-							{
-								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
-								},
-							},
-						},
-						Referrals: []string{}, // note that we are not following referrals at this time
-						Controls:  []ldap.Control{},
-					}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Groups = []string{"Animals@activedirectory.mycompany.example.com", "Mammals@activedirectory.mycompany.example.com"}
-			}),
-		},
-		{
-			name: "only the first group override for a given attribute name is applied",
-			// the choice to only run the first is somewhat arbitrary and likely irrelevant since we only
-			// have one group override at the moment...
-			// And as soon as we have starlark attribute mapping it will be obsolete. But this test
-			// ensures that we
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{
-					{
-						AttributeName: "sAMAccountName",
-						OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
-					},
-					{
-						AttributeName: "sAMAccountName",
-						OverrideFunc: func(entry *ldap.Entry) (string, error) {
-							return "override-group-name", nil
-						},
-					},
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
 				}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -670,10 +611,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "sAMAccountName",
-					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
-				}}
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -709,10 +649,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "sAMAccountName",
-					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
-				}}
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -741,10 +680,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
-					AttributeName: "sAMAccountName",
-					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
-				}}
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)

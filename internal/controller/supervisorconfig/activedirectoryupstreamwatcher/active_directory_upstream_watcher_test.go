@@ -218,7 +218,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Filter:             testGroupSearchFilter,
 			GroupNameAttribute: testGroupNameAttrName,
 		},
-		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 	}
 
 	// Make a copy with targeted changes.
@@ -533,7 +533,62 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInConfigCondition(1234),
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "no TLS configuration provided",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "sAMAccountName explicitly provided as group name attribute does not add an override",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.TLS = nil
+				upstream.Spec.GroupSearch.Attributes.GroupName = "sAMAccountName"
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           nil,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: "sAMAccountName",
+					},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -591,7 +646,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -649,7 +704,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
@@ -706,7 +761,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -830,7 +885,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -950,7 +1005,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1000,7 +1055,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1190,8 +1245,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))",
 						GroupNameAttribute: "sAMAccountName",
 					},
-					UIDAttributeParsingOverrides:   []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
-					GroupAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "sAMAccountName", OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}},
+					UIDAttributeParsingOverrides:   map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					GroupAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"sAMAccountName": upstreamldap.GroupSAMAccountNameWithDomainSuffix},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1241,7 +1296,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1290,7 +1345,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1339,7 +1394,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1580,25 +1635,25 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				expectedUIDAttributeParsingOverrides := copyOfExpectedValueForResultingCache.UIDAttributeParsingOverrides
 				actualConfig := actualIDP.GetConfig()
 				actualUIDAttributeParsingOverrides := actualConfig.UIDAttributeParsingOverrides
-				copyOfExpectedValueForResultingCache.UIDAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{}
-				actualConfig.UIDAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{}
+				copyOfExpectedValueForResultingCache.UIDAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){}
+				actualConfig.UIDAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){}
 
 				require.Equal(t, len(expectedUIDAttributeParsingOverrides), len(actualUIDAttributeParsingOverrides))
-				for i := range expectedUIDAttributeParsingOverrides {
-					require.Equal(t, expectedUIDAttributeParsingOverrides[i].AttributeName, actualUIDAttributeParsingOverrides[i].AttributeName)
-					require.Equal(t, reflect.ValueOf(expectedUIDAttributeParsingOverrides[i].OverrideFunc).Pointer(), reflect.ValueOf(actualUIDAttributeParsingOverrides[i].OverrideFunc).Pointer())
+				for k, v := range expectedUIDAttributeParsingOverrides {
+					require.NotNil(t, actualUIDAttributeParsingOverrides[k])
+					require.Equal(t, reflect.ValueOf(v).Pointer(), reflect.ValueOf(actualUIDAttributeParsingOverrides[k]).Pointer())
 				}
 
 				// function equality is awkward. Do the check for equality separately from the rest of the config.
 				expectedGroupAttributeParsingOverrides := copyOfExpectedValueForResultingCache.GroupAttributeParsingOverrides
 				actualGroupAttributeParsingOverrides := actualConfig.GroupAttributeParsingOverrides
-				copyOfExpectedValueForResultingCache.GroupAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{}
-				actualConfig.GroupAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{}
+				copyOfExpectedValueForResultingCache.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){}
+				actualConfig.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){}
 
 				require.Equal(t, len(expectedGroupAttributeParsingOverrides), len(actualGroupAttributeParsingOverrides))
-				for i := range expectedGroupAttributeParsingOverrides {
-					require.Equal(t, expectedGroupAttributeParsingOverrides[i].AttributeName, actualGroupAttributeParsingOverrides[i].AttributeName)
-					require.Equal(t, reflect.ValueOf(expectedGroupAttributeParsingOverrides[i].OverrideFunc).Pointer(), reflect.ValueOf(actualGroupAttributeParsingOverrides[i].OverrideFunc).Pointer())
+				for k, v := range expectedGroupAttributeParsingOverrides {
+					require.NotNil(t, actualGroupAttributeParsingOverrides[k])
+					require.Equal(t, reflect.ValueOf(v).Pointer(), reflect.ValueOf(actualGroupAttributeParsingOverrides[k]).Pointer())
 				}
 
 				require.Equal(t, copyOfExpectedValueForResultingCache, actualConfig)

@@ -47,9 +47,9 @@ type ActiveDirectoryIdentityProviderBind struct {
 
 type ActiveDirectoryIdentityProviderUserSearchAttributes struct {
 	// Username specifies the name of the attribute in Active Directory entry whose value shall become the username
-    // of the user after a successful authentication. This would typically be the same attribute name used in
-    // Optional, when empty this defaults to "userPrincipalName".
-    // +optional
+	// of the user after a successful authentication.
+	// Optional, when empty this defaults to "userPrincipalName".
+	// +optional
 	Username string `json:"username,omitempty"`
 
 	// UID specifies the name of the attribute in the ActiveDirectory entry which whose value shall be used to uniquely
@@ -108,6 +108,9 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// Optional. When not specified, the default will act as if the filter were specified as
 	// "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})".
 	// This searches nested groups by default.
+	// Note that nested group search can be slow for some Active Directory servers. To disable it,
+	// you can set the filter to
+	// "(&(objectClass=group)(member={})"
 	// +optional
 	Filter string `json:"filter,omitempty"`
 

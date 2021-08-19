@@ -579,7 +579,7 @@ func (m *mockProvider) UserInfo(_ context.Context, tokenSource oauth2.TokenSourc
 	return m.userInfo, m.userInfoErr
 }
 
-func forceUserInfoWithClaims(subject string, claims string) *oidc.UserInfo { //nolint:unparam
+func forceUserInfoWithClaims(subject string, claims string) *oidc.UserInfo {
 	userInfo := &oidc.UserInfo{Subject: subject}
 
 	// this is some dark magic to set a private field

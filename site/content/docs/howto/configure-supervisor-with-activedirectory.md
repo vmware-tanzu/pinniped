@@ -117,7 +117,7 @@ spec:
       # Specifies the name of the attribute in the LDAP entry whose
       # value shall be used to uniquely identify the user within this
       # LDAP provider after a successful authentication.
-      uid: "objectSid"
+      uid: "objectGUID"
 
   # Specify how to search for the group membership of an end-user during login.
   groupSearch:

@@ -20,7 +20,7 @@ menu:
 
 ### `spec.userSearch.attributes.username` 
 
-*Default Behavior*: The `samAccountName` attribute will become the user's Kubernetes username. 
+*Default Behavior*: The `userPrincipalName` attribute will become the user's Kubernetes username. 
 
 ### `spec.userSearch.attributes.uid` 
 *Default Behavior*: The `objectGUID` attribute will be used to uniquely identify users. 
@@ -28,14 +28,14 @@ menu:
 ### `spec.userSearch.filter`
 *Default Behavior*: 
 ```
-"(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={}))(sAMAccountType=805306368))"
+"(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={})(userPrincipalName={}))(sAMAccountType=805306368))"
 ```
 
 Requires the following of the Active Directory entry of the user specified:
 * is a person.
 * is not a computer.
 * is not shown in advanced view only (which would likely mean its a system created service account with advanced permissions).
-* either the `sAMAccountName` or the `mail` attribute matches the input username.
+* either the `sAMAccountName`, the `userPrincipalName`, or the `mail` attribute matches the input username.
 * the `sAMAccountType` is for a normal user account.
 
 ### `spec.groupSearch.base`
@@ -45,7 +45,7 @@ Requires the following of the Active Directory entry of the user specified:
 *Implications*: Searches your entire domain for groups. It may make sense to specify a subtree as a search base if you wish to exclude some groups for security reasons or to make searches faster.
 
 ### `spec.groupSearch.attributes.groupName`
-*Default Behavior*: The `sAMAccountName` attributes of the groups will become their groups in Kubernetes.
+*Default Behavior*: The attribute that will become the user's groups in Kubernetes will look like `sAMAccountName@domain` (where domain is constructed from the domain components of the group).
 
 ### `spec.groupSearch.filter` 
 

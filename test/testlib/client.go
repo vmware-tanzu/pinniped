@@ -137,13 +137,19 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 	return config
 }
 
+func NewKubeclientOptions(t *testing.T, config *rest.Config) []kubeclient.Option {
+	t.Helper()
+
+	return []kubeclient.Option{
+		kubeclient.WithConfig(config),
+		kubeclient.WithMiddleware(groupsuffix.New(IntegrationEnv(t).APIGroupSuffix)),
+	}
+}
+
 func NewKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 	t.Helper()
-	env := IntegrationEnv(t)
-	client, err := kubeclient.New(
-		kubeclient.WithConfig(config),
-		kubeclient.WithMiddleware(groupsuffix.New(env.APIGroupSuffix)),
-	)
+
+	client, err := kubeclient.New(NewKubeclientOptions(t, config)...)
 	require.NoError(t, err)
 	return client
 }
@@ -500,6 +506,30 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 		requireEventually.Equal(corev1.PodRunning, result.Status.Phase)
 	}, podCreateTimeout, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
 	return result
+}
+
+func CreateNamespace(ctx context.Context, t *testing.T, name string) *corev1.Namespace {
+	t.Helper()
+
+	adminClient := NewKubernetesClientset(t)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: name + "-integration-test-"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		t.Logf("cleaning up test namespace %s", namespace.Name)
+		require.NoError(t, adminClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{}))
+	})
+
+	return namespace
 }
 
 func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {

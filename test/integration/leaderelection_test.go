@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -199,21 +198,23 @@ func checkOnlyLeaderCanWrite(ctx context.Context, t *testing.T, namespace *corev
 
 	lease := waitForIdentity(ctx, t, namespace, leaseName, clients)
 
-	var leaders, nonLeaders int
-	for identity, err := range runWriteRequests(ctx, clients) {
-		identity, err := identity, err
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		var leaders, nonLeaders int
+		for identity, err := range runWriteRequests(ctx, clients) {
+			identity, err := identity, err
 
-		if identity == *lease.Spec.HolderIdentity {
-			leaders++
-			assert.NoError(t, err, "leader client %q should have no error", identity)
-		} else {
-			nonLeaders++
-			assert.Error(t, err, "non leader client %q should have write error but it was nil", identity)
-			assert.True(t, errors.Is(err, leaderelection.ErrNotLeader), "non leader client %q should have write error: %v", identity, err)
+			if identity == *lease.Spec.HolderIdentity {
+				leaders++
+				requireEventually.NoError(err, "leader client %q should have no error", identity)
+			} else {
+				nonLeaders++
+				requireEventually.Error(err, "non leader client %q should have write error but it was nil", identity)
+				requireEventually.True(errors.Is(err, leaderelection.ErrNotLeader), "non leader client %q should have write error: %v", identity, err)
+			}
 		}
-	}
-	assert.Equal(t, 1, leaders, "did not see leader")
-	assert.Equal(t, len(clients)-1, nonLeaders, "did not see non-leader")
+		requireEventually.Equal(1, leaders, "did not see leader")
+		requireEventually.Equal(len(clients)-1, nonLeaders, "did not see non-leader")
+	}, time.Minute, time.Second)
 
 	return lease
 }
@@ -225,7 +226,6 @@ func forceTransition(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 	var startTime metav1.MicroTime
 
 	errRetry := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		leaderClient := pickCurrentLeaderClient(ctx, t, namespace, leaseName, clients)
 		startLease := waitForIdentity(ctx, t, namespace, leaseName, clients)
 		startTransitions = *startLease.Spec.LeaseTransitions
 		startTime = *startLease.Spec.AcquireTime
@@ -233,7 +233,8 @@ func forceTransition(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 		startLease = startLease.DeepCopy()
 		startLease.Spec.HolderIdentity = pointer.String("some-other-client" + rand.String(5))
 
-		_, err := leaderClient.Kubernetes.CoordinationV1().Leases(namespace.Name).Update(ctx, startLease, metav1.UpdateOptions{})
+		_, err := pickCurrentLeaderClient(ctx, t, namespace, leaseName, clients).
+			Kubernetes.CoordinationV1().Leases(namespace.Name).Update(ctx, startLease, metav1.UpdateOptions{})
 		return err
 	})
 	require.NoError(t, errRetry)

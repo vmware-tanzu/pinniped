@@ -250,8 +250,18 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 }
 
 func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error) error {
-	errWithStack := errors.WithStack(err)
-	plog.Info("authorize response error", oidc.FositeErrorForLog(errWithStack)...)
+	if plog.Enabled(plog.LevelTrace) {
+		// When trace level logging is enabled, include the stack trace in the log message.
+		keysAndValues := oidc.FositeErrorForLog(err)
+		errWithStack := errors.WithStack(err)
+		keysAndValues = append(keysAndValues, "errWithStack")
+		// klog always prints error values using %s, which does not include stack traces,
+		// so convert the error to a string which includes the stack trace here.
+		keysAndValues = append(keysAndValues, fmt.Sprintf("%+v", errWithStack))
+		plog.Trace("authorize response error", keysAndValues...)
+	} else {
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+	}
 	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 	return nil

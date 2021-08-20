@@ -32,7 +32,7 @@ require (
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.22.0
-	k8s.io/apimachinery v0.22.0
+	k8s.io/apimachinery v0.22.1
 	k8s.io/apiserver v0.22.0
 	k8s.io/client-go v0.22.0
 	k8s.io/component-base v0.22.0

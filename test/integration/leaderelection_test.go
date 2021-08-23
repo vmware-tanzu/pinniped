@@ -6,7 +6,6 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
@@ -40,7 +39,7 @@ func TestLeaderElection(t *testing.T) {
 
 	namespace := testlib.CreateNamespace(ctx, t, leaseName)
 
-	clients := leaderElectionClients(t, namespace, leaseName)
+	clients, cancels := leaderElectionClients(t, namespace, leaseName)
 
 	// the tests below are order dependant to some degree and definitely cannot be run in parallel
 
@@ -68,9 +67,52 @@ func TestLeaderElection(t *testing.T) {
 		lease := checkOnlyLeaderCanWrite(ctx, t, namespace, leaseName, clients)
 		logLease(t, lease)
 	})
+
+	t.Run("stop current leader", func(t *testing.T) {
+		startLease := waitForIdentity(ctx, t, namespace, leaseName, clients)
+		startTransitions := *startLease.Spec.LeaseTransitions
+		startTime := *startLease.Spec.AcquireTime
+		startLeaderIdentity := *startLease.Spec.HolderIdentity
+
+		leaderClient := clients[startLeaderIdentity]
+
+		err := runWriteRequest(ctx, leaderClient)
+		require.NoError(t, err)
+
+		// emulate stopping the leader process
+		cancels[startLeaderIdentity]()
+		delete(clients, startLeaderIdentity)
+
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			err := runWriteRequest(ctx, leaderClient)
+			requireEventually.ErrorIs(err, leaderelection.ErrNotLeader, "leader should no longer be able to write")
+		}, time.Minute, time.Second)
+
+		if len(clients) > 0 {
+			finalLease := waitForIdentity(ctx, t, namespace, leaseName, clients)
+			finalTransitions := *finalLease.Spec.LeaseTransitions
+			finalTime := *finalLease.Spec.AcquireTime
+			finalLeaderIdentity := *finalLease.Spec.HolderIdentity
+
+			require.Greater(t, finalTransitions, startTransitions)
+			require.Greater(t, finalTime.UnixNano(), startTime.UnixNano())
+			require.NotEqual(t, startLeaderIdentity, finalLeaderIdentity, "should have elected new leader")
+
+			logLease(t, finalLease)
+		}
+	})
+
+	t.Run("sanity check write prevention after stopping leader", func(t *testing.T) {
+		if len(clients) == 0 {
+			t.Skip("no clients left to check")
+		}
+
+		lease := checkOnlyLeaderCanWrite(ctx, t, namespace, leaseName, clients)
+		logLease(t, lease)
+	})
 }
 
-func leaderElectionClient(t *testing.T, namespace *corev1.Namespace, leaseName, identity string) *kubeclient.Client {
+func leaderElectionClient(t *testing.T, namespace *corev1.Namespace, leaseName, identity string) (*kubeclient.Client, context.CancelFunc) {
 	t.Helper()
 
 	podInfo := &downward.PodInfo{
@@ -119,23 +161,24 @@ func leaderElectionClient(t *testing.T, namespace *corev1.Namespace, leaseName, 
 		leaderCancel()
 	}()
 
-	return client
+	return client, controllerCancel
 }
 
-func leaderElectionClients(t *testing.T, namespace *corev1.Namespace, leaseName string) map[string]*kubeclient.Client {
+func leaderElectionClients(t *testing.T, namespace *corev1.Namespace, leaseName string) (map[string]*kubeclient.Client, map[string]context.CancelFunc) {
 	t.Helper()
 
 	count := rand.IntnRange(1, 6)
-	out := make(map[string]*kubeclient.Client, count)
+	clients := make(map[string]*kubeclient.Client, count)
+	cancels := make(map[string]context.CancelFunc, count)
 
 	for i := 0; i < count; i++ {
 		identity := "leader-election-client-" + rand.String(5)
-		out[identity] = leaderElectionClient(t, namespace, leaseName, identity)
+		clients[identity], cancels[identity] = leaderElectionClient(t, namespace, leaseName, identity)
 	}
 
-	t.Logf("running leader election client tests with %d clients: %v", len(out), sets.StringKeySet(out).List())
+	t.Logf("running leader election client tests with %d clients: %v", len(clients), sets.StringKeySet(clients).List())
 
-	return out
+	return clients, cancels
 }
 
 func pickRandomLeaderElectionClient(clients map[string]*kubeclient.Client) *kubeclient.Client {
@@ -209,7 +252,7 @@ func checkOnlyLeaderCanWrite(ctx context.Context, t *testing.T, namespace *corev
 			} else {
 				nonLeaders++
 				requireEventually.Error(err, "non leader client %q should have write error but it was nil", identity)
-				requireEventually.True(errors.Is(err, leaderelection.ErrNotLeader), "non leader client %q should have write error: %v", identity, err)
+				requireEventually.ErrorIs(err, leaderelection.ErrNotLeader, "non leader client %q should have write error: %v", identity, err)
 			}
 		}
 		requireEventually.Equal(1, leaders, "did not see leader")

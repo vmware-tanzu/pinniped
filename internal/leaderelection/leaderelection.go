@@ -11,6 +11,7 @@ import (
 	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
@@ -43,47 +44,12 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 		return nil, nil, fmt.Errorf("could not create internal client for leader election: %w", err)
 	}
 
-	isLeader := atomic.NewBool(false)
+	isLeader := &isLeaderTracker{tracker: atomic.NewBool(false)}
 
 	identity := podInfo.Name
 	leaseName := deployment.Name
 
-	leaderElectionConfig := leaderelection.LeaderElectionConfig{
-		Lock: &resourcelock.LeaseLock{
-			LeaseMeta: metav1.ObjectMeta{
-				Namespace: podInfo.Namespace,
-				Name:      leaseName,
-			},
-			Client: internalClient.Kubernetes.CoordinationV1(),
-			LockConfig: resourcelock.ResourceLockConfig{
-				Identity: identity,
-			},
-		},
-		ReleaseOnCancel: true, // semantics for correct release handled by controllersWithLeaderElector below
-		LeaseDuration:   60 * time.Second,
-		RenewDeadline:   15 * time.Second,
-		RetryPeriod:     5 * time.Second,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(_ context.Context) {
-				plog.Debug("leader gained", "identity", identity)
-				isLeader.Store(true)
-			},
-			OnStoppedLeading: func() {
-				plog.Debug("leader lost", "identity", identity)
-				isLeader.Store(false)
-			},
-			OnNewLeader: func(newLeader string) {
-				if newLeader == identity {
-					return
-				}
-				plog.Debug("new leader elected", "newLeader", newLeader)
-			},
-		},
-		Name: leaseName,
-		// this must be set to nil because we do not want to associate /healthz with a failed
-		// leader election renewal as we do not want to exit the process if the leader changes.
-		WatchDog: nil,
-	}
+	leaderElectionConfig := newLeaderElectionConfig(podInfo.Namespace, leaseName, identity, internalClient.Kubernetes, isLeader)
 
 	// validate our config here before we rely on it being functioning below
 	if _, err := leaderelection.NewLeaderElector(leaderElectionConfig); err != nil {
@@ -103,7 +69,7 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 			return
 		}
 
-		if isLeader.Load() { // only perform "expensive" test for writes
+		if isLeader.canWrite() { // only perform "expensive" test for writes
 			return // we are currently the leader, all actions are permitted
 		}
 
@@ -127,7 +93,11 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 		leaderElectorCtx, leaderElectorCancel := context.WithCancel(context.Background()) // purposefully detached context
 
 		go func() {
-			controllers(ctx)      // run the controllers with the global context, this blocks until the context is canceled
+			controllers(ctx) // run the controllers with the global context, this blocks until the context is canceled
+
+			if isLeader.stop() { // remove our in-memory leader status before we release the lock
+				plog.Debug("leader lost", "identity", identity, "reason", "controller stop")
+			}
 			leaderElectorCancel() // once the controllers have all stopped, tell the leader elector to release the lock
 		}()
 
@@ -147,4 +117,123 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 	}
 
 	return client, controllersWithLeaderElector, nil
+}
+
+func newLeaderElectionConfig(namespace, leaseName, identity string, internalClient kubernetes.Interface, isLeader *isLeaderTracker) leaderelection.LeaderElectionConfig {
+	return leaderelection.LeaderElectionConfig{
+		Lock: &releaseLock{
+			delegate: &resourcelock.LeaseLock{
+				LeaseMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      leaseName,
+				},
+				Client: internalClient.CoordinationV1(),
+				LockConfig: resourcelock.ResourceLockConfig{
+					Identity: identity,
+				},
+			},
+			isLeader: isLeader,
+			identity: identity,
+		},
+		ReleaseOnCancel: true, // semantics for correct release handled by releaseLock.Update and controllersWithLeaderElector below
+		LeaseDuration:   60 * time.Second,
+		RenewDeadline:   15 * time.Second,
+		RetryPeriod:     5 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(_ context.Context) {
+				plog.Debug("leader gained", "identity", identity)
+				isLeader.start()
+			},
+			OnStoppedLeading: func() {
+				if isLeader.stop() { // barring changes to client-go, this branch should only be taken on a panic
+					plog.Debug("leader lost", "identity", identity, "reason", "on stop")
+				}
+			},
+			OnNewLeader: func(newLeader string) {
+				if newLeader == identity {
+					return
+				}
+				plog.Debug("new leader elected", "newLeader", newLeader)
+			},
+		},
+		Name: leaseName,
+		// this must be set to nil because we do not want to associate /healthz with a failed
+		// leader election renewal as we do not want to exit the process if the leader changes.
+		WatchDog: nil,
+	}
+}
+
+type isLeaderTracker struct {
+	tracker *atomic.Bool
+}
+
+func (t *isLeaderTracker) canWrite() bool {
+	return t.tracker.Load()
+}
+
+func (t *isLeaderTracker) start() {
+	t.tracker.Store(true)
+}
+
+func (t *isLeaderTracker) stop() (didStop bool) {
+	return t.tracker.CAS(true, false)
+}
+
+// note that resourcelock.Interface is an internal, unstable interface.
+// so while it would be convenient to embed the implementation within
+// this struct, we need to make sure our Update override is used and
+// that no other methods are added that change the meaning of the
+// interface.  thus we must have ~20 lines of boilerplate to have the
+// compiler ensure that we keep up with this interface over time.
+var _ resourcelock.Interface = &releaseLock{}
+
+// releaseLock works around a limitation of the client-go leader election code:
+// there is no "BeforeRelease" callback.  By the time the "OnStoppedLeading"
+// callback runs (this callback is meant to always run at the very end since it
+// normally terminates the process), we have already released the lock.  This
+// creates a race condition in between the release call (the Update func) and the
+// stop callback where a different client could acquire the lease while we still
+// believe that we hold the lease in our in-memory leader status.
+type releaseLock struct {
+	delegate resourcelock.Interface // do not embed this, see comment above
+	isLeader *isLeaderTracker
+	identity string
+}
+
+func (r *releaseLock) Update(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+	// setting an empty HolderIdentity on update means that the client is releasing the lock.
+	// thus we need to make sure to update our in-memory leader status before this occurs
+	// since other clients could immediately acquire the lock.  note that even if the Update
+	// call below fails, this client has already chosen to release the lock and thus we must
+	// update the in-memory status regardless of it we succeed in making the Kube API call.
+	// note that while resourcelock.Interface is an unstable interface, the meaning of an
+	// empty HolderIdentity is encoded into the Kube API and thus we can safely rely on that
+	// not changing (since changing that would break older clients).
+	if len(ler.HolderIdentity) == 0 && r.isLeader.stop() {
+		plog.Debug("leader lost", "identity", r.identity, "reason", "release")
+	}
+
+	return r.delegate.Update(ctx, ler)
+}
+
+// boilerplate passthrough methods below
+
+func (r *releaseLock) Get(ctx context.Context) (*resourcelock.LeaderElectionRecord, []byte, error) {
+	return r.delegate.Get(ctx)
+}
+
+func (r *releaseLock) Create(ctx context.Context, ler resourcelock.LeaderElectionRecord) error {
+	return r.delegate.Create(ctx, ler)
+}
+
+func (r *releaseLock) RecordEvent(s string) {
+	r.delegate.RecordEvent(s)
+}
+
+func (r *releaseLock) Identity() string {
+	return r.delegate.Identity()
+}
+
+func (r *releaseLock) Describe() string {
+	return r.delegate.Describe()
 }

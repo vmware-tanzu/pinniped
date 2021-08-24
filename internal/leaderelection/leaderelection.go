@@ -136,9 +136,13 @@ func newLeaderElectionConfig(namespace, leaseName, identity string, internalClie
 			identity: identity,
 		},
 		ReleaseOnCancel: true, // semantics for correct release handled by releaseLock.Update and controllersWithLeaderElector below
-		LeaseDuration:   60 * time.Second,
-		RenewDeadline:   15 * time.Second,
-		RetryPeriod:     5 * time.Second,
+
+		// Copied from defaults used in OpenShift since we want the same semantics:
+		// https://github.com/openshift/library-go/blob/e14e06ba8d476429b10cc6f6c0fcfe6ea4f2c591/pkg/config/leaderelection/leaderelection.go#L87-L109
+		LeaseDuration: 137 * time.Second,
+		RenewDeadline: 107 * time.Second,
+		RetryPeriod:   26 * time.Second,
+
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
 				plog.Debug("leader gained", "identity", identity)

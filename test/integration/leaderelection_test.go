@@ -205,7 +205,7 @@ func waitForIdentity(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 		}
 		out = lease
 		return lease.Spec.HolderIdentity != nil && identities.Has(*lease.Spec.HolderIdentity), nil
-	}, 3*time.Minute, time.Second)
+	}, 5*time.Minute, time.Second)
 
 	return out
 }

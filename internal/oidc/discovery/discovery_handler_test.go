@@ -4,13 +4,13 @@
 package discovery
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 )
 
@@ -24,7 +24,7 @@ func TestDiscovery(t *testing.T) {
 
 		wantStatus      int
 		wantContentType string
-		wantBodyJSON    interface{}
+		wantBodyJSON    string
 		wantBodyString  string
 	}{
 		{
@@ -34,22 +34,24 @@ func TestDiscovery(t *testing.T) {
 			path:            "/some/path" + oidc.WellKnownEndpointPath,
 			wantStatus:      http.StatusOK,
 			wantContentType: "application/json",
-			wantBodyJSON: &Metadata{
-				Issuer:                "https://some-issuer.com/some/path",
-				AuthorizationEndpoint: "https://some-issuer.com/some/path/oauth2/authorize",
-				TokenEndpoint:         "https://some-issuer.com/some/path/oauth2/token",
-				JWKSURI:               "https://some-issuer.com/some/path/jwks.json",
-				SupervisorDiscovery: SupervisorDiscoveryMetadataV1Alpha1{
-					PinnipedIDPsEndpoint: "https://some-issuer.com/some/path/v1alpha1/pinniped_identity_providers",
-				},
-				ResponseTypesSupported:            []string{"code"},
-				ResponseModesSupported:            []string{"query", "form_post"},
-				SubjectTypesSupported:             []string{"public"},
-				IDTokenSigningAlgValuesSupported:  []string{"ES256"},
-				TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
-				ScopesSupported:                   []string{"openid", "offline"},
-				ClaimsSupported:                   []string{"groups"},
-			},
+			wantBodyJSON: here.Doc(`
+			{
+				"issuer": "https://some-issuer.com/some/path",
+				"authorization_endpoint": "https://some-issuer.com/some/path/oauth2/authorize",
+				"token_endpoint": "https://some-issuer.com/some/path/oauth2/token",
+				"jwks_uri": "https://some-issuer.com/some/path/jwks.json",
+				"response_types_supported": ["code"],
+				"response_modes_supported": ["query", "form_post"],
+				"subject_types_supported": ["public"],
+				"id_token_signing_alg_values_supported": ["ES256"],
+				"token_endpoint_auth_methods_supported": ["client_secret_basic"],
+				"scopes_supported": ["openid", "offline"],
+				"claims_supported": ["groups"],
+				"discovery.supervisor.pinniped.dev/v1alpha1": {
+					"pinniped_identity_providers_endpoint": "https://some-issuer.com/some/path/v1alpha1/pinniped_identity_providers"
+				}
+			}
+			`),
 		},
 		{
 			name:            "bad method",
@@ -73,10 +75,8 @@ func TestDiscovery(t *testing.T) {
 
 			require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
 
-			if test.wantBodyJSON != nil {
-				wantJSON, err := json.Marshal(test.wantBodyJSON)
-				require.NoError(t, err)
-				require.JSONEq(t, string(wantJSON), rsp.Body.String())
+			if test.wantBodyJSON != "" {
+				require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
 			}
 
 			if test.wantBodyString != "" {

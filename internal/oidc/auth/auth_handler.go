@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
+	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
@@ -26,11 +27,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
-)
-
-const (
-	CustomUsernameHeaderName = "Pinniped-Username"
-	CustomPasswordHeaderName = "Pinniped-Password" //nolint:gosec // this is not a credential
 )
 
 func NewHandler(
@@ -59,7 +55,11 @@ func NewHandler(
 		}
 
 		if oidcUpstream != nil {
-			return handleAuthRequestForOIDCUpstream(r, w,
+			if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 {
+				// The client set a username header, so they are trying to log in with a username/password.
+				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
+			}
+			return handleAuthRequestForOIDCUpstreamAuthcodeGrant(r, w,
 				oauthHelperWithoutStorage,
 				generateCSRF, generateNonce, generatePKCE,
 				oidcUpstream,
@@ -86,13 +86,8 @@ func handleAuthRequestForLDAPUpstream(
 		return nil
 	}
 
-	username := r.Header.Get(CustomUsernameHeaderName)
-	password := r.Header.Get(CustomPasswordHeaderName)
-	if username == "" || password == "" {
-		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	if !hadUsernamePasswordValues {
 		return nil
 	}
 
@@ -102,33 +97,65 @@ func handleAuthRequestForLDAPUpstream(
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
 	}
 	if !authenticated {
-		plog.Debug("failed upstream LDAP authentication", "upstreamName", ldapUpstream.GetName())
-		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-		err = errors.WithStack(fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."))
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return nil
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."))
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(
-		downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse),
-		authenticateResponse.User.GetName(),
-		authenticateResponse.User.GetGroups(),
-	)
+	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
+	username = authenticateResponse.User.GetName()
+	groups := authenticateResponse.User.GetGroups()
 
-	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
-	if err != nil {
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return nil
-	}
-
-	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
-
-	return nil
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
 }
 
-func handleAuthRequestForOIDCUpstream(
+func handleAuthRequestForOIDCUpstreamPasswordGrant(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+) error {
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
+	if !created {
+		return nil
+	}
+
+	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	if !hadUsernamePasswordValues {
+		return nil
+	}
+
+	if !oidcUpstream.AllowsPasswordGrant() {
+		// Return a user-friendly error for this case which is entirely within our control.
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHint(
+				"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."))
+	}
+
+	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
+	if err != nil {
+		// Upstream password grant errors can be generic errors (e.g. a network failure) or can be oauth2.RetrieveError errors
+		// which represent the http response from the upstream server. These could be a 5XX or some other unexpected error,
+		// or could be a 400 with a JSON body as described by https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+		// which notes that wrong resource owner credentials should result in an "invalid_grant" error.
+		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
+		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
+		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithDebug(err.Error())) // WithDebug hides the error from the client
+	}
+
+	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	if err != nil {
+		// Return a user-friendly error for this case which is entirely within our control.
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()),
+		)
+	}
+
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
+}
+
+func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
@@ -155,9 +182,7 @@ func handleAuthRequestForOIDCUpstream(
 		},
 	})
 	if err != nil {
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return nil
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
 	}
 
 	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
@@ -224,11 +249,60 @@ func handleAuthRequestForOIDCUpstream(
 	return nil
 }
 
+func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error) error {
+	if plog.Enabled(plog.LevelTrace) {
+		// When trace level logging is enabled, include the stack trace in the log message.
+		keysAndValues := oidc.FositeErrorForLog(err)
+		errWithStack := errors.WithStack(err)
+		keysAndValues = append(keysAndValues, "errWithStack")
+		// klog always prints error values using %s, which does not include stack traces,
+		// so convert the error to a string which includes the stack trace here.
+		keysAndValues = append(keysAndValues, fmt.Sprintf("%+v", errWithStack))
+		plog.Trace("authorize response error", keysAndValues...)
+	} else {
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+	}
+	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+	return nil
+}
+
+func makeDownstreamSessionAndReturnAuthcodeRedirect(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	authorizeRequester fosite.AuthorizeRequester,
+	subject string,
+	username string,
+	groups []string,
+) error {
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
+
+	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+	if err != nil {
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
+	}
+
+	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+
+	return nil
+}
+
+func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
+	username := r.Header.Get(supervisoroidc.AuthorizeUsernameHeaderName)
+	password := r.Header.Get(supervisoroidc.AuthorizePasswordHeaderName)
+	if username == "" || password == "" {
+		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
+		return "", "", false
+	}
+	return username, password, true
+}
+
 func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider) (fosite.AuthorizeRequester, bool) {
 	authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 	if err != nil {
-		plog.Info("authorize request error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
 		return nil, false
 	}
 

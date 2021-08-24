@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/oidc"
 )
 
@@ -41,28 +42,23 @@ type Metadata struct {
 
 	// vvv Custom vvv
 
-	SupervisorDiscovery SupervisorDiscoveryMetadataV1Alpha1 `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+	v1alpha1.OIDCDiscoveryResponse
 
 	// ^^^ Custom ^^^
-}
-
-type SupervisorDiscoveryMetadataV1Alpha1 struct {
-	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
-}
-
-type IdentityProviderMetadata struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
 }
 
 // NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
 func NewHandler(issuerURL string) http.Handler {
 	oidcConfig := Metadata{
-		Issuer:                            issuerURL,
-		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
-		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
-		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
-		SupervisorDiscovery:               SupervisorDiscoveryMetadataV1Alpha1{PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1},
+		Issuer:                issuerURL,
+		AuthorizationEndpoint: issuerURL + oidc.AuthorizationEndpointPath,
+		TokenEndpoint:         issuerURL + oidc.TokenEndpointPath,
+		JWKSURI:               issuerURL + oidc.JWKSEndpointPath,
+		OIDCDiscoveryResponse: v1alpha1.OIDCDiscoveryResponse{
+			SupervisorDiscovery: v1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+				PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1,
+			},
+		},
 		ResponseTypesSupported:            []string{"code"},
 		ResponseModesSupported:            []string{"query", "form_post"},
 		SubjectTypesSupported:             []string{"public"},

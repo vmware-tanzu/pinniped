@@ -17,26 +17,36 @@ import (
 )
 
 type UpstreamOIDCIdentityProviderI interface {
-	// A name for this upstream provider, which will be used as a component of the path for the callback endpoint
-	// hosted by the Supervisor.
+	// GetName returns a name for this upstream provider, which will be used as a component of the path for the
+	// callback endpoint hosted by the Supervisor.
 	GetName() string
 
-	// The Oauth client ID registered with the upstream provider to be used in the authorization code flow.
+	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
 	GetClientID() string
 
-	// The Authorization Endpoint fetched from discovery.
+	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
 
-	// Scopes to request in authorization flow.
+	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
 	GetScopes() []string
 
-	// ID Token username claim name. May return empty string, in which case we will use some reasonable defaults.
+	// GetUsernameClaim returns the ID Token username claim name. May return empty string, in which case we
+	// will use some reasonable defaults.
 	GetUsernameClaim() string
 
-	// ID Token groups claim name. May return empty string, in which case we won't try to read groups from the upstream provider.
+	// GetGroupsClaim returns the ID Token groups claim name. May return empty string, in which case we won't
+	// try to read groups from the upstream provider.
 	GetGroupsClaim() string
 
-	// Performs upstream OIDC authorization code exchange and token validation.
+	// AllowsPasswordGrant returns true if a client should be allowed to use the resource owner password credentials grant
+	// flow with this upstream provider. When false, it should not be allowed.
+	AllowsPasswordGrant() bool
+
+	// PasswordCredentialsGrantAndValidateTokens performs upstream OIDC resource owner password credentials grant and
+	// token validation. Returns the validated raw tokens as well as the parsed claims of the ID token.
+	PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error)
+
+	// ExchangeAuthcodeAndValidateTokens performs upstream OIDC authorization code exchange and token validation.
 	// Returns the validated raw tokens as well as the parsed claims of the ID token.
 	ExchangeAuthcodeAndValidateTokens(
 		ctx context.Context,
@@ -50,15 +60,15 @@ type UpstreamOIDCIdentityProviderI interface {
 }
 
 type UpstreamLDAPIdentityProviderI interface {
-	// A name for this upstream provider.
+	// GetName returns a name for this upstream provider.
 	GetName() string
 
-	// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
+	// GetURL returns a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
 	// This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 	// identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
 	GetURL() *url.URL
 
-	// A method for performing user authentication against the upstream LDAP provider.
+	// UserAuthenticator adds an interface method for performing user authentication against the upstream LDAP provider.
 	authenticators.UserAuthenticator
 }
 

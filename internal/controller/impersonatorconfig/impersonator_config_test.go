@@ -29,14 +29,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
-	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
@@ -1032,13 +1030,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			// validate that we set delete preconditions correctly
 			r.NotEmpty(*deleteOptions)
 			for _, opt := range *deleteOptions {
-				uid := types.UID("uid-1234")
-				r.Equal(metav1.DeleteOptions{
-					Preconditions: &metav1.Preconditions{
-						UID:             &uid,
-						ResourceVersion: pointer.String("rv-5678"),
-					},
-				}, opt)
+				r.Equal(testutil.NewPreconditions("uid-1234", "rv-5678"), opt)
 			}
 		}
 

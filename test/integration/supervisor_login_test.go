@@ -67,7 +67,7 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				}, idpv1alpha1.PhaseReady)
 			},
-			requestAuthorization: requestAuthorizationUsingOIDCIdentityProvider,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
@@ -97,10 +97,44 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				}, idpv1alpha1.PhaseReady)
 			},
-			requestAuthorization:                 requestAuthorizationUsingOIDCIdentityProvider,
+			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlow,
 			wantDownstreamIDTokenSubjectToMatch:  regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+		},
+		{
+			name: "oidc with CLI password flow",
+			maybeSkip: func(t *testing.T) {
+				// never need to skip this test
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: env.SupervisorUpstreamOIDC.Issuer,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+					},
+					Client: idpv1alpha1.OIDCClient{
+						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+					},
+					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+						AllowPasswordGrant: true, // allow the CLI password flow for this OIDCIdentityProvider
+					},
+				}, idpv1alpha1.PhaseReady)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamOIDC.Username, // username to present to server during login
+					env.SupervisorUpstreamOIDC.Password, // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 		},
 		{
 			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
@@ -150,7 +184,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
@@ -216,7 +250,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserCN,       // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword, // password to present to server during login
@@ -282,7 +316,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					"incorrect", // password to present to server during login
@@ -329,7 +363,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
 					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
@@ -396,7 +430,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
@@ -450,7 +484,7 @@ func TestSupervisorLogin(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingLDAPIdentityProvider(t,
+				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestDeactivatedUserSAMAccountNameValue, // username to present to server during login
 					env.SupervisorUpstreamActiveDirectory.TestDeactivatedUserPassword,            // password to present to server during login
@@ -767,7 +801,7 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
 
-func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client) {
+func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client) {
 	t.Helper()
 	env := testlib.IntegrationEnv(t)
 
@@ -796,7 +830,7 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 	browsertest.WaitForURL(t, page, callbackURLPattern)
 }
 
-func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client, wantErr bool) {
+func requestAuthorizationUsingCLIPasswordFlow(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client, wantErr bool) {
 	t.Helper()
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)

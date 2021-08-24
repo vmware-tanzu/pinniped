@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamoidc
@@ -45,6 +45,13 @@ func TestProviderConfig(t *testing.T) {
 		require.ElementsMatch(t, []string{"scope1", "scope2"}, p.GetScopes())
 		require.Equal(t, "test-username-claim", p.GetUsernameClaim())
 		require.Equal(t, "test-groups-claim", p.GetGroupsClaim())
+
+		// AllowPasswordGrant defaults to false.
+		require.False(t, p.AllowsPasswordGrant())
+		p.AllowPasswordGrant = true
+		require.True(t, p.AllowsPasswordGrant())
+		p.AllowPasswordGrant = false
+		require.False(t, p.AllowsPasswordGrant())
 	})
 
 	const (
@@ -66,246 +73,468 @@ func TestProviderConfig(t *testing.T) {
 	// if the error string for unsupported user info changes, this will hopefully catch it
 	_, userInfoNotSupported := (&oidc.Provider{}).UserInfo(context.Background(), nil)
 
-	tests := []struct {
-		name        string
-		authCode    string
-		expectNonce nonce.Nonce
-		returnIDTok string
-		wantErr     string
-		wantToken   oidctypes.Token
+	t.Run("PasswordCredentialsGrantAndValidateTokens", func(t *testing.T) {
+		tests := []struct {
+			name                  string
+			disallowPasswordGrant bool
+			returnIDTok           string
+			tokenStatusCode       int
+			wantErr               string
+			wantToken             oidctypes.Token
 
-		userInfo           *oidc.UserInfo
-		userInfoErr        error
-		wantUserInfoCalled bool
-	}{
-		{
-			name:     "exchange fails with network error",
-			authCode: "invalid-auth-code",
-			wantErr:  "oauth2: cannot fetch token: 403 Forbidden\nResponse: invalid authorization code\n",
-		},
-		{
-			name:     "missing ID token",
-			authCode: "valid",
-			wantErr:  "received response missing ID token",
-		},
-		{
-			name:        "invalid ID token",
-			authCode:    "valid",
-			returnIDTok: "invalid-jwt",
-			wantErr:     "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
-		},
-		{
-			name:        "invalid access token hash",
-			authCode:    "valid",
-			returnIDTok: invalidAccessTokenHashIDToken,
-			wantErr:     "received invalid ID token: access token hash does not match value in ID token",
-		},
-		{
-			name:        "invalid nonce",
-			authCode:    "valid",
-			expectNonce: "test-nonce",
-			returnIDTok: invalidNonceIDToken,
-			wantErr:     `received ID token with invalid nonce: invalid nonce (expected "test-nonce", got "invalid-nonce")`,
-		},
-		{
-			name:        "invalid nonce but not checked",
-			authCode:    "valid",
-			expectNonce: "",
-			returnIDTok: invalidNonceIDToken,
-			wantToken: oidctypes.Token{
-				AccessToken: &oidctypes.AccessToken{
-					Token:  "test-access-token",
-					Expiry: metav1.Time{},
-				},
-				RefreshToken: &oidctypes.RefreshToken{
-					Token: "test-refresh-token",
-				},
-				IDToken: &oidctypes.IDToken{
-					Token:  invalidNonceIDToken,
-					Expiry: metav1.Time{},
-					Claims: map[string]interface{}{
-						"aud":   "test-client-id",
-						"iat":   1.602283741e+09,
-						"jti":   "test-jti",
-						"nbf":   1.602283741e+09,
-						"nonce": "invalid-nonce",
-						"sub":   "test-user",
+			userInfo           *oidc.UserInfo
+			userInfoErr        error
+			wantUserInfoCalled bool
+		}{
+			{
+				name:        "valid",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.606768593e+09,
+							"jti": "test-jti",
+							"nbf": 1.606768593e+09,
+							"sub": "test-user",
+						},
 					},
 				},
+				userInfoErr:        userInfoNotSupported,
+				wantUserInfoCalled: true,
 			},
-			userInfoErr:        userInfoNotSupported,
-			wantUserInfoCalled: true,
-		},
-		{
-			name:        "valid",
-			authCode:    "valid",
-			returnIDTok: validIDToken,
-			wantToken: oidctypes.Token{
-				AccessToken: &oidctypes.AccessToken{
-					Token:  "test-access-token",
-					Expiry: metav1.Time{},
-				},
-				RefreshToken: &oidctypes.RefreshToken{
-					Token: "test-refresh-token",
-				},
-				IDToken: &oidctypes.IDToken{
-					Token:  validIDToken,
-					Expiry: metav1.Time{},
-					Claims: map[string]interface{}{
-						"foo": "bar",
-						"bat": "baz",
-						"aud": "test-client-id",
-						"iat": 1.606768593e+09,
-						"jti": "test-jti",
-						"nbf": 1.606768593e+09,
-						"sub": "test-user",
+			{
+				name:        "valid with userinfo",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo":    "awesomeness", // overwrite existing claim
+							"bat":    "baz",
+							"aud":    "test-client-id",
+							"iat":    1.606768593e+09,
+							"jti":    "test-jti",
+							"nbf":    1.606768593e+09,
+							"sub":    "test-user",
+							"groups": "fancy-group", // add a new claim
+						},
 					},
 				},
+				// claims is private field so we have to use hacks to set it
+				userInfo:           forceUserInfoWithClaims("test-user", `{"foo":"awesomeness","groups":"fancy-group"}`),
+				wantUserInfoCalled: true,
 			},
-			userInfoErr:        userInfoNotSupported,
-			wantUserInfoCalled: true,
-		},
-		{
-			name:        "user info fetch error",
-			authCode:    "valid",
-			returnIDTok: validIDToken,
-			wantErr:     "could not fetch user info claims: could not get user info: some network error",
-			userInfoErr: errors.New("some network error"),
-		},
-		{
-			name:        "user info sub error",
-			authCode:    "valid",
-			returnIDTok: validIDToken,
-			wantErr:     "could not fetch user info claims: userinfo 'sub' claim (test-user-2) did not match id_token 'sub' claim (test-user)",
-			userInfo:    &oidc.UserInfo{Subject: "test-user-2"},
-		},
-		{
-			name:        "user info is not json",
-			authCode:    "valid",
-			returnIDTok: validIDToken,
-			wantErr:     "could not fetch user info claims: could not unmarshal user info claims: invalid character 'i' looking for beginning of value",
-			// claims is private field so we have to use hacks to set it
-			userInfo: forceUserInfoWithClaims("test-user", `invalid-json-data`),
-		},
-		{
-			name:        "valid with user info",
-			authCode:    "valid",
-			returnIDTok: validIDToken,
-			wantToken: oidctypes.Token{
-				AccessToken: &oidctypes.AccessToken{
-					Token:  "test-access-token",
-					Expiry: metav1.Time{},
-				},
-				RefreshToken: &oidctypes.RefreshToken{
-					Token: "test-refresh-token",
-				},
-				IDToken: &oidctypes.IDToken{
-					Token:  validIDToken,
-					Expiry: metav1.Time{},
-					Claims: map[string]interface{}{
-						"foo":    "awesomeness", // overwrite existing claim
-						"bat":    "baz",
-						"aud":    "test-client-id",
-						"iat":    1.606768593e+09,
-						"jti":    "test-jti",
-						"nbf":    1.606768593e+09,
-						"sub":    "test-user",
-						"groups": "fancy-group", // add a new claim
+			{
+				name:                  "password grant not allowed",
+				disallowPasswordGrant: true, // password grant is not allowed in this ProviderConfig
+				wantErr:               "resource owner password credentials grant is not allowed for this upstream provider according to its configuration",
+			},
+			{
+				name:            "token request fails with http error",
+				tokenStatusCode: http.StatusForbidden,
+				wantErr:         "oauth2: cannot fetch token: 403 Forbidden\nResponse: fake error\n",
+			},
+			{
+				name:    "missing ID token",
+				wantErr: "received response missing ID token",
+			},
+			{
+				name:        "invalid ID token",
+				returnIDTok: "invalid-jwt",
+				wantErr:     "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+			},
+			{
+				name:        "invalid access token hash",
+				returnIDTok: invalidAccessTokenHashIDToken,
+				wantErr:     "received invalid ID token: access token hash does not match value in ID token",
+			},
+			{
+				name:        "user info fetch error",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: could not get user info: some network error",
+				userInfoErr: errors.New("some network error"),
+			},
+			{
+				name:        "user info sub error",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: userinfo 'sub' claim (test-user-2) did not match id_token 'sub' claim (test-user)",
+				userInfo:    &oidc.UserInfo{Subject: "test-user-2"},
+			},
+			{
+				name:        "user info is not json",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: could not unmarshal user info claims: invalid character 'i' looking for beginning of value",
+				// claims is private field so we have to use hacks to set it
+				userInfo: forceUserInfoWithClaims("test-user", `invalid-json-data`),
+			},
+			{
+				name:        "invalid sub claim",
+				returnIDTok: invalidSubClaim,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  invalidSubClaim,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.61021969e+09,
+							"jti": "test-jti",
+							"nbf": 1.61021969e+09,
+							// no sub claim
+						},
 					},
 				},
+				wantUserInfoCalled: false,
 			},
-			// claims is private field so we have to use hacks to set it
-			userInfo:           forceUserInfoWithClaims("test-user", `{"foo":"awesomeness","groups":"fancy-group"}`),
-			wantUserInfoCalled: true,
-		},
-		{
-			name:        "invalid sub claim",
-			authCode:    "valid",
-			returnIDTok: invalidSubClaim,
-			wantToken: oidctypes.Token{
-				AccessToken: &oidctypes.AccessToken{
-					Token:  "test-access-token",
-					Expiry: metav1.Time{},
-				},
-				RefreshToken: &oidctypes.RefreshToken{
-					Token: "test-refresh-token",
-				},
-				IDToken: &oidctypes.IDToken{
-					Token:  invalidSubClaim,
-					Expiry: metav1.Time{},
-					Claims: map[string]interface{}{
-						"foo": "bar",
-						"bat": "baz",
-						"aud": "test-client-id",
-						"iat": 1.61021969e+09,
-						"jti": "test-jti",
-						"nbf": 1.61021969e+09,
-						// no sub claim
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, http.MethodPost, r.Method)
+					require.NoError(t, r.ParseForm())
+					require.Equal(t, 6, len(r.Form))
+					require.Equal(t, "password", r.Form.Get("grant_type"))
+					require.Equal(t, "test-client-id", r.Form.Get("client_id"))
+					require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
+					require.Equal(t, "test-username", r.Form.Get("username"))
+					require.Equal(t, "test-password", r.Form.Get("password"))
+					require.Equal(t, "scope1 scope2", r.Form.Get("scope"))
+					if tt.tokenStatusCode != 0 {
+						http.Error(w, "fake error", http.StatusForbidden)
+						return
+					}
+					var response struct {
+						oauth2.Token
+						IDToken string `json:"id_token,omitempty"`
+					}
+					response.AccessToken = "test-access-token"
+					response.RefreshToken = "test-refresh-token"
+					response.Expiry = time.Now().Add(time.Hour)
+					response.IDToken = tt.returnIDTok
+					w.Header().Set("content-type", "application/json")
+					require.NoError(t, json.NewEncoder(w).Encode(&response))
+				}))
+				t.Cleanup(tokenServer.Close)
+
+				p := ProviderConfig{
+					Name:          "test-name",
+					UsernameClaim: "test-username-claim",
+					GroupsClaim:   "test-groups-claim",
+					Config: &oauth2.Config{
+						ClientID:     "test-client-id",
+						ClientSecret: "test-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:   "https://example.com",
+							TokenURL:  tokenServer.URL,
+							AuthStyle: oauth2.AuthStyleInParams,
+						},
+						Scopes: []string{"scope1", "scope2"},
 					},
-				},
-			},
-			wantUserInfoCalled: false,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodPost, r.Method)
-				require.NoError(t, r.ParseForm())
-				require.Equal(t, "test-client-id", r.Form.Get("client_id"))
-				require.Equal(t, "test-pkce", r.Form.Get("code_verifier"))
-				require.Equal(t, "authorization_code", r.Form.Get("grant_type"))
-				require.NotEmpty(t, r.Form.Get("code"))
-				if r.Form.Get("code") != "valid" {
-					http.Error(w, "invalid authorization code", http.StatusForbidden)
+					Provider: &mockProvider{
+						userInfo:    tt.userInfo,
+						userInfoErr: tt.userInfoErr,
+					},
+					AllowPasswordGrant: !tt.disallowPasswordGrant,
+				}
+
+				tok, err := p.PasswordCredentialsGrantAndValidateTokens(
+					context.Background(),
+					"test-username",
+					"test-password",
+				)
+
+				if tt.wantErr != "" {
+					require.EqualError(t, err, tt.wantErr)
+					require.Nil(t, tok)
 					return
 				}
-				var response struct {
-					oauth2.Token
-					IDToken string `json:"id_token,omitempty"`
-				}
-				response.AccessToken = "test-access-token"
-				response.RefreshToken = "test-refresh-token"
-				response.Expiry = time.Now().Add(time.Hour)
-				response.IDToken = tt.returnIDTok
-				w.Header().Set("content-type", "application/json")
-				require.NoError(t, json.NewEncoder(w).Encode(&response))
-			}))
-			t.Cleanup(tokenServer.Close)
+				require.NoError(t, err)
+				require.Equal(t, &tt.wantToken, tok)
+				require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
+			})
+		}
+	})
 
-			p := ProviderConfig{
-				Name:          "test-name",
-				UsernameClaim: "test-username-claim",
-				GroupsClaim:   "test-groups-claim",
-				Config: &oauth2.Config{
-					ClientID: "test-client-id",
-					Endpoint: oauth2.Endpoint{
-						AuthURL:   "https://example.com",
-						TokenURL:  tokenServer.URL,
-						AuthStyle: oauth2.AuthStyleInParams,
+	t.Run("ExchangeAuthcodeAndValidateTokens", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			authCode    string
+			expectNonce nonce.Nonce
+			returnIDTok string
+			wantErr     string
+			wantToken   oidctypes.Token
+
+			userInfo           *oidc.UserInfo
+			userInfoErr        error
+			wantUserInfoCalled bool
+		}{
+			{
+				name:     "exchange fails with network error",
+				authCode: "invalid-auth-code",
+				wantErr:  "oauth2: cannot fetch token: 403 Forbidden\nResponse: invalid authorization code\n",
+			},
+			{
+				name:     "missing ID token",
+				authCode: "valid",
+				wantErr:  "received response missing ID token",
+			},
+			{
+				name:        "invalid ID token",
+				authCode:    "valid",
+				returnIDTok: "invalid-jwt",
+				wantErr:     "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+			},
+			{
+				name:        "invalid access token hash",
+				authCode:    "valid",
+				returnIDTok: invalidAccessTokenHashIDToken,
+				wantErr:     "received invalid ID token: access token hash does not match value in ID token",
+			},
+			{
+				name:        "invalid nonce",
+				authCode:    "valid",
+				expectNonce: "test-nonce",
+				returnIDTok: invalidNonceIDToken,
+				wantErr:     `received ID token with invalid nonce: invalid nonce (expected "test-nonce", got "invalid-nonce")`,
+			},
+			{
+				name:        "invalid nonce but not checked",
+				authCode:    "valid",
+				expectNonce: "",
+				returnIDTok: invalidNonceIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
 					},
-					Scopes: []string{"scope1", "scope2"},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  invalidNonceIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"aud":   "test-client-id",
+							"iat":   1.602283741e+09,
+							"jti":   "test-jti",
+							"nbf":   1.602283741e+09,
+							"nonce": "invalid-nonce",
+							"sub":   "test-user",
+						},
+					},
 				},
-				Provider: &mockProvider{
-					userInfo:    tt.userInfo,
-					userInfoErr: tt.userInfoErr,
+				userInfoErr:        userInfoNotSupported,
+				wantUserInfoCalled: true,
+			},
+			{
+				name:        "valid",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.606768593e+09,
+							"jti": "test-jti",
+							"nbf": 1.606768593e+09,
+							"sub": "test-user",
+						},
+					},
 				},
-			}
+				userInfoErr:        userInfoNotSupported,
+				wantUserInfoCalled: true,
+			},
+			{
+				name:        "user info fetch error",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: could not get user info: some network error",
+				userInfoErr: errors.New("some network error"),
+			},
+			{
+				name:        "user info sub error",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: userinfo 'sub' claim (test-user-2) did not match id_token 'sub' claim (test-user)",
+				userInfo:    &oidc.UserInfo{Subject: "test-user-2"},
+			},
+			{
+				name:        "user info is not json",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantErr:     "could not fetch user info claims: could not unmarshal user info claims: invalid character 'i' looking for beginning of value",
+				// claims is private field so we have to use hacks to set it
+				userInfo: forceUserInfoWithClaims("test-user", `invalid-json-data`),
+			},
+			{
+				name:        "valid with user info",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo":    "awesomeness", // overwrite existing claim
+							"bat":    "baz",
+							"aud":    "test-client-id",
+							"iat":    1.606768593e+09,
+							"jti":    "test-jti",
+							"nbf":    1.606768593e+09,
+							"sub":    "test-user",
+							"groups": "fancy-group", // add a new claim
+						},
+					},
+				},
+				// claims is private field so we have to use hacks to set it
+				userInfo:           forceUserInfoWithClaims("test-user", `{"foo":"awesomeness","groups":"fancy-group"}`),
+				wantUserInfoCalled: true,
+			},
+			{
+				name:        "invalid sub claim",
+				authCode:    "valid",
+				returnIDTok: invalidSubClaim,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  invalidSubClaim,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.61021969e+09,
+							"jti": "test-jti",
+							"nbf": 1.61021969e+09,
+							// no sub claim
+						},
+					},
+				},
+				wantUserInfoCalled: false,
+			},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, http.MethodPost, r.Method)
+					require.NoError(t, r.ParseForm())
+					require.Len(t, r.Form, 6)
+					require.Equal(t, "test-client-id", r.Form.Get("client_id"))
+					require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
+					require.Equal(t, "test-pkce", r.Form.Get("code_verifier"))
+					require.Equal(t, "authorization_code", r.Form.Get("grant_type"))
+					require.Equal(t, "https://example.com/callback", r.Form.Get("redirect_uri"))
+					require.NotEmpty(t, r.Form.Get("code"))
+					if r.Form.Get("code") != "valid" {
+						http.Error(w, "invalid authorization code", http.StatusForbidden)
+						return
+					}
+					var response struct {
+						oauth2.Token
+						IDToken string `json:"id_token,omitempty"`
+					}
+					response.AccessToken = "test-access-token"
+					response.RefreshToken = "test-refresh-token"
+					response.Expiry = time.Now().Add(time.Hour)
+					response.IDToken = tt.returnIDTok
+					w.Header().Set("content-type", "application/json")
+					require.NoError(t, json.NewEncoder(w).Encode(&response))
+				}))
+				t.Cleanup(tokenServer.Close)
 
-			ctx := context.Background()
+				p := ProviderConfig{
+					Name:          "test-name",
+					UsernameClaim: "test-username-claim",
+					GroupsClaim:   "test-groups-claim",
+					Config: &oauth2.Config{
+						ClientID:     "test-client-id",
+						ClientSecret: "test-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:   "https://example.com",
+							TokenURL:  tokenServer.URL,
+							AuthStyle: oauth2.AuthStyleInParams,
+						},
+						Scopes: []string{"scope1", "scope2"},
+					},
+					Provider: &mockProvider{
+						userInfo:    tt.userInfo,
+						userInfoErr: tt.userInfoErr,
+					},
+				}
 
-			tok, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce, "https://example.com/callback")
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-				require.Nil(t, tok)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, &tt.wantToken, tok)
-			require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
-		})
-	}
+				tok, err := p.ExchangeAuthcodeAndValidateTokens(
+					context.Background(),
+					tt.authCode,
+					"test-pkce",
+					tt.expectNonce,
+					"https://example.com/callback",
+				)
+
+				if tt.wantErr != "" {
+					require.EqualError(t, err, tt.wantErr)
+					require.Nil(t, tok)
+					return
+				}
+				require.NoError(t, err)
+				require.Equal(t, &tt.wantToken, tok)
+				require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
+			})
+		}
+	})
 }
 
 // mockVerifier returns an *oidc.IDTokenVerifier that validates any correctly serialized JWT without doing much else.

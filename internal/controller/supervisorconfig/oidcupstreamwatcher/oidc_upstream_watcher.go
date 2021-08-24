@@ -172,8 +172,9 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		Config: &oauth2.Config{
 			Scopes: computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
 		},
-		UsernameClaim: upstream.Spec.Claims.Username,
-		GroupsClaim:   upstream.Spec.Claims.Groups,
+		UsernameClaim:      upstream.Spec.Claims.Username,
+		GroupsClaim:        upstream.Spec.Claims.Groups,
+		AllowPasswordGrant: upstream.Spec.AuthorizationConfig.AllowPasswordGrant,
 	}
 	conditions := []*v1alpha1.Condition{
 		c.validateSecret(upstream, &result),

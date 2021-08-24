@@ -644,7 +644,6 @@ func authenticatorAPIGroup(apiGroup string) withFunc {
 	}
 }
 
-//nolint:unparam // the apiGroupSuffix parameter might always be the same, but this is nice for test readability
 func replaceGV(t *testing.T, baseGV schema.GroupVersion, apiGroupSuffix string) schema.GroupVersion {
 	t.Helper()
 	groupName, ok := Replace(baseGV.Group, apiGroupSuffix)

@@ -36,8 +36,6 @@ The following table includes the current roadmap for Pinniped. If you have any q
 Last Updated: July 2021
 Theme|Description|Timeline|
 |--|--|--|
-|Remote OIDC login support|Add support for logging in from remote hosts without web browsers in the Pinniped CLI and Supervisor|Jul 2021|
-|Non-Interactive Password based LDAP logins |Support for non-interactive LDAP Logins via CLI using Environmental Variables |Jul 2021|
 |Non-Interactive Password based OIDC logins |Support for non-interactive OIDC Logins via CLI using Password Grant |Aug 2021|
 |Active Directory Support|Extends upstream IDP protocols|Aug 2021|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Sept 2021|

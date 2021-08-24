@@ -93,15 +93,18 @@ to authenticate the user to the cluster.
 If the Pinniped Supervisor is used for authentication to that cluster, then the user's authentication experience
 will depend on which type of identity provider was configured.
 
-- For an OIDC identity provider, `kubectl` will open the user's web browser and direct it to the login page of
+- For an OIDC identity provider, there are two supported client flows.
+
+  When using the default browser-based flow, `kubectl` will open the user's web browser and direct it to the login page of
   their OIDC Provider. This login flow is controlled by the provider, so it may include two-factor authentication or
-  other features provided by the OIDC Provider.
-   
-  If the user's browser is not available, then `kubectl` will instead print a URL which can be visited in a
-  browser (potentially on a different computer) to complete the authentication.
+  other features provided by the OIDC Provider. If the user's browser is not available, then `kubectl` will instead
+  print a URL which can be visited in a browser (potentially on a different computer) to complete the authentication.
+
+  When using the optional CLI-based flow, `kubectl` will interactively prompt the user for their username and password at the CLI.
+  Alternatively, the user can set the environment variables `PINNIPED_USERNAME` and `PINNIPED_PASSWORD` for the
+  `kubectl` process to avoid the interactive prompts.
 
 - For an LDAP identity provider, `kubectl` will interactively prompt the user for their username and password at the CLI.
-   
   Alternatively, the user can set the environment variables `PINNIPED_USERNAME` and `PINNIPED_PASSWORD` for the
   `kubectl` process to avoid the interactive prompts.
 

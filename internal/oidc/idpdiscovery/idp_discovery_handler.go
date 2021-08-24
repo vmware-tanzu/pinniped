@@ -10,23 +10,9 @@ import (
 	"net/http"
 	"sort"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/oidc"
 )
-
-const (
-	idpDiscoveryTypeLDAP            = "ldap"
-	idpDiscoveryTypeOIDC            = "oidc"
-	idpDiscoveryTypeActiveDirectory = "activedirectory"
-)
-
-type response struct {
-	IDPs []identityProviderResponse `json:"pinniped_identity_providers"`
-}
-
-type identityProviderResponse struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
 
 // NewHandler returns an http.Handler that serves the upstream IDP discovery endpoint.
 func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler {
@@ -51,24 +37,38 @@ func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler 
 }
 
 func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, error) {
-	r := response{
-		IDPs: []identityProviderResponse{},
-	}
+	r := v1alpha1.IDPDiscoveryResponse{PinnipedIDPs: []v1alpha1.PinnipedIDP{}}
 
 	// The cache of IDPs could change at any time, so always recalculate the list.
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeLDAP})
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
+			Name:  provider.GetName(),
+			Type:  v1alpha1.IDPTypeLDAP,
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
+		})
 	}
 	for _, provider := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeActiveDirectory})
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
+			Name:  provider.GetName(),
+			Type:  v1alpha1.IDPTypeActiveDirectory,
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
+		})
 	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeOIDC})
+		flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
+		if provider.AllowsPasswordGrant() {
+			flows = append(flows, v1alpha1.IDPFlowCLIPassword)
+		}
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
+			Name:  provider.GetName(),
+			Type:  v1alpha1.IDPTypeOIDC,
+			Flows: flows,
+		})
 	}
 
 	// Nobody like an API that changes the results unnecessarily. :)
-	sort.SliceStable(r.IDPs, func(i, j int) bool {
-		return r.IDPs[i].Name < r.IDPs[j].Name
+	sort.SliceStable(r.PinnipedIDPs, func(i, j int) bool {
+		return r.PinnipedIDPs[i].Name < r.PinnipedIDPs[j].Name
 	})
 
 	var b bytes.Buffer

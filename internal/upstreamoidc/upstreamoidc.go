@@ -6,6 +6,7 @@ package upstreamoidc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -28,15 +29,16 @@ func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Clie
 
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
 type ProviderConfig struct {
-	Name          string
-	UsernameClaim string
-	GroupsClaim   string
-	Config        *oauth2.Config
-	Provider      interface {
+	Name               string
+	UsernameClaim      string
+	GroupsClaim        string
+	Config             *oauth2.Config
+	Client             *http.Client
+	AllowPasswordGrant bool
+	Provider           interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
-	Client *http.Client
 }
 
 func (p *ProviderConfig) GetName() string {
@@ -62,6 +64,32 @@ func (p *ProviderConfig) GetUsernameClaim() string {
 
 func (p *ProviderConfig) GetGroupsClaim() string {
 	return p.GroupsClaim
+}
+
+func (p *ProviderConfig) AllowsPasswordGrant() bool {
+	return p.AllowPasswordGrant
+}
+
+func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
+	// Disallow this grant when requested.
+	if !p.AllowPasswordGrant {
+		return nil, fmt.Errorf("resource owner password credentials grant is not allowed for this upstream provider according to its configuration")
+	}
+
+	// Note that this implicitly uses the scopes from p.Config.Scopes.
+	tok, err := p.Config.PasswordCredentialsToken(
+		coreosoidc.ClientContext(ctx, p.Client),
+		username,
+		password,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// There is no nonce to validate for a resource owner password credentials grant because it skips using
+	// the authorize endpoint and goes straight to the token endpoint.
+	const skipNonceValidation nonce.Nonce = ""
+	return p.ValidateToken(ctx, tok, skipNonceValidation)
 }
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {

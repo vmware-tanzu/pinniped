@@ -149,6 +149,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --static-token string                      Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string                  Instead of doing an OIDC-based login, read a static token from the environment
 				      --timeout duration                         Timeout for autodiscovery and validation (default 10m0s)
+				      --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')
 				      --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
 				      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')
 			`)
@@ -814,7 +815,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "when IDP discovery document contains multiple pinniped_idps and no name or type flags are given",
+			name: "when IDP discovery document contains multiple IDPs and no name or type flags are given",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					"--kubeconfig", "./testdata/kubeconfig.yaml",
@@ -1034,6 +1035,33 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
+			name: "supervisor upstream IDP discovery does not find matching IDP when name and type are both specified",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "does-not-exist-idp",
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-other-ldap-idp", "type": "ldap"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no Supervisor upstream identity providers with name "does-not-exist-idp" of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"}]` + "\n"
+			},
+		},
+		{
 			name: "supervisor upstream IDP discovery fails to resolve ambiguity when type is specified but name is not",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
@@ -1091,7 +1119,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "supervisor upstream IDP discovery fails to find any matching idps when type is specified but name is not",
+			name: "supervisor upstream IDP discovery fails to find any matching IDPs when type is specified but name is not",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
 				return []string{
@@ -1117,7 +1145,32 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "supervisor upstream IDP discovery fails to find any matching idps when name is specified but type is not",
+			name: "supervisor upstream IDP discovery fails to find any matching IDPs when type is specified but name is not and there is only one IDP found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no Supervisor upstream identity providers of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to find any matching IDPs when name is specified but type is not",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
 				return []string{
@@ -1140,6 +1193,80 @@ func TestGetKubeconfig(t *testing.T) {
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
 				return `Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
 					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to find any matching IDPs when name is specified but type is not and there is only one IDP found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "my-nonexistent-idp",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when flow is specified but it does not match any flow returned by discovery",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-flow", "my-nonexistent-flow",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc", "flows": ["non-matching-flow-1", "non-matching-flow-2"]}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no client flow "my-nonexistent-flow" for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found.` +
+					` Found these flows: [non-matching-flow-1 non-matching-flow-2]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when no flow is specified and more than one flow is returned by discovery",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc", "flows": ["flow1", "flow2"]}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: multiple client flows for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found, so the --upstream-identity-provider-flow flag must be specified.` +
+					` Found these flows: [flow1 flow2]` + "\n"
 			},
 		},
 		{
@@ -1535,7 +1662,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect impersonation proxy with autodiscovered JWT authenticator",
+			name: "autodetect impersonation proxy with auto-discovered JWT authenticator",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					"--kubeconfig", "./testdata/kubeconfig.yaml",
@@ -1958,7 +2085,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 				}`, issuerURL)
 			},
-			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDPs endpoint shouldn't be called by this test
+			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDP discovery endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -2015,13 +2142,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "when upstream idp related flags are sent, pass them through",
+			name: "when all upstream IDP related flags are sent, pass them through without performing IDP discovery",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					"--kubeconfig", "./testdata/kubeconfig.yaml",
 					"--skip-validation",
 					"--upstream-identity-provider-name=some-oidc-idp",
 					"--upstream-identity-provider-type=oidc",
+					"--upstream-identity-provider-flow=foobar",
 				}
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
@@ -2030,7 +2158,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryStatusCode: http.StatusNotFound,
+			oidcDiscoveryStatusCode: http.StatusNotFound, // should not get called by the client in this case
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -2080,6 +2208,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-oidc-idp
 						  - --upstream-identity-provider-type=oidc
+						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
 						  provideClusterInfo: true
@@ -2089,13 +2218,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-			name: "when upstream IDP related flags are sent, pass them through even when IDP discovery shows a different IDP",
+			name: "when all upstream IDP related flags are sent, pass them through even when IDP discovery shows a different IDP",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					"--kubeconfig", "./testdata/kubeconfig.yaml",
 					"--skip-validation",
 					"--upstream-identity-provider-name=some-oidc-idp",
 					"--upstream-identity-provider-type=oidc",
+					"--upstream-identity-provider-flow=foobar",
 				}
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
@@ -2159,6 +2289,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-oidc-idp
 						  - --upstream-identity-provider-type=oidc
+						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
 						  provideClusterInfo: true
@@ -2333,6 +2464,244 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when both name and type are specified but flow is not and a matching IDP is found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "some-ldap-idp",
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when flow is specified and no flows were returned by discovery uses the specified flow",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-flow", "foobar",
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  - --upstream-identity-provider-flow=foobar
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when flow is specified and it matches a flow returned by discovery uses the specified flow",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-flow", "cli_password",
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-ldap-idp", "type": "ldap", "flows": ["some_flow", "cli_password", "some_other_flow"]}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  - --upstream-identity-provider-flow=cli_password
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery when no flow is specified but there is only one flow returned by discovery uses the discovered flow",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-ldap-idp", "type": "ldap", "flows": ["cli_password"]}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  - --upstream-identity-provider-flow=cli_password
 						  command: '.../path/to/pinniped'
 						  env: []
 						  provideClusterInfo: true

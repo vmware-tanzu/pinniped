@@ -17,6 +17,8 @@ web:
   tlsKey: /var/certs/dex-key.pem
 oauth2:
   skipApprovalScreen: true
+  #! Allow the resource owner password grant, which Dex implements to also return ID tokens.
+  passwordConnector: local
 staticClients:
 - id: pinniped-cli
   name: 'Pinniped CLI'

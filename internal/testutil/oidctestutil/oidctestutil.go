@@ -49,6 +49,14 @@ type ExchangeAuthcodeAndValidateTokenArgs struct {
 	RedirectURI          string
 }
 
+// PasswordCredentialsGrantAndValidateTokensArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.PasswordCredentialsGrantAndValidateTokensFunc().
+type PasswordCredentialsGrantAndValidateTokensArgs struct {
+	Ctx      context.Context
+	Username string
+	Password string
+}
+
 type TestUpstreamLDAPIdentityProvider struct {
 	Name             string
 	URL              *url.URL
@@ -70,12 +78,14 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
-	Name                                  string
-	ClientID                              string
-	AuthorizationURL                      url.URL
-	UsernameClaim                         string
-	GroupsClaim                           string
-	Scopes                                []string
+	Name               string
+	ClientID           string
+	AuthorizationURL   url.URL
+	UsernameClaim      string
+	GroupsClaim        string
+	Scopes             []string
+	AllowPasswordGrant bool
+
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
 		authcode string,
@@ -83,8 +93,16 @@ type TestUpstreamOIDCIdentityProvider struct {
 		expectedIDTokenNonce nonce.Nonce,
 	) (*oidctypes.Token, error)
 
-	exchangeAuthcodeAndValidateTokensCallCount int
-	exchangeAuthcodeAndValidateTokensArgs      []*ExchangeAuthcodeAndValidateTokenArgs
+	PasswordCredentialsGrantAndValidateTokensFunc func(
+		ctx context.Context,
+		username string,
+		password string,
+	) (*oidctypes.Token, error)
+
+	exchangeAuthcodeAndValidateTokensCallCount         int
+	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
+	passwordCredentialsGrantAndValidateTokensCallCount int
+	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
@@ -109,6 +127,20 @@ func (u *TestUpstreamOIDCIdentityProvider) GetUsernameClaim() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetGroupsClaim() string {
 	return u.GroupsClaim
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) AllowsPasswordGrant() bool {
+	return u.AllowPasswordGrant
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
+	u.passwordCredentialsGrantAndValidateTokensCallCount++
+	u.passwordCredentialsGrantAndValidateTokensArgs = append(u.passwordCredentialsGrantAndValidateTokensArgs, &PasswordCredentialsGrantAndValidateTokensArgs{
+		Ctx:      ctx,
+		Username: username,
+		Password: password,
+	})
+	return u.PasswordCredentialsGrantAndValidateTokensFunc(ctx, username, password)
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
@@ -180,8 +212,191 @@ func (b *UpstreamIDPListerBuilder) Build() provider.DynamicUpstreamIDPProvider {
 	return idpProvider
 }
 
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPasswordCredentialsGrantAndValidateTokens(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *PasswordCredentialsGrantAndValidateTokensArgs,
+) {
+	t.Helper()
+	var actualArgs *PasswordCredentialsGrantAndValidateTokensArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.passwordCredentialsGrantAndValidateTokensCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.passwordCredentialsGrantAndValidateTokensArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to PasswordCredentialsGrantAndValidateTokens() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"PasswordCredentialsGrantAndValidateTokens() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPasswordCredentialsGrantAndValidateTokens(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.passwordCredentialsGrantAndValidateTokensCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to PasswordCredentialsGrantAndValidateTokens()",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndValidateTokens(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *ExchangeAuthcodeAndValidateTokenArgs,
+) {
+	t.Helper()
+	var actualArgs *ExchangeAuthcodeAndValidateTokenArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.exchangeAuthcodeAndValidateTokensCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.exchangeAuthcodeAndValidateTokensArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to ExchangeAuthcodeAndValidateTokens() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"ExchangeAuthcodeAndValidateTokens() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndValidateTokens(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.exchangeAuthcodeAndValidateTokensCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to ExchangeAuthcodeAndValidateTokens()",
+	)
+}
+
 func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 	return &UpstreamIDPListerBuilder{}
+}
+
+type TestUpstreamOIDCIdentityProviderBuilder struct {
+	name                string
+	clientID            string
+	scopes              []string
+	idToken             map[string]interface{}
+	usernameClaim       string
+	groupsClaim         string
+	authorizationURL    url.URL
+	allowPasswordGrant  bool
+	authcodeExchangeErr error
+	passwordGrantErr    error
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.name = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithClientID(value string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.clientID = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAuthorizationURL(value url.URL) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.authorizationURL = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAllowPasswordGrant(value bool) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.allowPasswordGrant = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithScopes(values []string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.scopes = values
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUsernameClaim(value string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.usernameClaim = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutUsernameClaim() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.usernameClaim = ""
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithGroupsClaim(value string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.groupsClaim = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutGroupsClaim() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.groupsClaim = ""
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name string, value interface{}) *TestUpstreamOIDCIdentityProviderBuilder {
+	if u.idToken == nil {
+		u.idToken = map[string]interface{}{}
+	}
+	u.idToken[name] = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutIDTokenClaim(claim string) *TestUpstreamOIDCIdentityProviderBuilder {
+	delete(u.idToken, claim)
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUpstreamAuthcodeExchangeError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.authcodeExchangeErr = err
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPasswordGrantError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.passwordGrantErr = err
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
+	return &TestUpstreamOIDCIdentityProvider{
+		Name:               u.name,
+		ClientID:           u.clientID,
+		UsernameClaim:      u.usernameClaim,
+		GroupsClaim:        u.groupsClaim,
+		Scopes:             u.scopes,
+		AllowPasswordGrant: u.allowPasswordGrant,
+		AuthorizationURL:   u.authorizationURL,
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+			if u.authcodeExchangeErr != nil {
+				return nil, u.authcodeExchangeErr
+			}
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+		},
+		PasswordCredentialsGrantAndValidateTokensFunc: func(ctx context.Context, username, password string) (*oidctypes.Token, error) {
+			if u.passwordGrantErr != nil {
+				return nil, u.passwordGrantErr
+			}
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+		},
+	}
+}
+
+func NewTestUpstreamOIDCIdentityProviderBuilder() *TestUpstreamOIDCIdentityProviderBuilder {
+	return &TestUpstreamOIDCIdentityProviderBuilder{}
 }
 
 // Declare a separate type from the production code to ensure that the state param's contents was serialized

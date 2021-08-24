@@ -271,7 +271,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		)
 	})
 
-	t.Run("with Supervisor OIDC upstream IDP and manual flow", func(t *testing.T) {
+	t.Run("with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -365,7 +365,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 		// Read all of the remaining output from the subprocess until EOF.
 		t.Logf("waiting for kubectl to output namespace list")
-		// Read all of the output from the subprocess until EOF.
+		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
@@ -379,6 +379,159 @@ func TestE2EFullIntegration(t *testing.T) {
 			pinnipedExe,
 			expectedUsername,
 			expectedGroups,
+		)
+	})
+
+	t.Run("with Supervisor OIDC upstream IDP and CLI password flow without web browser", func(t *testing.T) {
+		expectedUsername := env.SupervisorUpstreamOIDC.Username
+		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream OIDC provider and wait for it to become ready.
+		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes:   env.SupervisorUpstreamOIDC.AdditionalScopes,
+				AllowPasswordGrant: true, // allow the CLI password flow for this OIDCIdentityProvider
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/oidc-test-sessions-password-grant.yaml"
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-skip-listen",
+			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
+			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Password + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+
+	t.Run("with Supervisor OIDC upstream IDP and CLI password flow when OIDCIdentityProvider disallows it", func(t *testing.T) {
+		// Create upstream OIDC provider and wait for it to become ready.
+		oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes:   env.SupervisorUpstreamOIDC.AdditionalScopes,
+				AllowPasswordGrant: false, // disallow the CLI password flow for this OIDCIdentityProvider!
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/oidc-test-sessions-password-grant-negative-test.yaml"
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-skip-listen",
+			// Create a kubeconfig configured to use the cli_password flow. By specifying all
+			// available --upstream-identity-provider-* options the CLI should skip IDP discovery
+			// and use the provided values without validating them. "cli_password" will not show
+			// up in the list of available flows for this IDP in the discovery response.
+			"--upstream-identity-provider-name", oidcIdentityProvider.Name,
+			"--upstream-identity-provider-type", "oidc",
+			"--upstream-identity-provider-flow", "cli_password",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Username + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Password + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutput := string(kubectlOutputBytes)
+
+		// The output should look like an authentication failure, because the OIDCIdentityProvider disallows password grants.
+		t.Log("kubectl command output (expecting a login failed error):\n", kubectlOutput)
+		require.Contains(t, kubectlOutput,
+			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
+				`The resource owner or authorization server denied the request. `+
+				`Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.`,
 		)
 	})
 
@@ -422,7 +575,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
 		require.NoError(t, err)
 
-		// Read all of the output from the subprocess until EOF.
+		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
@@ -487,7 +640,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
-		// Read all of the output from the subprocess until EOF.
+		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))

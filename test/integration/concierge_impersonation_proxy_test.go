@@ -438,7 +438,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
 			parallelIfNotEKS(t)
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 
 			// Create and start informer to exercise the "watch" verb for us.
 			informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
@@ -827,7 +827,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// this works because impersonation cannot set UID and thus the final user info the proxy sees has no UID
 		t.Run("nested impersonation as a service account is allowed if it has enough RBAC permissions", func(t *testing.T) {
 			parallelIfNotEKS(t)
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 			saName, saToken, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 			nestedImpersonationClient := newImpersonationProxyClientWithCredentials(t,
 				&loginv1alpha1.ClusterCredential{Token: saToken}, impersonationProxyURL, impersonationProxyCACertPEM,
@@ -916,7 +916,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}
 
 			// Test using a service account token.
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 			saName, saToken, _ := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 			impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(t,
 				&loginv1alpha1.ClusterCredential{Token: saToken},
@@ -935,7 +935,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("WhoAmIRequests and SA token request", func(t *testing.T) {
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 			kubeClient := adminClient.CoreV1()
 			saName, _, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 
@@ -1145,7 +1145,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		t.Run("websocket client", func(t *testing.T) {
 			parallelIfNotEKS(t)
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 
 			impersonationRestConfig := impersonationProxyRestConfig(
 				refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM),
@@ -1224,7 +1224,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		t.Run("http2 client", func(t *testing.T) {
 			parallelIfNotEKS(t)
-			namespaceName := createTestNamespace(t, adminClient)
+			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 
 			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
 			wantConfigMap := &corev1.ConfigMap{
@@ -1783,7 +1783,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			requireEventually.Truef(k8serrors.IsNotFound(err), "expected NotFound error, got %v", err)
-		}, 10*time.Second, 250*time.Millisecond)
+		}, time.Minute, time.Second)
 
 		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
 		// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when
@@ -1862,27 +1862,6 @@ func ensureDNSResolves(t *testing.T, urlString string) {
 			requireEventually.NotEmpty(ips)
 		}
 	}, 5*time.Minute, 1*time.Second)
-}
-
-func createTestNamespace(t *testing.T, adminClient kubernetes.Interface) string {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-
-		t.Logf("cleaning up test namespace %s", namespace.Name)
-		require.NoError(t, adminClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{}))
-	})
-	return namespace.Name
 }
 
 func createServiceAccountToken(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, namespaceName string) (name, token string, uid types.UID) {

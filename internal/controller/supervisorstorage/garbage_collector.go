@@ -102,7 +102,12 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 		}
 
 		if garbageCollectAfterTime.Before(frozenClock.Now()) {
-			err = c.kubeClient.CoreV1().Secrets(secret.Namespace).Delete(ctx.Context, secret.Name, metav1.DeleteOptions{})
+			err = c.kubeClient.CoreV1().Secrets(secret.Namespace).Delete(ctx.Context, secret.Name, metav1.DeleteOptions{
+				Preconditions: &metav1.Preconditions{
+					UID:             &secret.UID,
+					ResourceVersion: &secret.ResourceVersion,
+				},
+			})
 			if err != nil {
 				plog.WarningErr("failed to garbage collect resource", err, logKV(secret))
 				continue

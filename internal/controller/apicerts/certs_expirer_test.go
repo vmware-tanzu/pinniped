@@ -297,12 +297,7 @@ func TestExpirerControllerSync(t *testing.T) {
 
 			if test.wantDelete {
 				require.Len(t, *opts, 1)
-				require.Equal(t, metav1.DeleteOptions{
-					Preconditions: &metav1.Preconditions{
-						UID:             &testUID,
-						ResourceVersion: &testRV,
-					},
-				}, (*opts)[0])
+				require.Equal(t, testutil.NewPreconditions(testUID, testRV), (*opts)[0])
 			} else {
 				require.Len(t, *opts, 0)
 			}

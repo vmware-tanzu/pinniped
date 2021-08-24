@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
@@ -116,6 +117,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			subject                 controllerlib.Controller
 			kubeInformerClient      *kubernetesfake.Clientset
 			kubeClient              *kubernetesfake.Clientset
+			deleteOptions           *[]metav1.DeleteOptions
+			deleteOptionsRecorder   kubernetes.Interface
 			kubeInformers           kubeinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
@@ -130,7 +133,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = GarbageCollectorController(
 				fakeClock,
-				kubeClient,
+				deleteOptionsRecorder,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 			)
@@ -158,6 +161,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeClient = kubernetesfake.NewSimpleClientset()
+			deleteOptions = &[]metav1.DeleteOptions{}
+			deleteOptionsRecorder = testutil.NewDeleteOptionsRecorder(kubeClient, deleteOptions)
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			frozenNow = time.Now().UTC()
 			fakeClock = clock.NewFakeClock(frozenNow)
@@ -193,8 +198,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			it.Before(func() {
 				firstExpiredSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "first expired secret",
-						Namespace: installedInNamespace,
+						Name:            "first expired secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-123",
+						ResourceVersion: "rv-456",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
@@ -204,8 +211,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(firstExpiredSecret))
 				secondExpiredSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "second expired secret",
-						Namespace: installedInNamespace,
+						Name:            "second expired secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-789",
+						ResourceVersion: "rv-555",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-2 * time.Second).Format(time.RFC3339),
 						},
@@ -236,6 +245,13 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "second expired secret"),
 					},
 					kubeClient.Actions(),
+				)
+				r.ElementsMatch(
+					[]metav1.DeleteOptions{
+						testutil.NewPreconditions("uid-123", "rv-456"),
+						testutil.NewPreconditions("uid-789", "rv-555"),
+					},
+					*deleteOptions,
 				)
 				list, err := kubeClient.CoreV1().Secrets(installedInNamespace).List(context.Background(), metav1.ListOptions{})
 				r.NoError(err)

@@ -46,7 +46,7 @@ function with_modules() {
   env_vars="KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error}"
 
   pushd "${ROOT}" >/dev/null
-  for mod_file in $(find . -maxdepth 4 -not -path "./generated/*" -not -path "./hack/*" -name go.mod | sort); do
+  for mod_file in $(find . -maxdepth 4 -not -path "./generated/*" -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
       echo "=> "

@@ -48,6 +48,9 @@ rules:
   - apiGroups: [apps]
     resources: [replicasets,deployments]
     verbs: [get]
+  - apiGroups: [ coordination.k8s.io ]
+    resources: [ leases ]
+    verbs: [ create, get, update ]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

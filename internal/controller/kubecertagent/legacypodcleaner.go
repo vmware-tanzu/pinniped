@@ -40,12 +40,29 @@ func NewLegacyPodCleanerController(
 		controllerlib.Config{
 			Name: "legacy-pod-cleaner-controller",
 			Syncer: controllerlib.SyncFunc(func(ctx controllerlib.Context) error {
-				if err := client.Kubernetes.CoreV1().Pods(ctx.Key.Namespace).Delete(ctx.Context, ctx.Key.Name, metav1.DeleteOptions{}); err != nil {
+				podClient := client.Kubernetes.CoreV1().Pods(ctx.Key.Namespace)
+
+				// avoid blind writes to the API
+				agentPod, err := podClient.Get(ctx.Context, ctx.Key.Name, metav1.GetOptions{})
+				if err != nil {
+					if k8serrors.IsNotFound(err) {
+						return nil
+					}
+					return fmt.Errorf("could not get legacy agent pod: %w", err)
+				}
+
+				if err := podClient.Delete(ctx.Context, ctx.Key.Name, metav1.DeleteOptions{
+					Preconditions: &metav1.Preconditions{
+						UID:             &agentPod.UID,
+						ResourceVersion: &agentPod.ResourceVersion,
+					},
+				}); err != nil {
 					if k8serrors.IsNotFound(err) {
 						return nil
 					}
 					return fmt.Errorf("could not delete legacy agent pod: %w", err)
 				}
+
 				log.Info("deleted legacy kube-cert-agent pod", "pod", klog.KRef(ctx.Key.Namespace, ctx.Key.Name))
 				return nil
 			}),

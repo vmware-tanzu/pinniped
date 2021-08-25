@@ -19,6 +19,10 @@ func (c *FakeConfigV1alpha1) FederationDomains(namespace string) v1alpha1.Federa
 	return &FakeFederationDomains{c, namespace}
 }
 
+func (c *FakeConfigV1alpha1) StarlarkFunctions(namespace string) v1alpha1.StarlarkFunctionInterface {
+	return &FakeStarlarkFunctions{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeConfigV1alpha1) RESTClient() rest.Interface {

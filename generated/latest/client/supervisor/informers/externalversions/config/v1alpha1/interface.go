@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// FederationDomains returns a FederationDomainInformer.
 	FederationDomains() FederationDomainInformer
+	// StarlarkFunctions returns a StarlarkFunctionInformer.
+	StarlarkFunctions() StarlarkFunctionInformer
 }
 
 type version struct {
@@ -29,4 +31,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // FederationDomains returns a FederationDomainInformer.
 func (v *version) FederationDomains() FederationDomainInformer {
 	return &federationDomainInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// StarlarkFunctions returns a StarlarkFunctionInformer.
+func (v *version) StarlarkFunctions() StarlarkFunctionInformer {
+	return &starlarkFunctionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

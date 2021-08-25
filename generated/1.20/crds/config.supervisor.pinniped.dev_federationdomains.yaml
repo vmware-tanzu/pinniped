@@ -38,6 +38,156 @@ spec:
           spec:
             description: Spec of the OIDC provider.
             properties:
+              identityProviders:
+                description: IdentityProviders is the list of identity providers available
+                  for use by this FederationDomain. For backwards compatibility with
+                  versions of Pinniped which predate support for multiple identity
+                  providers, an empty IdentityProviders list will cause the FederationDomain
+                  to use all available identity providers which exist in the same
+                  namespace, but also to reject all authentication requests when there
+                  is more than one identity provider currently defined. In this backwards
+                  compatibility mode, the name of the identity provider resource (e.g.
+                  the Name of an OIDCIdentityProvider resource) will be used as the
+                  name of the identity provider in this FederationDomain. This mode
+                  is provided to make upgrading from older versions easier. However,
+                  instead of relying on this backwards compatibility mode, please
+                  consider this mode to be deprecated and please instead explicitly
+                  list the identity provider using this IdentityProviders field.
+                items:
+                  description: FederationDomainIdentityProvider describes how an identity
+                    provider is made available in this FederationDomain. An identity
+                    provider (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes
+                    how to connect to a server, how to talk in a specific protocol
+                    for authentication, and how to use the schema of that server/protocol
+                    to extract a normalized user identity. Normalized user identities
+                    include a username and a list of group names. In contrast, the
+                    FederationDomainIdentityProvider describes how to use that normalized
+                    identity in a group of Kubernetes clusters. It can perform arbitrary
+                    transformations on that normalized identity. For example, a transformation
+                    can add a prefix to all usernames to help avoid accidental conflicts
+                    when multiple identity providers have different users with the
+                    same username (e.g. "idp1:ryan" versus "idp2:ryan"). A FederationDomainIdentityProvider
+                    can also implement arbitrary authentication rejection policies.
+                    For example, even though a user was able to authenticate with
+                    the identity provider, disallow the authentication to the Kubernetes
+                    clusters that belong to this FederationDomain unless the user
+                    also belongs to a specific group in the identity provider.
+                  properties:
+                    name:
+                      description: Name is the name of this identity provider as it
+                        will appear to clients. This name ends up in the kubeconfig
+                        of end users, so changing the name of an identity provider
+                        that is in use by end users will be a disruptive change for
+                        those users.
+                      minLength: 1
+                      type: string
+                    objectRef:
+                      description: ObjectRef is a reference to a Pinniped identity
+                        provider resource. A valid reference is required. If the reference
+                        cannot be resolved then the identity provider will not be
+                        made available.
+                      properties:
+                        apiGroup:
+                          description: APIGroup is the group for the resource being
+                            referenced. If APIGroup is not specified, the specified
+                            Kind must be in the core API group. For any other third-party
+                            types, APIGroup is required.
+                          type: string
+                        kind:
+                          description: Kind is the type of resource being referenced
+                          type: string
+                        name:
+                          description: Name is the name of resource being referenced
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      type: object
+                    transforms:
+                      description: Transforms is an optional list of transformations
+                        to be applied during user authentication in the order which
+                        they are listed.
+                      items:
+                        properties:
+                          objectRef:
+                            description: ObjectRef is a reference to a transformation
+                              function. Currently, this must be a resource of kind
+                              StarlarkFunction. This must refer to function resource
+                              with type usernameAndGroups.transform.pinniped.dev/v1,
+                              which specifies the contract for calling the function,
+                              passing arguments to it, and reading the result from
+                              it. A valid reference is required. If the reference
+                              cannot be resolved, or if it is of an unsupported kind
+                              or type, then the identity provider will not be made
+                              available.
+                            properties:
+                              apiGroup:
+                                description: APIGroup is the group for the resource
+                                  being referenced. If APIGroup is not specified,
+                                  the specified Kind must be in the core API group.
+                                  For any other third-party types, APIGroup is required.
+                                type: string
+                              kind:
+                                description: Kind is the type of resource being referenced
+                                type: string
+                              name:
+                                description: Name is the name of resource being referenced
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          params:
+                            additionalProperties:
+                              description: FederationDomainTransformParam is used
+                                to pass a typed param value to a transformation function.
+                              properties:
+                                boolValue:
+                                  description: BoolValue should hold the value when
+                                    Type is "bool", and is otherwise ignored.
+                                  type: boolean
+                                intValue:
+                                  description: IntValue should hold the value when
+                                    Type is "int", and is otherwise ignored.
+                                  format: int64
+                                  type: integer
+                                stringValue:
+                                  description: StringValue should hold the value when
+                                    Type is "string", and is otherwise ignored.
+                                  type: string
+                                type:
+                                  description: Type determines the type of the param,
+                                    and indicates which other field should be non-empty.
+                                  enum:
+                                  - string
+                                  - bool
+                                  - int
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                            description: Params are additional parameters that will
+                              be passed to the transformation function beyond the
+                              default parameters determined by the function's type
+                              (e.g. usernameAndGroups.transform.pinniped.dev/v1).
+                              It is a map of param names to param values. To be valid,
+                              a param's value must be of the type declared by the
+                              referenced StarlarkFunction resource for that param
+                              name, and all of the param names declared by the StarlarkFunction
+                              resource must be present here. Extra params which are
+                              listed here but are not defined by the StarlarkFunction
+                              resource will be ignored. If any params are invalid,
+                              then the identity provider will not be made available.
+                            type: object
+                        required:
+                        - objectRef
+                        type: object
+                      type: array
+                  required:
+                  - name
+                  - objectRef
+                  type: object
+                type: array
               issuer:
                 description: "Issuer is the OIDC Provider's issuer, per the OIDC Discovery
                   Metadata document, as well as the identifier that it will use for

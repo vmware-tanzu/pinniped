@@ -12,3 +12,11 @@ type FederationDomainListerExpansion interface{}
 // FederationDomainNamespaceListerExpansion allows custom methods to be added to
 // FederationDomainNamespaceLister.
 type FederationDomainNamespaceListerExpansion interface{}
+
+// StarlarkFunctionListerExpansion allows custom methods to be added to
+// StarlarkFunctionLister.
+type StarlarkFunctionListerExpansion interface{}
+
+// StarlarkFunctionNamespaceListerExpansion allows custom methods to be added to
+// StarlarkFunctionNamespaceLister.
+type StarlarkFunctionNamespaceListerExpansion interface{}

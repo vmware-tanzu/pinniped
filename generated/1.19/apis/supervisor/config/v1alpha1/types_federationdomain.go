@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -41,6 +41,72 @@ type FederationDomainTLSSpec struct {
 	SecretName string `json:"secretName,omitempty"`
 }
 
+// FederationDomainTransformParam is used to pass a typed param value to a transformation function.
+type FederationDomainTransformParam struct {
+	// Type determines the type of the param, and indicates which other field should be non-empty.
+	// +kubebuilder:validation:Enum=string;bool;int
+	Type string `json:"type"`
+
+	// StringValue should hold the value when Type is "string", and is otherwise ignored.
+	// +optional
+	StringValue string `json:"stringValue"`
+
+	// BoolValue should hold the value when Type is "bool", and is otherwise ignored.
+	// +optional
+	BoolValue bool `json:"boolValue"`
+
+	// IntValue should hold the value when Type is "int", and is otherwise ignored.
+	// +optional
+	IntValue int64 `json:"intValue"`
+}
+
+type FederationDomainTransform struct {
+	// ObjectRef is a reference to a transformation function. Currently, this must be a resource of kind StarlarkFunction.
+	// This must refer to function resource with type usernameAndGroups.transform.pinniped.dev/v1, which
+	// specifies the contract for calling the function, passing arguments to it, and reading the result from it.
+	// A valid reference is required. If the reference cannot be resolved, or if it is of an unsupported kind or type,
+	// then the identity provider will not be made available.
+	ObjectRef corev1.TypedLocalObjectReference `json:"objectRef"`
+
+	// Params are additional parameters that will be passed to the transformation function beyond the default parameters
+	// determined by the function's type (e.g. usernameAndGroups.transform.pinniped.dev/v1). It is a map of param names
+	// to param values. To be valid, a param's value must be of the type declared by the referenced StarlarkFunction
+	// resource for that param name, and all of the param names declared by the StarlarkFunction resource must be present
+	// here. Extra params which are listed here but are not defined by the StarlarkFunction resource will be ignored.
+	// If any params are invalid, then the identity provider will not be made available.
+	// +optional
+	Params map[string]FederationDomainTransformParam `json:"params,omitempty"`
+}
+
+// FederationDomainIdentityProvider describes how an identity provider is made available in this FederationDomain.
+// An identity provider (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes how to connect to a server,
+// how to talk in a specific protocol for authentication, and how to use the schema of that server/protocol to
+// extract a normalized user identity. Normalized user identities include a username and a list of group names.
+// In contrast, the FederationDomainIdentityProvider describes how to use that normalized identity in a group of
+// Kubernetes clusters. It can perform arbitrary transformations on that normalized identity. For example, a
+// transformation can add a prefix to all usernames to help avoid accidental conflicts when multiple identity
+// providers have different users with the same username (e.g. "idp1:ryan" versus "idp2:ryan").
+// A FederationDomainIdentityProvider can also implement arbitrary authentication rejection policies.
+// For example, even though a user was able to authenticate with the identity provider, disallow the authentication
+// to the Kubernetes clusters that belong to this FederationDomain unless the user also belongs to a specific
+// group in the identity provider.
+type FederationDomainIdentityProvider struct {
+	// Name is the name of this identity provider as it will appear to clients. This name ends up in the kubeconfig
+	// of end users, so changing the name of an identity provider that is in use by end users will be a disruptive
+	// change for those users.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// ObjectRef is a reference to a Pinniped identity provider resource. A valid reference is required.
+	// If the reference cannot be resolved then the identity provider will not be made available.
+	ObjectRef corev1.TypedLocalObjectReference `json:"objectRef"`
+
+	// Transforms is an optional list of transformations to be applied during user authentication
+	// in the order which they are listed.
+	// +optional
+	Transforms []FederationDomainTransform `json:"transforms,omitempty"`
+}
+
 // FederationDomainSpec is a struct that describes an OIDC Provider.
 type FederationDomainSpec struct {
 	// Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the
@@ -57,6 +123,18 @@ type FederationDomainSpec struct {
 	// TLS configures how this FederationDomain is served over Transport Layer Security (TLS).
 	// +optional
 	TLS *FederationDomainTLSSpec `json:"tls,omitempty"`
+
+	// IdentityProviders is the list of identity providers available for use by this FederationDomain.
+	// For backwards compatibility with versions of Pinniped which predate support for multiple identity providers,
+	// an empty IdentityProviders list will cause the FederationDomain to use all available identity providers which
+	// exist in the same namespace, but also to reject all authentication requests when there is more than one identity
+	// provider currently defined. In this backwards compatibility mode, the name of the identity provider resource
+	// (e.g. the Name of an OIDCIdentityProvider resource) will be used as the name of the identity provider in this
+	// FederationDomain. This mode is provided to make upgrading from older versions easier. However, instead of
+	// relying on this backwards compatibility mode, please consider this mode to be deprecated and please instead
+	// explicitly list the identity provider using this IdentityProviders field.
+	// +optional
+	IdentityProviders []FederationDomainIdentityProvider `json:"identityProviders,omitempty"`
 }
 
 // FederationDomainSecrets holds information about this OIDC Provider's secrets.

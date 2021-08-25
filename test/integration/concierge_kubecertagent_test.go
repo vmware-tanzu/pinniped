@@ -93,7 +93,8 @@ func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer,
 	return nil
 }
 
-func TestLegacyPodCleaner(t *testing.T) {
+// safe to run in parallel with serial tests since it only interacts with a test local pod, see main_test.go.
+func TestLegacyPodCleaner_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

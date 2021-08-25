@@ -37,7 +37,8 @@ import (
 	"go.pinniped.dev/test/testlib/browsertest"
 )
 
-func TestCLIGetKubeconfigStaticToken(t *testing.T) {
+// safe to run in parallel with serial tests since it only interacts with a test local webhook, see main_test.go.
+func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a test webhook configuration to use with the CLI.

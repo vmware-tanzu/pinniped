@@ -27,10 +27,9 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestLeaderElection(t *testing.T) {
+// safe to run in parallel with serial tests since it only interacts with a test local lease, see main_test.go.
+func TestLeaderElection_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
-
-	t.Parallel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)

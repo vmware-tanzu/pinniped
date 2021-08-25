@@ -120,7 +120,7 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	}
 
 	t.Helper()
-	SkipUnlessIntegration(t)
+	skipUnlessIntegration(t)
 
 	capabilitiesDescriptionYAML := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_YAML")
 	capabilitiesDescriptionFile := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_FILE")

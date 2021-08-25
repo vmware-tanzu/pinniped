@@ -44,18 +44,18 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
 1. Install the `ytt` and `kapp` command-line tools using the instructions from the [Carvel documentation](https://carvel.dev/#whole-suite).
 
-2. Clone the Pinniped GitHub repository and visit the `deploy/concierge` directory:
+1. Clone the Pinniped GitHub repository and visit the `deploy/concierge` directory:
 
    - `git clone git@github.com:vmware-tanzu/pinniped.git`
    - `cd pinniped/deploy/concierge`
 
-3. Decide which release version you would like to install. All release versions are [listed on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
+1. Decide which release version you would like to install. All release versions are [listed on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
 
-4. Checkout your preferred version tag, e.g. `{{< latestversion >}}`.
+1. Checkout your preferred version tag, e.g. `{{< latestversion >}}`.
 
    - `git checkout {{< latestversion >}}`
 
-5. Customize configuration parameters:
+1. Customize configuration parameters:
 
     - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/concierge/values.yaml) for documentation about individual configuration parameters.
       For example, you can change the number of Concierge pods by setting `replicas` or apply custom annotations to the impersonation proxy service using `impersonation_proxy_spec`.
@@ -80,13 +80,13 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
     - If you are using a GitOps-style workflow to manage the installation of Pinniped, then you may wish to commit this new YAML file to your GitOps repository.
 
-6. Render templated YAML manifests:
+1. Render templated YAML manifests:
 
    - `ytt --file . --file site/dev-env.yaml`
 
    By putting the override file last in the list of `--file` options, it will override the default values.
 
-7. Deploy the templated YAML manifests:
+1. Deploy the templated YAML manifests:
 
    - `ytt --file . --file site/dev-env.yaml | kapp deploy --app pinniped-concierge --file -`
 

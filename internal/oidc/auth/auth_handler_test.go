@@ -946,9 +946,22 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:      "application/json; charset=utf-8",
 			wantBodyJSON:         fositeInvalidRedirectURIErrorBody,
 		},
-		{ // TODO maybe add one like this for AD
+		{
 			name:   "downstream redirect uri does not match what is configured for client when using LDAP upstream",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			method: http.MethodGet,
+			path: modifiedHappyGetRequestPath(map[string]string{
+				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
+			}),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
+			wantStatus:           http.StatusBadRequest,
+			wantContentType:      "application/json; charset=utf-8",
+			wantBodyJSON:         fositeInvalidRedirectURIErrorBody,
+		},
+		{
+			name:   "downstream redirect uri does not match what is configured for client when using active directory upstream",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamLDAPIdentityProvider),
 			method: http.MethodGet,
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
@@ -994,6 +1007,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
+			name:            "downstream client does not exist when using active directory upstream",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamLDAPIdentityProvider),
+			method:          http.MethodGet,
+			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			wantStatus:      http.StatusUnauthorized,
+			wantContentType: "application/json; charset=utf-8",
+			wantBodyJSON:    fositeInvalidClientErrorBody,
+		},
+		{
 			name:               "response type is unsupported when using OIDC upstream browser flow",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
@@ -1023,6 +1045,16 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "response type is unsupported when using LDAP upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+			wantBodyString:     "",
+		},
+		{
+			name:               "response type is unsupported when using active directory upstream",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamLDAPIdentityProvider),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusFound,

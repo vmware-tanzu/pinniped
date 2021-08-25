@@ -948,9 +948,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    "ignored-but-required",
-							Image:   "busybox",
-							Command: []string{"sh", "-c", "sleep 3600"},
+							Name:            "sleeper",
+							Image:           env.ShellContainerImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         []string{"sh", "-c", "sleep 3600"},
 						},
 					},
 					ServiceAccountName: saName,
@@ -1064,7 +1065,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// existing Concierge pod because we need more tools than we can get from a scratch/distroless base image.
 			runningTestPod := testlib.CreatePod(ctx, t, "impersonation-proxy", env.ConciergeNamespace, corev1.PodSpec{Containers: []corev1.Container{{
 				Name:            "impersonation-proxy-test",
-				Image:           "debian:10.10-slim",
+				Image:           env.ShellContainerImage,
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"bash", "-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
 				Stdin:           true,

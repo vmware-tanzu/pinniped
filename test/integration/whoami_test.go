@@ -134,7 +134,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 }
 
 func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
-	_ = testlib.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -168,9 +168,10 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 		corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:    "ignored-but-required",
-					Image:   "busybox",
-					Command: []string{"sh", "-c", "sleep 3600"},
+					Name:            "sleeper",
+					Image:           env.ShellContainerImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"sh", "-c", "sleep 3600"},
 				},
 			},
 			ServiceAccountName: sa.Name,

@@ -117,9 +117,10 @@ func TestLegacyPodCleaner(t *testing.T) {
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
-				Name:    "sleeper",
-				Image:   "debian:10.9-slim",
-				Command: []string{"/bin/sleep", "infinity"},
+				Name:            "sleeper",
+				Image:           env.ShellContainerImage,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"/bin/sleep", "infinity"},
 			}},
 		},
 	}, metav1.CreateOptions{})

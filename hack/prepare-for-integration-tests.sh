@@ -368,6 +368,8 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local user store does not let us configure groups.
 export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
+# PINNIPED_TEST_SHELL_CONTAINER_IMAGE should be a container which includes bash and sleep, used by some tests.
+export PINNIPED_TEST_SHELL_CONTAINER_IMAGE="ghcr.io/pinniped-ci-bot/test-kubectl:latest"
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

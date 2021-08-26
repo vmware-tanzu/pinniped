@@ -298,7 +298,7 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
-	adUpstreamImpl := activeDirectoryUpstreamGenericLDAPImpl{*upstream}
+	adUpstreamImpl := &activeDirectoryUpstreamGenericLDAPImpl{activeDirectoryIdentityProvider: *upstream}
 
 	config := &upstreamldap.ProviderConfig{
 		Name: upstream.Name,
@@ -322,7 +322,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){defaultActiveDirectoryGroupNameAttributeName: upstreamldap.GroupSAMAccountNameWithDomainSuffix}
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

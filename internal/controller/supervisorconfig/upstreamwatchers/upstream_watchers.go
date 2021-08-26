@@ -30,7 +30,7 @@ const (
 	ErrNoCertificates = constable.Error("no certificates found")
 
 	LDAPBindAccountSecretType = corev1.SecretTypeBasicAuth
-	TestLDAPConnectionTimeout = 90 * time.Second
+	probeLDAPTimeout          = 90 * time.Second
 
 	// Constants related to conditions.
 	typeBindSecretValid              = "BindSecretValid"
@@ -290,7 +290,7 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 	var ldapConnectionValidCondition *v1alpha1.Condition
 	var searchBaseFoundCondition *v1alpha1.Condition
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivity(ctx, validatedSecretVersionsCache, upstream, config, currentSecretVersion)
+		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSecretVersionsCache, upstream, config, currentSecretVersion)
 		if ldapConnectionValidCondition != nil {
 			conditions.Append(ldapConnectionValidCondition, false)
 		}
@@ -301,10 +301,10 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 	return conditions
 }
 
-func validateAndSetLDAPServerConnectivity(ctx context.Context, validatedSecretVersionsCache *SecretVersionCache, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) (*v1alpha1.Condition, *v1alpha1.Condition) {
+func validateAndSetLDAPServerConnectivityAndSearchBase(ctx context.Context, validatedSecretVersionsCache *SecretVersionCache, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) (*v1alpha1.Condition, *v1alpha1.Condition) {
 	var ldapConnectionValidCondition *v1alpha1.Condition
 	if !HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecretVersion(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
-		testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, TestLDAPConnectionTimeout)
+		testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, probeLDAPTimeout)
 		defer cancelFunc()
 
 		ldapConnectionValidCondition = TestConnection(testConnectionTimeout, upstream.Spec().BindSecretName(), config, currentSecretVersion)
@@ -321,7 +321,11 @@ func validateAndSetLDAPServerConnectivity(ctx context.Context, validatedSecretVe
 	}
 	var searchBaseFoundCondition *v1alpha1.Condition
 	if !HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
-		searchBaseFoundCondition = upstream.Spec().DetectAndSetSearchBase(ctx, config)
+		searchBaseTimeout, cancelFunc := context.WithTimeout(ctx, probeLDAPTimeout)
+		defer cancelFunc()
+
+		searchBaseFoundCondition = upstream.Spec().DetectAndSetSearchBase(searchBaseTimeout, config)
+
 		validatedSettings := validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()]
 		validatedSettings.GroupSearchBase = config.GroupSearch.Base
 		validatedSettings.UserSearchBase = config.UserSearch.Base

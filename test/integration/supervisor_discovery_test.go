@@ -39,7 +39,8 @@ import (
 //
 // Testing talking to the supervisor's port 8443 where the supervisor is terminating TLS itself is
 // handled by the others tests in this file.
-func TestSupervisorOIDCDiscovery(t *testing.T) {
+// Never run this test in parallel since deleting all federation domains is disruptive, see main_test.go.
+func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	client := testlib.NewSupervisorClientset(t)
 
@@ -143,7 +144,8 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	}
 }
 
-func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
+// Never run this test in parallel since deleting all federation domains is disruptive, see main_test.go.
+func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	pinnipedClient := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
@@ -214,7 +216,8 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	})
 }
 
-func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
+// Never run this test in parallel since deleting all federation domains is disruptive, see main_test.go.
+func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	pinnipedClient := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)

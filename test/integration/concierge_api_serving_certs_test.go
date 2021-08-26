@@ -17,7 +17,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
+// Never run this test in parallel since breaking discovery is disruptive, see main_test.go.
+func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	defaultServingCertResourceName := env.ConciergeAppName + "-api-tls-serving-certificate"
 

@@ -19,11 +19,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestStorageGarbageCollection(t *testing.T) {
-	// Run this test in parallel with the other integration tests because it does a lot of waiting
-	// and will not impact other tests, or be impacted by other tests, when run in parallel.
-	t.Parallel()
-
+// safe to run in parallel with serial tests since it only interacts with test local secrets, see main_test.go.
+func TestStorageGarbageCollection_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	client := testlib.NewKubernetesClientset(t)
 	secrets := client.CoreV1().Secrets(env.SupervisorNamespace)

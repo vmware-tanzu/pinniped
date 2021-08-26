@@ -29,7 +29,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestWhoAmI_Kubeadm(t *testing.T) {
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_Kubeadm_Parallel(t *testing.T) {
 	// use the cluster signing key being available as a proxy for this being a kubeadm cluster
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
@@ -60,7 +61,8 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 	)
 }
 
-func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_ServiceAccount_Legacy_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -133,8 +135,9 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	)
 }
 
-func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
-	_ = testlib.IntegrationEnv(t)
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -168,9 +171,10 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 		corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:    "ignored-but-required",
-					Image:   "busybox",
-					Command: []string{"sh", "-c", "sleep 3600"},
+					Name:            "sleeper",
+					Image:           env.ShellContainerImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"sh", "-c", "sleep 3600"},
 				},
 			},
 			ServiceAccountName: sa.Name,
@@ -241,7 +245,8 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	)
 }
 
-func TestWhoAmI_CSR(t *testing.T) {
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_CSR_Parallel(t *testing.T) {
 	// use the cluster signing key being available as a proxy for this not being an EKS cluster
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
@@ -329,7 +334,8 @@ func TestWhoAmI_CSR(t *testing.T) {
 	)
 }
 
-func TestWhoAmI_Anonymous(t *testing.T) {
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_Anonymous_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -359,7 +365,8 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 	)
 }
 
-func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
+// whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestWhoAmI_ImpersonateDirectly_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

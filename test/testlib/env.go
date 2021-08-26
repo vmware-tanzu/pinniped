@@ -54,6 +54,7 @@ type TestEnv struct {
 	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
 	Proxy                          string                               `json:"proxy"`
 	APIGroupSuffix                 string                               `json:"apiGroupSuffix"`
+	ShellContainerImage            string                               `json:"shellContainer"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -127,7 +128,7 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	}
 
 	t.Helper()
-	SkipUnlessIntegration(t)
+	skipUnlessIntegration(t)
 
 	capabilitiesDescriptionYAML := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_YAML")
 	capabilitiesDescriptionFile := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_FILE")
@@ -232,6 +233,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 	result.APIGroupSuffix = wantEnv("PINNIPED_TEST_API_GROUP_SUFFIX", "pinniped.dev")
+	result.ShellContainerImage = needEnv(t, "PINNIPED_TEST_SHELL_CONTAINER_IMAGE")
 
 	result.CLIUpstreamOIDC = TestOIDCUpstream{
 		Issuer:      needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER"),

@@ -18,7 +18,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestSupervisorSecrets(t *testing.T) {
+// safe to run in parallel with serial tests since it only interacts with a test local federation domain, see main_test.go.
+func TestSupervisorSecrets_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
 	supervisorClient := testlib.NewSupervisorClientset(t)

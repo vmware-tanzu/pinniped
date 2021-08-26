@@ -49,17 +49,38 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
 1. Customize configuration parameters:
 
-   - Edit `values.yaml` with your custom values.
-   - Change the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`.
-   - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/supervisor/values.yaml) for documentation about individual configuration parameters.
+    - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/supervisor/values.yaml) for documentation about individual configuration parameters.
+      For example, you can change the number of Concierge pods by setting `replicas` or apply custom annotations to the impersonation proxy service using `impersonation_proxy_spec`.
+
+    - In a different directory, create a new YAML file to contain your site-specific configuration. For example, you might call this file `site/dev-env.yaml`.
+
+      In the file, add the special ytt comment for a values file and the YAML triple-dash which starts a new YAML document.
+      Then add custom overrides for any of the parameters from [`values.yaml`](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/supervisor/values.yaml).
+
+      Override the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`,
+      to ensure that you use the version of the server which matches these templates.
+
+      Here is an example which overrides the image tag, the default logging level, and the number of replicas:
+      ```yaml
+      #@data/values
+      ---
+      image_tag: {{< latestversion >}}
+      log_level: debug
+      replicas: 1
+      ```
+    - Parameters for which you would like to use the default value should be excluded from this file.
+
+    - If you are using a GitOps-style workflow to manage the installation of Pinniped, then you may wish to commit this new YAML file to your GitOps repository.
 
 1. Render templated YAML manifests:
 
-   - `ytt --file .`
+    - `ytt --file . --file site/dev-env.yaml`
+   
+    By putting the override file last in the list of `--file` options, it will override the default values.
 
 1. Deploy the templated YAML manifests:
 
-     `ytt --file . | kapp deploy --app pinniped-supervisor --file -`
+     `ytt --file . --file site/dev-env.yaml | kapp deploy --app pinniped-supervisor --file -`
 
 ## Next steps
 

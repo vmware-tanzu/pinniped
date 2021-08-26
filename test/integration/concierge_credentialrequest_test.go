@@ -22,7 +22,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestUnsuccessfulCredentialRequest(t *testing.T) {
+// TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestUnsuccessfulCredentialRequest_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -44,7 +45,8 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 	require.Equal(t, "authentication failed", *response.Status.Message)
 }
 
-func TestSuccessfulCredentialRequest(t *testing.T) {
+// TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestSuccessfulCredentialRequest_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
@@ -129,7 +131,8 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	}
 }
 
-func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
+// TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
@@ -149,7 +152,8 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 	require.Equal(t, pointer.StringPtr("authentication failed"), response.Status.Message)
 }
 
-func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
+// TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.
+func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the

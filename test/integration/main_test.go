@@ -29,7 +29,7 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 		return
 	}
 
-	var serialTests, parallelTests, finalTests []testing.InternalTest
+	var serialTests, parallelTests, disruptiveTests, finalTests []testing.InternalTest
 
 	for _, test := range tests {
 		test := test
@@ -40,9 +40,17 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 		// top level tests that want the standard Go behavior of only running
 		// parallel tests with other parallel tests should use the regular
 		// t.Parallel() approach. this has no effect on any subtest.
-		if strings.HasSuffix(test.Name, "_Parallel") {
+		switch {
+		case strings.HasSuffix(test.Name, "_Parallel"):
 			parallelTests = append(parallelTests, test)
-		} else {
+
+		// top level integration tests the end with the string _Disruptive
+		// are indicating that they are never safe to run with any other
+		// test because they break the underlying cluster in some way.
+		case strings.HasSuffix(test.Name, "_Disruptive"):
+			disruptiveTests = append(disruptiveTests, test)
+
+		default:
 			serialTests = append(serialTests, test)
 		}
 	}
@@ -51,7 +59,7 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 		Name: "TestIntegrationSerial",
 		F: func(t *testing.T) {
 			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
-			t.Parallel()                  // outer test runs in parallel always
+			t.Parallel()                  // outer test always runs in parallel for this bucket
 
 			for _, test := range serialTests {
 				test := test
@@ -66,7 +74,7 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 		Name: "TestIntegrationParallel",
 		F: func(t *testing.T) {
 			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
-			t.Parallel()                  // outer test runs in parallel always
+			t.Parallel()                  // outer test always runs in parallel for this bucket
 
 			for _, test := range parallelTests {
 				test := test
@@ -79,12 +87,31 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 		},
 	}
 
-	if len(serialTests) > 0 {
-		finalTests = append(finalTests, serialTest)
+	disruptiveTest := testing.InternalTest{
+		Name: "TestIntegrationDisruptive",
+		F: func(t *testing.T) {
+			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
+			// outer test never runs in parallel for this bucket
+
+			for _, test := range disruptiveTests {
+				test := test
+				t.Run(test.Name, func(t *testing.T) {
+					test.F(t) // inner disruptive tests do not run in parallel
+				})
+			}
+		},
 	}
 
 	if len(parallelTests) > 0 {
 		finalTests = append(finalTests, parallelTest)
+	}
+
+	if len(serialTests) > 0 {
+		finalTests = append(finalTests, serialTest)
+	}
+
+	if len(disruptiveTests) > 0 {
+		finalTests = append(finalTests, disruptiveTest)
 	}
 
 	*testsPointer = finalTests

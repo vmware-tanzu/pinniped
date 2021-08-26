@@ -400,6 +400,49 @@
     }
 }
 
+.resources {
+    background-color: #fff;
+    margin-top: -90px;
+    padding: 30px 30px 50px 30px;
+
+    .embed-responsive {
+        position: relative;
+        &:before {
+            padding-top: 56.25%;
+            display: block;
+            content: "";
+        }
+        .embed-responsive-item {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+    }
+
+    .grid {
+        .col {
+            border: 1px solid #F2F2F2;
+            .icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 140px;
+            }
+            .content {
+                padding: 0px 20px 20px 20px;
+                text-align: center;
+                h3 {
+                    margin-top: 0px;
+                }
+            }
+        }
+    }
+}
+
 .docs {
     background-color: #fff;
     margin-top: -90px;

@@ -24,7 +24,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestLDAPSearch(t *testing.T) {
+// safe to run in parallel with serial tests since it only makes read requests to our test LDAP server, see main_test.go.
+func TestLDAPSearch_Parallel(t *testing.T) {
 	// This test does not interact with Kubernetes itself. It is a test of our LDAP client code, and only interacts
 	// with our test OpenLDAP server, which is exposed directly to this test via kubectl port-forward.
 	// Theoretically we should always be able to run this test, but something about the kubectl port forwarding

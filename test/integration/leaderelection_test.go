@@ -27,12 +27,11 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestLeaderElection(t *testing.T) {
+// safe to run in parallel with serial tests since it only interacts with a test local lease, see main_test.go.
+func TestLeaderElection_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
-	t.Parallel()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	t.Cleanup(cancel)
 
 	leaseName := "leader-election-" + rand.String(5)
@@ -198,14 +197,17 @@ func waitForIdentity(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		lease, err := pickRandomLeaderElectionClient(clients).Kubernetes.CoordinationV1().Leases(namespace.Name).Get(ctx, leaseName, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
+			t.Logf("lease %s/%s does not exist", namespace.Name, leaseName)
 			return false, nil
 		}
 		if err != nil {
 			return false, err
 		}
 		out = lease
+		t.Logf("lease %s/%s - current leader identity: %s, valid leader identities: %s",
+			namespace.Name, leaseName, pointer.StringDeref(lease.Spec.HolderIdentity, "<nil>"), identities.List())
 		return lease.Spec.HolderIdentity != nil && identities.Has(*lease.Spec.HolderIdentity), nil
-	}, 5*time.Minute, time.Second)
+	}, 10*time.Minute, 10*time.Second)
 
 	return out
 }
@@ -257,7 +259,7 @@ func checkOnlyLeaderCanWrite(ctx context.Context, t *testing.T, namespace *corev
 		}
 		requireEventually.Equal(1, leaders, "did not see leader")
 		requireEventually.Equal(len(clients)-1, nonLeaders, "did not see non-leader")
-	}, time.Minute, time.Second)
+	}, 3*time.Minute, 3*time.Second)
 
 	return lease
 }
@@ -274,7 +276,7 @@ func forceTransition(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 		startTime = *startLease.Spec.AcquireTime
 
 		startLease = startLease.DeepCopy()
-		startLease.Spec.HolderIdentity = pointer.String("some-other-client" + rand.String(5))
+		startLease.Spec.HolderIdentity = pointer.String("some-other-client-" + rand.String(5))
 
 		_, err := pickCurrentLeaderClient(ctx, t, namespace, leaseName, clients).
 			Kubernetes.CoordinationV1().Leases(namespace.Name).Update(ctx, startLease, metav1.UpdateOptions{})
@@ -288,8 +290,6 @@ func forceTransition(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 
 	require.Greater(t, finalTransitions, startTransitions)
 	require.Greater(t, finalTime.UnixNano(), startTime.UnixNano())
-
-	time.Sleep(2 * time.Minute) // need to give clients time to notice this change because leader election is polling based
 
 	return finalLease
 }
@@ -306,8 +306,6 @@ func forceRestart(ctx context.Context, t *testing.T, namespace *corev1.Namespace
 	newLease := waitForIdentity(ctx, t, namespace, leaseName, clients)
 	require.Zero(t, *newLease.Spec.LeaseTransitions)
 	require.Greater(t, newLease.Spec.AcquireTime.UnixNano(), startLease.Spec.AcquireTime.UnixNano())
-
-	time.Sleep(2 * time.Minute) // need to give clients time to notice this change because leader election is polling based
 
 	return newLease
 }

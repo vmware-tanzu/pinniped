@@ -20,7 +20,7 @@ import (
 )
 
 func TestExampleController(t *testing.T) {
-	testlib.SkipUnlessIntegration(t)
+	_ = testlib.IntegrationEnv(t)
 
 	config := testlib.NewClientConfig(t)
 

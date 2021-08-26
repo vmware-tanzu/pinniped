@@ -64,7 +64,8 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 	// in the user's list of groups after a successful authentication.
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the ActiveDirectory
 	// server in the user's entry. E.g. "cn" for common name. Distinguished names can be used by specifying lower-case "dn".
-	// Optional. When not specified, this defaults to a custom field that looks like "sAMAccountName@domain".
+	// Optional. When not specified, this defaults to a custom field that looks like "sAMAccountName@domain",
+	// where domain is constructed from the domain components of the group DN.
 	// +optional
 	GroupName string `json:"groupName,omitempty"`
 }
@@ -72,7 +73,11 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 type ActiveDirectoryIdentityProviderUserSearch struct {
 	// Base is the dn (distinguished name) that should be used as the search base when searching for users.
 	// E.g. "ou=users,dc=example,dc=com".
-	// Optional, when not specified it will be based on the result of a query for the default naming context.
+	// Optional, when not specified it will be based on the result of a query for the defaultNamingContext
+	// (see https://docs.microsoft.com/en-us/windows/win32/adschema/rootdse).
+	// The default behavior searches your entire domain for users.
+	// It may make sense to specify a subtree as a search base if you wish to exclude some users
+	// or to make searches faster.
 	// +optional
 	Base string `json:"base,omitempty"`
 
@@ -83,6 +88,10 @@ type ActiveDirectoryIdentityProviderUserSearch struct {
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
 	// Optional. When not specified, the default will be
 	// '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={}")(mail={})(userPrincipalName={})(sAMAccountType=805306368))'
+	// This means that the user is a person, is not a computer, the sAMAccountType is for a normal user account,
+	// and is not shown in advanced view only
+	// (which would likely mean its a system created service account with advanced permissions).
+	// Also, either the sAMAccountName, the userPrincipalName, or the mail attribute matches the input username.
 	// +optional
 	Filter string `json:"filter,omitempty"`
 
@@ -95,7 +104,11 @@ type ActiveDirectoryIdentityProviderUserSearch struct {
 type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// Base is the dn (distinguished name) that should be used as the search base when searching for groups. E.g.
 	// "ou=groups,dc=example,dc=com".
-	// Optional, when not specified it will be based on the result of a query for the default naming context.
+	// Optional, when not specified it will be based on the result of a query for the defaultNamingContext
+	// (see https://docs.microsoft.com/en-us/windows/win32/adschema/rootdse).
+	// The default behavior searches your entire domain for groups.
+	// It may make sense to specify a subtree as a search base if you wish to exclude some groups
+	// for security reasons or to make searches faster.
 	// +optional
 	Base string `json:"base,omitempty"`
 

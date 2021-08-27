@@ -501,6 +501,7 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 						RunAsUser:  pointer.Int64Ptr(0),
 						RunAsGroup: pointer.Int64Ptr(0),
 					},
+					HostNetwork: controllerManagerPod.Spec.HostNetwork,
 				},
 			},
 

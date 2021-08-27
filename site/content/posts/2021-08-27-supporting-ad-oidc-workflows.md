@@ -3,7 +3,7 @@ title: "Pinniped v0.11.0: Easy Configurations for Active Directory, OIDC CLI wor
 slug: supporting-ad-oidc-workflows
 date: 2021-07-28
 author: Anjali Telang
-image:https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
+image: https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
 excerpt: "With the release of v0.11.0, Pinniped offers CRDs for easy Active Directory configuration, OIDC password grant flow for CLI workflows, and Distroless images for security and performance"
 tags: ['Margo Crawford','Ryan Richard', 'Anjali Telang', 'release']
 ---
@@ -64,22 +64,22 @@ You can also customize the userSearch and groupSearch as shown in the examples i
 
 Here is an example of what the ID token claims will look like:
 
-
-aud:
-- pinniped-cli
-auth_time: 1630094468
-exp: 1630094589
-groups:
-- Mammals@activedirectory.test.example.com
-- Marine Mammals@activedirectory.test.example.com
-iat: 1630094469
-iss: https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path
-jti: 191709eb-b2fd-47e0-97f4-a06c48330c3a
-nonce: c772c414388482163515103110cfcdfc
-rat: 1630094468
-sub: ldaps://activedirectory.test.example.com:636?base=DC%3Dactivedirectory%2CDC%3Dtest%2CDC%3Dexample%2CDC%3Dcom&sub=04030201-0605-0807-0910-111213141516
-username: pinny@activedirectory.test.example.com
-
+```yaml
+  aud:
+  - pinniped-cli
+  auth_time: 1630094468
+  exp: 1630094589
+  groups:
+  - Mammals@activedirectory.test.example.com
+  - Marine Mammals@activedirectory.test.example.com
+  iat: 1630094469
+  iss: https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path
+  jti: 191709eb-b2fd-47e0-97f4-a06c48330c3a
+  nonce: c772c414388482163515103110cfcdfc
+  rat: 1630094468
+  sub: ldaps://activedirectory.test.example.com:636?base=DC%3Dactivedirectory%2CDC%3Dtest%2CDC%3Dexample%2CDC%3Dcom&sub=04030201-0605-0807-0910-111213141516
+  username: pinny@activedirectory.test.example.com
+ ```
 
 ## OIDC CLI-based workflows
 

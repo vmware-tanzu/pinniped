@@ -151,6 +151,16 @@ func TestAgentController(t *testing.T) {
 		},
 	}
 
+	// The host network setting from the kube-controller-manager pod should be applied on the
+	// deployment.
+	healthyKubeControllerManagerPodWithHostNetwork := healthyKubeControllerManagerPod.DeepCopy()
+	healthyKubeControllerManagerPodWithHostNetwork.Spec.HostNetwork = true
+
+	//  We create an agent deployment that does not use host network and expect the
+	// controller to add 'hostNetwork: true' to the spec.
+	healthyAgentDeploymentWithHostNetwork := healthyAgentDeployment.DeepCopy()
+	healthyAgentDeploymentWithHostNetwork.Spec.Template.Spec.HostNetwork = true
+
 	// Make another kube-controller-manager pod that's similar, but does not have the CLI flags we're expecting.
 	// We should handle this by falling back to default values for the cert and key paths.
 	healthyKubeControllerManagerPodWithoutArgs := healthyKubeControllerManagerPod.DeepCopy()
@@ -462,6 +472,31 @@ func TestAgentController(t *testing.T) {
 			},
 		},
 		{
+			name: "deployment exists, but missing host network from kube-controller-manager",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPodWithHostNetwork,
+				healthyAgentDeployment,
+				healthyAgentPod,
+			},
+			wantDistinctErrors: []string{
+				"failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
+			},
+			wantAgentDeployment: healthyAgentDeploymentWithHostNetwork,
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+				Message:        "failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="updating existing deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+			},
+		},
+		{
 			name: "deployment exists, configmap missing",
 			pinnipedObjects: []runtime.Object{
 				initialCredentialIssuer,
@@ -562,7 +597,7 @@ func TestAgentController(t *testing.T) {
 			},
 		},
 		{
-			name: "deployment exists, configmap is valid,, exec into agent pod fails",
+			name: "deployment exists, configmap is valid, exec into agent pod fails",
 			pinnipedObjects: []runtime.Object{
 				initialCredentialIssuer,
 			},

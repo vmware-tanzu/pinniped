@@ -79,7 +79,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --skip-browser                             Skip opening the browser (just print the URL)
 					  --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'browser_authcode', 'cli_password')
 					  --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap') (default "oidc")
+					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory') (default "oidc")
 			`),
 		},
 		{
@@ -149,7 +149,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap)
+				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory)
 			`),
 		},
 		{
@@ -213,6 +213,17 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
+			name: "activedirectory upstream type with default flow is allowed",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "activedirectory",
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantOptionsCount: 5,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+		},
+		{
 			name: "ldap upstream type with CLI flow is allowed",
 			args: []string{
 				"--issuer", "test-issuer",
@@ -236,6 +247,32 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: --upstream-identity-provider-flow value not recognized for identity provider type "ldap": browser_authcode (supported values: [cli_password])
+			`),
+		},
+		{
+			name: "active directory upstream type with CLI flow is allowed",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "activedirectory",
+				"--upstream-identity-provider-flow", "cli_password",
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantOptionsCount: 5,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+		},
+		{
+			name: "active directory upstream type with unsupported flow is an error",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "activedirectory",
+				"--upstream-identity-provider-flow", "browser_authcode", // "browser_authcode" is only supported for OIDC upstreams
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: --upstream-identity-provider-flow value not recognized for identity provider type "activedirectory": browser_authcode (supported values: [cli_password])
 			`),
 		},
 		{

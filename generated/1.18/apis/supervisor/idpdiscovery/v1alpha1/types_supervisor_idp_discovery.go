@@ -12,8 +12,9 @@ type IDPType string
 type IDPFlow string
 
 const (
-	IDPTypeOIDC IDPType = "oidc"
-	IDPTypeLDAP IDPType = "ldap"
+	IDPTypeOIDC            IDPType = "oidc"
+	IDPTypeLDAP            IDPType = "ldap"
+	IDPTypeActiveDirectory IDPType = "activedirectory"
 
 	IDPFlowCLIPassword     IDPFlow = "cli_password"
 	IDPFlowBrowserAuthcode IDPFlow = "browser_authcode"

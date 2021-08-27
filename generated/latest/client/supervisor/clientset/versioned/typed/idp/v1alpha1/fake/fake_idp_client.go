@@ -15,6 +15,10 @@ type FakeIDPV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeIDPV1alpha1) ActiveDirectoryIdentityProviders(namespace string) v1alpha1.ActiveDirectoryIdentityProviderInterface {
+	return &FakeActiveDirectoryIdentityProviders{c, namespace}
+}
+
 func (c *FakeIDPV1alpha1) LDAPIdentityProviders(namespace string) v1alpha1.LDAPIdentityProviderInterface {
 	return &FakeLDAPIdentityProviders{c, namespace}
 }

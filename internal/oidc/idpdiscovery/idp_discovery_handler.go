@@ -47,6 +47,13 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
 		})
 	}
+	for _, provider := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
+			Name:  provider.GetName(),
+			Type:  v1alpha1.IDPTypeActiveDirectory,
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
+		})
+	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
 		flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
 		if provider.AllowsPasswordGrant() {

@@ -62,9 +62,10 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	CLIUpstreamOIDC        TestOIDCUpstream `json:"cliOIDCUpstream"`
-	SupervisorUpstreamOIDC TestOIDCUpstream `json:"supervisorOIDCUpstream"`
-	SupervisorUpstreamLDAP TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	CLIUpstreamOIDC                   TestOIDCUpstream `json:"cliOIDCUpstream"`
+	SupervisorUpstreamOIDC            TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+	SupervisorUpstreamLDAP            TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	SupervisorUpstreamActiveDirectory TestLDAPUpstream `json:"supervisorActiveDirectoryUpstream"`
 }
 
 type TestOIDCUpstream struct {
@@ -82,22 +83,29 @@ type TestOIDCUpstream struct {
 }
 
 type TestLDAPUpstream struct {
-	Host                           string   `json:"host"`
-	StartTLSOnlyHost               string   `json:"startTLSOnlyHost"`
-	CABundle                       string   `json:"caBundle"`
-	BindUsername                   string   `json:"bindUsername"`
-	BindPassword                   string   `json:"bindPassword"`
-	UserSearchBase                 string   `json:"userSearchBase"`
-	GroupSearchBase                string   `json:"groupSearchBase"`
-	TestUserDN                     string   `json:"testUserDN"`
-	TestUserCN                     string   `json:"testUserCN"`
-	TestUserPassword               string   `json:"testUserPassword"`
-	TestUserMailAttributeName      string   `json:"testUserMailAttributeName"`
-	TestUserMailAttributeValue     string   `json:"testUserMailAttributeValue"`
-	TestUserUniqueIDAttributeName  string   `json:"testUserUniqueIDAttributeName"`
-	TestUserUniqueIDAttributeValue string   `json:"testUserUniqueIDAttributeValue"`
-	TestUserDirectGroupsCNs        []string `json:"testUserDirectGroupsCNs"`
-	TestUserDirectGroupsDNs        []string `json:"testUserDirectGroupsDNs"` //nolint:golint // this is "distinguished names", not "DNS"
+	Host                                            string   `json:"host"`
+	StartTLSOnlyHost                                string   `json:"startTLSOnlyHost"`
+	CABundle                                        string   `json:"caBundle"`
+	BindUsername                                    string   `json:"bindUsername"`
+	BindPassword                                    string   `json:"bindPassword"`
+	UserSearchBase                                  string   `json:"userSearchBase"`
+	DefaultNamingContextSearchBase                  string   `json:"defaultNamingContextSearchBase"`
+	GroupSearchBase                                 string   `json:"groupSearchBase"`
+	TestUserDN                                      string   `json:"testUserDN"`
+	TestUserCN                                      string   `json:"testUserCN"`
+	TestUserPassword                                string   `json:"testUserPassword"`
+	TestUserMailAttributeName                       string   `json:"testUserMailAttributeName"`
+	TestUserMailAttributeValue                      string   `json:"testUserMailAttributeValue"`
+	TestUserUniqueIDAttributeName                   string   `json:"testUserUniqueIDAttributeName"`
+	TestUserUniqueIDAttributeValue                  string   `json:"testUserUniqueIDAttributeValue"`
+	TestUserDirectGroupsCNs                         []string `json:"testUserDirectGroupsCNs"`
+	TestUserDirectGroupsDNs                         []string `json:"testUserDirectGroupsDNs"` //nolint:golint // this is "distinguished names", not "DNS"
+	TestUserSAMAccountNameValue                     string   `json:"testUserSAMAccountNameValue"`
+	TestUserPrincipalNameValue                      string   `json:"testUserPrincipalNameValue"`
+	TestUserIndirectGroupsSAMAccountNames           []string `json:"TestUserIndirectGroupsSAMAccountNames"`
+	TestUserIndirectGroupsSAMAccountPlusDomainNames []string `json:"TestUserIndirectGroupsSAMAccountPlusDomainNames"`
+	TestDeactivatedUserSAMAccountNameValue          string   `json:"TestDeactivatedUserSAMAccountNameValue"`
+	TestDeactivatedUserPassword                     string   `json:"TestDeactivatedUserPassword"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -269,8 +277,33 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
 	}
 
+	result.SupervisorUpstreamActiveDirectory = TestLDAPUpstream{
+		Host:                                  wantEnv("PINNIPED_TEST_AD_HOST", ""),
+		CABundle:                              base64Decoded(t, os.Getenv("PINNIPED_TEST_AD_LDAPS_CA_BUNDLE")),
+		BindUsername:                          wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME", ""),
+		BindPassword:                          wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD", ""),
+		TestUserPassword:                      wantEnv("PINNIPED_TEST_AD_USER_PASSWORD", ""),
+		TestUserUniqueIDAttributeName:         wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME", ""),
+		TestUserUniqueIDAttributeValue:        wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
+		TestUserPrincipalNameValue:            wantEnv("PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME", ""),
+		TestUserMailAttributeValue:            wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_VALUE", ""),
+		TestUserMailAttributeName:             wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_NAME", ""),
+		TestUserDirectGroupsDNs:               filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN", ""), ";")),
+		TestUserDirectGroupsCNs:               filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN", ""), ";")),
+		TestUserIndirectGroupsSAMAccountNames: filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME", ""), ";")),
+		TestUserIndirectGroupsSAMAccountPlusDomainNames: filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME_DOMAINNAMES", ""), ";")),
+		TestDeactivatedUserSAMAccountNameValue:          wantEnv("PINNIPED_TEST_DEACTIVATED_AD_USER_SAMACCOUNTNAME", ""),
+		TestDeactivatedUserPassword:                     wantEnv("PINNIPED_TEST_DEACTIVATED_AD_USER_PASSWORD", ""),
+		DefaultNamingContextSearchBase:                  wantEnv("PINNIPED_TEST_AD_DEFAULTNAMINGCONTEXT_DN", ""),
+		UserSearchBase:                                  wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
+		GroupSearchBase:                                 wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
+	}
+
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsCNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountNames)
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

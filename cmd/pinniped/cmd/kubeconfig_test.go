@@ -151,7 +151,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --timeout duration                         Timeout for autodiscovery and validation (default 10m0s)
 				      --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')
 				      --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-				      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')
+				      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory')
 			`)
 			},
 		},
@@ -2471,7 +2471,7 @@ func TestGetKubeconfig(t *testing.T) {
 					issuerURL,
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
 			},
-		},
+		}, // TODO make sure there are active directory tests for various flows
 		{
 			name: "supervisor upstream IDP discovery when both name and type are specified but flow is not and a matching IDP is found",
 			args: func(issuerCABundle string, issuerURL string) []string {

@@ -47,7 +47,7 @@ import (
 )
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
-func TestE2EFullIntegration(t *testing.T) {
+func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -660,6 +660,139 @@ func TestE2EFullIntegration(t *testing.T) {
 			expectedGroups,
 		)
 	})
+
+	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
+	// by interacting with the CLI's username and password prompts.
+	t.Run("with Supervisor ActiveDirectory upstream IDP using username and password prompts", func(t *testing.T) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
+		}
+		if env.SupervisorUpstreamActiveDirectory.Host == "" {
+			t.Skip("Active Directory hostname not specified")
+		}
+
+		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
+		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
+
+		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/ad-test-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamActiveDirectory.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+
+	// Add an ActiveDirectory upstream IDP and try using it to authenticate during kubectl commands
+	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
+	t.Run("with Supervisor ActiveDirectory upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("ActiveDirectory integration test requires connectivity to an LDAP server")
+		}
+
+		if env.SupervisorUpstreamActiveDirectory.Host == "" {
+			t.Skip("Active Directory hostname not specified")
+		}
+
+		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
+		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
+
+		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/ad-test-with-env-vars-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Set up the username and password env vars to avoid the interactive prompts.
+		const usernameEnvVar = "PINNIPED_USERNAME"
+		originalUsername, hadOriginalUsername := os.LookupEnv(usernameEnvVar)
+		t.Cleanup(func() {
+			if hadOriginalUsername {
+				require.NoError(t, os.Setenv(usernameEnvVar, originalUsername))
+			}
+		})
+		require.NoError(t, os.Setenv(usernameEnvVar, expectedUsername))
+		const passwordEnvVar = "PINNIPED_PASSWORD" //nolint:gosec // this is not a credential
+		originalPassword, hadOriginalPassword := os.LookupEnv(passwordEnvVar)
+		t.Cleanup(func() {
+			if hadOriginalPassword {
+				require.NoError(t, os.Setenv(passwordEnvVar, originalPassword))
+			}
+		})
+		require.NoError(t, os.Setenv(passwordEnvVar, env.SupervisorUpstreamActiveDirectory.TestUserPassword))
+
+		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		// The next kubectl command should not require auth, so we should be able to run it without these env vars.
+		require.NoError(t, os.Unsetenv(usernameEnvVar))
+		require.NoError(t, os.Unsetenv(passwordEnvVar))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
 }
 
 func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib.TestEnv) {
@@ -708,6 +841,39 @@ func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib
 			},
 		},
 	}, idpv1alpha1.LDAPPhaseReady)
+}
+
+func setupClusterForEndToEndActiveDirectoryTest(t *testing.T, username string, env *testlib.TestEnv) {
+	// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+	testlib.CreateTestClusterRoleBinding(t,
+		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: username},
+		rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+	)
+	testlib.WaitForUserToHaveAccess(t, username, []string{}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
+
+	// Put the bind service account's info into a Secret.
+	bindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+		map[string]string{
+			corev1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+			corev1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+		},
+	)
+
+	// Create upstream LDAP provider and wait for it to become ready.
+	testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+		Host: env.SupervisorUpstreamActiveDirectory.Host,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+		},
+		Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+			SecretName: bindSecret.Name,
+		},
+	}, idpv1alpha1.ActiveDirectoryPhaseReady)
 }
 
 func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) string {

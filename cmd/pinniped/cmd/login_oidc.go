@@ -110,7 +110,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", idpdiscoveryv1alpha1.IDPTypeOIDC.String(), fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP))
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", idpdiscoveryv1alpha1.IDPTypeOIDC.String(), fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory))
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, idpdiscoveryv1alpha1.IDPFlowCLIPassword))
 
 	// --skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
@@ -267,7 +267,7 @@ func flowOptions(requestedIDPType idpdiscoveryv1alpha1.IDPType, requestedFlow id
 				"--upstream-identity-provider-flow value not recognized for identity provider type %q: %s (supported values: %s)",
 				requestedIDPType, requestedFlow, strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String(), idpdiscoveryv1alpha1.IDPFlowCLIPassword.String()}, ", "))
 		}
-	case idpdiscoveryv1alpha1.IDPTypeLDAP:
+	case idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword, "":
 			return useCLIFlow, nil
@@ -282,7 +282,13 @@ func flowOptions(requestedIDPType idpdiscoveryv1alpha1.IDPType, requestedFlow id
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
 		return nil, fmt.Errorf(
 			"--upstream-identity-provider-type value not recognized: %s (supported values: %s)",
-			requestedIDPType, strings.Join([]string{idpdiscoveryv1alpha1.IDPTypeOIDC.String(), idpdiscoveryv1alpha1.IDPTypeLDAP.String()}, ", "))
+			requestedIDPType,
+			strings.Join([]string{
+				idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
+				idpdiscoveryv1alpha1.IDPTypeLDAP.String(),
+				idpdiscoveryv1alpha1.IDPTypeActiveDirectory.String(),
+			}, ", "),
+		)
 	}
 }
 

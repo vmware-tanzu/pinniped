@@ -37,20 +37,24 @@ func TestIDPDiscovery(t *testing.T) {
 			wantContentType: "application/json",
 			wantFirstResponseBodyJSON: here.Doc(`{
 				"pinniped_identity_providers": [
-					{"name": "a-some-ldap-idp", "type": "ldap", "flows": ["cli_password"]},
-					{"name": "a-some-oidc-idp", "type": "oidc", "flows": ["browser_authcode"]},
-					{"name": "x-some-idp",      "type": "ldap", "flows": ["cli_password"]},
-					{"name": "x-some-idp",      "type": "oidc", "flows": ["browser_authcode"]},
-					{"name": "z-some-ldap-idp", "type": "ldap", "flows": ["cli_password"]},
-					{"name": "z-some-oidc-idp", "type": "oidc", "flows": ["browser_authcode", "cli_password"]}
+					{"name": "a-some-ldap-idp", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "a-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
+					{"name": "x-some-idp",      "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "x-some-idp",      "type": "oidc",            "flows": ["browser_authcode"]},
+					{"name": "y-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password"]},
+					{"name": "z-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password"]},
+					{"name": "z-some-ldap-idp", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "z-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode", "cli_password"]}
 				]
 			}`),
 			wantSecondResponseBodyJSON: here.Doc(`{
 				"pinniped_identity_providers": [
-					{"name": "some-other-ldap-idp-1", "type": "ldap", "flows": ["cli_password"]},
-					{"name": "some-other-ldap-idp-2", "type": "ldap", "flows": ["cli_password"]},
-					{"name": "some-other-oidc-idp-1", "type": "oidc", "flows": ["browser_authcode", "cli_password"]},
-					{"name": "some-other-oidc-idp-2", "type": "oidc", "flows": ["browser_authcode"]}
+					{"name": "some-other-ad-idp-1",   "type": "activedirectory", "flows": ["cli_password"]},
+					{"name": "some-other-ad-idp-2",   "type": "activedirectory", "flows": ["cli_password"]},
+					{"name": "some-other-ldap-idp-1", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "some-other-ldap-idp-2", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "some-other-oidc-idp-1", "type": "oidc",            "flows": ["browser_authcode", "cli_password"]},
+					{"name": "some-other-oidc-idp-2", "type": "oidc",            "flows": ["browser_authcode"]}
 				]
 			}`),
 		},
@@ -73,6 +77,8 @@ func TestIDPDiscovery(t *testing.T) {
 				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "a-some-oidc-idp"}).
 				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ldap-idp"}).
 				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "x-some-idp"}).
+				WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ad-idp"}).
+				WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "y-some-ad-idp"}).
 				Build()
 
 			handler := NewHandler(idpLister)
@@ -100,6 +106,11 @@ func TestIDPDiscovery(t *testing.T) {
 			idpLister.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1", AllowPasswordGrant: true},
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-2"},
+			})
+
+			idpLister.SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
+				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-2"},
+				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-1"},
 			})
 
 			// Make the same request to the same handler instance again, and expect different results.

@@ -50,6 +50,7 @@ skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 skip_chromedriver_check=no
+get_active_directory_vars="" # specify a filename for a script to get AD related env variables
 
 while (("$#")); do
   case "$1" in
@@ -79,6 +80,16 @@ while (("$#")); do
     skip_chromedriver_check=yes
     shift
     ;;
+  --get-active-directory-vars)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--get-active-directory-vars requires a script name to be specified"
+      exit 1
+    fi
+    get_active_directory_vars=$1
+    shift
+    ;;
   -*)
     log_error "Unsupported flag $1" >&2
     exit 1
@@ -96,10 +107,11 @@ if [[ "$help" == "yes" ]]; then
   log_note "   $me [flags]"
   log_note
   log_note "Flags:"
-  log_note "   -h, --help:              print this usage"
-  log_note "   -c, --clean:             destroy the current kind cluster and make a new one"
-  log_note "   -g, --api-group-suffix:  deploy Pinniped with an alternate API group suffix"
-  log_note "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
+  log_note "   -h, --help:                   print this usage"
+  log_note "   -c, --clean:                  destroy the current kind cluster and make a new one"
+  log_note "   -g, --api-group-suffix:       deploy Pinniped with an alternate API group suffix"
+  log_note "   -s, --skip-build:             reuse the most recently built image of the app instead of building"
+  log_note "   --get-active-directory-vars:  specify a script that exports active directory environment variables"
   exit 1
 fi
 
@@ -370,6 +382,15 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local use
 export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
 # PINNIPED_TEST_SHELL_CONTAINER_IMAGE should be a container which includes bash and sleep, used by some tests.
 export PINNIPED_TEST_SHELL_CONTAINER_IMAGE="ghcr.io/pinniped-ci-bot/test-kubectl:latest"
+
+# We can't set up an in-cluster active directory instance, but
+# if you have an active directory instance that you wish to run the tests against,
+# specify a script to set the ad-related environment variables.
+# You will need to set the environment variables that start with "PINNIPED_TEST_AD_"
+# found in pinniped/test/testlib/env.go.
+if [[ "$get_active_directory_vars" != "" ]]; then
+  source $get_active_directory_vars
+fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

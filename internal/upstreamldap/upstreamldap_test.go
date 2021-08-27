@@ -507,6 +507,204 @@ func TestEndUserAuthentication(t *testing.T) {
 			},
 		},
 		{
+			name:     "override UID parsing to work with microsoft style objectGUIDs",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
+					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
+				}
+				p.UserSearch.UIDAttribute = "objectGUID"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{testUserSearchUsernameAttribute, "objectGUID"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute("objectGUID", []string{"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16"}),
+							},
+						},
+					}}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
+				r.UID = "04030201-0605-0807-0910-111213141516"
+			}),
+		},
+		{
+			name:     "override UID parsing when the attribute name doesn't match what's returned does default parsing",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
+					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:     "override group parsing to create new group names",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
+								},
+							},
+							{
+								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
+								},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
+				r.Groups = []string{"Animals@activedirectory.mycompany.example.com", "Mammals@activedirectory.mycompany.example.com"}
+			}),
+		},
+		{
+			name:     "override group parsing when domain can't be determined from dn",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: "no-domain-components",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
+								},
+							},
+							{
+								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
+								},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "error finding groups for user some-upstream-user-dn: did not find domain components in group dn: no-domain-components",
+		},
+		{
+			name:     "override group parsing when entry has multiple values for attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: "no-domain-components",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals", "Eukaryotes"}),
+								},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "error finding groups for user some-upstream-user-dn: found 2 values for attribute \"sAMAccountName\", but expected 1 result",
+		}, {
+			name:     "override group parsing when entry has no values for attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN:         "no-domain-components",
+								Attributes: []*ldap.EntryAttribute{},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "error finding groups for user some-upstream-user-dn: found 0 values for attribute \"sAMAccountName\", but expected 1 result",
+		},
+		{
 			name:           "when dial fails",
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
@@ -1294,6 +1492,77 @@ func TestRealTLSDialing(t *testing.T) {
 				err := conn.(*ldap.Conn).StartTLS(&tls.Config{})
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)
 			}
+		})
+	}
+}
+
+func TestGetMicrosoftFormattedUUID(t *testing.T) {
+	tests := []struct {
+		name       string
+		binaryUUID []byte
+		wantString string
+		wantErr    string
+	}{
+		{
+			name:       "happy path",
+			binaryUUID: []byte("\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16"),
+			wantString: "04030201-0605-0807-0910-111213141516",
+		},
+		{
+			name:       "not the right length",
+			binaryUUID: []byte("2\xf8\xb0\xaa\xb6V\xb1D\x8b(\xee"),
+			wantErr:    "invalid UUID (got 11 bytes)",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			actualUUIDString, err := microsoftUUIDFromBinary(tt.binaryUUID)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantString, actualUUIDString)
+		})
+	}
+}
+
+func TestGetDomainFromDistinguishedName(t *testing.T) {
+	tests := []struct {
+		name              string
+		distinguishedName string
+		wantDomain        string
+		wantErr           string
+	}{
+		{
+			name:              "happy path",
+			distinguishedName: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+			wantDomain:        "activedirectory.mycompany.example.com",
+		},
+		{
+			name:              "lowercased happy path",
+			distinguishedName: "cn=Mammals,ou=Users,ou=pinniped-ad,dc=activedirectory,dc=mycompany,dc=example,dc=com",
+			wantDomain:        "activedirectory.mycompany.example.com",
+		},
+		{
+			name:              "no domain components",
+			distinguishedName: "not-a-dn",
+			wantErr:           "did not find domain components in group dn: not-a-dn",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			actualDomain, err := getDomainFromDistinguishedName(tt.distinguishedName)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantDomain, actualDomain)
 		})
 	}
 }

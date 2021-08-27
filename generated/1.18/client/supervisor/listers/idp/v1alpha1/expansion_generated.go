@@ -5,6 +5,14 @@
 
 package v1alpha1
 
+// ActiveDirectoryIdentityProviderListerExpansion allows custom methods to be added to
+// ActiveDirectoryIdentityProviderLister.
+type ActiveDirectoryIdentityProviderListerExpansion interface{}
+
+// ActiveDirectoryIdentityProviderNamespaceListerExpansion allows custom methods to be added to
+// ActiveDirectoryIdentityProviderNamespaceLister.
+type ActiveDirectoryIdentityProviderNamespaceListerExpansion interface{}
+
 // LDAPIdentityProviderListerExpansion allows custom methods to be added to
 // LDAPIdentityProviderLister.
 type LDAPIdentityProviderListerExpansion interface{}

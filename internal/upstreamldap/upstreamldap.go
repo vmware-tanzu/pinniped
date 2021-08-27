@@ -13,11 +13,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
@@ -35,6 +37,7 @@ const (
 	groupSearchPageSize                     = uint32(250)
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
+	sAMAccountNameAttribute                 = "sAMAccountName"
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -103,6 +106,14 @@ type ProviderConfig struct {
 
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
+
+	// UIDAttributeParsingOverrides are mappings between an attribute name and a way to parse it as a UID when
+	// it comes out of LDAP.
+	UIDAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
+
+	// GroupNameMappingOverrides are the mappings between an attribute name and a way to parse it as a group
+	// name when it comes out of LDAP.
+	GroupAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -370,10 +381,20 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 	}
 
 	groups := []string{}
+entries:
 	for _, groupEntry := range searchResult.Entries {
 		if len(groupEntry.DN) == 0 {
 			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
 		}
+		if overrideFunc := p.c.GroupAttributeParsingOverrides[groupAttributeName]; overrideFunc != nil {
+			overrideGroupName, err := overrideFunc(groupEntry)
+			if err != nil {
+				return nil, fmt.Errorf("error finding groups for user %s: %w", userDN, err)
+			}
+			groups = append(groups, overrideGroupName)
+			continue entries
+		}
+		// if none of the overrides matched, use the default behavior (no mapping)
 		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
 		if err != nil {
 			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
@@ -390,6 +411,39 @@ func (p *Provider) validateConfig() error {
 		return fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
 	}
 	return nil
+}
+
+func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, error) {
+	t := trace.FromContext(ctx).Nest("slow ldap attempt when searching for default naming context", trace.Field{Key: "providerName", Value: p.GetName()})
+	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
+
+	conn, err := p.dial(ctx)
+	if err != nil {
+		p.traceSearchBaseDiscoveryFailure(t, err)
+		return "", fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
+	if err != nil {
+		p.traceSearchBaseDiscoveryFailure(t, err)
+		return "", fmt.Errorf(`error binding as "%s" before querying for defaultNamingContext: %w`, p.c.BindUsername, err)
+	}
+
+	searchResult, err := conn.Search(p.defaultNamingContextRequest())
+	if err != nil {
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: %w`, err)
+	}
+
+	if len(searchResult.Entries) != 1 {
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: expected to find 1 entry but found %d`, len(searchResult.Entries))
+	}
+	searchBase := searchResult.Entries[0].GetAttributeValue("defaultNamingContext")
+	if searchBase == "" {
+		// if we get an empty search base back, treat it like an error. Otherwise we might make too broad of a search.
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: empty search base DN found`)
+	}
+	return searchBase, nil
 }
 
 func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
@@ -460,6 +514,20 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	}
 
 	return mappedUsername, mappedUID, mappedGroupNames, nil
+}
+
+func (p *Provider) defaultNamingContextRequest() *ldap.SearchRequest {
+	return &ldap.SearchRequest{
+		BaseDN:       "",
+		Scope:        ldap.ScopeBaseObject,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       "(objectClass=*)",
+		Attributes:   []string{"defaultNamingContext"},
+		Controls:     nil, // don't need paging because we set the SizeLimit so small
+	}
 }
 
 func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
@@ -563,6 +631,10 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 		)
 	}
 
+	if overrideFunc := p.c.UIDAttributeParsingOverrides[attributeName]; overrideFunc != nil {
+		return overrideFunc(entry)
+	}
+
 	return base64.RawURLEncoding.EncodeToString(attributeValue), nil
 }
 
@@ -600,4 +672,64 @@ func (p *Provider) traceAuthSuccess(t *trace.Trace) {
 	t.Step("authentication succeeded",
 		trace.Field{Key: "authenticated", Value: true},
 	)
+}
+
+func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
+	t.Step("search base discovery failed",
+		trace.Field{Key: "reason", Value: err.Error()})
+}
+
+func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
+	// validation has already been done so we can just get the attribute...
+	return func(entry *ldap.Entry) (string, error) {
+		binaryUUID := entry.GetRawAttributeValue(attributeName)
+		return microsoftUUIDFromBinary(binaryUUID)
+	}
+}
+
+func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
+	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
+	if err != nil {
+		return "", err
+	}
+	// then swap it because AD stores the first 3 fields little-endian rather than the expected
+	// big-endian.
+	uuidVal[0], uuidVal[1], uuidVal[2], uuidVal[3] = uuidVal[3], uuidVal[2], uuidVal[1], uuidVal[0]
+	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
+	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
+	return uuidVal.String(), nil
+}
+
+func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
+	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
+
+	if len(sAMAccountNameAttributeValues) != 1 {
+		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
+			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
+		)
+	}
+
+	sAMAccountName := sAMAccountNameAttributeValues[0]
+	if len(sAMAccountName) == 0 {
+		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
+			sAMAccountNameAttribute,
+		)
+	}
+
+	distinguishedName := entry.DN
+	domain, err := getDomainFromDistinguishedName(distinguishedName)
+	if err != nil {
+		return "", err
+	}
+	return sAMAccountName + "@" + domain, nil
+}
+
+var domainComponentsRegexp = regexp.MustCompile(",DC=|,dc=")
+
+func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
+	domainComponents := domainComponentsRegexp.Split(distinguishedName, -1)
+	if len(domainComponents) == 1 {
+		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
+	}
+	return strings.Join(domainComponents[1:], "."), nil
 }

@@ -233,7 +233,7 @@ func WithRequestAudience(audience string) Option {
 // WithCLISendingCredentials causes the login flow to use CLI-based prompts for username and password and causes the
 // call to the Issuer's authorize endpoint to be made directly (no web browser) with the username and password on custom
 // HTTP headers. This is only intended to be used when the issuer is a Pinniped Supervisor and the upstream identity
-// provider type supports this style of authentication. Currently, this is supported by LDAPIdentityProviders
+// provider type supports this style of authentication. Currently, this is supported by LDAPIdentityProviders, ActiveDirectoryIdentityProviders,
 // and by OIDCIdentityProviders which optionally enable the resource owner password credentials grant flow.
 // This should never be used with non-Supervisor issuers because it will send the user's password to the authorization
 // endpoint as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.

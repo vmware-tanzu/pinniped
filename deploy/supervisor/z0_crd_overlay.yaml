@@ -31,3 +31,12 @@ metadata:
   name: #@ pinnipedDevAPIGroupWithPrefix("ldapidentityproviders.idp.supervisor")
 spec:
   group: #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
+
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"activedirectoryidentityproviders.idp.supervisor.pinniped.dev"}}), expects=1
+---
+metadata:
+  #@overlay/match missing_ok=True
+  labels: #@ labels()
+  name: #@ pinnipedDevAPIGroupWithPrefix("activedirectoryidentityproviders.idp.supervisor")
+spec:
+  group: #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")

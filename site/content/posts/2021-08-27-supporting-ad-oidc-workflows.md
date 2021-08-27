@@ -3,7 +3,7 @@ title: "Pinniped v0.11.0: Easy Configurations for Active Directory, OIDC CLI wor
 slug: supporting-ad-oidc-workflows
 date: 2021-07-28
 author: Anjali Telang
-image:https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
+image: https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
 excerpt: "With the release of v0.11.0, Pinniped offers CRDs for easy Active Directory configuration, OIDC password grant flow for CLI workflows, and Distroless images for security and performance"
 tags: ['Margo Crawford','Ryan Richard', 'Anjali Telang', 'release']
 ---

@@ -405,7 +405,7 @@ func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 		requireEventually.NoError(err)
 		requireEventually.NoError(response.Body.Close())
 		requireEventually.Equal(http.StatusNotFound, response.StatusCode)
-	}, time.Minute, 200*time.Millisecond)
+	}, 2*time.Minute, 200*time.Millisecond)
 }
 
 func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url string) {
@@ -424,7 +424,7 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 		}
 		requireEventually.Error(err)
 		requireEventually.EqualError(err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
-	}, time.Minute, 200*time.Millisecond)
+	}, 2*time.Minute, 200*time.Millisecond)
 }
 
 func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
@@ -566,7 +566,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 
 		responseBody, err = ioutil.ReadAll(response.Body)
 		requireEventually.NoError(err)
-	}, time.Minute, 200*time.Millisecond)
+	}, 2*time.Minute, 200*time.Millisecond)
 
 	return response, string(responseBody)
 }

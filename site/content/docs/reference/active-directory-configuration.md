@@ -10,6 +10,8 @@ menu:
     parent: reference
 ---
 
+This describes the default values for the `ActiveDirectoryIdentityProvider` user and group search. For more about `ActiveDirectoryIdentityProvider`
+configuration, see [the API reference documentation](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#activedirectoryidentityprovider).
 
 ### `spec.userSearch.base`
 

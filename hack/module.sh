@@ -8,7 +8,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 function tidy_cmd() {
-  echo 'go mod tidy -v'
+  local version="$(cat "${ROOT}/go.mod" | grep '^go ' | cut -f 2 -d ' ')"
+  echo "go mod tidy -v -go=${version} -compat=${version}"
 }
 
 function lint_cmd() {

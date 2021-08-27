@@ -392,15 +392,16 @@ func requireDiscoveryEndpointsAreNotFound(t *testing.T, supervisorScheme, superv
 func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	requestNonExistentPath, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	require.NoError(t, err)
-
-	requestNonExistentPath.Host = host
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		requestNonExistentPath, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		requestNonExistentPath.Host = host
+
 		response, err := httpClient.Do(requestNonExistentPath)
 		requireEventually.NoError(err)
 		requireEventually.NoError(response.Body.Close())
@@ -411,10 +412,11 @@ func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url string) {
 	t.Helper()
 	httpClient := newHTTPClient(t, "", nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		requireEventually.NoError(err)
 
@@ -534,30 +536,30 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, dnsOverrides)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// Define a request to the new discovery endpoint which should have been created by an FederationDomain.
-	requestDiscoveryEndpoint, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		endpointURL,
-		nil,
-	)
-	require.NoError(t, err)
-
 	issuerURL, err := url.Parse(issuer)
 	require.NoError(t, err)
-	// Set the host header on the request to match the issuer's hostname, which could potentially be different
-	// from the public ingress address, e.g. when a load balancer is used, so we want to test here that the host
-	// header is respected by the supervisor server.
-	requestDiscoveryEndpoint.Host = issuerURL.Host
 
 	// Fetch that discovery endpoint. Give it some time for the endpoint to come into existence.
 	var response *http.Response
 	var responseBody []byte
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-		var err error
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Define a request to the new discovery endpoint which should have been created by an FederationDomain.
+		requestDiscoveryEndpoint, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodGet,
+			endpointURL,
+			nil,
+		)
+		requireEventually.NoError(err)
+
+		// Set the host header on the request to match the issuer's hostname, which could potentially be different
+		// from the public ingress address, e.g. when a load balancer is used, so we want to test here that the host
+		// header is respected by the supervisor server.
+		requestDiscoveryEndpoint.Host = issuerURL.Host
+
 		response, err = httpClient.Do(requestDiscoveryEndpoint)
 		requireEventually.NoError(err)
 		defer func() { _ = response.Body.Close() }()

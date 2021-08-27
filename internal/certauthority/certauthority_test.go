@@ -261,7 +261,7 @@ func TestIssue(t *testing.T) {
 					clock:     func() time.Time { return now },
 				},
 			},
-			wantErr: "could not parse CA certificate: asn1: syntax error: sequence truncated",
+			wantErr: "could not parse CA certificate: x509: malformed certificate",
 		},
 		{
 			name: "signing error",

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -78,7 +79,7 @@ func start(ctx context.Context, l net.Listener, handler http.Handler) {
 
 func waitForSignal() os.Signal {
 	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, os.Interrupt)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 	return <-signalCh
 }
 

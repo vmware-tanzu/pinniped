@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.11.0: Easy Configurations for Active Directory, OIDC CLI workflows and more"
 slug: supporting-ad-oidc-workflows
-date: 2021-07-28
+date: 2021-08-27
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
 excerpt: "With the release of v0.11.0, Pinniped offers CRDs for easy Active Directory configuration, OIDC password grant flow for CLI workflows, and Distroless images for security and performance"
@@ -60,7 +60,7 @@ Here’s what an example configuration looks like
    password: "YOUR_PASSWORD"
  ```
 
-You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here] ({{< ref “docs/howto/configure-supervisor-with-activedirectory.md" >}})
+You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here] ({{< ref "docs/howto/configure-supervisor-with-activedirectory.md" >}})
 
 Here is an example of what the ID token claims will look like:
 
@@ -92,7 +92,7 @@ A few considerations while configuring this on the cluster:
 Confirm that Multi-factor authentication is not intended to be used on the cluster
 Pinniped CLI running on your workstation and the Pinniped Supervisor backend are trusted to handle your password
 
-With the new functionality, Users initiate  pinniped get kubeconfig with a new argument --upstream-identity-provider-flow=”cli_password” to indicate their intent to use Password grant auth flow for logging into the upstream OIDC provider. By default, if no argument is specified this will follow the Browser-based auth flow. This way older Pinniped CLI versions will default to using Browser-based auth and the default for older Supervisor versions with newer CLI versions will also be Browser-based authentication.
+With the new functionality, Users initiate  `pinniped get kubeconfig` with a new argument `--upstream-identity-provider-flow="cli_password"` to indicate their intent to use Password grant auth flow for logging into the upstream OIDC provider. By default, if no argument is specified this will follow the Browser-based auth flow. This way older Pinniped CLI versions will default to using Browser-based auth and the default for older Supervisor versions with newer CLI versions will also be Browser-based authentication.
 
 ## Distroless-based container images
 

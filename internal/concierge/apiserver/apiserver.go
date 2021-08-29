@@ -6,6 +6,7 @@ package apiserver
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,6 +16,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/pkg/version"
 
+	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
@@ -29,7 +31,7 @@ type Config struct {
 type ExtraConfig struct {
 	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
 	Issuer                        issuer.ClientCertIssuer
-	StartControllersPostStartHook func(ctx context.Context)
+	BuildControllersPostStartHook controllerinit.RunnerBuilder
 	Scheme                        *runtime.Scheme
 	NegotiatedSerializer          runtime.NegotiatedSerializer
 	LoginConciergeGroupVersion    schema.GroupVersion
@@ -105,16 +107,39 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		return nil, fmt.Errorf("could not install API groups: %w", err)
 	}
 
+	shutdown := &sync.WaitGroup{}
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
 		func(postStartContext genericapiserver.PostStartHookContext) error {
 			plog.Debug("start-controllers post start hook starting")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {
+				defer cancel()
+
 				<-postStartContext.StopCh
-				cancel()
 			}()
-			c.ExtraConfig.StartControllersPostStartHook(ctx)
+
+			runControllers, err := c.ExtraConfig.BuildControllersPostStartHook(ctx)
+			if err != nil {
+				return fmt.Errorf("cannot create run controller func: %w", err)
+			}
+
+			shutdown.Add(1)
+			go func() {
+				defer shutdown.Done()
+
+				runControllers(ctx)
+			}()
+
+			return nil
+		},
+	)
+	s.GenericAPIServer.AddPreShutdownHookOrDie("stop-controllers",
+		func() error {
+			plog.Debug("stop-controllers pre shutdown hook starting")
+			defer plog.Debug("stop-controllers pre shutdown hook completed")
+
+			shutdown.Wait()
 
 			return nil
 		},

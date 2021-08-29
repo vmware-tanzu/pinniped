@@ -27,6 +27,7 @@ import (
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
@@ -135,7 +136,7 @@ func (a *App) runServer(ctx context.Context) error {
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
-	startControllersFunc, err := controllermanager.PrepareControllers(
+	buildControllers, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
 			ServerInstallationInfo:           podInfo,
 			APIGroupSuffix:                   *cfg.APIGroupSuffix,
@@ -165,7 +166,7 @@ func (a *App) runServer(ctx context.Context) error {
 		dynamicServingCertProvider,
 		authenticators,
 		certIssuer,
-		startControllersFunc,
+		buildControllers,
 		*cfg.APIGroupSuffix,
 		scheme,
 		loginGV,
@@ -190,7 +191,7 @@ func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Private,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer issuer.ClientCertIssuer,
-	startControllersPostStartHook func(context.Context),
+	buildControllers controllerinit.RunnerBuilder,
 	apiGroupSuffix string,
 	scheme *runtime.Scheme,
 	loginConciergeGroupVersion, identityConciergeGroupVersion schema.GroupVersion,
@@ -227,7 +228,7 @@ func getAggregatedAPIServerConfig(
 		ExtraConfig: apiserver.ExtraConfig{
 			Authenticator:                 authenticator,
 			Issuer:                        issuer,
-			StartControllersPostStartHook: startControllersPostStartHook,
+			BuildControllersPostStartHook: buildControllers,
 			Scheme:                        scheme,
 			NegotiatedSerializer:          codecs,
 			LoginConciergeGroupVersion:    loginConciergeGroupVersion,
@@ -237,7 +238,7 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func Main() {
+func main() error { // return an error instead of klog.Fatal to allow defer statements to run
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
@@ -250,7 +251,11 @@ func Main() {
 
 	ctx := genericapiserver.SetupSignalContext()
 
-	if err := New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run(); err != nil {
+	return New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run()
+}
+
+func Main() {
+	if err := main(); err != nil {
 		klog.Fatal(err)
 	}
 }

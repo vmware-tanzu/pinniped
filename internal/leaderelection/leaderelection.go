@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
@@ -36,7 +37,7 @@ const ErrNotLeader constable.Error = "write attempt rejected as client is not le
 // logic and will coordinate lease release with the input controller starter function.
 func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubeclient.Option) (
 	*kubeclient.Client,
-	func(context.Context, func(context.Context)),
+	controllerinit.RunnerWrapper,
 	error,
 ) {
 	internalClient, err := kubeclient.New(opts...)
@@ -89,7 +90,10 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 		return nil, nil, fmt.Errorf("could not create leader election client: %w", err)
 	}
 
-	controllersWithLeaderElector := func(ctx context.Context, controllers func(context.Context)) {
+	controllersWithLeaderElector := func(ctx context.Context, controllers controllerinit.Runner) {
+		plog.Debug("leader election loop start", "identity", identity)
+		defer plog.Debug("leader election loop shutdown", "identity", identity)
+
 		leaderElectorCtx, leaderElectorCancel := context.WithCancel(context.Background()) // purposefully detached context
 
 		go func() {

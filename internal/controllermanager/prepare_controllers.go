@@ -6,7 +6,6 @@
 package controllermanager
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
 	"go.pinniped.dev/internal/controller/impersonatorconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
+	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
@@ -95,7 +95,7 @@ type Config struct {
 
 // Prepare the controllers and their informers and return a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
-func PrepareControllers(c *Config) (func(ctx context.Context), error) {
+func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(c.APIGroupSuffix)
 
 	dref, deployment, err := deploymentref.New(c.ServerInstallationInfo)
@@ -303,11 +303,12 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			singletonWorker,
 		)
 
-	// Return a function which starts the informers and controllers.
-	return func(ctx context.Context) {
-		informers.startAndWaitForSync(ctx)
-		go leaderElector(ctx, controllerManager.Start)
-	}, nil
+	return controllerinit.Prepare(controllerManager.Start, leaderElector,
+		informers.kubePublicNamespaceK8s,
+		informers.kubeSystemNamespaceK8s,
+		informers.installationNamespaceK8s,
+		informers.pinniped,
+	), nil
 }
 
 type informers struct {
@@ -344,16 +345,4 @@ func createInformers(
 			defaultResyncInterval,
 		),
 	}
-}
-
-func (i *informers) startAndWaitForSync(ctx context.Context) {
-	i.kubePublicNamespaceK8s.Start(ctx.Done())
-	i.kubeSystemNamespaceK8s.Start(ctx.Done())
-	i.installationNamespaceK8s.Start(ctx.Done())
-	i.pinniped.Start(ctx.Done())
-
-	i.kubePublicNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.kubeSystemNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.installationNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.pinniped.WaitForCacheSync(ctx.Done())
 }

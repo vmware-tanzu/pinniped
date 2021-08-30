@@ -23,7 +23,7 @@ You can find more details in our [design document](https://hackmd.io/Hx17ATt_QpG
 
 ## Demo
 
-{{< youtube id="01QD8EbN_H8" title="New SSH jump host support in Pinniped v0.10.0" >}}
+{{< youtube id="RZ7hdwRXx4E" title="New SSH jump host support in Pinniped v0.10.0" >}}
 
 ## High level overview of the workflow
 

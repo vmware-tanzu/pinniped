@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.11.0: Easy Configurations for Active Directory, OIDC CLI workflows and more"
 slug: supporting-ad-oidc-workflows
-date: 2021-08-27
+date: 2021-08-31
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1574090695368-bac29418e5dc?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80
 excerpt: "With the release of v0.11.0, Pinniped offers CRDs for easy Active Directory configuration, OIDC password grant flow for CLI workflows, and Distroless images for security and performance"
@@ -62,7 +62,7 @@ Here’s what an example configuration looks like
 
 You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here] ({{< ref "docs/howto/configure-supervisor-with-activedirectory.md" >}})
 
-In the above example, users will be able to login with either their sAMAccountName (i.e. pinny), userPrincipalName (i.e. pinny@activedirectory.example.com) or mail attribute.  This reduces the need to tell users what specific value from AD must be provided in the username field.  Regardless of what value the user provides in the username field, the userPrincipalName will be used as the identity in Kubernetes clusters.  UPN is used as the username attribute by default as it is unique within an AD forest.  Similarly, a UPN is generated for each group using its sAMAccountName attribute and the AD domain hostname.  The default AD configuration finds both direct and nested groups.
+In the above example, users will be able to login with either their sAMAccountName (i.e. pinny), userPrincipalName (i.e. pinny@example.com) or mail attribute.  This reduces the need to tell users what specific value from AD must be provided in the username field.  Regardless of what value the user provides in the username field, the userPrincipalName will be used as the identity in Kubernetes clusters.  UPN is used as the username attribute by default as it is unique within an AD forest.  Similarly, a UPN is generated for each group using its sAMAccountName attribute and the AD domain hostname.  The default AD configuration finds both direct and nested groups.
 
 After logging in, running the `pinniped whoami` command displays:
 ```
@@ -73,8 +73,8 @@ URL: https://cluster.example.com
 
 Current user info:
 
-Username: pinny@activedirectory.example.com
-Groups: Mammals@activedirectory.example.com, Marine Mammals@activedirectory.test.example.com, system:authenticated
+Username: pinny@example.com
+Groups: Mammals@example.com, Marine Mammals@example.com, system:authenticated
 ```
 
 ## OIDC CLI-based workflows

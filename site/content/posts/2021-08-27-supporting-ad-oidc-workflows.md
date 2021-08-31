@@ -62,24 +62,20 @@ Here’s what an example configuration looks like
 
 You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here] ({{< ref "docs/howto/configure-supervisor-with-activedirectory.md" >}})
 
-Here is an example of what the ID token claims will look like:
+In the above example, users will be able to login with either their sAMAccountName (i.e. pinny), userPrincipalName (i.e. pinny@activedirectory.example.com) or mail attribute.  This reduces the need to tell users what specific value from AD must be provided in the username field.  Regardless of what value the user provides in the username field, the userPrincipalName will be used as the identity in Kubernetes clusters.  UPN is used as the username attribute by default as it is unique within an AD forest.  Similarly, a UPN is generated for each group using its sAMAccountName attribute and the AD domain hostname.  The default AD configuration finds both direct and nested groups.
 
-```yaml
-  aud:
-  - pinniped-cli
-  auth_time: 1630094468
-  exp: 1630094589
-  groups:
-  - Mammals@activedirectory.test.example.com
-  - Marine Mammals@activedirectory.test.example.com
-  iat: 1630094469
-  iss: https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path
-  jti: 191709eb-b2fd-47e0-97f4-a06c48330c3a
-  nonce: c772c414388482163515103110cfcdfc
-  rat: 1630094468
-  sub: ldaps://activedirectory.test.example.com:636?base=DC%3Dactivedirectory%2CDC%3Dtest%2CDC%3Dexample%2CDC%3Dcom&sub=04030201-0605-0807-0910-111213141516
-  username: pinny@activedirectory.test.example.com
- ```
+After logging in, running the `pinniped whoami` command displays:
+```
+Current cluster info:
+
+Name: cluster-name
+URL: https://cluster.example.com
+
+Current user info:
+
+Username: pinny@activedirectory.example.com
+Groups: Mammals@activedirectory.example.com, Marine Mammals@activedirectory.test.example.com, system:authenticated
+```
 
 ## OIDC CLI-based workflows
 

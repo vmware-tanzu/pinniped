@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
+	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
@@ -56,36 +58,51 @@ const (
 	defaultResyncInterval = 3 * time.Minute
 )
 
-func start(ctx context.Context, l net.Listener, handler http.Handler) {
+func startServer(ctx context.Context, shutdown *sync.WaitGroup, l net.Listener, handler http.Handler) {
 	server := http.Server{Handler: handler}
 
-	errCh := make(chan error)
+	shutdown.Add(1)
 	go func() {
-		errCh <- server.Serve(l)
+		defer shutdown.Done()
+
+		err := server.Serve(l)
+		plog.Debug("server exited", "err", err)
 	}()
 
+	shutdown.Add(1)
 	go func() {
-		select {
-		case err := <-errCh:
-			plog.Debug("server exited", "err", err)
-		case <-ctx.Done():
-			plog.Debug("server context cancelled", "err", ctx.Err())
-			if err := server.Shutdown(context.Background()); err != nil {
-				plog.Debug("server shutdown failed", "err", err)
-			}
+		defer shutdown.Done()
+
+		<-ctx.Done()
+		plog.Debug("server context cancelled", "err", ctx.Err())
+
+		// allow up to a minute grace period for active connections to return to idle
+		connectionsCtx, connectionsCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer connectionsCancel()
+
+		if err := server.Shutdown(connectionsCtx); err != nil {
+			plog.Debug("server shutdown failed", "err", err)
 		}
 	}()
 }
 
-func waitForSignal() os.Signal {
+func signalCtx() context.Context {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
-	return <-signalCh
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer cancel()
+
+		s := <-signalCh
+		plog.Debug("saw signal", "signal", s)
+	}()
+
+	return ctx
 }
 
 //nolint:funlen
-func startControllers(
-	ctx context.Context,
+func prepareControllers(
 	cfg *supervisor.Config,
 	issuerManager *manager.Manager,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
@@ -97,8 +114,8 @@ func startControllers(
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
-	leaderElector func(context.Context, func(context.Context)),
-) {
+	leaderElector controllerinit.RunnerWrapper,
+) controllerinit.RunnerBuilder {
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
@@ -267,21 +284,27 @@ func startControllers(
 			),
 			singletonWorker)
 
-	kubeInformers.Start(ctx.Done())
-	pinnipedInformers.Start(ctx.Done())
-
-	// Wait until the caches are synced before returning.
-	kubeInformers.WaitForCacheSync(ctx.Done())
-	pinnipedInformers.WaitForCacheSync(ctx.Done())
-
-	go leaderElector(ctx, controllerManager.Start)
+	return controllerinit.Prepare(controllerManager.Start, leaderElector, kubeInformers, pinnipedInformers)
 }
 
-func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
-	serverInstallationNamespace := podInfo.Namespace
+func startControllers(ctx context.Context, shutdown *sync.WaitGroup, buildControllers controllerinit.RunnerBuilder) error {
+	runControllers, err := buildControllers(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot create run controller func: %w", err)
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	shutdown.Add(1)
+	go func() {
+		defer shutdown.Done()
+
+		runControllers(ctx)
+	}()
+
+	return nil
+}
+
+func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+	serverInstallationNamespace := podInfo.Namespace
 
 	dref, supervisorDeployment, err := deploymentref.New(podInfo)
 	if err != nil {
@@ -339,8 +362,7 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 	)
 
-	startControllers(
-		ctx,
+	buildControllersFunc := prepareControllers(
 		cfg,
 		oidProvidersManager,
 		dynamicJWKSProvider,
@@ -355,13 +377,20 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		leaderElector,
 	)
 
+	ctx := signalCtx()
+	shutdown := &sync.WaitGroup{}
+
+	if err := startControllers(ctx, shutdown, buildControllersFunc); err != nil {
+		return err
+	}
+
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	httpListener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
 	defer func() { _ = httpListener.Close() }()
-	start(ctx, httpListener, oidProvidersManager)
+	startServer(ctx, shutdown, httpListener, oidProvidersManager)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	httpsListener, err := tls.Listen("tcp", ":8443", &tls.Config{
@@ -384,20 +413,20 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
 	defer func() { _ = httpsListener.Close() }()
-	start(ctx, httpsListener, oidProvidersManager)
+	startServer(ctx, shutdown, httpsListener, oidProvidersManager)
 
 	plog.Debug("supervisor is ready",
 		"httpAddress", httpListener.Addr().String(),
 		"httpsAddress", httpsListener.Addr().String(),
 	)
+	defer plog.Debug("supervisor exiting")
 
-	gotSignal := waitForSignal()
-	plog.Debug("supervisor exiting", "signal", gotSignal)
+	shutdown.Wait()
 
 	return nil
 }
 
-func Main() {
+func main() error { // return an error instead of klog.Fatal to allow defer statements to run
 	logs.InitLogs()
 	defer logs.FlushLogs()
 	plog.RemoveKlogGlobalFlags() // move this whenever the below code gets refactored to use cobra
@@ -408,16 +437,20 @@ func Main() {
 	// Discover in which namespace we are installed.
 	podInfo, err := downward.Load(os.Args[1])
 	if err != nil {
-		klog.Fatal(fmt.Errorf("could not read pod metadata: %w", err))
+		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
 
 	// Read the server config file.
 	cfg, err := supervisor.FromPath(os.Args[2])
 	if err != nil {
-		klog.Fatal(fmt.Errorf("could not load config: %w", err))
+		return fmt.Errorf("could not load config: %w", err)
 	}
 
-	if err := run(podInfo, cfg); err != nil {
+	return runSupervisor(podInfo, cfg)
+}
+
+func Main() {
+	if err := main(); err != nil {
 		klog.Fatal(err)
 	}
 }

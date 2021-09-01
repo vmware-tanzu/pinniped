@@ -34,7 +34,7 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 Last Updated: July 2021
-Theme|Description|Timeline|
+|Theme|Description|Timeline|
 |--|--|--|
 |Non-Interactive Password based OIDC logins |Support for non-interactive OIDC Logins via CLI using Password Grant |Aug 2021|
 |Active Directory Support|Extends upstream IDP protocols|Aug 2021|

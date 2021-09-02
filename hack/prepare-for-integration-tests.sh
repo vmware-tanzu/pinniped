@@ -219,8 +219,8 @@ ytt --file . \
   --data-value "image_repo=$registry_repo" \
   --data-value "image_tag=$tag" >"$manifest"
 
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
 popd >/dev/null
 
@@ -238,8 +238,8 @@ ytt --file . \
   --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
   >"$manifest"
 
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 kapp deploy --yes --app tools --diff-changes --file "$manifest"
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
 popd >/dev/null
 
@@ -281,6 +281,7 @@ ytt --file . \
   >"$manifest"
 
 kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
 popd >/dev/null
 
@@ -308,6 +309,7 @@ ytt --file . \
   --data-value "discovery_url=$discovery_url" >"$manifest"
 
 kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
 popd >/dev/null
 

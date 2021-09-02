@@ -65,7 +65,6 @@ spec:
       labels: #@ defaultLabel()
     spec:
       securityContext:
-        readOnlyRootFilesystem: true
         runAsUser: #@ data.values.run_as_user
         runAsGroup: #@ data.values.run_as_group
       serviceAccountName: #@ defaultResourceName()
@@ -85,6 +84,8 @@ spec:
             - pinniped-supervisor
             - /etc/podinfo
             - /etc/config/pinniped.yaml
+          securityContext:
+            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: "100m"
@@ -95,8 +96,10 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
+              readOnly: true
             - name: podinfo
               mountPath: /etc/podinfo
+              readOnly: true
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -131,11 +134,9 @@ spec:
             failureThreshold: 3
       volumes:
         - name: config-volume
-          readOnly: true
           configMap:
             name: #@ defaultResourceNameWithSuffix("static-config")
         - name: podinfo
-          readOnly: true
           downwardAPI:
             items:
               - path: "labels"

@@ -33,17 +33,16 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: July 2021
+Last Updated: Sept 2021
 |Theme|Description|Timeline|
 |--|--|--|
-|Non-Interactive Password based OIDC logins |Support for non-interactive OIDC Logins via CLI using Password Grant |Aug 2021|
-|Active Directory Support|Extends upstream IDP protocols|Aug 2021|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Sept 2021|
-|Wider Concierge cluster support|Support for more cluster types in the Concierge|Sept 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works|Sept 2021|
+|Wider Concierge cluster support|Support for more cluster types in the Concierge|Exploring/Ongoing|
 |Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|
+|CLI SSO|Support Kerberos based authentication on CLI |Exploring/Ongoing|
 |Extended IDP support|Support more types of identity providers on the Supervisor|Exploring/Ongoing|
 |Improved Documentation|Reorganizing and improving Pinniped docs; new how-to guides and tutorials|Exploring/Ongoing|
-|Improving Security Posture|Offer the best security posture for Kubernetes cluster authentication|Exploring/Ongoing|
 |Improve our CI/CD systems|Upgrade tests; make Kind more efficient and reliable for CI ; Windows tests; performance tests; scale tests; soak tests|Exploring/Ongoing|
 |CLI Improvements|Improving CLI UX for setting up Supervisor IDPs|Exploring/Ongoing|
 |Telemetry|Adding some useful phone home metrics as well as some vanity metrics|Exploring/Ongoing|

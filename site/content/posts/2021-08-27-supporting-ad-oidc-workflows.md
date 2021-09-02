@@ -94,6 +94,7 @@ With the new functionality, Users initiate  `pinniped get kubeconfig` with a new
 
 In this release, we are moving our base container images from Debian to Distroless as it not only increases performance by providing much smaller sized images, but enhances security by removing dependencies on system libraries that may have vulnerabilities.
 
+Refer to the [v0.11.0 release notes](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.11.0) for complete list of fixes and features included in the release.
 
 ## Tell us about your configuration and use cases!
 

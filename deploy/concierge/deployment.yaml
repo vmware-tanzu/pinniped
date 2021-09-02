@@ -116,7 +116,6 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       securityContext:
-        readOnlyRootFilesystem: true
         runAsUser: #@ data.values.run_as_user
         runAsGroup: #@ data.values.run_as_group
       serviceAccountName: #@ defaultResourceName()
@@ -132,6 +131,8 @@ spec:
           image: #@ data.values.image_repo + ":" + data.values.image_tag
           #@ end
           imagePullPolicy: IfNotPresent
+          securityContext:
+            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: "100m"
@@ -148,10 +149,13 @@ spec:
               mountPath: /tmp
             - name: config-volume
               mountPath: /etc/config
+              readOnly: true
             - name: podinfo
               mountPath: /etc/podinfo
+              readOnly: true
             - name: impersonation-proxy
               mountPath: /var/run/secrets/impersonation-proxy.concierge.pinniped.dev/serviceaccount
+              readOnly: true
           env:
             #@ if data.values.https_proxy:
             - name: HTTPS_PROXY
@@ -185,7 +189,6 @@ spec:
             medium: Memory
             sizeLimit: 100Mi
         - name: config-volume
-          readOnly: true
           configMap:
             name: #@ defaultResourceNameWithSuffix("config")
         - name: impersonation-proxy
@@ -195,7 +198,6 @@ spec:
               - key: token
                 path: token
         - name: podinfo
-          readOnly: true
           downwardAPI:
             items:
               - path: "labels"

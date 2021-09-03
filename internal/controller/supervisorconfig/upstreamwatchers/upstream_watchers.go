@@ -183,16 +183,18 @@ func HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecre
 	return false
 }
 
-func HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(secretVersionCache *SecretVersionCache, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
+func HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(secretVersionCache *SecretVersionCache, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, previouslyValidatedSecretVersion string, config *upstreamldap.ProviderConfig) bool {
 	for _, cond := range upstreamStatusConditions {
 		if cond.Type == TypeSearchBaseFound && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
 			// Found a previously successful condition for the current spec generation.
 			// Now figure out which version of the bind Secret was used during that previous validation, if any.
 			validatedSettings := secretVersionCache.ValidatedSettingsByName[upstreamName]
-			// Reload the user search and group search base settings that were previously validated.
-			config.UserSearch.Base = validatedSettings.UserSearchBase
-			config.GroupSearch.Base = validatedSettings.GroupSearchBase
-			return true
+			if previouslyValidatedSecretVersion == currentSecretVersion {
+				// Reload the user search and group search base settings that were previously validated.
+				config.UserSearch.Base = validatedSettings.UserSearchBase
+				config.GroupSearch.Base = validatedSettings.GroupSearchBase
+				return true
+			}
 		}
 	}
 	return false
@@ -302,6 +304,7 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 }
 
 func validateAndSetLDAPServerConnectivityAndSearchBase(ctx context.Context, validatedSecretVersionsCache *SecretVersionCache, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) (*v1alpha1.Condition, *v1alpha1.Condition) {
+	previouslyValidatedSecretVersion := validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()].BindSecretResourceVersion
 	var ldapConnectionValidCondition *v1alpha1.Condition
 	if !HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecretVersion(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
 		testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, probeLDAPTimeout)
@@ -320,16 +323,19 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(ctx context.Context, vali
 		}
 	}
 	var searchBaseFoundCondition *v1alpha1.Condition
-	if !HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
+	if !HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, previouslyValidatedSecretVersion, config) {
 		searchBaseTimeout, cancelFunc := context.WithTimeout(ctx, probeLDAPTimeout)
 		defer cancelFunc()
 
 		searchBaseFoundCondition = upstream.Spec().DetectAndSetSearchBase(searchBaseTimeout, config)
 
 		validatedSettings := validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()]
-		validatedSettings.GroupSearchBase = config.GroupSearch.Base
-		validatedSettings.UserSearchBase = config.UserSearch.Base
-		validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()] = validatedSettings
+		if validatedSettings.BindSecretResourceVersion == currentSecretVersion {
+			// only update the rest of the cached settings if the secret versions match.
+			validatedSettings.GroupSearchBase = config.GroupSearch.Base
+			validatedSettings.UserSearchBase = config.UserSearch.Base
+			validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()] = validatedSettings
+		}
 	}
 
 	return ldapConnectionValidCondition, searchBaseFoundCondition

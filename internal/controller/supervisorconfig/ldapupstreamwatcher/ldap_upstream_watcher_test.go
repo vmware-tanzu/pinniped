@@ -616,10 +616,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
-				UserSearchBase:  testUserSearchBase,
-				GroupSearchBase: testGroupSearchBase,
-			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{},
 		},
 		{
 			name: "non-nil TLS configuration with empty CertificateAuthorityData is valid",

@@ -329,6 +329,188 @@ func TestSupervisorLogin(t *testing.T) {
 			wantErrorType:        "access_denied",
 		},
 		{
+			name: "ldap login still works after updating bind secret",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				secretName := secret.Name
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
+						SecretName: secretName,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
+				}, idpv1alpha1.LDAPPhaseReady)
+
+				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
+				// update that secret, which will cause the cache to recheck tls and search base values
+				client := testlib.NewKubernetesClientset(t)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					updatedSecret.Name, updatedSecret.ResourceVersion,
+				)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					ldapIDP, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
+				}, time.Minute, 500*time.Millisecond)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$",
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name: "ldap login still works after deleting and recreating the bind secret",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				secretName := secret.Name
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
+						SecretName: secretName,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
+				}, idpv1alpha1.LDAPPhaseReady)
+
+				// delete, then recreate that secret, which will cause the cache to recheck tls and search base values
+				client := testlib.NewKubernetesClientset(t)
+				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
+				defer deleteCancel()
+				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+				require.NoError(t, err)
+
+				// create the secret again
+				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
+				defer recreateCancel()
+				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName,
+						Namespace: env.SupervisorNamespace,
+					},
+					Type: v1.SecretTypeBasicAuth,
+					StringData: map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					recreatedSecret.Name, recreatedSecret.ResourceVersion,
+				)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					ldapIDP, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
+				}, time.Minute, 500*time.Millisecond)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$",
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
 			name: "activedirectory with all default options",
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
@@ -450,7 +632,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "active directory login still works after deleting and recreating bind secret",
+			name: "active directory login still works after updating bind secret",
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
 				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
@@ -481,7 +663,7 @@ func TestSupervisorLogin(t *testing.T) {
 				}, idpv1alpha1.ActiveDirectoryPhaseReady)
 
 				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
-				// update that secret, which will cause the cache to
+				// update that secret, which will cause the cache to recheck tls and search base values
 				client := testlib.NewKubernetesClientset(t)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
@@ -492,6 +674,93 @@ func TestSupervisorLogin(t *testing.T) {
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
+				)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					adIDP, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
+				}, time.Minute, 500*time.Millisecond)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
+					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$",
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
+		},
+		{
+			name: "active directory login still works after deleting and recreating bind secret",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+				if env.SupervisorUpstreamActiveDirectory.Host == "" {
+					t.Skip("Active Directory hostname not specified")
+				}
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				)
+				secretName := secret.Name
+				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+					Host: env.SupervisorUpstreamActiveDirectory.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+					},
+					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+						SecretName: secretName,
+					},
+				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+
+				// delete the secret
+				client := testlib.NewKubernetesClientset(t)
+				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
+				defer deleteCancel()
+				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+				require.NoError(t, err)
+
+				// create the secret again
+				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
+				defer recreateCancel()
+				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName,
+						Namespace: env.SupervisorNamespace,
+					},
+					Type: v1.SecretTypeBasicAuth,
+					StringData: map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				}, metav1.CreateOptions{})
+				require.NoError(t, err)
+
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					recreatedSecret.Name, recreatedSecret.ResourceVersion,
 				)
 				supervisorClient := testlib.NewSupervisorClientset(t)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
@@ -640,6 +909,32 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
 		{"SearchBaseFound", "True", expectedUserSearchReason},
+	}, conditionsSummary)
+}
+
+func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, requireEventually *require.Assertions, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
+	t.Helper()
+	requireEventually.Len(ldapIDP.Status.Conditions, 3)
+
+	conditionsSummary := [][]string{}
+	for _, condition := range ldapIDP.Status.Conditions {
+		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
+		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+			condition.Type, string(condition.Status), condition.Reason, condition.Message)
+		switch condition.Type {
+		case "BindSecretValid":
+			requireEventually.Equal("loaded bind secret", condition.Message)
+		case "TLSConfigurationValid":
+			requireEventually.Equal("loaded TLS configuration", condition.Message)
+		case "LDAPConnectionValid":
+			requireEventually.Equal(expectedLDAPConnectionValidMessage, condition.Message)
+		}
+	}
+
+	requireEventually.ElementsMatch([][]string{
+		{"BindSecretValid", "True", "Success"},
+		{"TLSConfigurationValid", "True", "Success"},
+		{"LDAPConnectionValid", "True", "Success"},
 	}, conditionsSummary)
 }
 

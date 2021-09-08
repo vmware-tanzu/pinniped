@@ -188,39 +188,6 @@ func TestConnection(
 	}
 }
 
-func HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecretVersion(secretVersionCache SecretVersionCacheI, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
-	for _, cond := range upstreamStatusConditions {
-		if cond.Type == typeLDAPConnectionValid && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
-			// Found a previously successful condition for the current spec generation.
-			// Now figure out which version of the bind Secret was used during that previous validation, if any.
-			validatedSettings, hasValidatedSettings := secretVersionCache.Get(upstreamName, currentSecretVersion, currentGeneration)
-			if hasValidatedSettings {
-				// Reload the TLS vs StartTLS setting that was previously validated.
-				config.ConnectionProtocol = validatedSettings.LDAPConnectionProtocol
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(secretVersionCache SecretVersionCacheI, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, previouslyValidatedSecretVersion string, config *upstreamldap.ProviderConfig) bool {
-	for _, cond := range upstreamStatusConditions {
-		if cond.Type == TypeSearchBaseFound && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
-			// Found a previously successful condition for the current spec generation.
-			// Now figure out which version of the bind Secret was used during that previous validation, if any.
-			validatedSettings, hasValidatedSettings := secretVersionCache.Get(upstreamName, currentSecretVersion, currentGeneration)
-			if hasValidatedSettings {
-				// Reload the user search and group search base settings that were previously validated.
-				config.UserSearch.Base = validatedSettings.UserSearchBase
-				config.GroupSearch.Base = validatedSettings.GroupSearchBase
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func validTLSCondition(message string) *v1alpha1.Condition {
 	return &v1alpha1.Condition{
 		Type:    typeTLSConfigurationValid,

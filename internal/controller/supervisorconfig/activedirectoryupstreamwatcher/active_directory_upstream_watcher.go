@@ -207,7 +207,7 @@ type UpstreamActiveDirectoryIdentityProviderICache interface {
 
 type activeDirectoryWatcherController struct {
 	cache                                   UpstreamActiveDirectoryIdentityProviderICache
-	validatedSecretVersionsCache            *upstreamwatchers.SecretVersionCache
+	validatedSecretVersionsCache            upstreamwatchers.SecretVersionCacheI
 	ldapDialer                              upstreamldap.LDAPDialer
 	client                                  pinnipedclientset.Interface
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer
@@ -238,7 +238,7 @@ func New(
 // For test dependency injection purposes.
 func newInternal(
 	idpCache UpstreamActiveDirectoryIdentityProviderICache,
-	validatedSecretVersionsCache *upstreamwatchers.SecretVersionCache,
+	validatedSecretVersionsCache upstreamwatchers.SecretVersionCacheI,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer,

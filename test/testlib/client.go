@@ -464,7 +464,7 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 	})
 	t.Logf("created test ActiveDirectoryIdentityProvider %s", created.Name)
 
-	// Wait for the LDAPIdentityProvider to enter the expected phase (or time out).
+	// Wait for the ActiveDirectoryIdentityProvider to enter the expected phase (or time out).
 	var result *idpv1alpha1.ActiveDirectoryIdentityProvider
 	RequireEventuallyf(t,
 		func(requireEventually *require.Assertions) {

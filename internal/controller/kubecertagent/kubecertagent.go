@@ -48,7 +48,7 @@ const (
 	// agentPodLabelKey is used to identify which pods are created by the kube-cert-agent
 	// controllers.
 	agentPodLabelKey   = "kube-cert-agent.pinniped.dev"
-	agentPodLabelValue = "v2"
+	agentPodLabelValue = "v3"
 
 	// conciergeDefaultLabelKeyName is the name of the key of the label applied to all Concierge resources.
 	// This name is determined in the YAML manifests, but this controller needs to treat it as a special case below.

@@ -91,13 +91,13 @@ func TestAgentController(t *testing.T) {
 		Spec: appsv1.DeploymentSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Selector: metav1.SetAsLabelSelector(map[string]string{
-				"kube-cert-agent.pinniped.dev": "v2",
+				"kube-cert-agent.pinniped.dev": "v3",
 			}),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"extralabel":                   "labelvalue",
-						"kube-cert-agent.pinniped.dev": "v2",
+						"kube-cert-agent.pinniped.dev": "v3",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -199,7 +199,7 @@ func TestAgentController(t *testing.T) {
 			Namespace:         "concierge",
 			Name:              "pinniped-concierge-kube-cert-agent-xyz-1234",
 			UID:               types.UID("pinniped-concierge-kube-cert-agent-xyz-1234-test-uid"),
-			Labels:            map[string]string{"kube-cert-agent.pinniped.dev": "v2"},
+			Labels:            map[string]string{"kube-cert-agent.pinniped.dev": "v3"},
 			CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 		},
 		Spec:   corev1.PodSpec{},

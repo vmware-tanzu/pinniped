@@ -1,8 +1,8 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
+#@ load("helpers.lib.yaml", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
 #@ if data.values.service_http_nodeport_port or data.values.service_https_nodeport_port:
 ---
@@ -14,8 +14,7 @@ metadata:
   labels: #@ labels()
 spec:
   type: NodePort
-  selector:
-    app: #@ data.values.app_name
+  selector: #@ deploymentPodLabel()
   ports:
     #@ if data.values.service_http_nodeport_port:
     - name: http
@@ -47,7 +46,7 @@ metadata:
   labels: #@ labels()
 spec:
   type: ClusterIP
-  selector: #@ defaultLabel()
+  selector: #@ deploymentPodLabel()
   ports:
     #@ if data.values.service_http_clusterip_port:
     - name: http
@@ -73,7 +72,7 @@ metadata:
   labels: #@ labels()
 spec:
   type: LoadBalancer
-  selector: #@ defaultLabel()
+  selector: #@ deploymentPodLabel()
   #@ if data.values.service_loadbalancer_ip:
   loadBalancerIP: #@ data.values.service_loadbalancer_ip
   #@ end

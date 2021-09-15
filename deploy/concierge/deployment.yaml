@@ -235,6 +235,9 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("api")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
   selector: #@ defaultLabel()
@@ -249,6 +252,9 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("proxy")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
   selector: #@ defaultLabel()

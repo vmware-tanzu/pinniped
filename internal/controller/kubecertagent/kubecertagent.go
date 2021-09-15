@@ -356,6 +356,7 @@ func (c *agentController) loadSigningKey(agentPod *corev1.Pod) error {
 	if err := c.dynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("failed to set signing cert/key content from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
+	c.log.Info("successfully loaded signing key from agent pod into cache")
 
 	// Remember that we've successfully loaded the key from this pod so we can skip the exec+load if nothing has changed.
 	c.execCache.Set(agentPod.UID, struct{}{}, 15*time.Minute)

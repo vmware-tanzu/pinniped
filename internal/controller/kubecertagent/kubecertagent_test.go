@@ -920,6 +920,9 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors:        []string{""},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.SuccessStrategyStatus,
@@ -951,6 +954,9 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors:        []string{""},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.SuccessStrategyStatus,

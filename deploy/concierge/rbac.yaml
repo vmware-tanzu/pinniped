@@ -145,7 +145,7 @@ rules:
   #! We need to be able to create and update deployments in our namespace so we can manage the kube-cert-agent Deployment.
   - apiGroups: [ apps ]
     resources: [ deployments ]
-    verbs: [ create, get, list, patch, update, watch ]
+    verbs: [ create, get, list, patch, update, watch, delete ]
   #! We need to be able to get replicasets so we can form the correct owner references on our generated objects.
   - apiGroups: [ apps ]
     resources: [ replicasets ]

@@ -25,7 +25,12 @@
 #@ end
 
 #@ def defaultLabel():
+#! Note that the name of this label's key is also assumed by kubecertagent.go and impersonator_config.go
 app: #@ data.values.app_name
+#@ end
+
+#@ def deploymentPodLabel():
+deployment.pinniped.dev: concierge
 #@ end
 
 #@ def labels():

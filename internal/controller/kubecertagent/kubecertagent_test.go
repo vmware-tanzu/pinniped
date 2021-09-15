@@ -32,6 +32,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
@@ -85,19 +86,18 @@ func TestAgentController(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "concierge",
 			Name:      "pinniped-concierge-kube-cert-agent",
-			Labels:    map[string]string{"extralabel": "labelvalue"},
+			Labels:    map[string]string{"extralabel": "labelvalue", "app": "anything"},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: pointer.Int32Ptr(1),
 			Selector: metav1.SetAsLabelSelector(map[string]string{
-				"extralabel":                   "labelvalue",
-				"kube-cert-agent.pinniped.dev": "v2",
+				"kube-cert-agent.pinniped.dev": "v3",
 			}),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"extralabel":                   "labelvalue",
-						"kube-cert-agent.pinniped.dev": "v2",
+						"kube-cert-agent.pinniped.dev": "v3",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -151,6 +151,19 @@ func TestAgentController(t *testing.T) {
 		},
 	}
 
+	// Older versions of Pinniped had a selector which included "app: app_name", e.g. "app: concierge".
+	// Selector is an immutable field, but we want to support upgrading from those older versions anyway.
+	oldStyleLabels := map[string]string{
+		"app":                          "concierge",
+		"extralabel":                   "labelvalue",
+		"kube-cert-agent.pinniped.dev": "v2",
+	}
+	healthyAgentDeploymentWithOldStyleSelector := healthyAgentDeployment.DeepCopy()
+	healthyAgentDeploymentWithOldStyleSelector.Spec.Selector = metav1.SetAsLabelSelector(oldStyleLabels)
+	healthyAgentDeploymentWithOldStyleSelector.Spec.Template.ObjectMeta.Labels = oldStyleLabels
+	healthyAgentDeploymentWithOldStyleSelector.UID = "fake-uid-abc123"                        // needs UID to test delete options
+	healthyAgentDeploymentWithOldStyleSelector.ResourceVersion = "fake-resource-version-1234" // needs ResourceVersion to test delete options
+
 	// The host network setting from the kube-controller-manager pod should be applied on the
 	// deployment.
 	healthyKubeControllerManagerPodWithHostNetwork := healthyKubeControllerManagerPod.DeepCopy()
@@ -186,7 +199,7 @@ func TestAgentController(t *testing.T) {
 			Namespace:         "concierge",
 			Name:              "pinniped-concierge-kube-cert-agent-xyz-1234",
 			UID:               types.UID("pinniped-concierge-kube-cert-agent-xyz-1234-test-uid"),
-			Labels:            map[string]string{"kube-cert-agent.pinniped.dev": "v2"},
+			Labels:            map[string]string{"kube-cert-agent.pinniped.dev": "v3"},
 			CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 		},
 		Spec:   corev1.PodSpec{},
@@ -227,6 +240,8 @@ func TestAgentController(t *testing.T) {
 		alsoAllowUndesiredDistinctErrors []string
 		wantDistinctLogs                 []string
 		wantAgentDeployment              *appsv1.Deployment
+		wantDeploymentActionVerbs        []string
+		wantDeploymentDeleteActionOpts   []metav1.DeleteOptions
 		wantStrategy                     *configv1alpha1.CredentialIssuerStrategy
 	}{
 		{
@@ -369,7 +384,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -417,12 +433,118 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
 			},
-			wantAgentDeployment: healthyAgentDeploymentWithDefaultedPaths,
+			wantAgentDeployment:       healthyAgentDeploymentWithDefaultedPaths,
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
 				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "to support upgrade from old versions, update to immutable selector field of existing deployment causes delete and recreate, no running agent pods yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeploymentWithOldStyleSelector,
+				pendingAgentPod,
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+			},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "create"}, // must recreate deployment when Selector field changes
+			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+			},
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "to support upgrade from old versions, update to immutable selector field of existing deployment causes delete and recreate, when delete fails",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeploymentWithOldStyleSelector,
+				pendingAgentPod,
+			},
+			addKubeReactions: func(clientset *kubefake.Clientset) {
+				clientset.PrependReactor("delete", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("some delete error")
+				})
+			},
+			wantDistinctErrors: []string{
+				"could not ensure agent deployment: some delete error",
+			},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+			},
+			wantAgentDeployment: healthyAgentDeploymentWithOldStyleSelector, // couldn't be deleted, so it didn't change
+			// delete to try to recreate deployment when Selector field changes, but delete always fails, so keeps trying to delete
+			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "delete", "delete", "delete"},
+			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+			},
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not ensure agent deployment: some delete error",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "to support upgrade from old versions, update to immutable selector field of existing deployment causes delete and recreate, when delete succeeds but create fails",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeploymentWithOldStyleSelector,
+				pendingAgentPod,
+			},
+			addKubeReactions: func(clientset *kubefake.Clientset) {
+				clientset.PrependReactor("create", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("some create error")
+				})
+			},
+			wantDistinctErrors: []string{
+				"could not ensure agent deployment: some create error",
+			},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+			},
+			wantAgentDeployment: nil, // was deleted, but couldn't be recreated
+			// delete to try to recreate deployment when Selector field changes, but create always fails, so keeps trying to recreate
+			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "create", "create", "create", "create"},
+			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+			},
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not ensure agent deployment: some create error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
 		},
@@ -462,7 +584,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`kube-cert-agent-controller "level"=0 "msg"="updating existing deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
 			},
-			wantAgentDeployment: healthyAgentDeploymentWithExtraLabels,
+			wantAgentDeployment:       healthyAgentDeploymentWithExtraLabels,
+			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -484,7 +607,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
 			},
-			wantAgentDeployment: healthyAgentDeploymentWithHostNetwork,
+			wantAgentDeployment:       healthyAgentDeploymentWithHostNetwork,
+			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -509,7 +633,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -535,7 +660,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: missing \"kubeconfig\" key",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -561,7 +687,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: key \"kubeconfig\" does not contain a valid kubeconfig",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -587,7 +714,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: kubeconfig in key \"kubeconfig\" does not contain any clusters",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -615,7 +743,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not exec into agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: some exec error",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -643,7 +772,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				`failed to decode signing cert/key JSON from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: invalid character 'b' looking for beginning of value`,
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -671,7 +801,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				`failed to decode signing cert base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -699,7 +830,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				`failed to decode signing key base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -730,7 +862,8 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"failed to set signing cert/key content from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: some dynamic cert error",
 			},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.ErrorStrategyStatus,
@@ -754,8 +887,9 @@ func TestAgentController(t *testing.T) {
 				// If we pre-fill the cache here, we should never see any calls to the executor or dynamicCert mocks.
 				execCache.Set(healthyAgentPod.UID, struct{}{}, 1*time.Hour)
 			},
-			wantDistinctErrors:  []string{""},
-			wantAgentDeployment: healthyAgentDeployment,
+			wantDistinctErrors:        []string{""},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.SuccessStrategyStatus,
@@ -782,9 +916,13 @@ func TestAgentController(t *testing.T) {
 				healthyAgentPod,
 				validClusterInfoConfigMap,
 			},
-			mocks:               mockExecSucceeds,
-			wantDistinctErrors:  []string{""},
-			wantAgentDeployment: healthyAgentDeployment,
+			mocks:                     mockExecSucceeds,
+			wantDistinctErrors:        []string{""},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.SuccessStrategyStatus,
@@ -811,10 +949,14 @@ func TestAgentController(t *testing.T) {
 				healthyAgentPod,
 				validClusterInfoConfigMap,
 			},
-			discoveryURLOverride: pointer.StringPtr("https://overridden-server.example.com/some/path"),
-			mocks:                mockExecSucceeds,
-			wantDistinctErrors:   []string{""},
-			wantAgentDeployment:  healthyAgentDeployment,
+			discoveryURLOverride:      pointer.StringPtr("https://overridden-server.example.com/some/path"),
+			mocks:                     mockExecSucceeds,
+			wantDistinctErrors:        []string{""},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch"},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 				Status:         configv1alpha1.SuccessStrategyStatus,
@@ -843,6 +985,10 @@ func TestAgentController(t *testing.T) {
 			if tt.addKubeReactions != nil {
 				tt.addKubeReactions(kubeClientset)
 			}
+
+			actualDeleteActionOpts := &[]metav1.DeleteOptions{}
+			trackDeleteKubeClient := testutil.NewDeleteOptionsRecorder(kubeClientset, actualDeleteActionOpts)
+
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
 			log := testlogger.New(t)
 
@@ -863,10 +1009,16 @@ func TestAgentController(t *testing.T) {
 					NamePrefix:                "pinniped-concierge-kube-cert-agent-",
 					ContainerImagePullSecrets: []string{"pinniped-image-pull-secret"},
 					CredentialIssuerName:      initialCredentialIssuer.Name,
-					Labels:                    map[string]string{"extralabel": "labelvalue"},
-					DiscoveryURLOverride:      tt.discoveryURLOverride,
+					Labels: map[string]string{
+						"extralabel": "labelvalue",
+						// The special label "app" should never be added to the Pods of the kube cert agent Deployment.
+						// Older versions of Pinniped added this label, but it matches the Selector of the main
+						// Concierge Deployment, so we do not want it to exist on the Kube cert agent pods.
+						"app": "anything",
+					},
+					DiscoveryURLOverride: tt.discoveryURLOverride,
 				},
-				&kubeclient.Client{Kubernetes: kubeClientset, PinnipedConcierge: conciergeClientset},
+				&kubeclient.Client{Kubernetes: trackDeleteKubeClient, PinnipedConcierge: conciergeClientset},
 				kubeInformers.Core().V1().Pods(),
 				kubeInformers.Apps().V1().Deployments(),
 				kubeInformers.Core().V1().Pods(),
@@ -893,6 +1045,20 @@ func TestAgentController(t *testing.T) {
 			require.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
+
+			// Assert on all actions that happened to deployments.
+			var actualDeploymentActionVerbs []string
+			for _, a := range kubeClientset.Actions() {
+				if a.GetResource().Resource == "deployments" {
+					actualDeploymentActionVerbs = append(actualDeploymentActionVerbs, a.GetVerb())
+				}
+			}
+			if tt.wantDeploymentActionVerbs != nil {
+				require.Equal(t, tt.wantDeploymentActionVerbs, actualDeploymentActionVerbs)
+			}
+			if tt.wantDeploymentDeleteActionOpts != nil {
+				require.Equal(t, tt.wantDeploymentDeleteActionOpts, *actualDeleteActionOpts)
+			}
 
 			// Assert that the agent deployment is in the expected final state.
 			deployments, err := kubeClientset.AppsV1().Deployments("concierge").List(ctx, metav1.ListOptions{})

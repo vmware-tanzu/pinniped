@@ -3,7 +3,8 @@
 
 #@ load("@ytt:data", "data")
 #@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
+#@ load("@ytt:template", "template")
 
 #@ if not data.values.into_namespace:
 ---
@@ -108,10 +109,16 @@ metadata:
 spec:
   replicas: #@ data.values.replicas
   selector:
+    #! In hindsight, this should have been deploymentPodLabel(), but this field is immutable so changing it would break upgrades.
     matchLabels: #@ defaultLabel()
   template:
     metadata:
-      labels: #@ defaultLabel()
+      labels:
+        #! This has always included defaultLabel(), which is used by this Deployment's selector.
+        _: #@ template.replace(defaultLabel())
+        #! More recently added the more unique deploymentPodLabel() so Services can select these Pods more specifically
+        #! without accidentally selecting any other Deployment's Pods, especially the kube cert agent Deployment's Pods.
+        _: #@ template.replace(deploymentPodLabel())
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
@@ -225,7 +232,7 @@ spec:
             - weight: 50
               podAffinityTerm:
                 labelSelector:
-                  matchLabels: #@ defaultLabel()
+                  matchLabels: #@ deploymentPodLabel()
                 topologyKey: kubernetes.io/hostname
 ---
 apiVersion: v1
@@ -235,9 +242,12 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("api")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
-  selector: #@ defaultLabel()
+  selector: #@ deploymentPodLabel()
   ports:
     - protocol: TCP
       port: 443
@@ -249,9 +259,12 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("proxy")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
-  selector: #@ defaultLabel()
+  selector: #@ deploymentPodLabel()
   ports:
     - protocol: TCP
       port: 443

@@ -32,7 +32,7 @@ func TestKubeCertAgent(t *testing.T) {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		agentPods, err := kubeClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{
-			LabelSelector: "kube-cert-agent.pinniped.dev=v2",
+			LabelSelector: "kube-cert-agent.pinniped.dev=v3",
 		})
 		if err != nil {
 			return false, fmt.Errorf("failed to list pods: %w", err)

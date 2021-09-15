@@ -12,6 +12,9 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("nodeport")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: NodePort
   selector: #@ deploymentPodLabel()
@@ -44,6 +47,9 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("clusterip")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
   selector: #@ deploymentPodLabel()
@@ -70,6 +76,9 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("loadbalancer")
   namespace: #@ namespace()
   labels: #@ labels()
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: LoadBalancer
   selector: #@ deploymentPodLabel()

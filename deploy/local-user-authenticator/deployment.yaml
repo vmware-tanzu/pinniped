@@ -73,6 +73,9 @@ metadata:
   namespace: local-user-authenticator
   labels:
     app: local-user-authenticator
+  #! prevent kapp from altering the selector of our services to match kubectl behavior
+  annotations:
+    kapp.k14s.io/disable-default-label-scoping-rules: ""
 spec:
   type: ClusterIP
   selector:

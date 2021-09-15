@@ -48,7 +48,11 @@ const (
 	// agentPodLabelKey is used to identify which pods are created by the kube-cert-agent
 	// controllers.
 	agentPodLabelKey   = "kube-cert-agent.pinniped.dev"
-	agentPodLabelValue = "v2"
+	agentPodLabelValue = "v3"
+
+	// conciergeDefaultLabelKeyName is the name of the key of the label applied to all Concierge resources.
+	// This name is determined in the YAML manifests, but this controller needs to treat it as a special case below.
+	conciergeDefaultLabelKeyName = "app"
 
 	ClusterInfoNamespace    = "kube-public"
 	clusterInfoName         = "cluster-info"
@@ -84,10 +88,26 @@ type AgentConfig struct {
 	DiscoveryURLOverride *string
 }
 
-func (a *AgentConfig) agentLabels() map[string]string {
+// Only select using the unique label which will not match the pods of any other Deployment.
+// Older versions of Pinniped had multiple labels here.
+func (a *AgentConfig) agentPodSelectorLabels() map[string]string {
+	return map[string]string{agentPodLabelKey: agentPodLabelValue}
+}
+
+// Label the agent pod using the configured labels plus the unique label which we will use in the selector.
+func (a *AgentConfig) agentPodLabels() map[string]string {
 	allLabels := map[string]string{agentPodLabelKey: agentPodLabelValue}
 	for k, v := range a.Labels {
-		allLabels[k] = v
+		// Never label the agent pod with any label whose key is "app" because that could unfortunately match
+		// the selector of the main Concierge Deployment. This is sadly inconsistent because all other resources
+		// get labelled with the "app" label, but unfortunately the selector of the main Concierge Deployment is
+		// an immutable field, so we cannot update it to make it use a more specific label without breaking upgrades.
+		// Therefore, we take extra care here to avoid allowing the kube cert agent pods to match the selector of
+		// the main Concierge Deployment. Note that older versions of Pinniped included this "app" label, so during
+		// an upgrade we must take care to perform an update to remove it.
+		if k != conciergeDefaultLabelKeyName {
+			allLabels[k] = v
+		}
 	}
 	return allLabels
 }
@@ -236,7 +256,7 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not get CredentialIssuer to update: %w", err)
 	}
 
-	// Find the latest healthy kube-controller-manager Pod in kube-system..
+	// Find the latest healthy kube-controller-manager Pod in kube-system.
 	controllerManagerPods, err := c.kubeSystemPods.Lister().Pods(ControllerManagerNamespace).List(controllerManagerLabels)
 	if err != nil {
 		err := fmt.Errorf("could not list controller manager pods: %w", err)
@@ -336,6 +356,7 @@ func (c *agentController) loadSigningKey(agentPod *corev1.Pod) error {
 	if err := c.dynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("failed to set signing cert/key content from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
+	c.log.Info("successfully loaded signing key from agent pod into cache")
 
 	// Remember that we've successfully loaded the key from this pod so we can skip the exec+load if nothing has changed.
 	c.execCache.Set(agentPod.UID, struct{}{}, 15*time.Minute)
@@ -365,16 +386,42 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 		return err
 	}
 
-	// Otherwise update the spec of the Deployment to match our desired state.
+	// Update the spec of the Deployment to match our desired state.
 	updatedDeployment := existingDeployment.DeepCopy()
 	updatedDeployment.Spec = expectedDeployment.Spec
 	updatedDeployment.ObjectMeta = mergeLabelsAndAnnotations(updatedDeployment.ObjectMeta, expectedDeployment.ObjectMeta)
+	desireSelectorUpdate := !apiequality.Semantic.DeepEqual(updatedDeployment.Spec.Selector, existingDeployment.Spec.Selector)
+	desireTemplateLabelsUpdate := !apiequality.Semantic.DeepEqual(updatedDeployment.Spec.Template.Labels, existingDeployment.Spec.Template.Labels)
 
 	// If the existing Deployment already matches our desired spec, we're done.
 	if apiequality.Semantic.DeepDerivative(updatedDeployment, existingDeployment) {
-		return nil
+		// DeepDerivative allows the map fields of updatedDeployment to be a subset of existingDeployment,
+		// but we want to check that certain of those map fields are exactly equal before deciding to skip the update.
+		if !desireSelectorUpdate && !desireTemplateLabelsUpdate {
+			return nil // already equal enough, so skip update
+		}
 	}
 
+	// Selector is an immutable field, so if we want to update it then we must delete and recreate the Deployment,
+	// and then we're done. Older versions of Pinniped had multiple labels in the Selector, so to support upgrades from
+	// those versions we take extra care to handle this case.
+	if desireSelectorUpdate {
+		log.Info("deleting deployment to update immutable Selector field")
+		err = c.client.Kubernetes.AppsV1().Deployments(existingDeployment.Namespace).Delete(ctx.Context, existingDeployment.Name, metav1.DeleteOptions{
+			Preconditions: &metav1.Preconditions{
+				UID:             &existingDeployment.UID,
+				ResourceVersion: &existingDeployment.ResourceVersion,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		log.Info("creating new deployment to update immutable Selector field")
+		_, err = c.client.Kubernetes.AppsV1().Deployments(expectedDeployment.Namespace).Create(ctx.Context, expectedDeployment, metav1.CreateOptions{})
+		return err
+	}
+
+	// Otherwise, update the Deployment.
 	log.Info("updating existing deployment")
 	_, err = c.client.Kubernetes.AppsV1().Deployments(updatedDeployment.Namespace).Update(ctx.Context, updatedDeployment, metav1.UpdateOptions{})
 	return err
@@ -457,10 +504,10 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: pointer.Int32Ptr(1),
-			Selector: metav1.SetAsLabelSelector(c.cfg.agentLabels()),
+			Selector: metav1.SetAsLabelSelector(c.cfg.agentPodSelectorLabels()),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: c.cfg.agentLabels(),
+					Labels: c.cfg.agentPodLabels(),
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: pointer.Int64Ptr(0),

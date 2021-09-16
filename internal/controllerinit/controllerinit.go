@@ -22,8 +22,8 @@ type RunnerWrapper func(context.Context, Runner)
 // It is expected to be called in the main go routine since the construction can fail.
 type RunnerBuilder func(context.Context) (Runner, error)
 
-// informer is the subset of SharedInformerFactory needed for starting an informer cache and waiting for it to sync.
-type informer interface {
+// Informer is the subset of SharedInformerFactory needed for starting an informer cache and waiting for it to sync.
+type Informer interface {
 	Start(stopCh <-chan struct{})
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 }
@@ -31,7 +31,7 @@ type informer interface {
 // Prepare returns RunnerBuilder that, when called:
 //   1. Starts all provided informers and waits for them sync (and fails if they hang)
 //   2. Returns a Runner that combines the Runner and RunnerWrapper passed into Prepare
-func Prepare(controllers Runner, controllersWrapper RunnerWrapper, informers ...informer) RunnerBuilder {
+func Prepare(controllers Runner, controllersWrapper RunnerWrapper, informers ...Informer) RunnerBuilder {
 	return func(ctx context.Context) (Runner, error) {
 		for _, informer := range informers {
 			informer := informer

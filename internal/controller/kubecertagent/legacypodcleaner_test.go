@@ -18,7 +18,6 @@ import (
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
@@ -175,13 +174,12 @@ func TestLegacyPodCleanerController(t *testing.T) {
 				&kubeclient.Client{Kubernetes: trackDeleteClient},
 				kubeInformers.Core().V1().Pods(),
 				log,
-				controllerlib.WithMaxRetries(1),
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			errorMessages := runControllerUntilQuiet(ctx, t, controller, kubeInformers)
+			errorMessages := runControllerUntilQuiet(ctx, t, controller, func(_ context.Context, _ *testing.T) {}, kubeInformers)
 			assert.Equal(t, tt.wantDistinctErrors, deduplicate(errorMessages), "unexpected errors")
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
 			assert.Equal(t, tt.wantActions, kubeClientset.Actions()[2:], "unexpected actions")

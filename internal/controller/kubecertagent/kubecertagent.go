@@ -184,7 +184,6 @@ func newAgentController(
 	clock clock.Clock,
 	execCache *cache.Expiring,
 	log logr.Logger,
-	options ...controllerlib.Option,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -204,47 +203,45 @@ func newAgentController(
 				execCache:            execCache,
 			},
 		},
-		append([]controllerlib.Option{
-			controllerlib.WithInformer(
-				kubeSystemPods,
-				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-					return controllerManagerLabels.Matches(labels.Set(obj.GetLabels()))
-				}),
-				controllerlib.InformerOption{},
-			),
-			controllerlib.WithInformer(
-				agentDeployments,
-				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-					return obj.GetNamespace() == cfg.Namespace && obj.GetName() == cfg.deploymentName()
-				}),
-				controllerlib.InformerOption{},
-			),
-			controllerlib.WithInformer(
-				agentPods,
-				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-					return agentLabels.Matches(labels.Set(obj.GetLabels()))
-				}),
-				controllerlib.InformerOption{},
-			),
-			controllerlib.WithInformer(
-				kubePublicConfigMaps,
-				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-					return obj.GetNamespace() == ClusterInfoNamespace && obj.GetName() == clusterInfoName
-				}),
-				controllerlib.InformerOption{},
-			),
-			controllerlib.WithInformer(
-				credentialIssuers,
-				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-					return obj.GetName() == cfg.CredentialIssuerName
-				}),
-				controllerlib.InformerOption{},
-			),
-			// Be sure to run once even to make sure the CredentialIssuer is updated if there are no controller manager
-			// pods. We should be able to pass an empty key since we don't use the key in the sync (we sync
-			// the world).
-			controllerlib.WithInitialEvent(controllerlib.Key{}),
-		}, options...)...,
+		controllerlib.WithInformer(
+			kubeSystemPods,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return controllerManagerLabels.Matches(labels.Set(obj.GetLabels()))
+			}),
+			controllerlib.InformerOption{},
+		),
+		controllerlib.WithInformer(
+			agentDeployments,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return obj.GetNamespace() == cfg.Namespace && obj.GetName() == cfg.deploymentName()
+			}),
+			controllerlib.InformerOption{},
+		),
+		controllerlib.WithInformer(
+			agentPods,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return agentLabels.Matches(labels.Set(obj.GetLabels()))
+			}),
+			controllerlib.InformerOption{},
+		),
+		controllerlib.WithInformer(
+			kubePublicConfigMaps,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return obj.GetNamespace() == ClusterInfoNamespace && obj.GetName() == clusterInfoName
+			}),
+			controllerlib.InformerOption{},
+		),
+		controllerlib.WithInformer(
+			credentialIssuers,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return obj.GetName() == cfg.CredentialIssuerName
+			}),
+			controllerlib.InformerOption{},
+		),
+		// Be sure to run once even to make sure the CredentialIssuer is updated if there are no controller manager
+		// pods. We should be able to pass an empty key since we don't use the key in the sync (we sync
+		// the world).
+		controllerlib.WithInitialEvent(controllerlib.Key{}),
 	)
 }
 

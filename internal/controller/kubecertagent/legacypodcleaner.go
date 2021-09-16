@@ -24,7 +24,6 @@ func NewLegacyPodCleanerController(
 	client *kubeclient.Client,
 	agentPods corev1informers.PodInformer,
 	log logr.Logger,
-	options ...controllerlib.Option,
 ) controllerlib.Controller {
 	// legacyAgentLabels are the Kubernetes labels we previously added to agent pods (the new value is "v2").
 	// We also expect these pods to have the "extra" labels configured on the Concierge.
@@ -67,14 +66,12 @@ func NewLegacyPodCleanerController(
 				return nil
 			}),
 		},
-		append([]controllerlib.Option{
-			controllerlib.WithInformer(
-				agentPods,
-				pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-					return obj.GetNamespace() == cfg.Namespace && legacyAgentSelector.Matches(labels.Set(obj.GetLabels()))
-				}, nil),
-				controllerlib.InformerOption{},
-			),
-		}, options...)...,
+		controllerlib.WithInformer(
+			agentPods,
+			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
+				return obj.GetNamespace() == cfg.Namespace && legacyAgentSelector.Matches(labels.Set(obj.GetLabels()))
+			}, nil),
+			controllerlib.InformerOption{},
+		),
 	)
 }

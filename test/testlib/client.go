@@ -350,6 +350,41 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	return created
 }
 
+// delete and recreate a particular secret by name.
+func DeleteAndRecreateTestSecret(t *testing.T, namespace string, name string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
+	t.Helper()
+	client := NewKubernetesClientset(t)
+
+	deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
+	defer deleteCancel()
+
+	err := client.CoreV1().Secrets(namespace).Delete(deleteCtx, name, metav1.DeleteOptions{})
+	require.NoError(t, err)
+	t.Logf("deleted test Secret %s", name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Labels:      map[string]string{"pinniped.dev/test": ""},
+			Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Type:       secretType,
+		StringData: stringData,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
+		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("recreated test Secret %s", created.Name)
+	return created
+}
+
 func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
 	t.Helper()
 	env := IntegrationEnv(t)

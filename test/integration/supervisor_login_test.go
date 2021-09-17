@@ -370,6 +370,19 @@ func TestSupervisorLogin(t *testing.T) {
 						},
 					},
 				}, idpv1alpha1.LDAPPhaseReady)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				expectedMsgBeforeRecreate := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					ldapIDP, err := supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsgBeforeRecreate)
+				}, time.Minute, 500*time.Millisecond)
 
 				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
 				// update that secret, which will cause the cache to recheck tls and search base values
@@ -384,7 +397,6 @@ func TestSupervisorLogin(t *testing.T) {
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
 				)
-				supervisorClient := testlib.NewSupervisorClientset(t)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
@@ -454,41 +466,38 @@ func TestSupervisorLogin(t *testing.T) {
 						},
 					},
 				}, idpv1alpha1.LDAPPhaseReady)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				expectedMsgBeforeRecreate := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					ldapIDP, err := supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsgBeforeRecreate)
+				}, time.Minute, 500*time.Millisecond)
 
 				// delete, then recreate that secret, which will cause the cache to recheck tls and search base values
-				client := testlib.NewKubernetesClientset(t)
-				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
-				defer deleteCancel()
-				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
-				require.NoError(t, err)
-
-				// create the secret again
-				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
-				defer recreateCancel()
-				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
-						Namespace: env.SupervisorNamespace,
-					},
-					Type: v1.SecretTypeBasicAuth,
-					StringData: map[string]string{
+				recreatedSecret := testlib.DeleteAndRecreateTestSecret(t, env.SupervisorNamespace, secretName, v1.SecretTypeBasicAuth,
+					map[string]string{
 						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
 						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 					},
-				}, metav1.CreateOptions{})
-				require.NoError(t, err)
-				expectedMsg := fmt.Sprintf(
+				)
+				expectedMsgAfterRecreate := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
 				)
-				supervisorClient := testlib.NewSupervisorClientset(t)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					ldapIDP, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					ldapIDP, err := supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsgAfterRecreate)
 				}, time.Minute, 500*time.Millisecond)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
@@ -662,6 +671,20 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				}, idpv1alpha1.ActiveDirectoryPhaseReady)
 
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				expectedMsgBeforeEdit := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					adIDP, err := supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsgBeforeEdit)
+				}, time.Minute, 500*time.Millisecond)
+
 				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
 				// update that secret, which will cause the cache to recheck tls and search base values
 				client := testlib.NewKubernetesClientset(t)
@@ -670,18 +693,17 @@ func TestSupervisorLogin(t *testing.T) {
 				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedMsgAfterEdit := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
 				)
-				supervisorClient := testlib.NewSupervisorClientset(t)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					adIDP, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsgAfterEdit)
 				}, time.Minute, 500*time.Millisecond)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
@@ -734,41 +756,38 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				}, idpv1alpha1.ActiveDirectoryPhaseReady)
 
-				// delete the secret
-				client := testlib.NewKubernetesClientset(t)
-				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
-				defer deleteCancel()
-				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
-				require.NoError(t, err)
+				supervisorClient := testlib.NewSupervisorClientset(t)
+				expectedMsgBeforeRecreate := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					adIDP, err := supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					requireEventually.NoError(err)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsgBeforeRecreate)
+				}, time.Minute, 500*time.Millisecond)
 
-				// create the secret again
-				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
-				defer recreateCancel()
-				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
-						Namespace: env.SupervisorNamespace,
-					},
-					Type: v1.SecretTypeBasicAuth,
-					StringData: map[string]string{
+				// delete, then recreate that secret, which will cause the cache to recheck tls and search base values
+				recreatedSecret := testlib.DeleteAndRecreateTestSecret(t, env.SupervisorNamespace, secretName, v1.SecretTypeBasicAuth,
+					map[string]string{
 						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
 						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
 					},
-				}, metav1.CreateOptions{})
-				require.NoError(t, err)
-
-				expectedMsg := fmt.Sprintf(
+				)
+				expectedMsgAfterRecreate := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
 				)
-				supervisorClient := testlib.NewSupervisorClientset(t)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					adIDP, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					adIDP, err := supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsgAfterRecreate)
 				}, time.Minute, 500*time.Millisecond)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
@@ -919,7 +938,7 @@ func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, req
 	conditionsSummary := [][]string{}
 	for _, condition := range ldapIDP.Status.Conditions {
 		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+		t.Logf("Saw LDAPIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
 			condition.Type, string(condition.Status), condition.Reason, condition.Message)
 		switch condition.Type {
 		case "BindSecretValid":

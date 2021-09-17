@@ -376,11 +376,7 @@ func DeleteAndRecreateTestSecret(t *testing.T, namespace string, name string, se
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
-		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	})
+	// no need to cleanup because there's already a cleanup function for this secret.
 	t.Logf("recreated test Secret %s", created.Name)
 	return created
 }

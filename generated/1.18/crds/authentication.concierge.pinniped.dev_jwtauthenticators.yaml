@@ -24,6 +24,12 @@ spec:
     - jsonPath: .spec.issuer
       name: Issuer
       type: string
+    - jsonPath: .spec.audience
+      name: Audience
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:

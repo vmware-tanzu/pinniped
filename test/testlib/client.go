@@ -26,6 +26,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
+
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -100,6 +102,12 @@ func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
 	t.Helper()
 
 	return aggregatorclient.NewForConfigOrDie(NewClientConfig(t))
+}
+
+func NewAPIExtensionsV1Client(t *testing.T) apiextensionsv1.ApiextensionsV1Interface {
+	t.Helper()
+
+	return apiextensionsv1.NewForConfigOrDie(NewClientConfig(t))
 }
 
 func newClientConfigWithOverrides(t *testing.T, overrides *clientcmd.ConfigOverrides) *rest.Config {

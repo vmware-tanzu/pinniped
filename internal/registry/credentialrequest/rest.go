@@ -87,7 +87,7 @@ func (*REST) Categories() []string {
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	t := trace.FromContext(ctx).Nest("create", trace.Field{
 		Key:   "kind",
-		Value: obj.GetObjectKind().GroupVersionKind().Kind,
+		Value: "TokenCredentialRequest",
 	})
 	defer t.Log()
 

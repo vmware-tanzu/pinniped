@@ -938,6 +938,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			namespaceName := testlib.CreateNamespace(ctx, t, "impersonation").Name
 			kubeClient := adminClient.CoreV1()
 			saName, _, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
+			expectedUsername := serviceaccount.MakeUsername(namespaceName, saName)
+			expectedUID := string(saUID)
+			expectedGroups := []string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"}
 
 			_, tokenRequestProbeErr := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
 			if k8serrors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
@@ -1002,8 +1005,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// new service account tokens include the pod info in the extra fields
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
-					serviceaccount.MakeUsername(namespaceName, saName),
-					[]string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"},
+					expectedUsername,
+					expectedGroups,
 					map[string]identityv1alpha1.ExtraValue{
 						"authentication.kubernetes.io/pod-name": {pod.Name},
 						"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
@@ -1017,7 +1020,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Name: saName, Namespace: namespaceName},
 				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "system:node-bootstrapper"},
 			)
-			testlib.WaitForUserToHaveAccess(t, serviceaccount.MakeUsername(namespaceName, saName), []string{}, &authorizationv1.ResourceAttributes{
+			testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
 				Verb: "create", Group: certificatesv1.GroupName, Version: "*", Resource: "certificatesigningrequests",
 			})
 
@@ -1041,20 +1044,34 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			)
 			require.NoError(t, err)
 
-			saCSR, err := impersonationProxySAClient.Kubernetes.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
-			require.NoError(t, err)
-
-			err = adminClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
-			require.NoError(t, err)
-
-			// make sure the user info that the CSR captured matches the SA, including the UID
-			require.Equal(t, serviceaccount.MakeUsername(namespaceName, saName), saCSR.Spec.Username)
-			require.Equal(t, string(saUID), saCSR.Spec.UID)
-			require.Equal(t, []string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"}, saCSR.Spec.Groups)
-			require.Equal(t, map[string]certificatesv1beta1.ExtraValue{
-				"authentication.kubernetes.io/pod-name": {pod.Name},
-				"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
-			}, saCSR.Spec.Extra)
+			if testutil.KubeServerSupportsCertificatesV1API(t, adminClient.Discovery()) {
+				saCSR, err := impersonationProxySAClient.Kubernetes.CertificatesV1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+				require.NoError(t, err)
+				err = adminClient.CertificatesV1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+				require.NoError(t, err)
+				// make sure the user info that the CSR captured matches the SA, including the UID
+				require.Equal(t, expectedUsername, saCSR.Spec.Username)
+				require.Equal(t, expectedUID, saCSR.Spec.UID)
+				require.Equal(t, expectedGroups, saCSR.Spec.Groups)
+				require.Equal(t, map[string]certificatesv1.ExtraValue{
+					"authentication.kubernetes.io/pod-name": {pod.Name},
+					"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
+				}, saCSR.Spec.Extra)
+			} else {
+				// On old Kubernetes clusters use CertificatesV1beta1
+				saCSR, err := impersonationProxySAClient.Kubernetes.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+				require.NoError(t, err)
+				err = adminClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+				require.NoError(t, err)
+				// make sure the user info that the CSR captured matches the SA, including the UID
+				require.Equal(t, expectedUsername, saCSR.Spec.Username)
+				require.Equal(t, expectedUID, saCSR.Spec.UID)
+				require.Equal(t, expectedGroups, saCSR.Spec.Groups)
+				require.Equal(t, map[string]certificatesv1beta1.ExtraValue{
+					"authentication.kubernetes.io/pod-name": {pod.Name},
+					"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
+				}, saCSR.Spec.Extra)
+			}
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
@@ -2416,7 +2433,7 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	return out
 }
 
-func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) (string, map[string]certificatesv1beta1.ExtraValue) {
+func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) (string, map[string][]string) {
 	t.Helper()
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -2439,18 +2456,43 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 	)
 	require.NoError(t, err)
 
-	csReq, err := client.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
-	require.NoError(t, err)
-
-	err = client.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
-	require.NoError(t, err)
-
 	outUID := uid // in the future this may not be empty on some clusters
-	if len(outUID) == 0 {
-		outUID = csReq.Spec.UID
+	extrasAsStrings := map[string][]string{}
+
+	if testutil.KubeServerSupportsCertificatesV1API(t, client.Discovery()) {
+		csReq, err := client.CertificatesV1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		err = client.CertificatesV1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+		require.NoError(t, err)
+
+		if len(outUID) == 0 {
+			outUID = csReq.Spec.UID
+		}
+
+		// Convert each `ExtraValue` to `[]string` to return, so we don't have to deal with v1beta1 types versus v1 types
+		for k, v := range csReq.Spec.Extra {
+			extrasAsStrings[k] = v
+		}
+	} else {
+		// On old Kubernetes clusters use CertificatesV1beta1
+		csReq, err := client.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		err = client.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+		require.NoError(t, err)
+
+		if len(outUID) == 0 {
+			outUID = csReq.Spec.UID
+		}
+
+		// Convert each `ExtraValue` to `[]string` to return, so we don't have to deal with v1beta1 types versus v1 types
+		for k, v := range csReq.Spec.Extra {
+			extrasAsStrings[k] = v
+		}
 	}
 
-	return outUID, csReq.Spec.Extra
+	return outUID, extrasAsStrings
 }
 
 func parallelIfNotEKS(t *testing.T) {

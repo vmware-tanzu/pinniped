@@ -24,12 +24,10 @@ import (
 )
 
 // certBackdate is the amount of time before time.Now() that will be used to set
-// a certificate's NotBefore field.
-//
-// This could certainly be made configurable by an installer of pinniped, but we
-// will see if we can save adding a configuration knob with a reasonable default
-// here.
-const certBackdate = 10 * time.Second
+// a certificate's NotBefore field.  We use the same hard coded and unconfigurable
+// backdate value as used by the Kubernetes controller manager certificate signer:
+// https://github.com/kubernetes/kubernetes/blob/68d646a101005e95379d84160adf01d146bdd149/pkg/controller/certificates/signer/signer.go#L199
+const certBackdate = 5 * time.Minute
 
 type env struct {
 	// secure random number generators for various steps (usually crypto/rand.Reader, but broken out here for tests).

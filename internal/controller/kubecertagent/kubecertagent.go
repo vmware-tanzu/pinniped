@@ -46,7 +46,19 @@ const (
 	ControllerManagerNamespace = "kube-system"
 
 	// agentPodLabelKey is used to identify which pods are created by the kube-cert-agent
-	// controllers.
+	// controllers.  These values should be updated when an incompatible change is made to
+	// the kube-cert-agent pods.  Doing so will cause about a minute of downtime of the token
+	// credential request API on upgrade because the new concierge pods will not be able to
+	// fill their agentController.dynamicCertProvider cache until the new deployment has rolled
+	// out.  This is exacerbated by our leader election which assumes that filling caches only
+	// requires read requests.  On the incompatible kube-cert-agent upgrade case, we have to
+	// issue a write request to fill a cache (which just points out how hacky this code is).
+	//
+	// On an upgrade to a new pinniped version, if the agent label has not changed, the new
+	// pinniped code is basically saying that it is safe to use the old deployment forever
+	// (because the update to the new deployment could fail indefinitely).  Therefore, if the
+	// new pinniped code wants to guarantee that any change to the kube cert agent deployment
+	// has rolled out before attempting to fetch the signer, it must update agentPodLabelValue.
 	agentPodLabelKey   = "kube-cert-agent.pinniped.dev"
 	agentPodLabelValue = "v3"
 
@@ -268,16 +280,19 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
-	if err := c.createOrUpdateDeployment(ctx, newestControllerManager); err != nil {
-		err := fmt.Errorf("could not ensure agent deployment: %w", err)
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+	depErr := c.createOrUpdateDeployment(ctx, newestControllerManager)
+	if depErr != nil {
+		// it is fine if this call fails because a different concierge pod may have already created a compatible deployment
+		// thus if the later code is able to find pods with the agent labels that we expect, we will attempt to use them
+		// this means that we must always change the agent labels when we change the agent pods in an incompatible way
+		depErr = fmt.Errorf("could not ensure agent deployment: %w", depErr)
 	}
 
 	// Find the latest healthy agent Pod in our namespace.
 	agentPods, err := c.agentPods.Lister().Pods(c.cfg.Namespace).List(agentLabels)
 	if err != nil {
 		err := fmt.Errorf("could not list agent pods: %w", err)
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 	newestAgentPod := newestRunningPod(agentPods)
 
@@ -285,25 +300,31 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	// the CredentialIssuer.
 	if newestAgentPod == nil {
 		err := fmt.Errorf("could not find a healthy agent pod (%s)", pluralize(agentPods))
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	// Load the Kubernetes API info from the kube-public/cluster-info ConfigMap.
 	configMap, err := c.kubePublicConfigMaps.Lister().ConfigMaps(ClusterInfoNamespace).Get(clusterInfoName)
 	if err != nil {
 		err := fmt.Errorf("failed to get %s/%s configmap: %w", ClusterInfoNamespace, clusterInfoName, err)
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotGetClusterInfoStrategyReason)
 	}
 
 	apiInfo, err := c.extractAPIInfo(configMap)
 	if err != nil {
 		err := fmt.Errorf("could not extract Kubernetes API endpoint info from %s/%s configmap: %w", ClusterInfoNamespace, clusterInfoName, err)
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotGetClusterInfoStrategyReason)
 	}
 
 	// Load the certificate and key from the agent pod into our in-memory signer.
 	if err := c.loadSigningKey(newestAgentPod); err != nil {
-		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotFetchKeyStrategyReason)
+	}
+
+	if depErr != nil {
+		// if we get here, it means that we have successfully loaded a signing key but failed to reconcile the deployment.
+		// mark the status as failed and re-kick the sync loop until we are happy with the state of the deployment.
+		return c.failStrategyAndErr(ctx.Context, credIssuer, depErr, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	// Set the CredentialIssuer strategy to successful.
@@ -591,4 +612,14 @@ func pluralize(pods []*corev1.Pod) string {
 		return "1 candidate"
 	}
 	return fmt.Sprintf("%d candidates", len(pods))
+}
+
+func firstErr(errs ...error) error {
+	for _, err := range errs {
+		err := err
+		if err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("all errors were nil but should not have been")
 }

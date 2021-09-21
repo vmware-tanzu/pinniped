@@ -908,6 +908,45 @@ func TestAgentController(t *testing.T) {
 			},
 		},
 		{
+			name: "deployment exists has old selector, but agent pod exists with correct labels, configmap is valid, exec succeeds",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeploymentWithOldStyleSelector,
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+			},
+			addKubeReactions: func(clientset *kubefake.Clientset) {
+				clientset.PrependReactor("delete", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("some delete error")
+				})
+			},
+			mocks: mockExecSucceeds, // expect an attempt to fill the cache
+			wantDistinctErrors: []string{
+				"could not ensure agent deployment: some delete error",
+			},
+			wantAgentDeployment: healthyAgentDeploymentWithOldStyleSelector, // couldn't be deleted, so it didn't change
+			// delete to try to recreate deployment when Selector field changes, but delete always fails, so keeps trying to delete
+			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "delete"},
+			wantDistinctLogs: []string{
+				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+			},
+			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
+			},
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not ensure agent deployment: some delete error",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
 			name: "deployment exists, configmap is valid, exec succeeds",
 			pinnipedObjects: []runtime.Object{
 				initialCredentialIssuer,

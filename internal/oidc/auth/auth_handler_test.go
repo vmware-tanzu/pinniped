@@ -381,10 +381,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return encoded
 	}
 
-	expectedRedirectLocationForUpstreamOIDC := func(expectedUpstreamState string, expectedPrompt string) string {
+	expectedRedirectLocationForUpstreamOIDC := func(expectedUpstreamState string) string {
 		query := map[string]string{
 			"response_type":         "code",
 			"access_type":           "offline",
+			"prompt":                "consent",
 			"scope":                 "scope1 scope2",
 			"client_id":             "some-client-id",
 			"state":                 expectedUpstreamState,
@@ -392,9 +393,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": downstreamPKCEChallengeMethod,
 			"redirect_uri":          downstreamIssuer + "/callback",
-		}
-		if expectedPrompt != "" {
-			query["prompt"] = expectedPrompt
 		}
 		return urlWithQuery(upstreamAuthURL.String(), query)
 	}
@@ -461,7 +459,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), ""),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -539,7 +537,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        htmlContentType,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, ""), ""),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -559,7 +557,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), ""),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -630,25 +628,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:                                   "OIDC upstream browser flow happy path with prompt param login passed through to redirect uri",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
-			generateCSRF:                           happyCSRFGenerator,
-			generatePKCE:                           happyPKCEGenerator,
-			generateNonce:                          happyNonceGenerator,
-			stateEncoder:                           happyStateEncoder,
-			cookieEncoder:                          happyCookieEncoder,
-			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
-			contentType:                            "application/x-www-form-urlencoded",
-			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
-			wantContentType:                        htmlContentType,
-			wantBodyStringWithLocationInHref:       true,
-			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", ""), "login"),
-			wantUpstreamStateParamInLocationHeader: true,
-		},
-		{
 			name:            "OIDC upstream browser flow with error while decoding CSRF cookie just generates a new cookie and succeeds as usual",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
@@ -663,7 +642,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType: htmlContentType,
 			// Generated a new CSRF cookie and set it in the response.
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), ""),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -684,7 +663,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
-			}, "", ""), ""),
+			}, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -748,7 +727,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
 				"scope": "openid offline_access",
-			}, "", ""), ""),
+			}, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -1425,8 +1404,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(
-				map[string]string{"prompt": "none login", "scope": "email"}, "", "",
-			), ""),
+				map[string]string{"prompt": "none login", "scope": "email"}, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -2224,6 +2202,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			map[string]string{
 				"response_type": "code",
 				"access_type":   "offline",
+				"prompt":        "consent",
 				"scope":         "some-other-new-scope1 some-other-new-scope2", // updated expectation
 				"client_id":     "some-other-new-client-id",                    // updated expectation
 				"state": expectedUpstreamStateParam(

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -226,22 +225,17 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 		}
 	}
 
-	authCodeOptions := []oauth2.AuthCodeOption{
-		oauth2.AccessTypeOffline,
-		nonceValue.Param(),
-		pkceValue.Challenge(),
-		pkceValue.Method(),
-	}
-
-	promptParam := r.Form.Get("prompt")
-	if promptParam != "" && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam("prompt", promptParam))
-	}
-
 	http.Redirect(w, r,
 		upstreamOAuthConfig.AuthCodeURL(
 			encodedStateParamValue,
-			authCodeOptions...,
+			// this is the pinniped supervisor asking for a refresh token the first time it exchanges an authorization code for a particular user
+			oauth2.AccessTypeOffline,
+			// this is the pinniped supervisor asking for a re-consent on every login even if the user has approved it before
+			// combined with oauth2.AccessTypeOffline, this means we are requesting a refresh token on every login, not just the first one
+			oauth2.ApprovalForce,
+			nonceValue.Param(),
+			pkceValue.Challenge(),
+			pkceValue.Method(),
 		),
 		302,
 	)

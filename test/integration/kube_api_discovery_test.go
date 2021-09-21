@@ -430,10 +430,14 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		addSuffix("credentialissuers.config.concierge"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "ProxyMode", Type: "string", JSONPath: ".spec.impersonationProxy.mode"},
-				// CredentialIssuers status is a list of strategies, each with its own status. Unfortunately,
+				// CredentialIssuer status is a list of strategies, each with its own status. Unfortunately,
 				// AdditionalPrinterColumns cannot show multiple results, e.g. a list of strategy types where
 				// the status is equal to Successful. See https://github.com/kubernetes/kubernetes/issues/67268.
-				// So we don't show any status as a AdditionalPrinterColumn at the moment.
+				// Although this selector can evaluate to multiple results, the kubectl implementation of JSONPath
+				// will always only show the first result. Thus, this column will show the first successful strategy
+				// type, which is the same thing that `pinniped get kubeconfig` looks for, so the value of this
+				// column represents the current default strategy that will be used by `pinniped get kubeconfig`.
+				{Name: "DefaultStrategy", Type: "string", JSONPath: `.status.strategies[?(@.status == "Success")].type`},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

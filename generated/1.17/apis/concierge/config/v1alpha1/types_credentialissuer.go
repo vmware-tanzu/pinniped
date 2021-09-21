@@ -216,6 +216,7 @@ type ImpersonationProxyInfo struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped,scope=Cluster
 // +kubebuilder:printcolumn:name="ProxyMode",type=string,JSONPath=`.spec.impersonationProxy.mode`
+// +kubebuilder:printcolumn:name="DefaultStrategy",type=string,JSONPath=`.status.strategies[?(@.status == "Success")].type`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:subresource:status
 type CredentialIssuer struct {

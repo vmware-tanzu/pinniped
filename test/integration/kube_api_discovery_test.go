@@ -433,7 +433,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 				// CredentialIssuer status is a list of strategies, each with its own status. Unfortunately,
 				// AdditionalPrinterColumns cannot show multiple results, e.g. a list of strategy types where
 				// the status is equal to Successful. See https://github.com/kubernetes/kubernetes/issues/67268.
-				// Although this selector can evaluate to multiple results, the kubectl implementation of JSONPath
+				// Although this selector can evaluate to multiple results, the Kube CRD implementation of JSONPath
 				// will always only show the first result. Thus, this column will show the first successful strategy
 				// type, which is the same thing that `pinniped get kubeconfig` looks for, so the value of this
 				// column represents the current default strategy that will be used by `pinniped get kubeconfig`.

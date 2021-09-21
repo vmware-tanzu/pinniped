@@ -13,6 +13,8 @@ ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 source /tmp/integration-test-env
 
+echo -n "PINNIPED_TEST_GOLAND_RUNNER=true;"
+
 printenv | grep PINNIPED_TEST_ | sed 's/=.*//g' | grep -v CLUSTER_CAPABILITY_YAML | while read -r var ; do
     echo -n "${var}="
     echo -n "${!var}" | tr -d '\n'

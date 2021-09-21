@@ -1056,7 +1056,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			caCert, err := x509.ParseCertificate(block.Bytes)
 			require.NoError(t, err)
 			require.Equal(t, "Pinniped Impersonation Proxy CA", caCert.Subject.CommonName)
-			require.WithinDuration(t, time.Now().Add(-10*time.Second), caCert.NotBefore, 10*time.Second)
+			require.WithinDuration(t, time.Now().Add(-5*time.Minute), caCert.NotBefore, 10*time.Second)
 			require.WithinDuration(t, time.Now().Add(100*time.Hour*24*365), caCert.NotAfter, 10*time.Second)
 			return createdCertPEM
 		}
@@ -1077,7 +1077,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NotNil(createdCertPEM)
 			validCert := testutil.ValidateServerCertificate(t, string(caCert), string(createdCertPEM))
 			validCert.RequireMatchesPrivateKey(string(createdKeyPEM))
-			validCert.RequireLifetime(time.Now().Add(-10*time.Second), time.Now().Add(100*time.Hour*24*365), 10*time.Second)
+			validCert.RequireLifetime(time.Now().Add(-5*time.Minute), time.Now().Add(100*time.Hour*24*365), 10*time.Second)
 		}
 
 		var requireSigningCertProviderHasLoadedCerts = func(certPEM, keyPEM []byte) {

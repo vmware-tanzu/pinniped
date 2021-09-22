@@ -4,13 +4,16 @@
 package integration
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -398,4 +401,114 @@ func TestGetAPIResourceList(t *testing.T) {
 			}
 		})
 	}
+}
+
+// safe to run in parallel with serial tests since it only reads CRDs, see main_test.go.
+func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
+	// AdditionalPrinterColumns can be set on a CRD to make `kubectl get` return those columns in its table output.
+	// The main purpose of this test is to fail when we add a new CRD without considering which
+	// AdditionalPrinterColumns to set on it. This test will force us to consider it and make an explicit choice.
+	env := testlib.IntegrationEnv(t)
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelFunc()
+
+	// AdditionalPrinterColumns are not returned by the Kube discovery endpoints,
+	// so "discover" them in the CRD definitions instead.
+	apiExtensionsV1Client := testlib.NewAPIExtensionsV1Client(t)
+	crdList, err := apiExtensionsV1Client.CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
+	require.NoError(t, err)
+
+	addSuffix := func(base string) string {
+		return base + "." + env.APIGroupSuffix
+	}
+
+	// Since we're checking that AdditionalPrinterColumns exists on every CRD then we might as well also
+	// assert which fields are set as AdditionalPrinterColumns.
+	// Ideally, every CRD should show some kind of identifying info, some kind of status, and Age.
+	expectedColumnsPerCRDVersion := map[string]map[string][]apiextensionsv1.CustomResourceColumnDefinition{
+		addSuffix("credentialissuers.config.concierge"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "ProxyMode", Type: "string", JSONPath: ".spec.impersonationProxy.mode"},
+				// CredentialIssuer status is a list of strategies, each with its own status. Unfortunately,
+				// AdditionalPrinterColumns cannot show multiple results, e.g. a list of strategy types where
+				// the status is equal to Successful. See https://github.com/kubernetes/kubernetes/issues/67268.
+				// Although this selector can evaluate to multiple results, the Kube CRD implementation of JSONPath
+				// will always only show the first result. Thus, this column will show the first successful strategy
+				// type, which is the same thing that `pinniped get kubeconfig` looks for, so the value of this
+				// column represents the current default strategy that will be used by `pinniped get kubeconfig`.
+				{Name: "DefaultStrategy", Type: "string", JSONPath: `.status.strategies[?(@.status == "Success")].type`},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("webhookauthenticators.authentication.concierge"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Endpoint", Type: "string", JSONPath: ".spec.endpoint"},
+				// Note that WebhookAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("jwtauthenticators.authentication.concierge"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
+				{Name: "Audience", Type: "string", JSONPath: ".spec.audience"},
+				// Note that JWTAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("activedirectoryidentityproviders.idp.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Host", Type: "string", JSONPath: ".spec.host"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("federationdomains.config.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
+				{Name: "Status", Type: "string", JSONPath: ".status.status"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("ldapidentityproviders.idp.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Host", Type: "string", JSONPath: ".spec.host"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+		addSuffix("oidcidentityproviders.idp.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
+	}
+
+	actualPinnipedCRDCount := 0
+	expectedPinnipedCRDCount := 7 // the current number of CRDs that we ship as part of Pinniped
+
+	for _, crd := range crdList.Items {
+		if !strings.Contains(crd.Spec.Group, env.APIGroupSuffix) {
+			continue // skip non-Pinniped CRDs
+		}
+
+		// Found a Pinniped CRD, so let's check it for AdditionalPrinterColumns.
+		actualPinnipedCRDCount++
+
+		for _, version := range crd.Spec.Versions {
+			expectedColumns, ok := expectedColumnsPerCRDVersion[crd.Name][version.Name]
+			assert.Truef(t, ok,
+				"should have found an expected AdditionalPrinterColumns for CRD %q version %q: "+
+					"please make sure that some useful AdditionalPrinterColumns are defined on the CRD and update this test's expectations",
+				crd.Name, version.Name)
+			assert.Equalf(t, expectedColumns, version.AdditionalPrinterColumns,
+				"CRD %q version %q had unexpected AdditionalPrinterColumns", crd.Name, version.Name)
+		}
+	}
+
+	// Make sure that the logic of this test did not accidentally skip a CRD that it should have interrogated.
+	require.Equal(t, expectedPinnipedCRDCount, actualPinnipedCRDCount,
+		"did not find expected number of Pinniped CRDs to check for additionalPrinterColumns")
 }

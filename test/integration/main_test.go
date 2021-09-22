@@ -14,7 +14,14 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	splitIntegrationTestsIntoBuckets(m)
+	if os.Getenv("PINNIPED_TEST_GOLAND_RUNNER") != "true" {
+		// When running integration tests from inside GoLand, do not modify them.
+		// If the test gets nested under TestIntegrationSerial or the other groups,
+		// then you cannot run/debug a focused integration test in GoLand because the
+		// name of the test changes in a way that GoLand does not expect due to
+		// the nesting.
+		splitIntegrationTestsIntoBuckets(m)
+	}
 	os.Exit(m.Run())
 }
 

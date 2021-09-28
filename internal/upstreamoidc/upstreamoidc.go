@@ -37,6 +37,7 @@ type ProviderConfig struct {
 	AllowPasswordGrant bool
 	Provider           interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
+		Claims(v interface{}) error
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
 }
@@ -160,14 +161,21 @@ func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, c
 		return nil // defer to existing ID token validation
 	}
 
+	providerJSON := &struct {
+		UserInfoURL string `json:"userinfo_endpoint"`
+	}{}
+	if err := p.Provider.Claims(providerJSON); err != nil {
+		// this should never happen because we should have already parsed these claims at an earlier stage
+		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal discovery JSON", err)
+	}
+
+	// implementing the user info endpoint is not required, skip this logic when it is absent
+	if len(providerJSON.UserInfoURL) == 0 {
+		return nil
+	}
+
 	userInfo, err := p.Provider.UserInfo(coreosoidc.ClientContext(ctx, p.Client), oauth2.StaticTokenSource(tok))
 	if err != nil {
-		// the user info endpoint is not required but we do not have a good way to probe if it was provided
-		const userInfoUnsupported = "oidc: user info endpoint is not supported by this provider"
-		if err.Error() == userInfoUnsupported {
-			return nil
-		}
-
 		return httperr.Wrap(http.StatusInternalServerError, "could not get user info", err)
 	}
 

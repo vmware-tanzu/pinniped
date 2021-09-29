@@ -6,6 +6,7 @@ package upstreamoidc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -131,12 +133,11 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	if err := validated.Claims(&validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
 	}
-	plog.All("claims from ID token", "providerName", p.Name, "claims", validatedClaims)
+	maybeLogClaims("claims from ID token", p.Name, validatedClaims)
 
 	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
-	plog.All("claims from ID token and userinfo", "providerName", p.Name, "claims", validatedClaims)
 
 	return &oidctypes.Token{
 		AccessToken: &oidctypes.AccessToken{
@@ -196,5 +197,21 @@ func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, c
 		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal user info claims", err)
 	}
 
+	maybeLogClaims("claims from ID token and userinfo", p.Name, claims)
+
 	return nil
+}
+
+func maybeLogClaims(msg, name string, claims map[string]interface{}) {
+	if plog.Enabled(plog.LevelAll) { // log keys and values at all level
+		data, _ := json.Marshal(claims) // nothing we can do if it fails, but it really never should
+		plog.Info(msg, "providerName", name, "claims", string(data))
+		return
+	}
+
+	if plog.Enabled(plog.LevelDebug) { // log keys at debug level
+		keys := sets.StringKeySet(claims).List() // note: this is only safe because the compiler asserts that claims is a map[string]<anything>
+		plog.Info(msg, "providerName", name, "keys", keys)
+		return
+	}
 }

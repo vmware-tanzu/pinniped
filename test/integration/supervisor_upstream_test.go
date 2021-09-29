@@ -20,7 +20,7 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 	t.Run("invalid missing secret and bad issuer", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.OIDCIdentityProviderSpec{
-			Issuer: "https://127.0.0.1:444444/issuer",
+			Issuer: "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 			Client: v1alpha1.OIDCClient{
 				SecretName: "does-not-exist",
 			},
@@ -37,8 +37,8 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 				Type:   "OIDCDiscoverySucceeded",
 				Status: v1alpha1.ConditionFalse,
 				Reason: "Unreachable",
-				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/issuer":
-Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp: address 444444: in [truncated 10 chars]`,
+				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
+Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": dial tcp: address 444444: in [truncated 10 chars]`,
 			},
 		})
 	})

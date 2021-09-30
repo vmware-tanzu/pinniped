@@ -285,7 +285,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateNonOIDCErr(err)),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
 			}
 		}
 
@@ -387,11 +387,12 @@ func computeScopes(additionalScopes []string) []string {
 	return scopes
 }
 
-func truncateNonOIDCErr(err error) string {
-	const max = 100
+func truncateMostLongErr(err error) string {
+	const max = 300
 	msg := err.Error()
 
-	if len(msg) <= max || strings.HasPrefix(msg, "oidc:") {
+	// always log oidc and x509 errors completely
+	if len(msg) <= max || strings.Contains(msg, "oidc:") || strings.Contains(msg, "x509:") {
 		return msg
 	}
 

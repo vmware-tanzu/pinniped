@@ -36,9 +36,10 @@ The following table includes the current roadmap for Pinniped. If you have any q
 Last Updated: Sept 2021
 |Theme|Description|Timeline|
 |--|--|--|
-|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works|Sept 2021|
-|Wider Concierge cluster support|Support for OpenShift cluster types in the Concierge|Sept 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Oct 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for LDAP/AD |Nov 2021|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
+|Wider Concierge cluster support|Support for OpenShift cluster types in the Concierge|Exploring/Ongoing|
 |Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|
 |CLI SSO|Support Kerberos based authentication on CLI |Exploring/Ongoing|
 |Extended IDP support|Support more types of identity providers on the Supervisor|Exploring/Ongoing|

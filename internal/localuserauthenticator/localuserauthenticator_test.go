@@ -481,7 +481,7 @@ func newClient(caBundle []byte, serverName string) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS13,
+				MinVersion: tls.VersionTLS12,
 				RootCAs:    rootCAs,
 				ServerName: serverName,
 			},

@@ -74,7 +74,7 @@ func (w *webhook) start(ctx context.Context, l net.Listener) error {
 	server := http.Server{
 		Handler: w,
 		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
+			MinVersion: tls.VersionTLS12,
 			GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				certPEM, keyPEM := w.certProvider.CurrentCertKeyContent()
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)

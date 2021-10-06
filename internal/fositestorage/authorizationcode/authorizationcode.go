@@ -11,7 +11,6 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -19,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must be present")
 	ErrInvalidAuthorizeRequestVersion = constable.Error("authorization request data has wrong version")
 
-	authorizeCodeStorageVersion = "1"
+	authorizeCodeStorageVersion = "2"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -139,7 +139,7 @@ func NewValidEmptyAuthorizeCodeSession() *AuthorizeCodeSession {
 	return &AuthorizeCodeSession{
 		Request: &fosite.Request{
 			Client:  &clientregistry.Client{},
-			Session: &openid.DefaultSession{},
+			Session: &psession.PinnipedSession{},
 		},
 	}
 }
@@ -169,161 +169,172 @@ func (e *errSerializationFailureWithCause) Error() string {
 // ExpectedAuthorizeCodeSessionJSONFromFuzzing is used for round tripping tests.
 // It is exported to allow integration tests to use it.
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
-	  "active": true,
-	  "request": {
+	"active": true,
+	"request": {
 		"id": "曑x螠Gæ鄋楨",
 		"requestedAt": "2082-11-10T18:36:11.627253638Z",
 		"client": {
-		  "id": ":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
-		  "client_secret": "UQ==",
-		  "redirect_uris": [
-			"ǖ枭kʍ切厦ȳ箦;¥ʊXĝ奨誷傥祩d",
-			"zŇZ",
-			"優蒼ĊɌț訫ǄǽeʀO2ƚ&N"
-		  ],
-		  "grant_types": [
-			"唐W6ɻ橩斚薛ɑƐ"
-		  ],
-		  "response_types": [
-			"w",
-			"ǔŭe[u@阽羂ŷ-Ĵ½輢OÅ濲喾H"
-		  ],
-		  "scopes": [
-			"G螩歐湡ƙı唡ɸğƎ&胢輢Ƈĵƚ"
-		  ],
-		  "audience": [
-			"ě"
-		  ],
-		  "public": false,
-		  "jwks_uri": "o*泞羅ʘ Ⱦķ瀊垰7ã\")",
-		  "jwks": {
-			"keys": [
-			  {
-				"kty": "OKP",
-				"crv": "Ed25519",
-				"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
-				"x5u": {
-				  "Scheme": "",
-				  "Opaque": "",
-				  "User": null,
-				  "Host": "",
-				  "Path": "",
-				  "RawPath": "",
-				  "ForceQuery": false,
-				  "RawQuery": "",
-				  "Fragment": "",
-				  "RawFragment": ""
-				}
-			  },
-			  {
-				"kty": "OKP",
-				"crv": "Ed25519",
-				"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
-				"x5u": {
-				  "Scheme": "",
-				  "Opaque": "",
-				  "User": null,
-				  "Host": "",
-				  "Path": "",
-				  "RawPath": "",
-				  "ForceQuery": false,
-				  "RawQuery": "",
-				  "Fragment": "",
-				  "RawFragment": ""
-				}
-			  }
-			]
-		  },
-		  "token_endpoint_auth_method": "ƿʥǟȒ伉<x¹T鼓c吏",
-		  "request_uris": [
-			"Ć捘j]=谅ʑɑɮ$Ól4Ȟ",
-			",Q7钎漡臧n"
-		  ],
-		  "request_object_signing_alg": "3@¡廜+v,淬Ʋ4Dʧ呩锏緍场",
-		  "token_endpoint_auth_signing_alg": "(ưƓǴ罷ǹ~]ea胠"
+			"id": ":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
+			"client_secret": "UQ==",
+			"redirect_uris": [
+				"ǖ枭kʍ切厦ȳ箦;¥ʊXĝ奨誷傥祩d",
+				"zŇZ",
+				"優蒼ĊɌț訫ǄǽeʀO2ƚ\u0026N"
+			],
+			"grant_types": [
+				"唐W6ɻ橩斚薛ɑƐ"
+			],
+			"response_types": [
+				"w",
+				"ǔŭe[u@阽羂ŷ-Ĵ½輢OÅ濲喾H"
+			],
+			"scopes": [
+				"G螩歐湡ƙı唡ɸğƎ\u0026胢輢Ƈĵƚ"
+			],
+			"audience": [
+				"ě"
+			],
+			"public": false,
+			"jwks_uri": "o*泞羅ʘ Ⱦķ瀊垰7ã\")",
+			"jwks": {
+				"keys": [
+					{
+						"kty": "OKP",
+						"crv": "Ed25519",
+						"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
+						"x5u": {
+							"Scheme": "",
+							"Opaque": "",
+							"User": null,
+							"Host": "",
+							"Path": "",
+							"RawPath": "",
+							"ForceQuery": false,
+							"RawQuery": "",
+							"Fragment": "",
+							"RawFragment": ""
+						}
+					},
+					{
+						"kty": "OKP",
+						"crv": "Ed25519",
+						"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
+						"x5u": {
+							"Scheme": "",
+							"Opaque": "",
+							"User": null,
+							"Host": "",
+							"Path": "",
+							"RawPath": "",
+							"ForceQuery": false,
+							"RawQuery": "",
+							"Fragment": "",
+							"RawFragment": ""
+						}
+					}
+				]
+			},
+			"token_endpoint_auth_method": "ƿʥǟȒ伉\u003cx¹T鼓c吏",
+			"request_uris": [
+				"Ć捘j]=谅ʑɑɮ$Ól4Ȟ",
+				",Q7钎漡臧n"
+			],
+			"request_object_signing_alg": "3@¡廜+v,淬Ʋ4Dʧ呩锏緍场",
+			"token_endpoint_auth_signing_alg": "(ưƓǴ罷ǹ~]ea胠"
 		},
 		"scopes": [
-		  "ĩv絹b垇IŕĩǀŻQ'k頂箨J-a稆",
-		  "啶#昏Q遐*\\髎bŸ"
+			"ĩv絹b垇IŕĩǀŻQ'k頂箨J-a稆",
+			"啶#昏Q遐*\\髎bŸ"
 		],
 		"grantedScopes": [
-		  "慂UFƼĮǡ鑻Z"
+			"慂UFƼĮǡ鑻Z"
 		],
 		"form": {
-		  "褾攚ŝlĆ厦駳骪l拁乖¡J¿Ƈ妔": [
-			"懧¥ɂĵ~Čyʊ恀c\"Ǌřðȿ/",
-			"裢?霃谥vƘ:ƿ/濔Aʉ<",
-			"ȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀j¤"
-		  ],
-		  "诞": [
-			"狲N<Cq罉ZPſĝEK郊©l",
-			"餚Ǉ/ɷȑ潠[ĝU噤'pX ",
-			"Y妶ǵ!ȁu狍ɶȳsčɦƦ诱"
-		  ]
+			"褾攚ŝlĆ厦駳骪l拁乖¡J¿Ƈ妔": [
+				"懧¥ɂĵ~Čyʊ恀c\"Ǌřðȿ/",
+				"裢?霃谥vƘ:ƿ/濔Aʉ\u003c",
+				"ȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀j¤"
+			],
+			"诞": [
+				"狲N\u003cCq罉ZPſĝEK郊©l",
+				"餚Ǉ/ɷȑ潠[ĝU噤'pX ",
+				"Y妶ǵ!ȁu狍ɶȳsčɦƦ诱"
+			]
 		},
 		"session": {
-		  "Claims": {
-			"JTI": "攬林Ñz焁糳¿o>Q鱙翑ȲŻ",
-			"Issuer": "锰劝旣樎Ȱ鍌#ȳńƩŴȭ",
-			"Subject": "绝TFǊĆw宵ɚeY48珎²",
-			"Audience": [
-			  "éã越|j¦鲶H股ƲLŋZ-{5£踉4"
-			],
-			"Nonce": "5^驜Ŗ~ů崧軒q腟u尿",
-			"ExpiresAt": "2065-11-30T13:47:03.613000626Z",
-			"IssuedAt": "1976-02-22T09:57:20.479850437Z",
-			"RequestedAt": "2016-04-13T04:18:53.648949323Z",
-			"AuthTime": "2098-07-12T04:38:54.034043015Z",
-			"AccessTokenHash": "嫯R",
-			"AuthenticationContextClassReference": "¤'+ʣ",
-			"AuthenticationMethodsReference": "L&ɽ艄ʬʏ",
-			"CodeHash": "ğǫ\\aȊ4ț髄Al",
-			"Extra": {
-			  "PƢ曰": {
-				"ĸŴB岺Ð嫹Sx镯荫ő": [
-				  843216989
-				],
-				"疂ư墫ɓ": {
-				  "\\BRë_g\"ʎ啴SƇMǃļ": {
-					"ʦ4": false
-				  },
-				  "鶡萷ɵ啜s攦": null
-				}
-			  },
-			  "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#": 2520197933
-			}
-		  },
-		  "Headers": {
-			"Extra": {
-			  "寱ĊƑ÷Ƒ螞费Ďğ~劰û橸ɽ銐ƭ?}": {
-				"ȜʁɁ;Bd謺錳4帳ŅǃĊd": {
-				  "翢砜Fȏl鐉诳DT=3骜": {
-					"ų厷ɁOƪ穋嶿鳈恱va|载ǰɱ汶C": false
-				  },
-				  "鸨EJ毕懴řĬń戹%c": null
+			"fosite": {
+				"Claims": {
+					"JTI": "u妔隤ʑƍš駎竪0ɔ闏À1",
+					"Issuer": "麤ã桒嘞\\摗Ǘū稖咾鎅ǸÖ绝TF",
+					"Subject": "巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢Û±",
+					"Audience": [
+						"H股ƲL",
+						"肟v\u0026đehpƧ",
+						"5^驜Ŗ~ů崧軒q腟u尿"
+					],
+					"Nonce": "ğ",
+					"ExpiresAt": "2016-11-22T21:33:58.460521133Z",
+					"IssuedAt": "1990-07-25T23:42:07.055978334Z",
+					"RequestedAt": "1971-01-30T00:23:36.377684025Z",
+					"AuthTime": "2088-11-09T12:09:14.051840239Z",
+					"AccessTokenHash": "蕖¤'+ʣȍ瓁U4鞀",
+					"AuthenticationContextClassReference": "ʏÑęN\u003c_z",
+					"AuthenticationMethodsReference": "ț髄A",
+					"CodeHash": "4磔_袻vÓG-壧丵礴鋈k蟵pAɂʅ",
+					"Extra": {
+						"#\u0026PƢ曰l騌蘙螤\\阏Đ镴Ƥm蔻ǭ\\鿞": 1677215584,
+						"Y\u0026鶡萷ɵ啜s攦Ɩïdnǔ": {
+							",t猟i\u0026\u0026Q@ǤǟǗǪ飘ȱF?Ƈ": {
+								"~劰û橸ɽ銐ƭ?}H": null,
+								"癑勦e骲v0H晦XŘO溪V蔓": {
+									"碼Ǫ": false
+								}
+							},
+							"钻煐ɨəÅDČ{Ȩʦ4撎": [
+								3684968178
+							]
+						}
+					}
 				},
-				"室癑勦e骲v0H晦XŘO溪V蔓Ȍ+~ē": [
-				  954647573
-				]
-			  },
-			  "麈ƵDǀ\\郂üţ垂": 1572524915
+				"Headers": {
+					"Extra": {
+						"ĊdŘ鸨EJ毕懴řĬń戹": {
+							"诳DT=3骜Ǹ,": {
+								"\u003e": {
+									"ǰ": false
+								},
+								"ɁOƪ穋嶿鳈恱va": null
+							},
+							"豑觳翢砜Fȏl": [
+								927958776
+							]
+						},
+						"埅ȜʁɁ;Bd謺錳4帳Ņ": 388005986
+					}
+				},
+				"ExpiresAt": {
+					"C]ɲ'=ĸ闒NȢȰ.醋": "1970-07-19T18:03:29.902062193Z",
+					"fɤȆʪ融ƆuŤn": "2064-01-24T20:34:16.593152073Z",
+					"爣縗ɦüHêQ仏1ő": "2102-03-17T06:24:40.256846902Z"
+				},
+				"Username": "韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ",
+				"Subject": "闺髉龳ǽÙ龦O亾EW莛8嘶×"
+			},
+			"custom": {
+				"providerUID": "鵮碡ʯiŬŽ非Ĝ眧Ĭ葜SŦ餧Ĭ倏4",
+				"providerName": "nŐǛ3",
+				"providerType": "闣ʬ橳(ý綃ʃʚƟ覣k眐4Ĉt",
+				"oidc": {
+					"upstreamRefreshToken": "嵽痊w©Ź榨Q|ôɵt毇妬"
+				}
 			}
-		  },
-		  "ExpiresAt": {
-			"'=ĸ闒NȢȰ.醋fʜ": "2031-10-18T22:07:34.950803105Z",
-			"ɦüHêQ仏1őƖ2Ė暮唍ǞʜƢú4": "2049-05-13T15:27:20.968432454Z"
-		  },
-		  "Username": "+韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟȥE",
-		  "Subject": "龳ǽÙ龦O亾EW莛8嘶×姮c恭企"
 		},
 		"requestedAudience": [
-		  "邖ɐ5檄¬",
-		  "Ĭ葜SŦ餧Ĭ倏4ĵ嶼仒篻ɥ闣ʬ橳(ý綃"
+			"6鉢緋uƴŤȱʀļÂ?墖\u003cƬb獭潜Ʃ饾"
 		],
 		"grantedAudience": [
-		  "ʚƟ覣k眐4ĈtC嵽痊w©Ź榨Q|ô",
-		  "猊Ia瓕巈環_ɑ彨ƍ蛊ʚ£:設虝2"
+			"|鬌R蜚蠣麹概÷驣7Ʀ澉1æɽ誮rʨ鷞"
 		]
-	  },
-	  "version": "1"
-	}`
+	},
+	"version": "2"
+}`

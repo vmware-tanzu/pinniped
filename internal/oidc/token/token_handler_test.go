@@ -46,6 +46,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
@@ -58,7 +59,6 @@ const (
 	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	goodSubject          = "https://issuer?sub=some-subject"
 	goodUsername         = "some-username"
-	goodGroups           = "group1,groups2"
 
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
@@ -72,6 +72,8 @@ const (
 var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
+	goodGroups          = []string{"group1", "groups2"}
+	expectedGoodGroups  = []interface{}{"group1", "groups2"}
 
 	hmacSecretFunc = func() []byte {
 		return []byte(hmacSecret)
@@ -813,7 +815,7 @@ func TestTokenExchange(t *testing.T) {
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
 			require.Equal(t, goodUsername, tokenClaims["username"])
-			require.Equal(t, goodGroups, tokenClaims["groups"])
+			require.Equal(t, expectedGoodGroups, tokenClaims["groups"])
 
 			// Also assert that some are the same as the original downstream ID token.
 			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
@@ -1358,18 +1360,25 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Request, oauthHelper fosite.OAuth2Provider) fosite.AuthorizeResponder {
 	// We only set the fields in the session that Fosite wants us to set.
 	ctx := context.Background()
-	session := &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject:     goodSubject,
-			RequestedAt: goodRequestedAtTime,
-			AuthTime:    goodAuthTime,
-			Extra: map[string]interface{}{
-				oidc.DownstreamUsernameClaim: goodUsername,
-				oidc.DownstreamGroupsClaim:   goodGroups,
+	session := &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:     goodSubject,
+				RequestedAt: goodRequestedAtTime,
+				AuthTime:    goodAuthTime,
+				Extra: map[string]interface{}{
+					oidc.DownstreamUsernameClaim: goodUsername,
+					oidc.DownstreamGroupsClaim:   goodGroups,
+				},
+			},
+			Subject:  "", // not used, note that callback_handler.go does not set this
+			Username: "", // not used, note that callback_handler.go does not set this
+		},
+		Custom: &psession.PinnipedSessionData{
+			OIDC: &psession.OIDCSessionData{
+				UpstreamRefreshToken: "starting-fake-refresh-token",
 			},
 		},
-		Subject:  "", // not used, note that callback_handler.go does not set this
-		Username: "", // not used, note that callback_handler.go does not set this
 	}
 	authRequester, err := oauthHelper.NewAuthorizeRequest(ctx, authRequest)
 	require.NoError(t, err)
@@ -1588,19 +1597,19 @@ func requireValidStoredRequest(
 	require.Equal(t, wantRequestForm, request.GetRequestForm()) // Fosite stores access token request without form
 
 	// Cast session to the type we think it should be.
-	session, ok := request.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", request.GetSession(), &openid.DefaultSession{})
+	session, ok := request.GetSession().(*psession.PinnipedSession)
+	require.Truef(t, ok, "could not cast %T to %T", request.GetSession(), &psession.PinnipedSession{})
 
 	// Assert that the session claims are what we think they should be, but only if we are doing OIDC.
 	if contains(wantGrantedScopes, "openid") {
-		claims := session.Claims
+		claims := session.Fosite.Claims
 		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
 		require.Equal(t, goodSubject, claims.Subject)
 
 		// Our custom claims from the authorize endpoint should still be set.
 		require.Equal(t, map[string]interface{}{
 			"username": goodUsername,
-			"groups":   goodGroups,
+			"groups":   expectedGoodGroups,
 		}, claims.Extra)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -1610,7 +1619,7 @@ func requireValidStoredRequest(
 
 		// These fields will all be given good defaults by fosite at runtime and we only need to use them
 		// if we want to override the default behaviors. We currently don't need to override these defaults,
-		// so they do not end up being stored. Fosite sets its defaults at runtime in openid.DefaultSession's
+		// so they do not end up being stored. Fosite sets its defaults at runtime in openid.DefaultStrategy's
 		// GenerateIDToken() method.
 		require.Empty(t, claims.Issuer)
 		require.Empty(t, claims.Audience)
@@ -1630,11 +1639,11 @@ func requireValidStoredRequest(
 	}
 
 	// Assert that the session headers are what we think they should be.
-	headers := session.Headers
+	headers := session.Fosite.Headers
 	require.Empty(t, headers)
 
 	// Assert that the token expirations are what we think they should be.
-	authCodeExpiresAt, ok := session.ExpiresAt[fosite.AuthorizeCode]
+	authCodeExpiresAt, ok := session.Fosite.ExpiresAt[fosite.AuthorizeCode]
 	require.True(t, ok, "expected session to hold expiration time for auth code")
 	testutil.RequireTimeInDelta(
 		t,
@@ -1644,7 +1653,7 @@ func requireValidStoredRequest(
 	)
 
 	// OpenID Connect sessions do not store access token expiration information.
-	accessTokenExpiresAt, ok := session.ExpiresAt[fosite.AccessToken]
+	accessTokenExpiresAt, ok := session.Fosite.ExpiresAt[fosite.AccessToken]
 	if wantAccessTokenExpiresAt {
 		require.True(t, ok, "expected session to hold expiration time for access token")
 		testutil.RequireTimeInDelta(
@@ -1658,8 +1667,8 @@ func requireValidStoredRequest(
 	}
 
 	// We don't use these, so they should be empty.
-	require.Empty(t, session.Username)
-	require.Empty(t, session.Subject)
+	require.Empty(t, session.Fosite.Username)
+	require.Empty(t, session.Fosite.Subject)
 }
 
 func requireGarbageCollectTimeInDelta(t *testing.T, tokenString string, typeLabel string, secrets v1.SecretInterface, wantExpirationTime time.Time, deltaTime time.Duration) {
@@ -1709,7 +1718,7 @@ func requireValidIDToken(
 		IssuedAt        int64    `json:"iat"`
 		RequestedAt     int64    `json:"rat"`
 		AuthTime        int64    `json:"auth_time"`
-		Groups          string   `json:"groups"`
+		Groups          []string `json:"groups"`
 		Username        string   `json:"username"`
 	}
 

@@ -16,7 +16,6 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
@@ -31,6 +30,7 @@ import (
 	pkce2 "go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -563,7 +563,7 @@ func validateAuthcodeStorage(
 	wantDownstreamRequestedScopes []string,
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
-) (*fosite.Request, *openid.DefaultSession) {
+) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
 	const (
@@ -591,16 +591,16 @@ func validateAuthcodeStorage(
 	testutil.RequireTimeInDelta(t, time.Now(), storedRequestFromAuthcode.RequestedAt, timeComparisonFudgeFactor)
 
 	// We're not using these fields yet, so confirm that we did not set them (for now).
-	require.Empty(t, storedSessionFromAuthcode.Subject)
-	require.Empty(t, storedSessionFromAuthcode.Username)
-	require.Empty(t, storedSessionFromAuthcode.Headers)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Subject)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Username)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Headers)
 
 	// The authcode that we are issuing should be good for the length of time that we declare in the fosite config.
-	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
-	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
+	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.Fosite.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+	require.Len(t, storedSessionFromAuthcode.Fosite.ExpiresAt, 1)
 
 	// Now confirm the ID token claims.
-	actualClaims := storedSessionFromAuthcode.Claims
+	actualClaims := storedSessionFromAuthcode.Fosite.Claims
 
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
@@ -642,7 +642,7 @@ func validatePKCEStorage(
 	oauthStore fositestoragei.AllFositeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
+	storedSessionFromAuthcode *psession.PinnipedSession,
 	wantDownstreamPKCEChallenge, wantDownstreamPKCEChallengeMethod string,
 ) {
 	t.Helper()
@@ -667,7 +667,7 @@ func validateIDSessionStorage(
 	oauthStore fositestoragei.AllFositeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
+	storedSessionFromAuthcode *psession.PinnipedSession,
 	wantDownstreamNonce string,
 ) {
 	t.Helper()
@@ -686,13 +686,13 @@ func validateIDSessionStorage(
 	require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
 }
 
-func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *openid.DefaultSession) {
+func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
 	storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest, &fosite.Request{})
-	storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
+	storedSession, ok := storedAuthorizeRequest.GetSession().(*psession.PinnipedSession)
+	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &psession.PinnipedSession{})
 
 	return storedRequest, storedSession
 }

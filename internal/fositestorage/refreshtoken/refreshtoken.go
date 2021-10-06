@@ -10,7 +10,6 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -18,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 	ErrInvalidRefreshTokenRequestVersion = constable.Error("refresh token request data has wrong version")
 	ErrInvalidRefreshTokenRequestData    = constable.Error("refresh token request data must be present")
 
-	refreshTokenStorageVersion = "1"
+	refreshTokenStorageVersion = "2"
 )
 
 type RevocationStorage interface {
@@ -110,7 +110,7 @@ func newValidEmptyRefreshTokenSession() *session {
 	return &session{
 		Request: &fosite.Request{
 			Client:  &clientregistry.Client{},
-			Session: &openid.DefaultSession{},
+			Session: &psession.PinnipedSession{},
 		},
 	}
 }

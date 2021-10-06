@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/handler/pkce"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -23,6 +22,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/internal/testutil"
 )
 
 const namespace = "test-ns"
@@ -51,7 +52,7 @@ func TestPKCEStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}},"requestedAudience":null,"grantedAudience":null},"version":"2"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/pkce",
@@ -85,16 +86,10 @@ func TestPKCEStorage(t *testing.T) {
 				TokenEndpointAuthSigningAlgorithm: "",
 			},
 		},
-		RequestedScope: nil,
-		GrantedScope:   nil,
-		Form:           url.Values{"key": []string{"val"}},
-		Session: &openid.DefaultSession{
-			Claims:    nil,
-			Headers:   nil,
-			ExpiresAt: nil,
-			Username:  "snorlax",
-			Subject:   "panda",
-		},
+		RequestedScope:    nil,
+		GrantedScope:      nil,
+		Form:              url.Values{"key": []string{"val"}},
+		Session:           testutil.NewFakePinnipedSession(),
 		RequestedAudience: nil,
 		GrantedAudience:   nil,
 	}
@@ -108,6 +103,7 @@ func TestPKCEStorage(t *testing.T) {
 	err = storage.DeletePKCERequestSession(ctx, "fancy-signature")
 	require.NoError(t, err)
 
+	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
 	require.Equal(t, wantActions, client.Actions())
 }
 
@@ -134,7 +130,7 @@ func TestWrongVersion(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"not-the-right-version"}`),
+			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"not-the-right-version"}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/pkce",
@@ -144,7 +140,7 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetPKCERequestSession(ctx, "fancy-signature", nil)
 
-	require.EqualError(t, err, "pkce request data has wrong version: pkce session for fancy-signature has version not-the-right-version instead of 1")
+	require.EqualError(t, err, "pkce request data has wrong version: pkce session for fancy-signature has version not-the-right-version instead of 2")
 }
 
 func TestNilSessionRequest(t *testing.T) {
@@ -162,7 +158,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"1"}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"2"}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/pkce",
@@ -190,10 +186,10 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreatePKCERequestSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
+	require.EqualError(t, err, "requester's session must be of type PinnipedSession")
 
 	request = &fosite.Request{
-		Session: &openid.DefaultSession{},
+		Session: &psession.PinnipedSession{},
 		Client:  nil,
 	}
 	err = storage.CreatePKCERequestSession(ctx, "signature-doesnt-matter", request)

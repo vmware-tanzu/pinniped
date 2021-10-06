@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -173,12 +174,14 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	}
 
 	now := time.Now()
-	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
-			Subject:     "none",
-			AuthTime:    now,
-			RequestedAt: now,
+	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
+				Subject:     "none",
+				AuthTime:    now,
+				RequestedAt: now,
+			},
 		},
 	})
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package token provides a handler for the OIDC token endpoint.
@@ -8,19 +8,19 @@ import (
 	"net/http"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psession"
 )
 
 func NewHandler(
 	oauthHelper fosite.OAuth2Provider,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		var session openid.DefaultSession
-		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, &session)
+		session := psession.NewPinnipedSession()
+		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
 		if err != nil {
 			plog.Info("token request error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAccessError(w, accessRequest, err)

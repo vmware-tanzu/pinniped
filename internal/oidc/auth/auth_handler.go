@@ -30,6 +30,8 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
+const promptParamNone = "none"
+
 func NewHandler(
 	downstreamIssuer string,
 	idpLister oidc.UpstreamIdentityProvidersLister,
@@ -220,15 +222,6 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 		return err
 	}
 
-	if csrfFromCookie == "" {
-		// We did not receive an incoming CSRF cookie, so write a new one.
-		err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
-		if err != nil {
-			plog.Error("error setting CSRF cookie", err)
-			return err
-		}
-	}
-
 	authCodeOptions := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		nonceValue.Param(),
@@ -237,8 +230,17 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	}
 
 	promptParam := r.Form.Get("prompt")
-	if promptParam != "" && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam("prompt", promptParam))
+	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired)
+	}
+
+	if csrfFromCookie == "" {
+		// We did not receive an incoming CSRF cookie, so write a new one.
+		err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
+		if err != nil {
+			plog.Error("error setting CSRF cookie", err)
+			return err
+		}
 	}
 
 	http.Redirect(w, r,

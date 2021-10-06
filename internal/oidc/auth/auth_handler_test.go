@@ -181,6 +181,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"error_description": "The resource owner or authorization server denied the request. Reason: required claim in upstream ID token has invalid format.",
 			"state":             happyState,
 		}
+
+		fositeLoginRequiredErrorQuery = map[string]string{
+			"error":             "login_required",
+			"error_description": "The Authorization Server requires End-User authentication.",
+			"state":             happyState,
+		}
 	)
 
 	hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
@@ -630,7 +636,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:                                   "OIDC upstream browser flow happy path with prompt param login passed through to redirect uri",
+			name:                                   "OIDC upstream browser flow happy path with prompt param other than none that gets ignored",
 			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
@@ -645,8 +651,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", ""), "login"),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", ""), ""),
 			wantUpstreamStateParamInLocationHeader: true,
+		},
+		{
+			name:               "OIDC upstream browser flow with prompt param none throws an error because we want to independently decide the upstream prompt param",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
+			generateCSRF:       happyCSRFGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			stateEncoder:       happyStateEncoder,
+			cookieEncoder:      happyCookieEncoder,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none"}),
+			contentType:        "application/x-www-form-urlencoded",
+			body:               encodeQuery(happyGetRequestQueryMap),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeLoginRequiredErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:            "OIDC upstream browser flow with error while decoding CSRF cookie just generates a new cookie and succeeds as usual",

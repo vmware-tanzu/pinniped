@@ -1055,7 +1055,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			require.NotNil(t, block)
 			caCert, err := x509.ParseCertificate(block.Bytes)
 			require.NoError(t, err)
-			require.Equal(t, "Pinniped Impersonation Proxy CA", caCert.Subject.CommonName)
+			require.Equal(t, "Pinniped Impersonation Proxy Serving CA", caCert.Subject.CommonName)
 			require.WithinDuration(t, time.Now().Add(-5*time.Minute), caCert.NotBefore, 10*time.Second)
 			require.WithinDuration(t, time.Now().Add(100*time.Hour*24*365), caCert.NotAfter, 10*time.Second)
 			return createdCertPEM

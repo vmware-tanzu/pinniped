@@ -14,11 +14,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type certsExpirerController struct {
@@ -74,7 +74,13 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
-		klog.Info("certsExpirerController Sync found that the secret does not exist yet or was deleted")
+		plog.Info("secret does not exist yet or was deleted",
+			"controller", ctx.Name,
+			"namespace", c.namespace,
+			"name", c.certsSecretResourceName,
+			"key", c.secretKey,
+			"renewBefore", c.renewBefore.String(),
+		)
 		return nil
 	}
 
@@ -85,7 +91,17 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 
 	certAge := time.Since(notBefore)
 	renewDelta := certAge - c.renewBefore
-	klog.Infof("certsExpirerController Sync found a renew delta of %s", renewDelta)
+	plog.Debug("found renew delta",
+		"controller", ctx.Name,
+		"namespace", c.namespace,
+		"name", c.certsSecretResourceName,
+		"key", c.secretKey,
+		"renewBefore", c.renewBefore.String(),
+		"notBefore", notBefore.String(),
+		"notAfter", notAfter.String(),
+		"certAge", certAge.String(),
+		"renewDelta", renewDelta.String(),
+	)
 	if renewDelta >= 0 || time.Now().After(notAfter) {
 		err := c.k8sClient.
 			CoreV1().
@@ -107,9 +123,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 }
 
 // getCertBounds returns the NotBefore and NotAfter fields of the TLS
-// certificate in the provided secret, or an error. Not that it expects the
-// provided secret to contain the well-known data keys from this package (see
-// certs_manager.go).
+// certificate in the provided secret, or an error.
 func (c *certsExpirerController) getCertBounds(secret *corev1.Secret) (time.Time, time.Time, error) {
 	certPEM := secret.Data[c.secretKey]
 	if certPEM == nil {

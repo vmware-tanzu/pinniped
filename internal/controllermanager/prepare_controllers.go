@@ -148,7 +148,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				c.ServingCertDuration,
-				"Pinniped CA",
+				"Pinniped Aggregation CA",
 				c.NamesConfig.APIService,
 			),
 			singletonWorker,
@@ -285,7 +285,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				365*24*time.Hour, // 1 year hard coded value
-				"Pinniped Impersonation Proxy CA",
+				"Pinniped Impersonation Proxy Signer CA",
 				"", // optional, means do not give me a serving cert
 			),
 			singletonWorker,
@@ -297,7 +297,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				client.Kubernetes,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				c.ServingCertRenewBefore,
+				365*24*time.Hour-time.Hour, // 1 year minus 1 hour hard coded value (i.e. wait until the last moment to break the signer)
 				apicerts.CACertificateSecretKey,
 			),
 			singletonWorker,

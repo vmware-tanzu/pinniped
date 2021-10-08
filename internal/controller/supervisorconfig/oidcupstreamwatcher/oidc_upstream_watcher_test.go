@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -119,16 +120,18 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	wrongCABase64 := base64.StdEncoding.EncodeToString(wrongCA.Bundle())
 
 	var (
-		testNamespace        = "test-namespace"
-		testName             = "test-name"
-		testSecretName       = "test-client-secret"
-		testAdditionalScopes = []string{"scope1", "scope2", "scope3"}
-		testExpectedScopes   = []string{"openid", "scope1", "scope2", "scope3"}
-		testClientID         = "test-oidc-client-id"
-		testClientSecret     = "test-oidc-client-secret"
-		testValidSecretData  = map[string][]byte{"clientID": []byte(testClientID), "clientSecret": []byte(testClientSecret)}
-		testGroupsClaim      = "test-groups-claim"
-		testUsernameClaim    = "test-username-claim"
+		testNamespace                = "test-namespace"
+		testName                     = "test-name"
+		testSecretName               = "test-client-secret"
+		testAdditionalScopes         = []string{"scope1", "scope2", "scope3"}
+		testExpectedScopes           = []string{"offline_access", "openid", "scope1", "scope2", "scope3"}
+		testExpectedAdditionalParams = map[string]string{"prompt": "consent"}
+		testClientID                 = "test-oidc-client-id"
+		testClientSecret             = "test-oidc-client-secret"
+		testValidSecretData          = map[string][]byte{"clientID": []byte(testClientID), "clientSecret": []byte(testClientSecret)}
+		testGroupsClaim              = "test-groups-claim"
+		testUsernameClaim            = "test-username-claim"
+		testUID                      = types.UID("test-uid")
 	)
 	tests := []struct {
 		name                   string
@@ -561,13 +564,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 		{
 			name: "upstream with error becomes valid",
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name", UID: testUID},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
-						AdditionalScopes:   append(testAdditionalScopes, "xyz", "openid"),
+						AdditionalScopes:   append(testAdditionalScopes, "xyz", "openid", "offline_access"),
 						AllowPasswordGrant: true,
 					},
 					Claims: v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
@@ -591,17 +594,19 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:               testName,
-					ClientID:           testClientID,
-					AuthorizationURL:   *testIssuerAuthorizeURL,
-					Scopes:             append(testExpectedScopes, "xyz"),
-					UsernameClaim:      testUsernameClaim,
-					GroupsClaim:        testGroupsClaim,
-					AllowPasswordGrant: true,
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					Scopes:                   append(testExpectedScopes, "xyz"),
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       true,
+					AdditionalAuthcodeParams: testExpectedAdditionalParams,
+					ResourceUID:              testUID,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -614,7 +619,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 		{
 			name: "existing valid upstream",
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
@@ -644,17 +649,19 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:               testName,
-					ClientID:           testClientID,
-					AuthorizationURL:   *testIssuerAuthorizeURL,
-					Scopes:             testExpectedScopes,
-					UsernameClaim:      testUsernameClaim,
-					GroupsClaim:        testGroupsClaim,
-					AllowPasswordGrant: false,
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					Scopes:                   testExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: testExpectedAdditionalParams,
+					ResourceUID:              testUID,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -667,7 +674,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 		{
 			name: "existing valid upstream with trailing slash",
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL + "/ends-with-slash/",
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
@@ -694,17 +701,19 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:               testName,
-					ClientID:           testClientID,
-					AuthorizationURL:   *testIssuerAuthorizeURL,
-					Scopes:             testExpectedScopes,
-					UsernameClaim:      testUsernameClaim,
-					GroupsClaim:        testGroupsClaim,
-					AllowPasswordGrant: false,
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					Scopes:                   testExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: testExpectedAdditionalParams,
+					ResourceUID:              testUID,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -860,6 +869,8 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				require.Equal(t, tt.wantResultingCache[i].GetUsernameClaim(), actualIDP.GetUsernameClaim())
 				require.Equal(t, tt.wantResultingCache[i].GetGroupsClaim(), actualIDP.GetGroupsClaim())
 				require.Equal(t, tt.wantResultingCache[i].AllowsPasswordGrant(), actualIDP.AllowsPasswordGrant())
+				require.Equal(t, tt.wantResultingCache[i].GetAdditionalAuthcodeParams(), actualIDP.GetAdditionalAuthcodeParams())
+				require.Equal(t, tt.wantResultingCache[i].GetResourceUID(), actualIDP.GetResourceUID())
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())
 
 				// We always want to use the proxy from env on these clients, so although the following assertions

@@ -14,6 +14,7 @@ import (
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -31,17 +32,27 @@ func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Clie
 
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
 type ProviderConfig struct {
-	Name               string
-	UsernameClaim      string
-	GroupsClaim        string
-	Config             *oauth2.Config
-	Client             *http.Client
-	AllowPasswordGrant bool
-	Provider           interface {
+	Name                     string
+	ResourceUID              types.UID
+	UsernameClaim            string
+	GroupsClaim              string
+	Config                   *oauth2.Config
+	Client                   *http.Client
+	AllowPasswordGrant       bool
+	AdditionalAuthcodeParams map[string]string
+	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
 		Claims(v interface{}) error
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
+}
+
+func (p *ProviderConfig) GetResourceUID() types.UID {
+	return p.ResourceUID
+}
+
+func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
+	return p.AdditionalAuthcodeParams
 }
 
 func (p *ProviderConfig) GetName() string {

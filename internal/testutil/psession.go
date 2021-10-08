@@ -23,7 +23,7 @@ func NewFakePinnipedSession() *psession.PinnipedSession {
 			Username:  "snorlax",
 			Subject:   "panda",
 		},
-		Custom: &psession.PinnipedSessionData{
+		Custom: &psession.CustomSessionData{
 			ProviderUID:  "fake-provider-uid",
 			ProviderType: "fake-provider-type",
 			ProviderName: "fake-provider-name",

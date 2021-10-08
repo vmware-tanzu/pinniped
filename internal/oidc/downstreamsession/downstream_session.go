@@ -36,7 +36,7 @@ const (
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(subject string, username string, groups []string) *psession.PinnipedSession {
+func MakeDownstreamSession(subject string, username string, groups []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
@@ -46,6 +46,7 @@ func MakeDownstreamSession(subject string, username string, groups []string) *ps
 				AuthTime:    now,
 			},
 		},
+		Custom: custom,
 	}
 	if groups == nil {
 		groups = []string{}

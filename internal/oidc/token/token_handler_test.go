@@ -1374,7 +1374,7 @@ func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Reques
 			Subject:  "", // not used, note that callback_handler.go does not set this
 			Username: "", // not used, note that callback_handler.go does not set this
 		},
-		Custom: &psession.PinnipedSessionData{
+		Custom: &psession.CustomSessionData{
 			OIDC: &psession.OIDCSessionData{
 				UpstreamRefreshToken: "starting-fake-refresh-token",
 			},

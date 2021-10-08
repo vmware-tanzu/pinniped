@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -342,6 +343,9 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		// handle string type alias
 		func(s *fosite.TokenType, c fuzz.Continue) {
 			*s = fosite.TokenType(randString(c))
+		},
+		func(s *types.UID, c fuzz.Continue) {
+			*s = types.UID(randString(c))
 		},
 		// handle string type alias
 		func(s *fosite.Arguments, c fuzz.Continue) {

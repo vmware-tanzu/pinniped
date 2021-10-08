@@ -20,6 +20,7 @@ import (
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -59,11 +60,16 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 
 type TestUpstreamLDAPIdentityProvider struct {
 	Name             string
+	ResourceUID      types.UID
 	URL              *url.URL
 	AuthenticateFunc func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
 }
 
 var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
+
+func (u *TestUpstreamLDAPIdentityProvider) GetResourceUID() types.UID {
+	return u.ResourceUID
+}
 
 func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
@@ -78,13 +84,15 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
-	Name               string
-	ClientID           string
-	AuthorizationURL   url.URL
-	UsernameClaim      string
-	GroupsClaim        string
-	Scopes             []string
-	AllowPasswordGrant bool
+	Name                     string
+	ClientID                 string
+	ResourceUID              types.UID
+	AuthorizationURL         url.URL
+	UsernameClaim            string
+	GroupsClaim              string
+	Scopes                   []string
+	AdditionalAuthcodeParams map[string]string
+	AllowPasswordGrant       bool
 
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
@@ -103,6 +111,16 @@ type TestUpstreamOIDCIdentityProvider struct {
 	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
 	passwordCredentialsGrantAndValidateTokensCallCount int
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
+}
+
+var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetResourceUID() types.UID {
+	return u.ResourceUID
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalAuthcodeParams() map[string]string {
+	return u.AdditionalAuthcodeParams
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
@@ -303,20 +321,28 @@ func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 }
 
 type TestUpstreamOIDCIdentityProviderBuilder struct {
-	name                string
-	clientID            string
-	scopes              []string
-	idToken             map[string]interface{}
-	usernameClaim       string
-	groupsClaim         string
-	authorizationURL    url.URL
-	allowPasswordGrant  bool
-	authcodeExchangeErr error
-	passwordGrantErr    error
+	name                     string
+	resourceUID              types.UID
+	clientID                 string
+	scopes                   []string
+	idToken                  map[string]interface{}
+	refreshToken             *oidctypes.RefreshToken
+	usernameClaim            string
+	groupsClaim              string
+	authorizationURL         url.URL
+	additionalAuthcodeParams map[string]string
+	allowPasswordGrant       bool
+	authcodeExchangeErr      error
+	passwordGrantErr         error
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.name = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithResourceUID(value types.UID) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.resourceUID = value
 	return u
 }
 
@@ -373,6 +399,26 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutIDTokenClaim(claim stri
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAdditionalAuthcodeParams(params map[string]string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.additionalAuthcodeParams = params
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRefreshToken(token string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = &oidctypes.RefreshToken{Token: token}
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithEmptyRefreshToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = &oidctypes.RefreshToken{Token: ""}
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutRefreshToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = nil
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUpstreamAuthcodeExchangeError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.authcodeExchangeErr = err
 	return u
@@ -385,24 +431,26 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPasswordGrantError(err err
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
 	return &TestUpstreamOIDCIdentityProvider{
-		Name:               u.name,
-		ClientID:           u.clientID,
-		UsernameClaim:      u.usernameClaim,
-		GroupsClaim:        u.groupsClaim,
-		Scopes:             u.scopes,
-		AllowPasswordGrant: u.allowPasswordGrant,
-		AuthorizationURL:   u.authorizationURL,
+		Name:                     u.name,
+		ClientID:                 u.clientID,
+		ResourceUID:              u.resourceUID,
+		UsernameClaim:            u.usernameClaim,
+		GroupsClaim:              u.groupsClaim,
+		Scopes:                   u.scopes,
+		AllowPasswordGrant:       u.allowPasswordGrant,
+		AuthorizationURL:         u.authorizationURL,
+		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
 		},
 		PasswordCredentialsGrantAndValidateTokensFunc: func(ctx context.Context, username, password string) (*oidctypes.Token, error) {
 			if u.passwordGrantErr != nil {
 				return nil, u.passwordGrantErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
 		},
 	}
 }
@@ -479,6 +527,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamNonce string,
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
+	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
 
@@ -513,6 +562,7 @@ func RequireAuthCodeRegexpMatch(
 		wantDownstreamRequestedScopes,
 		wantDownstreamClientID,
 		wantDownstreamRedirectURI,
+		wantCustomSessionData,
 	)
 
 	// One PKCE should have been stored.
@@ -563,6 +613,7 @@ func validateAuthcodeStorage(
 	wantDownstreamRequestedScopes []string,
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
+	wantCustomSessionData *psession.CustomSessionData,
 ) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
@@ -633,6 +684,9 @@ func validateAuthcodeStorage(
 	require.Empty(t, actualClaims.AccessTokenHash)
 	require.Empty(t, actualClaims.AuthenticationContextClassReference)
 	require.Empty(t, actualClaims.AuthenticationMethodsReference)
+
+	// Check that the custom Pinniped session data matches.
+	require.Equal(t, wantCustomSessionData, storedSessionFromAuthcode.Custom)
 
 	return storedRequestFromAuthcode, storedSessionFromAuthcode
 }

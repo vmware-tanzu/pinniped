@@ -10,6 +10,7 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // PinnipedSession is a session container which includes the fosite standard stuff plus custom Pinniped stuff.
@@ -18,20 +19,20 @@ type PinnipedSession struct {
 	Fosite *openid.DefaultSession `json:"fosite,omitempty"`
 
 	// Custom Pinniped extensions to the session data.
-	Custom *PinnipedSessionData `json:"custom,omitempty"`
+	Custom *CustomSessionData `json:"custom,omitempty"`
 }
 
 var _ openid.Session = &PinnipedSession{}
 
-// PinnipedSessionData is the custom session data needed by Pinniped. It should be treated as a union type,
+// CustomSessionData is the custom session data needed by Pinniped. It should be treated as a union type,
 // where the value of ProviderType decides which other fields to use.
-type PinnipedSessionData struct {
+type CustomSessionData struct {
 	// The Kubernetes resource UID of the identity provider CRD for the upstream IDP used to start this session.
 	// This should be validated again upon downstream refresh to make sure that we are not refreshing against
 	// a different identity provider CRD which just happens to have the same name.
 	// This implies that when a user deletes an identity provider CRD, then the sessions that were started
 	// using that identity provider will not be able to perform any more downstream refreshes.
-	ProviderUID string `json:"providerUID"`
+	ProviderUID types.UID `json:"providerUID"`
 
 	// The Kubernetes resource name of the identity provider CRD for the upstream IDP used to start this session.
 	// Used during a downstream refresh to decide which upstream to refresh.
@@ -40,11 +41,19 @@ type PinnipedSessionData struct {
 
 	// The type of the identity provider for the upstream IDP used to start this session.
 	// Used during a downstream refresh to decide which upstream to refresh.
-	ProviderType string `json:"providerType"`
+	ProviderType ProviderType `json:"providerType"`
 
 	// Only used when ProviderType == "oidc".
 	OIDC *OIDCSessionData `json:"oidc,omitempty"`
 }
+
+type ProviderType string
+
+const (
+	ProviderTypeOIDC            ProviderType = "oidc"
+	ProviderTypeLDAP            ProviderType = "ldap"
+	ProviderTypeActiveDirectory ProviderType = "activedirectory"
+)
 
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
 type OIDCSessionData struct {
@@ -58,7 +67,7 @@ func NewPinnipedSession() *PinnipedSession {
 			Claims:  &jwt.IDTokenClaims{},
 			Headers: &jwt.Headers{},
 		},
-		Custom: &PinnipedSessionData{},
+		Custom: &CustomSessionData{},
 	}
 }
 

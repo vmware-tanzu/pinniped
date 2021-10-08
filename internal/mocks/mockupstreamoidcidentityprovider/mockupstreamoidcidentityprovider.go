@@ -18,6 +18,7 @@ import (
 	oidctypes "go.pinniped.dev/pkg/oidcclient/oidctypes"
 	pkce "go.pinniped.dev/pkg/oidcclient/pkce"
 	oauth2 "golang.org/x/oauth2"
+	types "k8s.io/apimachinery/pkg/types"
 )
 
 // MockUpstreamOIDCIdentityProviderI is a mock of UpstreamOIDCIdentityProviderI interface.
@@ -70,6 +71,20 @@ func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(ar
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ExchangeAuthcodeAndValidateTokens(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeAuthcodeAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ExchangeAuthcodeAndValidateTokens), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetAdditionalAuthcodeParams mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) GetAdditionalAuthcodeParams() map[string]string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAdditionalAuthcodeParams")
+	ret0, _ := ret[0].(map[string]string)
+	return ret0
+}
+
+// GetAdditionalAuthcodeParams indicates an expected call of GetAdditionalAuthcodeParams.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetAdditionalAuthcodeParams() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAdditionalAuthcodeParams", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetAdditionalAuthcodeParams))
 }
 
 // GetAuthorizationURL mocks base method.
@@ -126,6 +141,20 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetName() string {
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetName))
+}
+
+// GetResourceUID mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) GetResourceUID() types.UID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResourceUID")
+	ret0, _ := ret[0].(types.UID)
+	return ret0
+}
+
+// GetResourceUID indicates an expected call of GetResourceUID.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetResourceUID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceUID", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetResourceUID))
 }
 
 // GetScopes mocks base method.

@@ -172,9 +172,11 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		Config: &oauth2.Config{
 			Scopes: computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
 		},
-		UsernameClaim:      upstream.Spec.Claims.Username,
-		GroupsClaim:        upstream.Spec.Claims.Groups,
-		AllowPasswordGrant: upstream.Spec.AuthorizationConfig.AllowPasswordGrant,
+		UsernameClaim:            upstream.Spec.Claims.Username,
+		GroupsClaim:              upstream.Spec.Claims.Groups,
+		AllowPasswordGrant:       upstream.Spec.AuthorizationConfig.AllowPasswordGrant,
+		AdditionalAuthcodeParams: map[string]string{"prompt": "consent"},
+		ResourceUID:              upstream.UID,
 	}
 	conditions := []*v1alpha1.Condition{
 		c.validateSecret(upstream, &result),
@@ -374,6 +376,7 @@ func computeScopes(additionalScopes []string) []string {
 	// First compute the unique set of scopes, including "openid" (de-duplicate).
 	set := make(map[string]bool, len(additionalScopes)+1)
 	set["openid"] = true
+	set["offline_access"] = true
 	for _, s := range additionalScopes {
 		set[s] = true
 	}

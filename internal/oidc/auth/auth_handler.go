@@ -30,7 +30,10 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-const promptParamNone = "none"
+const (
+	promptParamName = "prompt"
+	promptParamNone = "none"
+)
 
 func NewHandler(
 	downstreamIssuer string,
@@ -51,13 +54,13 @@ func NewHandler(
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
 		}
 
-		oidcUpstream, ldapUpstream, err := chooseUpstreamIDP(idpLister)
+		oidcUpstream, ldapUpstream, idpType, err := chooseUpstreamIDP(idpLister)
 		if err != nil {
 			plog.WarningErr("authorize upstream config", err)
 			return err
 		}
 
-		if oidcUpstream != nil {
+		if idpType == psession.ProviderTypeOIDC {
 			if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 {
 				// The client set a username header, so they are trying to log in with a username/password.
 				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
@@ -74,6 +77,7 @@ func NewHandler(
 		return handleAuthRequestForLDAPUpstream(r, w,
 			oauthHelperWithStorage,
 			ldapUpstream,
+			idpType,
 		)
 	}))
 }
@@ -83,6 +87,7 @@ func handleAuthRequestForLDAPUpstream(
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
 	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	idpType psession.ProviderType,
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
 	if !created {
@@ -108,7 +113,14 @@ func handleAuthRequestForLDAPUpstream(
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
 
-	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
+	customSessionData := &psession.CustomSessionData{
+		ProviderUID:  ldapUpstream.GetResourceUID(),
+		ProviderName: ldapUpstream.GetName(),
+		ProviderType: idpType,
+	}
+
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w,
+		oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
@@ -147,6 +159,15 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithDebug(err.Error())) // WithDebug hides the error from the client
 	}
 
+	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
+		plog.Warning("refresh token not returned by upstream provider during password grant",
+			"upstreamName", oidcUpstream.GetName(),
+			"scopes", oidcUpstream.GetScopes())
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHint(
+				"Refresh token not returned by upstream provider during password grant."))
+	}
+
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
@@ -155,7 +176,15 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		)
 	}
 
-	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
+	customSessionData := &psession.CustomSessionData{
+		ProviderUID:  oidcUpstream.GetResourceUID(),
+		ProviderName: oidcUpstream.GetName(),
+		ProviderType: psession.ProviderTypeOIDC,
+		OIDC: &psession.OIDCSessionData{
+			UpstreamRefreshToken: token.RefreshToken.Token,
+		},
+	}
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
 }
 
 func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
@@ -223,15 +252,18 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	}
 
 	authCodeOptions := []oauth2.AuthCodeOption{
-		oauth2.AccessTypeOffline,
 		nonceValue.Param(),
 		pkceValue.Challenge(),
 		pkceValue.Method(),
 	}
 
-	promptParam := r.Form.Get("prompt")
+	promptParam := r.Form.Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired)
+	}
+
+	for key, val := range oidcUpstream.GetAdditionalAuthcodeParams() {
+		authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam(key, val))
 	}
 
 	if csrfFromCookie == "" {
@@ -280,8 +312,9 @@ func makeDownstreamSessionAndReturnAuthcodeRedirect(
 	subject string,
 	username string,
 	groups []string,
+	customSessionData *psession.CustomSessionData,
 ) error {
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
 
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
@@ -340,13 +373,13 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 }
 
 // Select either an OIDC, an LDAP or an AD IDP, or return an error.
-func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, provider.UpstreamLDAPIdentityProviderI, error) {
+func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, provider.UpstreamLDAPIdentityProviderI, psession.ProviderType, error) {
 	oidcUpstreams := idpLister.GetOIDCIdentityProviders()
 	ldapUpstreams := idpLister.GetLDAPIdentityProviders()
 	adUpstreams := idpLister.GetActiveDirectoryIdentityProviders()
 	switch {
 	case len(oidcUpstreams)+len(ldapUpstreams)+len(adUpstreams) == 0:
-		return nil, nil, httperr.New(
+		return nil, nil, "", httperr.New(
 			http.StatusUnprocessableEntity,
 			"No upstream providers are configured",
 		)
@@ -362,16 +395,16 @@ func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider
 			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
 		}
 		plog.Warning("Too many upstream providers are configured (found: %s)", upstreamIDPNames)
-		return nil, nil, httperr.New(
+		return nil, nil, "", httperr.New(
 			http.StatusUnprocessableEntity,
 			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",
 		)
 	case len(oidcUpstreams) == 1:
-		return oidcUpstreams[0], nil, nil
+		return oidcUpstreams[0], nil, psession.ProviderTypeOIDC, nil
 	case len(adUpstreams) == 1:
-		return nil, adUpstreams[0], nil
+		return nil, adUpstreams[0], psession.ProviderTypeActiveDirectory, nil
 	default:
-		return nil, ldapUpstreams[0], nil
+		return nil, ldapUpstreams[0], psession.ProviderTypeLDAP, nil
 	}
 }
 

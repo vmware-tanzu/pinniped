@@ -47,6 +47,8 @@ type ProviderConfig struct {
 	}
 }
 
+var _ provider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
+
 func (p *ProviderConfig) GetResourceUID() types.UID {
 	return p.ResourceUID
 }
@@ -120,6 +122,14 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
 }
 
+func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	// Create a TokenSource without an access token, so it thinks that a refresh is immediately required.
+	// Then ask it for the tokens to cause it to perform the refresh and return the results.
+	return p.Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken}).Token()
+}
+
+// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,
+// if the provider offers the userinfo endpoint.
 func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
@@ -146,7 +156,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	}
 	maybeLogClaims("claims from ID token", p.Name, validatedClaims)
 
-	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
+	if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
 
@@ -167,7 +177,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	}, nil
 }
 
-func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
+func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
 	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
 	if len(idTokenSubject) == 0 {
 		return nil // defer to existing ID token validation

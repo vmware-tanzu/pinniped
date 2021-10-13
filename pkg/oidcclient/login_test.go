@@ -35,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/upstreamoidc"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -404,11 +405,17 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
 							Return(&testToken, nil)
+						mock.EXPECT().
+							PerformRefresh(gomock.Any(), testToken.RefreshToken.Token).
+							DoAndReturn(func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+								// Call the real production code to perform a refresh.
+								return upstreamoidc.New(config, provider, client).PerformRefresh(ctx, refreshToken)
+							})
 						return mock
 					}
 
@@ -445,11 +452,17 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
 							Return(nil, fmt.Errorf("some validation error"))
+						mock.EXPECT().
+							PerformRefresh(gomock.Any(), "test-refresh-token-returning-invalid-id-token").
+							DoAndReturn(func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+								// Call the real production code to perform a refresh.
+								return upstreamoidc.New(config, provider, client).PerformRefresh(ctx, refreshToken)
+							})
 						return mock
 					}
 
@@ -1522,11 +1535,17 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					})
 					h.cache = cache
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
 							Return(&testToken, nil)
+						mock.EXPECT().
+							PerformRefresh(gomock.Any(), testToken.RefreshToken.Token).
+							DoAndReturn(func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+								// Call the real production code to perform a refresh.
+								return upstreamoidc.New(config, provider, client).PerformRefresh(ctx, refreshToken)
+							})
 						return mock
 					}
 

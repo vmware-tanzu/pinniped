@@ -808,9 +808,9 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
 	h.logger.V(debugLogLevel).Info("Pinniped: Refreshing cached token.")
-	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
+	upstreamOIDCIdentityProvider := h.getProvider(h.oauth2Config, h.provider, h.httpClient)
 
-	refreshed, err := refreshSource.Token()
+	refreshed, err := upstreamOIDCIdentityProvider.PerformRefresh(ctx, refreshToken.Token)
 	if err != nil {
 		// Ignore errors during refresh, but return nil which will trigger the full login flow.
 		return nil, nil
@@ -818,7 +818,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	return h.getProvider(h.oauth2Config, h.provider, h.httpClient).ValidateToken(ctx, refreshed, "")
+	return upstreamOIDCIdentityProvider.ValidateToken(ctx, refreshed, "")
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {

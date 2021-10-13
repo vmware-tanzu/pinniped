@@ -58,6 +58,21 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 	Password string
 }
 
+// PerformRefreshArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.PerformRefreshFunc().
+type PerformRefreshArgs struct {
+	Ctx          context.Context
+	RefreshToken string
+}
+
+// ValidateTokenArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.ValidateTokenFunc().
+type ValidateTokenArgs struct {
+	Ctx                  context.Context
+	Tok                  *oauth2.Token
+	ExpectedIDTokenNonce nonce.Nonce
+}
+
 type TestUpstreamLDAPIdentityProvider struct {
 	Name             string
 	ResourceUID      types.UID
@@ -107,10 +122,18 @@ type TestUpstreamOIDCIdentityProvider struct {
 		password string,
 	) (*oidctypes.Token, error)
 
+	PerformRefreshFunc func(ctx context.Context, refreshToken string) (*oauth2.Token, error)
+
+	ValidateTokenFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
+
 	exchangeAuthcodeAndValidateTokensCallCount         int
 	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
 	passwordCredentialsGrantAndValidateTokensCallCount int
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
+	performRefreshCallCount                            int
+	performRefreshArgs                                 []*PerformRefreshArgs
+	validateTokenCallCount                             int
+	validateTokenArgs                                  []*ValidateTokenArgs
 }
 
 var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
@@ -193,8 +216,51 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs
 	return u.exchangeAuthcodeAndValidateTokensArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(_ context.Context, _ *oauth2.Token, _ nonce.Nonce) (*oidctypes.Token, error) {
-	panic("implement me")
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	u.performRefreshCallCount++
+	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
+		Ctx:          ctx,
+		RefreshToken: refreshToken,
+	})
+	return u.PerformRefreshFunc(ctx, refreshToken)
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshCallCount() int {
+	return u.performRefreshCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *PerformRefreshArgs {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	return u.performRefreshArgs[call]
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+	if u.validateTokenArgs == nil {
+		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+	}
+	u.validateTokenCallCount++
+	u.validateTokenArgs = append(u.validateTokenArgs, &ValidateTokenArgs{
+		Ctx:                  ctx,
+		Tok:                  tok,
+		ExpectedIDTokenNonce: expectedIDTokenNonce,
+	})
+	return u.ValidateTokenFunc(ctx, tok, expectedIDTokenNonce)
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenCallCount() int {
+	return u.validateTokenCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenArgs(call int) *ValidateTokenArgs {
+	if u.validateTokenArgs == nil {
+		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+	}
+	return u.validateTokenArgs[call]
 }
 
 type UpstreamIDPListerBuilder struct {
@@ -316,6 +382,80 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndV
 	)
 }
 
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *PerformRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *PerformRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.performRefreshCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.performRefreshArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to PerformRefresh() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"PerformRefresh() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.performRefreshCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to PerformRefresh()",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *ValidateTokenArgs,
+) {
+	t.Helper()
+	var actualArgs *ValidateTokenArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.validateTokenCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.validateTokenArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to ValidateToken() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"ValidateToken() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to ValidateToken()",
+	)
+}
+
 func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 	return &UpstreamIDPListerBuilder{}
 }
@@ -329,11 +469,15 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	refreshToken             *oidctypes.RefreshToken
 	usernameClaim            string
 	groupsClaim              string
+	refreshedTokens          *oauth2.Token
+	validatedTokens          *oidctypes.Token
 	authorizationURL         url.URL
 	additionalAuthcodeParams map[string]string
 	allowPasswordGrant       bool
 	authcodeExchangeErr      error
 	passwordGrantErr         error
+	performRefreshErr        error
+	validateTokenErr         error
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
@@ -429,6 +573,26 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPasswordGrantError(err err
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRefreshedTokens(tokens *oauth2.Token) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshedTokens = tokens
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPerformRefreshError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.performRefreshErr = err
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidatedTokens(tokens *oidctypes.Token) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validatedTokens = tokens
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validateTokenErr = err
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
 	return &TestUpstreamOIDCIdentityProvider{
 		Name:                     u.name,
@@ -451,6 +615,18 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 				return nil, u.passwordGrantErr
 			}
 			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
+		},
+		PerformRefreshFunc: func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+			if u.performRefreshErr != nil {
+				return nil, u.performRefreshErr
+			}
+			return u.refreshedTokens, nil
+		},
+		ValidateTokenFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+			if u.validateTokenErr != nil {
+				return nil, u.validateTokenErr
+			}
+			return u.validatedTokens, nil
 		},
 	}
 }

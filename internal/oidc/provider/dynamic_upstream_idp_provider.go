@@ -63,6 +63,14 @@ type UpstreamOIDCIdentityProviderI interface {
 		redirectURI string,
 	) (*oidctypes.Token, error)
 
+	// PerformRefresh will call the provider's token endpoint to perform a refresh grant. The provider may or may not
+	// return a new ID or refresh token in the response. If it returns an ID token, then use ValidateRefresh to
+	// validate the ID token.
+	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
+
+	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
+	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
+	// tokens, or an error.
 	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 }
 

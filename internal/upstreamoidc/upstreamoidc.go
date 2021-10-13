@@ -123,9 +123,11 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 }
 
 func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	// Use the provided HTTP client to benefit from its CA, proxy, and other settings.
+	httpClientContext := coreosoidc.ClientContext(ctx, p.Client)
 	// Create a TokenSource without an access token, so it thinks that a refresh is immediately required.
 	// Then ask it for the tokens to cause it to perform the refresh and return the results.
-	return p.Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken}).Token()
+	return p.Config.TokenSource(httpClientContext, &oauth2.Token{RefreshToken: refreshToken}).Token()
 }
 
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,

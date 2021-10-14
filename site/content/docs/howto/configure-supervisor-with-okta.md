@@ -32,11 +32,18 @@ For example, to create an app:
 1. Create a new app:
    1. Click `Create App Integration`.
    1. For `Sign-on method`, select `OIDC`.
-   1. For `Application type`, app `Web Application`, then click next.
+   1. For `Application type`, app `Web Application`, then click next. Only if you would like to offer the
+      password grant flow to your end users, then choose `Native Application` instead.
    1. Enter a name for your app, such as "My Kubernetes Clusters".
+   1. If you chose to create a `Web Application` then in the General Settings section, choose Grant Types
+      `Authorization Code` and `Refresh Token`. Starting in Pinniped v0.13.0, the `Refresh Token` grant is required.
+   1. If you chose `Native Application` then in the General Settings section, choose Grant Types `Authorization Code`,
+      `Refresh Token`, and `Resource Owner Password`. Starting in Pinniped v0.13.0, the `Refresh Token` grant is required.
    1. Enter the sign-in redirect URI. This is the `spec.issuer` you configured in your `FederationDomain` appended with `/callback`.
    1. Optionally select `Limit access to selected groups` to restrict which Okta users can log in to Kubernetes using this integration.
-   1. Save the app and make note of the _Client ID_ and _Client secret_.
+   1. Save the app and make note of the _Client ID_ and _Client secret_. If you chose to create a `Native Application`
+      then there is an extra step required to get a client secret: after saving the app, in the
+      Client Credentials section click `Edit`, choose `Use Client Authentication`, and click `Save`.
    1. Navigate to the _Sign On_ tab > _OpenID Connect ID Token_ and click `Edit`. Fill in the Groups claim filter.
       For example, for all groups to be present under the claim name `groups`, fill in "groups" in the first box, then select "Matches regex" and ".*".
 
@@ -54,17 +61,25 @@ metadata:
   name: okta
 spec:
 
-  # Specify the upstream issuer URL (no trailing slash).
+  # Specify the upstream issuer URL (no trailing slash). Change this to be the
+  # actual issuer provided by your Okta account.
   issuer: https://my-company.okta.com
 
-  # Request any scopes other than "openid" for claims besides
-  # the default claims in your token. The "openid" scope is always
-  # included.
-  #
-  # To learn more about how to customize the claims returned, see here:
-  # https://developer.okta.com/docs/guides/customize-tokens-returned-from-okta/overview/
+  # Specify how to form authorization requests to Okta.
   authorizationConfig:
+
+    # Request any scopes other than "openid" for claims besides
+    # the default claims in your token. The "openid" scope is always
+    # included.
+    #
+    # To learn more about how to customize the claims returned, see here:
+    # https://developer.okta.com/docs/guides/customize-tokens-returned-from-okta/overview/
     additionalScopes: [groups, email]
+
+    # If you would also like to allow your end users to authenticate using
+    # a password grant, then change this to true. Password grants only work
+    # with applications created in Okta as "Native Applications".
+    allowPasswordGrant: false
 
   # Specify how Okta claims are mapped to Kubernetes identities.
   claims:

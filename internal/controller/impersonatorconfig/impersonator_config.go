@@ -51,7 +51,7 @@ const (
 	impersonationProxyPort       = 8444
 	defaultHTTPSPort             = 443
 	approximatelyOneHundredYears = 100 * 365 * 24 * time.Hour
-	caCommonName                 = "Pinniped Impersonation Proxy CA"
+	caCommonName                 = "Pinniped Impersonation Proxy Serving CA"
 	caCrtKey                     = "ca.crt"
 	caKeyKey                     = "ca.key"
 	appLabelKey                  = "app"

@@ -65,12 +65,12 @@ const (
 )
 
 var (
-	// Reject these AdditionalAuthorizeParameters to avoid allowing the user's config to overwrite the parameters
-	// that are always used by Pinniped in authcode authorization requests. The OIDC library used would otherwise
-	// happily treat the user's config as an override. Users can already set the "client_id" and "scope" params
-	// using other settings, and the others never make sense to override. This map should be treated as read-only
-	// since it is a global variable.
 	disallowedAdditionalAuthorizeParameters = map[string]bool{ //nolint: gochecknoglobals
+		// Reject these AdditionalAuthorizeParameters to avoid allowing the user's config to overwrite the parameters
+		// that are always used by Pinniped in authcode authorization requests. The OIDC library used would otherwise
+		// happily treat the user's config as an override. Users can already set the "client_id" and "scope" params
+		// using other settings, and the others never make sense to override. This map should be treated as read-only
+		// since it is a global variable.
 		"response_type":         true,
 		"scope":                 true,
 		"client_id":             true,
@@ -79,6 +79,10 @@ var (
 		"code_challenge":        true,
 		"code_challenge_method": true,
 		"redirect_uri":          true,
+
+		// Reject "hd" for now because it is not safe to use with Google's OIDC provider until Pinniped also
+		// performs the corresponding validation on the ID token.
+		"hd": true,
 	}
 )
 
@@ -202,7 +206,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 	result := upstreamoidc.ProviderConfig{
 		Name: upstream.Name,
 		Config: &oauth2.Config{
-			Scopes: computeScopes(authorizationConfig.AdditionalScopes, !authorizationConfig.DoNotRequestOfflineAccess),
+			Scopes: computeScopes(authorizationConfig.AdditionalScopes),
 		},
 		UsernameClaim:            upstream.Spec.Claims.Username,
 		GroupsClaim:              upstream.Spec.Claims.Groups,
@@ -416,13 +420,15 @@ func getTLSConfig(upstream *v1alpha1.OIDCIdentityProvider) (*tls.Config, error) 
 	return &result, nil
 }
 
-func computeScopes(additionalScopes []string, includeOfflineAccess bool) []string {
-	// First compute the unique set of scopes, including "openid" (de-duplicate).
+func computeScopes(additionalScopes []string) []string {
+	// If none are set then provide a reasonable default which only tries to use scopes defined in the OIDC spec.
+	if len(additionalScopes) == 0 {
+		return []string{"openid", "offline_access", "email", "profile"}
+	}
+
+	// Otherwise, first compute the unique set of scopes, including "openid" (de-duplicate).
 	set := make(map[string]bool, len(additionalScopes)+1)
 	set["openid"] = true
-	if includeOfflineAccess {
-		set["offline_access"] = true
-	}
 	for _, s := range additionalScopes {
 		set[s] = true
 	}
@@ -433,6 +439,7 @@ func computeScopes(additionalScopes []string, includeOfflineAccess bool) []strin
 		scopes = append(scopes, s)
 	}
 	sort.Strings(scopes)
+
 	return scopes
 }
 

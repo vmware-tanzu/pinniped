@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -109,6 +109,10 @@ func (s *secretsStorage) validateSecret(secret *corev1.Secret) error {
 }
 
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
+	// Note: There may be a small bug here in that toSecret will move the SecretLifetimeAnnotationKey date forward
+	// instead of keeping the storage resource's original SecretLifetimeAnnotationKey value. However, we only use
+	// this Update method in one place, and it doesn't matter in that place. Be aware that it might need improvement
+	// if we start using this Update method in more places.
 	secret, err := s.toSecret(signature, resourceVersion, data, nil)
 	if err != nil {
 		return "", err

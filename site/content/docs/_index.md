@@ -13,6 +13,10 @@ As a Kubernetes cluster administrator or user, you can learn how Pinniped works,
 
 Have a question, comment, or idea? Please reach out via [GitHub Discussions](https://github.com/vmware-tanzu/pinniped/discussions) or [join the Pinniped community meetings]({{< ref "/community" >}}).
 
+## Background
+
+{{< docsmenu "background" >}}
+
 ## Tutorials
 
 {{< docsmenu "tutorials" >}}
@@ -24,7 +28,3 @@ Have a question, comment, or idea? Please reach out via [GitHub Discussions](htt
 ## Reference
 
 {{< docsmenu "reference" >}}
-
-## Background
-
-{{< docsmenu "background" >}}

@@ -7,7 +7,7 @@ cascade:
 menu:
   docs:
     name: Architecture
-    weight: 100
+    weight: 20
     parent: background
 ---
 The principal purpose of Pinniped is to allow users to access Kubernetes
@@ -100,7 +100,7 @@ issue short-lived cluster certificates. (In the future, when the Kubernetes CSR 
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
 * Impersonation Proxy: Pinniped hosts an [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
-proxy that sends requests to the Kubernetes API server with user information and permissions based on a token. 
+proxy that sends requests to the Kubernetes API server with user information and permissions based on a token.
 
 ## kubectl Integration
 

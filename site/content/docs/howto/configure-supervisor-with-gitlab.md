@@ -63,8 +63,10 @@ spec:
     # GitLab is unusual among OIDC providers in that it returns an
     # error if you request the "offline_access" scope during an
     # authorization flow, so ask Pinniped to avoid requesting that
-    # scope when using GitLab.
-    doNotRequestOfflineAccess: true
+    # scope when using GitLab by excluding it from this list.
+    # By specifying only "openid" here then Pinniped will only
+    # request "openid".
+    additionalScopes: [openid]
 
     # If you would also like to allow your end users to authenticate using
     # a password grant, then change this to true.

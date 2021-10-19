@@ -91,7 +91,7 @@ spec:
     # Request any scopes other than "openid" for claims besides
     # the default claims in your token. The "openid" scope is always
     # included.
-    additionalScopes: [groups, email]
+    additionalScopes: [offline_access, groups, email]
 
     # If you would also like to allow your end users to authenticate using
     # a password grant, then change this to true.

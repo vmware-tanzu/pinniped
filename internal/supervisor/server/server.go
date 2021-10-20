@@ -41,6 +41,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/groupsuffix"
@@ -392,23 +393,22 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	defer func() { _ = httpListener.Close() }()
 	startServer(ctx, shutdown, httpListener, oidProvidersManager)
 
+	c := ptls.Default(nil)
+	c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+		defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
+		plog.Debug("GetCertificate called for port 8443",
+			"info.ServerName", info.ServerName,
+			"foundSNICert", cert != nil,
+			"foundDefaultCert", defaultCert != nil,
+		)
+		if cert == nil {
+			cert = defaultCert
+		}
+		return cert, nil
+	}
 	//nolint: gosec // Intentionally binding to all network interfaces.
-	httpsListener, err := tls.Listen("tcp", ":8443", &tls.Config{
-		MinVersion: tls.VersionTLS12, // Allow v1.2 because clients like the default `curl` on MacOS don't support 1.3 yet.
-		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
-			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
-			plog.Debug("GetCertificate called for port 8443",
-				"info.ServerName", info.ServerName,
-				"foundSNICert", cert != nil,
-				"foundDefaultCert", defaultCert != nil,
-			)
-			if cert == nil {
-				cert = defaultCert
-			}
-			return cert, nil
-		},
-	})
+	httpsListener, err := tls.Listen("tcp", ":8443", c)
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}

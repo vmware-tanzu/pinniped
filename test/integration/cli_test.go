@@ -108,7 +108,14 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	})
 }
 
-func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...string) (string, string) {
+type testingT interface {
+	Helper()
+	Errorf(format string, args ...interface{})
+	FailNow()
+	Logf(format string, args ...interface{})
+}
+
+func runPinnipedCLI(t testingT, envVars []string, pinnipedExe string, args ...string) (string, string) {
 	t.Helper()
 	start := time.Now()
 	var stdout, stderr bytes.Buffer

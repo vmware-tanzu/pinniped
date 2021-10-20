@@ -6,7 +6,6 @@ package oidcupstreamwatcher
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -35,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
@@ -313,7 +313,8 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 
 	// If the provider does not exist in the cache, do a fresh discovery lookup and save to the cache.
 	if discoveredProvider == nil {
-		tlsConfig, err := getTLSConfig(upstream)
+		var err error
+		httpClient, err = getClient(upstream)
 		if err != nil {
 			return &v1alpha1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
@@ -321,14 +322,6 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				Reason:  upstreamwatchers.ReasonInvalidTLSConfig,
 				Message: err.Error(),
 			}
-		}
-
-		httpClient = &http.Client{
-			Timeout: time.Minute,
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				TLSClientConfig: tlsConfig,
-			},
 		}
 
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
@@ -406,13 +399,9 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	}
 }
 
-func getTLSConfig(upstream *v1alpha1.OIDCIdentityProvider) (*tls.Config, error) {
-	result := tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-
+func getClient(upstream *v1alpha1.OIDCIdentityProvider) (*http.Client, error) {
 	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
-		return &result, nil
+		return defaultClientShortTimeout(nil), nil
 	}
 
 	bundle, err := base64.StdEncoding.DecodeString(upstream.Spec.TLS.CertificateAuthorityData)
@@ -420,12 +409,18 @@ func getTLSConfig(upstream *v1alpha1.OIDCIdentityProvider) (*tls.Config, error) 
 		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", err)
 	}
 
-	result.RootCAs = x509.NewCertPool()
-	if !result.RootCAs.AppendCertsFromPEM(bundle) {
+	rootCAs := x509.NewCertPool()
+	if !rootCAs.AppendCertsFromPEM(bundle) {
 		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", upstreamwatchers.ErrNoCertificates)
 	}
 
-	return &result, nil
+	return defaultClientShortTimeout(rootCAs), nil
+}
+
+func defaultClientShortTimeout(rootCAs *x509.CertPool) *http.Client {
+	c := phttp.Default(rootCAs)
+	c.Timeout = time.Minute
+	return c
 }
 
 func computeScopes(additionalScopes []string) []string {

@@ -91,7 +91,7 @@ func newWebhookAuthenticator(
 	defer func() { _ = os.Remove(temp.Name()) }()
 
 	cluster := &clientcmdapi.Cluster{Server: spec.Endpoint}
-	cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
+	_, cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
@@ -118,5 +118,7 @@ func newWebhookAuthenticator(
 	// custom proxy stuff used by the API server.
 	var customDial net.DialFunc
 
+	// this uses a http client that does not honor our TLS config
+	// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106155
 	return webhook.New(temp.Name(), version, implicitAuds, *webhook.DefaultRetryBackoff(), customDial)
 }

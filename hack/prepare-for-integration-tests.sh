@@ -132,6 +132,7 @@ check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' fo
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
 check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."
 check_dependency chromedriver "Please install chromedriver. e.g. 'brew install chromedriver' for MacOS"
+check_dependency nmap "Please install nmap. e.g. 'brew install nmap' for MacOS"
 
 # Check that Chrome and chromedriver versions match. If chromedriver falls a couple versions behind
 # then usually tests start to fail with strange error messages.
@@ -155,6 +156,12 @@ fi
 # Require kubectl >= 1.18.x
 if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
   log_error "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
+  exit 1
+fi
+
+# Require nmap >= 7.92.x
+if [ "$(nmap -V | grep 'Nmap version' | cut -d ' ' -f 3 | cut -d '.' -f 2)" -lt 92 ]; then
+  log_error "nmap >= 7.92.x is required, you have $(nmap -V | grep 'Nmap version' | cut -d ' ' -f 3)"
   exit 1
 fi
 

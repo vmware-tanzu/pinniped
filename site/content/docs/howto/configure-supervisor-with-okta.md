@@ -36,9 +36,9 @@ For example, to create an app:
       password grant flow to your end users, then choose `Native Application` instead.
    1. Enter a name for your app, such as "My Kubernetes Clusters".
    1. If you chose to create a `Web Application` then in the General Settings section, choose Grant Types
-      `Authorization Code` and `Refresh Token`. Starting in Pinniped v0.13.0, the `Refresh Token` grant is required.
+      `Authorization Code` and `Refresh Token`.
    1. If you chose `Native Application` then in the General Settings section, choose Grant Types `Authorization Code`,
-      `Refresh Token`, and `Resource Owner Password`. Starting in Pinniped v0.13.0, the `Refresh Token` grant is required.
+      `Refresh Token`, and `Resource Owner Password`.
    1. Enter the sign-in redirect URI. This is the `spec.issuer` you configured in your `FederationDomain` appended with `/callback`.
    1. Optionally select `Limit access to selected groups` to restrict which Okta users can log in to Kubernetes using this integration.
    1. Save the app and make note of the _Client ID_ and _Client secret_. If you chose to create a `Native Application`

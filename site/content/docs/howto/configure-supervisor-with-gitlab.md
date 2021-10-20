@@ -32,8 +32,7 @@ For example, to create a user-owned application:
    1. Enter the redirect URI. This is the `spec.issuer` you configured in your `FederationDomain` appended with `/callback`.
    1. Check the box saying that the application is _Confidential_. This is required and will cause GitLab to autogenerate
       a client ID and client secret for your application.
-   1. Check the box saying to _Expire Access Tokens_ to cause refresh tokens to be returned to the Supervisor. This is
-      required starting in Pinniped v0.13.0.
+   1. Check the box saying to _Expire Access Tokens_ to cause refresh tokens to be returned to the Supervisor.
    1. Select scope `openid`. This is required to get ID tokens. Also, this provides access to the `nickname` (GitLab username)
       and `groups` (GitLab groups) claims in the ID tokens.
    1. Optionally select other scopes which might provide access to other claims that you might want to use to determine
@@ -69,7 +68,9 @@ spec:
     additionalScopes: [openid]
 
     # If you would also like to allow your end users to authenticate using
-    # a password grant, then change this to true.
+    # a password grant, then change this to true. See
+    # https://docs.gitlab.com/ee/api/oauth2.html#resource-owner-password-credentials-flow
+    # for more information about using the password grant with GitLab.
     allowPasswordGrant: false
 
   # Specify how GitLab claims are mapped to Kubernetes identities.

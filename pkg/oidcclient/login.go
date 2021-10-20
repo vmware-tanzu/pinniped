@@ -813,6 +813,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 	refreshed, err := upstreamOIDCIdentityProvider.PerformRefresh(ctx, refreshToken.Token)
 	if err != nil {
 		// Ignore errors during refresh, but return nil which will trigger the full login flow.
+		h.logger.V(debugLogLevel).Info("Pinniped: Refresh failed.")
 		return nil, nil
 	}
 

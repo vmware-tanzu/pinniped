@@ -160,7 +160,8 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	}
 
 	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
-		plog.Warning("refresh token not returned by upstream provider during password grant",
+		plog.Warning("refresh token not returned by upstream provider during password grant, "+
+			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
 			"upstreamName", oidcUpstream.GetName(),
 			"scopes", oidcUpstream.GetScopes())
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,

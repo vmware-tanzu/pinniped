@@ -45,8 +45,11 @@ type OIDCAuthorizationConfig struct {
 	// the following scopes: "openid", "offline_access", "email", and "profile". See
 	// https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims for a description of the "profile" and "email"
 	// scopes. See https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess for a description of the
-	// "offline_access" scope. By setting this list to anything other than an empty list, you are overriding the
+	// "offline_access" scope. This default value may change in future versions of Pinniped as the standard evolves,
+	// or as common patterns used by providers who implement the standard in the ecosystem evolve.
+	// By setting this list to anything other than an empty list, you are overriding the
 	// default value, so you may wish to include some of "offline_access", "email", and "profile" in your override list.
+	// If you do not want any of these scopes to be requested, you may set this list to contain only "openid".
 	// Some OIDC providers may also require a scope to get access to the user's group membership, in which case you
 	// may wish to include it in this list. Sometimes the scope to request the user's group membership is called
 	// "groups", but unfortunately this is not specified in the OIDC standard.

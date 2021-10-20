@@ -28,6 +28,8 @@ const (
 	ErrInvalidOIDCRequestData     = constable.Error("oidc request data must be present")
 	ErrMalformedAuthorizationCode = constable.Error("malformed authorization code")
 
+	// Version 1 was the initial release of storage.
+	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	oidcStorageVersion = "2"
 )
 

@@ -70,7 +70,8 @@ func NewHandler(
 		}
 
 		if token.RefreshToken == nil || token.RefreshToken.Token == "" {
-			plog.Warning("refresh token not returned by upstream provider during authcode exchange",
+			plog.Warning("refresh token not returned by upstream provider during authcode exchange, "+
+				"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
 				"upstreamName", upstreamIDPConfig.GetName(),
 				"scopes", upstreamIDPConfig.GetScopes(),
 				"additionalParams", upstreamIDPConfig.GetAdditionalAuthcodeParams())

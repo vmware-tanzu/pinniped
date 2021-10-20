@@ -26,6 +26,8 @@ const (
 	ErrInvalidRefreshTokenRequestVersion = constable.Error("refresh token request data has wrong version")
 	ErrInvalidRefreshTokenRequestData    = constable.Error("refresh token request data must be present")
 
+	// Version 1 was the initial release of storage.
+	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	refreshTokenStorageVersion = "2"
 )
 

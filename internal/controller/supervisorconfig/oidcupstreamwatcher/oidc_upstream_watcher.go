@@ -12,9 +12,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
@@ -427,20 +428,14 @@ func computeScopes(additionalScopes []string) []string {
 	}
 
 	// Otherwise, first compute the unique set of scopes, including "openid" (de-duplicate).
-	set := make(map[string]bool, len(additionalScopes)+1)
-	set["openid"] = true
+	set := sets.NewString()
+	set.Insert("openid")
 	for _, s := range additionalScopes {
-		set[s] = true
+		set.Insert(s)
 	}
 
-	// Then grab all the keys and sort them.
-	scopes := make([]string, 0, len(set))
-	for s := range set {
-		scopes = append(scopes, s)
-	}
-	sort.Strings(scopes)
-
-	return scopes
+	// Return the set as a sorted list.
+	return set.List()
 }
 
 func truncateMostLongErr(err error) string {

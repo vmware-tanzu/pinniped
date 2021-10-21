@@ -37,7 +37,7 @@ Last Updated: Sept 2021
 |Theme|Description|Timeline|
 |--|--|--|
 |Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Oct 2021|
-|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for LDAP/AD |Nov 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream user is in an invalid state for LDAP/AD |Nov 2021|
 |Improving Security Posture|Set stricter default TLS versions and Ciphers |Nov 2021|
 |Improving Security Posture|Support FIPS compliant Boring crypto libraries |Dec 2021|
 |Improving Security Posture|Support Audit logging of security events related to Authentication |Jan 2022|
@@ -52,7 +52,6 @@ Last Updated: Sept 2021
 |Improving Security Posture|Client side use of Secure Enclaves for Session data |Exploring/Ongoing|
 |Improving Security Posture|Enforce the use of HTTP Strict Transport (HSTS) |Exploring/Ongoing|
 |Improving Security Posture|Assert that Pinniped runs under the restricted PSP version2 levels  |Exploring/Ongoing|
-|Improving Security Posture|mTLS for Supervisor sessions |Exploring/Ongoing|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
 |Wider Concierge cluster support|Support for OpenShift cluster types in the Concierge|Exploring/Ongoing|
 |Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|

@@ -65,6 +65,13 @@ type PerformRefreshArgs struct {
 	RefreshToken string
 }
 
+// RevokeRefreshTokenArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.RevokeRefreshTokenArgsFunc().
+type RevokeRefreshTokenArgs struct {
+	Ctx          context.Context
+	RefreshToken string
+}
+
 // ValidateTokenArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.ValidateTokenFunc().
 type ValidateTokenArgs struct {
@@ -103,6 +110,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	ClientID                 string
 	ResourceUID              types.UID
 	AuthorizationURL         url.URL
+	RevocationURL            *url.URL
 	UsernameClaim            string
 	GroupsClaim              string
 	Scopes                   []string
@@ -124,6 +132,8 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	PerformRefreshFunc func(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
+	RevokeRefreshTokenFunc func(ctx context.Context, refreshToken string) error
+
 	ValidateTokenFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 
 	exchangeAuthcodeAndValidateTokensCallCount         int
@@ -132,6 +142,8 @@ type TestUpstreamOIDCIdentityProvider struct {
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
 	performRefreshCallCount                            int
 	performRefreshArgs                                 []*PerformRefreshArgs
+	revokeRefreshTokenCallCount                        int
+	revokeRefreshTokenArgs                             []*RevokeRefreshTokenArgs
 	validateTokenCallCount                             int
 	validateTokenArgs                                  []*ValidateTokenArgs
 }
@@ -156,6 +168,10 @@ func (u *TestUpstreamOIDCIdentityProvider) GetClientID() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetAuthorizationURL() *url.URL {
 	return &u.AuthorizationURL
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetRevocationURL() *url.URL {
+	return u.RevocationURL
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetScopes() []string {
@@ -228,6 +244,18 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, r
 	return u.PerformRefreshFunc(ctx, refreshToken)
 }
 
+func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	if u.revokeRefreshTokenArgs == nil {
+		u.revokeRefreshTokenArgs = make([]*RevokeRefreshTokenArgs, 0)
+	}
+	u.revokeRefreshTokenCallCount++
+	u.revokeRefreshTokenArgs = append(u.revokeRefreshTokenArgs, &RevokeRefreshTokenArgs{
+		Ctx:          ctx,
+		RefreshToken: refreshToken,
+	})
+	return u.RevokeRefreshTokenFunc(ctx, refreshToken)
+}
+
 func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshCallCount() int {
 	return u.performRefreshCallCount
 }
@@ -237,6 +265,17 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *Perform
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
 	return u.performRefreshArgs[call]
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenCallCount() int {
+	return u.performRefreshCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenArgs(call int) *RevokeRefreshTokenArgs {
+	if u.revokeRefreshTokenArgs == nil {
+		u.revokeRefreshTokenArgs = make([]*RevokeRefreshTokenArgs, 0)
+	}
+	return u.revokeRefreshTokenArgs[call]
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
@@ -477,6 +516,7 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	authcodeExchangeErr      error
 	passwordGrantErr         error
 	performRefreshErr        error
+	revokeRefreshTokenErr    error
 	validateTokenErr         error
 }
 
@@ -621,6 +661,9 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 				return nil, u.performRefreshErr
 			}
 			return u.refreshedTokens, nil
+		},
+		RevokeRefreshTokenFunc: func(ctx context.Context, refreshToken string) error {
+			return u.revokeRefreshTokenErr
 		},
 		ValidateTokenFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.validateTokenErr != nil {

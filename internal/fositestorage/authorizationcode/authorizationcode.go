@@ -11,6 +11,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -46,6 +47,23 @@ type AuthorizeCodeSession struct {
 
 func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) oauth2.AuthorizeCodeStorage {
 	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
+}
+
+// ReadFromSecret reads the contents of a Secret as an AuthorizeCodeSession.
+func ReadFromSecret(secret *v1.Secret) (*AuthorizeCodeSession, error) {
+	session := NewValidEmptyAuthorizeCodeSession()
+	err := crud.FromSecret(TypeLabelValue, secret, session)
+	if err != nil {
+		return nil, err
+	}
+	if session.Version != authorizeCodeStorageVersion {
+		return nil, fmt.Errorf("%w: authorization code session has version %s instead of %s",
+			ErrInvalidAuthorizeRequestVersion, session.Version, authorizeCodeStorageVersion)
+	}
+	if session.Request.ID == "" {
+		return nil, fmt.Errorf("malformed authorization code session: %w", ErrInvalidAuthorizeRequestData)
+	}
+	return session, nil
 }
 
 func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) error {

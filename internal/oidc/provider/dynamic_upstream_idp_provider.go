@@ -68,6 +68,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	// validate the ID token.
 	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
+	// RevokeRefreshToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+	RevokeRefreshToken(ctx context.Context, refreshToken string) error
+
 	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
 	// tokens, or an error.

@@ -124,6 +124,7 @@ func prepareControllers(
 		NewManager().
 		WithController(
 			supervisorstorage.GarbageCollectorController(
+				dynamicUpstreamIDPProvider,
 				clock.RealClock{},
 				kubeClient,
 				secretInformer,

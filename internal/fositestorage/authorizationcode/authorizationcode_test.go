@@ -18,6 +18,7 @@ import (
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
+	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -396,4 +397,121 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// if it adds a new field that can be fuzzed, this check will fail
 	// thus if AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field)
 	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing)
+}
+
+func TestReadFromSecret(t *testing.T) {
+	tests := []struct {
+		name        string
+		secret      *corev1.Secret
+		wantSession *AuthorizeCodeSession
+		wantErr     string
+	}{
+		{
+			name: "happy path",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "authcode",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/authcode",
+			},
+			wantSession: &AuthorizeCodeSession{
+				Version: "2",
+				Active:  true,
+				Request: &fosite.Request{
+					ID:     "abcd-1",
+					Client: &clientregistry.Client{},
+					Session: &psession.PinnipedSession{
+						Fosite: &openid.DefaultSession{
+							Username: "snorlax",
+							Subject:  "panda",
+						},
+						Custom: &psession.CustomSessionData{
+							ProviderUID:  "fake-provider-uid",
+							ProviderName: "fake-provider-name",
+							ProviderType: "fake-provider-type",
+							OIDC: &psession.OIDCSessionData{
+								UpstreamRefreshToken: "fake-upstream-refresh-token",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "wrong secret type",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "authcode",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/not-authcode",
+			},
+			wantErr: "secret storage data has incorrect type: storage.pinniped.dev/not-authcode must equal storage.pinniped.dev/authcode",
+		},
+		{
+			name: "wrong session version",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "authcode",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"wrong-version-here","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/authcode",
+			},
+			wantErr: "authorization request data has wrong version: authorization code session has version wrong-version-here instead of 2",
+		},
+		{
+			name: "missing request",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "authcode",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/authcode",
+			},
+			wantErr: "malformed authorization code session: authorization request data must be present",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			session, err := ReadFromSecret(tt.secret)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.wantSession, session)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+				require.Nil(t, session)
+			}
+		})
+	}
 }

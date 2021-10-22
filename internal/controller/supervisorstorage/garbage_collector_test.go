@@ -39,6 +39,7 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = GarbageCollectorController(
+				nil,
 				clock.RealClock{},
 				nil,
 				secretsInformer,
@@ -132,6 +133,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = GarbageCollectorController(
+				nil, // TODO put an IDP cache here for these tests (use the builder like other controller tests)
 				fakeClock,
 				deleteOptionsRecorder,
 				kubeInformers.Core().V1().Secrets(),

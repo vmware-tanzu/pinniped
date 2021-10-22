@@ -351,6 +351,44 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 		c.validatorCache.putProvider(&upstream.Spec, discoveredProvider, httpClient)
 	}
 
+	// Get the revocation endpoint, if there is one. Many providers do not offer a revocation endpoint.
+	var additionalDiscoveryClaims struct {
+		// "revocation_endpoint" is specified by https://datatracker.ietf.org/doc/html/rfc8414#section-2
+		RevocationEndpoint string `json:"revocation_endpoint"`
+	}
+	if err := discoveredProvider.Claims(&additionalDiscoveryClaims); err != nil {
+		// This shouldn't actually happen because the above call to NewProvider() would have already returned this error.
+		return &v1alpha1.Condition{
+			Type:    typeOIDCDiscoverySucceeded,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonInvalidResponse,
+			Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
+		}
+	}
+	if additionalDiscoveryClaims.RevocationEndpoint != "" {
+		// Found a revocation URL. Try to parse it.
+		revocationURL, err := url.Parse(additionalDiscoveryClaims.RevocationEndpoint)
+		if err != nil {
+			return &v1alpha1.Condition{
+				Type:    typeOIDCDiscoverySucceeded,
+				Status:  v1alpha1.ConditionFalse,
+				Reason:  reasonInvalidResponse,
+				Message: fmt.Sprintf("failed to parse revocation endpoint URL: %v", err),
+			}
+		}
+		// Don't want to send refresh tokens to an insecure revocation endpoint, so require that it use https.
+		if revocationURL.Scheme != "https" {
+			return &v1alpha1.Condition{
+				Type:    typeOIDCDiscoverySucceeded,
+				Status:  v1alpha1.ConditionFalse,
+				Reason:  reasonInvalidResponse,
+				Message: fmt.Sprintf(`revocation endpoint URL scheme must be "https", not %q`, revocationURL.Scheme),
+			}
+		}
+		// Remember the URL for later use.
+		result.RevocationURL = revocationURL
+	}
+
 	// Parse out and validate the discovered authorize endpoint.
 	authURL, err := url.Parse(discoveredProvider.Endpoint().AuthURL)
 	if err != nil {

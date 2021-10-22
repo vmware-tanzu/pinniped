@@ -83,7 +83,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(nil)),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -104,7 +104,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "dc=pinniped,dc=dev" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -113,7 +113,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "(cn={})" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -125,7 +125,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.Filter = "cn={}"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -136,7 +136,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -147,7 +147,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -156,7 +156,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "dn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("cn=pinny,ou=users,dc=pinniped,dc=dev"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("cn=pinny,ou=users,dc=pinniped,dc=dev"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -165,7 +165,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("Seal"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("Seal"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -174,7 +174,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UsernameAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "Seal", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}}, // note that the final answer has case preserved from the entry
+				User: &user.DefaultInfo{Name: "Seal", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}}, // note that the final answer has case preserved from the entry
 			},
 		},
 		{
@@ -187,7 +187,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.UIDAttribute = "givenName"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "Pinny the 🦭", UID: b64("Pinny the 🦭"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "Pinny the 🦭", UID: b64("Pinny the 🦭"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -199,7 +199,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.UsernameAttribute = "cn"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -220,7 +220,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Base = ""
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -231,7 +231,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Base = "ou=users,dc=pinniped,dc=dev" // there are no groups under this part of the tree
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -245,7 +245,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{
 					"cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev",
 					"cn=seals,ou=groups,dc=pinniped,dc=dev",
-				}},
+				}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -259,7 +259,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{
 					"cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev",
 					"cn=seals,ou=groups,dc=pinniped,dc=dev",
-				}},
+				}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -270,7 +270,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.GroupNameAttribute = "objectClass" // silly example, but still a meaningful test
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"groupOfNames", "groupOfNames"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"groupOfNames", "groupOfNames"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -281,7 +281,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Filter = "(&(&(objectClass=groupOfNames)(member={}))(cn=seals))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"seals"}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -292,7 +292,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Filter = "foobar={}" // foobar is not a valid attribute name for this LDAP server's schema
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 			},
 		},
 		{
@@ -671,7 +671,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 		assert.NoError(t, result.err)
 		assert.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
 		assert.Equal(t, &authenticator.Response{
-			User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+			User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}, Extra: map[string][]string{"userDN": {"cn=pinny,ou=users,dc=pinniped,dc=dev"}}},
 		}, result.response)
 	}
 }

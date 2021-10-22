@@ -214,7 +214,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -281,7 +285,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.StartTLSOnlyHost+
@@ -348,9 +356,13 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
-			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:           "access_denied",
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
+			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantErrorType:        "access_denied",
 		},
 		{
 			name: "ldap login still works after updating bind secret",
@@ -426,7 +438,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -525,7 +541,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -580,7 +600,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -648,7 +672,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -721,7 +749,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -809,7 +841,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -864,7 +900,7 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: nil,
 			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
 			wantErrorType:           "access_denied",
 		},

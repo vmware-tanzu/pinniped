@@ -156,6 +156,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			Name:   testUserSearchResultUsernameAttributeValue,
 			UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 			Groups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
+			Extra:  map[string][]string{"userDN": {testUserSearchResultDNValue}},
 		}
 		if editFunc != nil {
 			editFunc(u)
@@ -503,6 +504,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					Name:   testUserSearchResultUsernameAttributeValue,
 					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 					Groups: []string{"a", "b", "c"},
+					Extra:  map[string][]string{"userDN": {testUserSearchResultDNValue}},
 				},
 			},
 		},
@@ -1208,6 +1210,151 @@ func TestEndUserAuthentication(t *testing.T) {
 				require.True(t, authenticated)
 				require.Equal(t, tt.wantAuthResponse, authResponse)
 			}
+		})
+	}
+}
+
+func TestUpstreamRefresh(t *testing.T) {
+	expectedUserSearch := &ldap.SearchRequest{
+		BaseDN:       testUserSearchResultDNValue,
+		Scope:        ldap.ScopeBaseObject,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       "(objectClass=*)",
+		Attributes:   []string{},
+		Controls:     nil, // don't need paging because we set the SizeLimit so small
+	}
+
+	happyPathUserSearchResult := &ldap.SearchResult{
+		Entries: []*ldap.Entry{
+			{
+				DN:         testUserSearchResultDNValue,
+				Attributes: []*ldap.EntryAttribute{},
+			},
+		},
+	}
+
+	providerConfig := &ProviderConfig{
+		Name:               "some-provider-name",
+		Host:               testHost,
+		CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+		ConnectionProtocol: TLS,
+		BindUsername:       testBindUsername,
+		BindPassword:       testBindPassword,
+		UserSearch: UserSearchConfig{
+			Base: testUserSearchBase,
+		},
+	}
+
+	tests := []struct {
+		name           string
+		providerConfig *ProviderConfig
+		setupMocks     func(conn *mockldapconn.MockConn)
+		dialError      error
+		wantErr        string
+	}{
+		{
+			name:           "happy path where searching the dn returns a single entry",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+		},
+		{
+			name:           "error where dial fails",
+			providerConfig: providerConfig,
+			dialError:      errors.New("some dial error"),
+			wantErr:        "error dialing host \"ldap.example.com:8443\": some dial error",
+		},
+		{
+			name:           "error binding",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "error binding as \"cn=some-bind-username,dc=pinniped,dc=dev\" before user search: some bind error",
+		},
+		{
+			name:           "search result returns no entries",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" resulted in 0 search results, but expected 1 result",
+		},
+		{
+			name:           "error searching",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(nil, errors.New("some search error"))
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "error searching for user \"some-upstream-user-dn\": some search error",
+		},
+		{
+			name:           "search result returns more than one entry",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN:         testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{},
+						},
+						{
+							DN:         "doesn't-matter",
+							Attributes: []*ldap.EntryAttribute{},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" resulted in 2 search results, but expected 1 result",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			conn := mockldapconn.NewMockConn(ctrl)
+			if tt.setupMocks != nil {
+				tt.setupMocks(conn)
+			}
+
+			dialWasAttempted := false
+			providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+				dialWasAttempted = true
+				require.Equal(t, providerConfig.Host, addr.Endpoint())
+				if tt.dialError != nil {
+					return nil, tt.dialError
+				}
+
+				return conn, nil
+			})
+
+			provider := New(*providerConfig)
+			err := provider.PerformRefresh(context.Background(), testUserSearchResultDNValue)
+			if tt.wantErr != "" {
+				require.NotNil(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, true, dialWasAttempted)
 		})
 	}
 }

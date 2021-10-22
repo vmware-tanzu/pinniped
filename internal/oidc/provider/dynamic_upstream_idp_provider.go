@@ -88,6 +88,9 @@ type UpstreamLDAPIdentityProviderI interface {
 
 	// UserAuthenticator adds an interface method for performing user authentication against the upstream LDAP provider.
 	authenticators.UserAuthenticator
+
+	// PerformRefresh performs a refresh against the upstream LDAP identity provider
+	PerformRefresh(ctx context.Context, userDN string) error
 }
 
 type DynamicUpstreamIDPProvider interface {

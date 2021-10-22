@@ -63,6 +63,7 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 type PerformRefreshArgs struct {
 	Ctx          context.Context
 	RefreshToken string
+	DN           string
 }
 
 // ValidateTokenArgs is used to spy on calls to
@@ -74,10 +75,13 @@ type ValidateTokenArgs struct {
 }
 
 type TestUpstreamLDAPIdentityProvider struct {
-	Name             string
-	ResourceUID      types.UID
-	URL              *url.URL
-	AuthenticateFunc func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
+	Name                    string
+	ResourceUID             types.UID
+	URL                     *url.URL
+	AuthenticateFunc        func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
+	performRefreshCallCount int
+	performRefreshArgs      []*PerformRefreshArgs
+	PerformRefreshErr       error
 }
 
 var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
@@ -96,6 +100,32 @@ func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context,
 
 func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
+}
+
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN string) error {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	u.performRefreshCallCount++
+	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
+		Ctx: ctx,
+		DN:  userDN,
+	})
+	if u.PerformRefreshErr != nil {
+		return u.PerformRefreshErr
+	}
+	return nil
+}
+
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshCallCount() int {
+	return u.performRefreshCallCount
+}
+
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshArgs(call int) *PerformRefreshArgs {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	return u.performRefreshArgs[call]
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
@@ -390,31 +420,54 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
 	t.Helper()
 	var actualArgs *PerformRefreshArgs
 	var actualNameOfUpstreamWhichMadeCall string
-	actualCallCountAcrossAllOIDCUpstreams := 0
+	actualCallCountAcrossAllUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		callCountOnThisUpstream := upstreamOIDC.performRefreshCallCount
-		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
 			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
 			actualArgs = upstreamOIDC.performRefreshArgs[0]
 		}
 	}
-	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to PerformRefresh() by all OIDC upstreams",
+	for _, upstreamLDAP := range b.upstreamLDAPIdentityProviders {
+		callCountOnThisUpstream := upstreamLDAP.performRefreshCallCount
+		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamLDAP.Name
+			actualArgs = upstreamLDAP.performRefreshArgs[0]
+		}
+	}
+	for _, upstreamAD := range b.upstreamActiveDirectoryIdentityProviders {
+		callCountOnThisUpstream := upstreamAD.performRefreshCallCount
+		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamAD.Name
+			actualArgs = upstreamAD.performRefreshArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
+		"should have been exactly one call to PerformRefresh() by all upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"PerformRefresh() was called on the wrong OIDC upstream",
+		"PerformRefresh() was called on the wrong upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
 func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {
 	t.Helper()
-	actualCallCountAcrossAllOIDCUpstreams := 0
+	actualCallCountAcrossAllUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.performRefreshCallCount
+		actualCallCountAcrossAllUpstreams += upstreamOIDC.performRefreshCallCount
 	}
-	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+	for _, upstreamLDAP := range b.upstreamLDAPIdentityProviders {
+		actualCallCountAcrossAllUpstreams += upstreamLDAP.performRefreshCallCount
+	}
+	for _, upstreamActiveDirectory := range b.upstreamActiveDirectoryIdentityProviders {
+		actualCallCountAcrossAllUpstreams += upstreamActiveDirectory.performRefreshCallCount
+	}
+
+	require.Equal(t, 0, actualCallCountAcrossAllUpstreams,
 		"expected exactly zero calls to PerformRefresh()",
 	)
 }

@@ -89,14 +89,12 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	case psession.ProviderTypeOIDC:
 		return upstreamOIDCRefresh(ctx, customSessionData, providerCache)
 	case psession.ProviderTypeLDAP:
-		// upstream refresh not yet implemented for LDAP, so do nothing
+		return upstreamLDAPRefresh(ctx, customSessionData, providerCache)
 	case psession.ProviderTypeActiveDirectory:
-		// upstream refresh not yet implemented for AD, so do nothing
+		return upstreamLDAPRefresh(ctx, customSessionData, providerCache)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-
-	return nil
 }
 
 func upstreamOIDCRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister) error {
@@ -163,5 +161,56 @@ func findOIDCProviderByNameAndValidateUID(
 		}
 	}
 	return nil, errorsx.WithStack(errUpstreamRefreshError.
+		WithHintf("Provider %q of type %q from upstream session data was not found.", s.ProviderName, s.ProviderType))
+}
+
+func upstreamLDAPRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister) error {
+	plog.Warning("refreshing upstream")
+	// if you have neither a valid ldap session config nor a valid active directory session config
+	if (s.LDAP == nil || s.LDAP.UserDN == "") && (s.ActiveDirectory == nil || s.ActiveDirectory.UserDN == "") {
+		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	plog.Warning("going to find provider", "provider", s.ProviderName)
+
+	// get ldap/ad provider out of cache
+	p, dn, _ := findLDAPProviderByNameAndValidateUID(s, providerCache)
+	// TODO error checking
+	// run PerformRefresh
+	err := p.PerformRefresh(ctx, dn)
+	if err != nil {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh failed using provider %q of type %q.",
+			s.ProviderName, s.ProviderType).WithWrap(err))
+	}
+
+	return nil
+}
+
+func findLDAPProviderByNameAndValidateUID(
+	s *psession.CustomSessionData,
+	providerCache oidc.UpstreamIdentityProvidersLister,
+) (provider.UpstreamLDAPIdentityProviderI, string, error) {
+	var providers []provider.UpstreamLDAPIdentityProviderI
+	var dn string
+	if s.ProviderType == psession.ProviderTypeLDAP {
+		providers = providerCache.GetLDAPIdentityProviders()
+		dn = s.LDAP.UserDN
+	} else if s.ProviderType == psession.ProviderTypeActiveDirectory {
+		providers = providerCache.GetActiveDirectoryIdentityProviders()
+		dn = s.ActiveDirectory.UserDN
+	}
+
+	for _, p := range providers {
+		if p.GetName() == s.ProviderName {
+			if p.GetResourceUID() != s.ProviderUID {
+				return nil, "", errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+					"Provider %q of type %q from upstream session data has changed its resource UID since authentication.",
+					s.ProviderName, s.ProviderType))
+			}
+			return p, dn, nil
+		}
+	}
+
+	return nil, "", errorsx.WithStack(errUpstreamRefreshError.
 		WithHintf("Provider %q of type %q from upstream session data was not found.", s.ProviderName, s.ProviderType))
 }

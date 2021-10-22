@@ -112,11 +112,26 @@ func handleAuthRequestForLDAPUpstream(
 	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
+	dn := userDNFromAuthenticatedResponse(authenticateResponse)
+	if dn == "" {
+		return httperr.New(http.StatusInternalServerError, "unexpected error during upstream authentication")
+	}
 
 	customSessionData := &psession.CustomSessionData{
 		ProviderUID:  ldapUpstream.GetResourceUID(),
 		ProviderName: ldapUpstream.GetName(),
 		ProviderType: idpType,
+	}
+
+	if idpType == psession.ProviderTypeLDAP {
+		customSessionData.LDAP = &psession.LDAPSessionData{
+			UserDN: dn,
+		}
+	}
+	if idpType == psession.ProviderTypeActiveDirectory {
+		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
+			UserDN: dn,
+		}
 	}
 
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w,
@@ -476,4 +491,17 @@ func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentit
 	q.Set(oidc.IDTokenSubjectClaim, authenticateResponse.User.GetUID())
 	ldapURL.RawQuery = q.Encode()
 	return ldapURL.String()
+}
+
+func userDNFromAuthenticatedResponse(authenticatedResponse *authenticator.Response) string {
+	// These errors shouldn't happen, but do some error checking anyway so it doesn't panic
+	extra := authenticatedResponse.User.GetExtra()
+	if len(extra) == 0 {
+		return ""
+	}
+	dnSlice := extra["userDN"]
+	if len(dnSlice) != 1 {
+		return ""
+	}
+	return dnSlice[0]
 }

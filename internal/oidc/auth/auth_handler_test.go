@@ -267,6 +267,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	happyLDAPUsernameFromAuthenticator := "some-mapped-ldap-username"
 	happyLDAPPassword := "some-ldap-password" //nolint:gosec
 	happyLDAPUID := "some-ldap-uid"
+	happyLDAPUserDN := "cn=foo,dn=bar"
 	happyLDAPGroups := []string{"group1", "group2", "group3"}
 
 	parsedUpstreamLDAPURL, err := url.Parse(upstreamLDAPURL)
@@ -282,6 +283,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					Name:   happyLDAPUsernameFromAuthenticator,
 					UID:    happyLDAPUID,
 					Groups: happyLDAPGroups,
+					Extra:  map[string][]string{"userDN": {happyLDAPUserDN}},
 				},
 			}, true, nil
 		}
@@ -438,6 +440,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderName: activeDirectoryUpstreamName,
 		ProviderType: psession.ProviderTypeActiveDirectory,
 		OIDC:         nil,
+		LDAP:         nil,
+		ActiveDirectory: &psession.ActiveDirectorySessionData{
+			UserDN: happyLDAPUserDN,
+		},
 	}
 
 	expectedHappyLDAPUpstreamCustomSession := &psession.CustomSessionData{
@@ -445,6 +451,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderName: ldapUpstreamName,
 		ProviderType: psession.ProviderTypeLDAP,
 		OIDC:         nil,
+		LDAP: &psession.LDAPSessionData{
+			UserDN: happyLDAPUserDN,
+		},
+		ActiveDirectory: nil,
 	}
 
 	expectedHappyOIDCPasswordGrantCustomSession := &psession.CustomSessionData{

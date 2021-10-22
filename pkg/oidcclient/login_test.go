@@ -513,7 +513,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantLogs: []string{
 				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
 				`"level"=4 "msg"="Pinniped: Refreshing cached token."`,
-				`"level"=4 "msg"="Pinniped: Refresh failed."`,
+				`"level"=4 "msg"="Pinniped: Refresh failed."  "error"="oauth2: cannot fetch token: 400 Bad Request\nResponse: expected client_id 'test-client-id'\n"`,
 				`"msg"="could not open callback listener" "error"="some listen error"`,
 			},
 			// Expect this to fall through to the authorization code flow, so it fails here.

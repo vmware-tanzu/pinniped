@@ -156,9 +156,8 @@ func findOIDCProviderByNameAndValidateUID(
 	for _, p := range providerCache.GetOIDCIdentityProviders() {
 		if p.GetName() == s.ProviderName {
 			if p.GetResourceUID() != s.ProviderUID {
-				return nil, errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-					"Provider %q of type %q from upstream session data has changed its resource UID since authentication.",
-					s.ProviderName, s.ProviderType))
+				return nil, errorsx.WithStack(errUpstreamRefreshError.WithHint(
+					"Provider from upstream session data has changed its resource UID since authentication."))
 			}
 			return p, nil
 		}

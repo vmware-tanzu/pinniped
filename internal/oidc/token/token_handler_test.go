@@ -1432,7 +1432,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'some-oidc-idp' of type 'oidc' from upstream session data has changed its resource UID since authentication."
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
 						}
 					`),
 				},

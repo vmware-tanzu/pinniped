@@ -1238,7 +1238,6 @@ func TestUpstreamRefresh(t *testing.T) {
 					},
 					{
 						Name:       testUserSearchUIDAttribute,
-						Values:     []string{testUserSearchResultUIDAttributeValue},
 						ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
 					},
 				},
@@ -1350,7 +1349,6 @@ func TestUpstreamRefresh(t *testing.T) {
 								},
 								{
 									Name:       testUserSearchUIDAttribute,
-									Values:     []string{"wrong-uid"},
 									ByteValues: [][]byte{[]byte("wrong-uid")},
 								},
 							},
@@ -1397,8 +1395,8 @@ func TestUpstreamRefresh(t *testing.T) {
 									Values: []string{testUserSearchResultUsernameAttributeValue},
 								},
 								{
-									Name:   testUserSearchUIDAttribute,
-									Values: []string{testUserSearchResultUIDAttributeValue},
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
 								},
 							},
 						},
@@ -1407,6 +1405,110 @@ func TestUpstreamRefresh(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantErr: "searching for user with original DN \"some-upstream-user-dn\" resulted in search result without DN",
+		},
+		{
+			name:           "search result has 0 values for username attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 0 values for attribute \"some-upstream-username-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has more than one value for username attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue, "something-else"},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 2 values for attribute \"some-upstream-username-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has 0 values for uid attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 0 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has 2 values for uid attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue), []byte("other-uid-value")},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 2 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
 		},
 	}
 

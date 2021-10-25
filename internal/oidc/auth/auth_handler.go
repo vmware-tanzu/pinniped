@@ -491,12 +491,8 @@ func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentit
 }
 
 func userDNFromAuthenticatedResponse(authenticatedResponse *authenticator.Response) string {
-	// These errors shouldn't happen, but do some error checking anyway so it doesn't panic
-	extra := authenticatedResponse.User.GetExtra()
-	if len(extra) == 0 {
-		return ""
-	}
-	dnSlice := extra["userDN"]
+	// This error shouldn't happen, but do some error checking anyway so it doesn't panic
+	dnSlice := authenticatedResponse.User.GetExtra()["userDN"]
 	if len(dnSlice) != 1 {
 		return ""
 	}

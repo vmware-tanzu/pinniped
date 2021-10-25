@@ -177,20 +177,21 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN string, expectedUs
 
 	conn, err := p.dial(ctx)
 	if err != nil {
-		p.traceAuthFailure(t, err)
+		p.traceRefreshFailure(t, err)
 		return fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
-		p.traceAuthFailure(t, err)
+		p.traceRefreshFailure(t, err)
 		return fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
 	searchResult, err := conn.Search(search)
 
 	if err != nil {
+		p.traceRefreshFailure(t, err)
 		return fmt.Errorf(`error searching for user "%s": %w`, userDN, err)
 	}
 
@@ -763,6 +764,12 @@ func (p *Provider) traceAuthSuccess(t *trace.Trace) {
 func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
 	t.Step("search base discovery failed",
 		trace.Field{Key: "reason", Value: err.Error()})
+}
+
+func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
+	t.Step("refresh failed",
+		trace.Field{Key: "reason", Value: err.Error()},
+	)
 }
 
 func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {

@@ -33,7 +33,9 @@ COPY --from=build-env /usr/local/bin /usr/local/bin
 EXPOSE 8080 8443
 
 # Run as non-root for security posture
-USER 1001:1001
+# Use the same non-root user as https://github.com/GoogleContainerTools/distroless/blob/fc3c4eaceb0518900f886aae90407c43be0a42d9/base/base.bzl#L9
+# This is a workaround for https://github.com/GoogleContainerTools/distroless/issues/718
+USER 65532:65532
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/pinniped-server"]

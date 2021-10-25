@@ -933,8 +933,10 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: ldapUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
-				Ctx: nil,
-				DN:  ldapUpstreamDN,
+				Ctx:              nil,
+				DN:               ldapUpstreamDN,
+				ExpectedSubject:  goodSubject,
+				ExpectedUsername: goodUsername,
 			},
 		}
 	}
@@ -943,8 +945,10 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: activeDirectoryUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
-				Ctx: nil,
-				DN:  activeDirectoryUpstreamDN,
+				Ctx:              nil,
+				DN:               activeDirectoryUpstreamDN,
+				ExpectedSubject:  goodSubject,
+				ExpectedUsername: goodUsername,
 			},
 		}
 	}
@@ -1796,7 +1800,8 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus: http.StatusUnauthorized,
+					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -1837,11 +1842,84 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus: http.StatusUnauthorized,
+					wantUpstreamRefreshCall: happyActiveDirectoryUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
 							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-ad-idp' of type 'activedirectory'."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap idp not found",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:  ldapUpstreamResourceUID,
+					ProviderName: ldapUpstreamName,
+					ProviderType: ldapUpstreamType,
+					LDAP: &psession.LDAPSessionData{
+						UserDN: ldapUpstreamDN,
+					},
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:  ldapUpstreamResourceUID,
+						ProviderName: ldapUpstreamName,
+						ProviderType: ldapUpstreamType,
+						LDAP: &psession.LDAPSessionData{
+							UserDN: ldapUpstreamDN,
+						},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider 'some-ldap-idp' of type 'ldap' from upstream session data was not found."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream active directory idp not found",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:  activeDirectoryUpstreamResourceUID,
+					ProviderName: activeDirectoryUpstreamName,
+					ProviderType: activeDirectoryUpstreamType,
+					ActiveDirectory: &psession.ActiveDirectorySessionData{
+						UserDN: activeDirectoryUpstreamDN,
+					},
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:  activeDirectoryUpstreamResourceUID,
+						ProviderName: activeDirectoryUpstreamName,
+						ProviderType: activeDirectoryUpstreamType,
+						ActiveDirectory: &psession.ActiveDirectorySessionData{
+							UserDN: activeDirectoryUpstreamDN,
+						},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider 'some-ad-idp' of type 'activedirectory' from upstream session data was not found."
 						}
 					`),
 				},

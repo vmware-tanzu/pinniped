@@ -61,9 +61,11 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 // PerformRefreshArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.PerformRefreshFunc().
 type PerformRefreshArgs struct {
-	Ctx          context.Context
-	RefreshToken string
-	DN           string
+	Ctx              context.Context
+	RefreshToken     string
+	DN               string
+	ExpectedUsername string
+	ExpectedSubject  string
 }
 
 // ValidateTokenArgs is used to spy on calls to
@@ -102,14 +104,16 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN string) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN string, expectedUsername string, expectedSubject string) error {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
 	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
-		Ctx: ctx,
-		DN:  userDN,
+		Ctx:              ctx,
+		DN:               userDN,
+		ExpectedUsername: expectedUsername,
+		ExpectedSubject:  expectedSubject,
 	})
 	if u.PerformRefreshErr != nil {
 		return u.PerformRefreshErr

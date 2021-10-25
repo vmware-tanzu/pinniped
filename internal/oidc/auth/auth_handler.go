@@ -487,10 +487,7 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 
 func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticator.Response) string {
 	ldapURL := *ldapUpstream.GetURL()
-	q := ldapURL.Query()
-	q.Set(oidc.IDTokenSubjectClaim, authenticateResponse.User.GetUID())
-	ldapURL.RawQuery = q.Encode()
-	return ldapURL.String()
+	return downstreamsession.DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
 }
 
 func userDNFromAuthenticatedResponse(authenticatedResponse *authenticator.Response) string {

@@ -6,6 +6,7 @@ package token
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/ory/fosite"
@@ -75,6 +76,18 @@ func NewHandler(
 
 func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, providerCache oidc.UpstreamIdentityProvidersLister) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
+	fositeSession := session.Fosite
+	if fositeSession == nil {
+		return fmt.Errorf("fosite session not found")
+	}
+	claims := fositeSession.Claims
+	if claims == nil {
+		return fmt.Errorf("fosite session claims not found")
+	}
+	extra := claims.Extra
+	downstreamUsername := extra["username"].(string)
+	downstreamSubject := claims.Subject
+
 	customSessionData := session.Custom
 	if customSessionData == nil {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
@@ -89,9 +102,9 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	case psession.ProviderTypeOIDC:
 		return upstreamOIDCRefresh(ctx, customSessionData, providerCache)
 	case psession.ProviderTypeLDAP:
-		return upstreamLDAPRefresh(ctx, customSessionData, providerCache)
+		return upstreamLDAPRefresh(ctx, customSessionData, providerCache, downstreamUsername, downstreamSubject)
 	case psession.ProviderTypeActiveDirectory:
-		return upstreamLDAPRefresh(ctx, customSessionData, providerCache)
+		return upstreamLDAPRefresh(ctx, customSessionData, providerCache, downstreamUsername, downstreamSubject)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
@@ -164,19 +177,19 @@ func findOIDCProviderByNameAndValidateUID(
 		WithHintf("Provider %q of type %q from upstream session data was not found.", s.ProviderName, s.ProviderType))
 }
 
-func upstreamLDAPRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister) error {
-	plog.Warning("refreshing upstream")
+func upstreamLDAPRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister, username string, subject string) error {
 	// if you have neither a valid ldap session config nor a valid active directory session config
 	if (s.LDAP == nil || s.LDAP.UserDN == "") && (s.ActiveDirectory == nil || s.ActiveDirectory.UserDN == "") {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-	plog.Warning("going to find provider", "provider", s.ProviderName)
 
 	// get ldap/ad provider out of cache
-	p, dn, _ := findLDAPProviderByNameAndValidateUID(s, providerCache)
-	// TODO error checking
+	p, dn, err := findLDAPProviderByNameAndValidateUID(s, providerCache)
+	if err != nil {
+		return err
+	}
 	// run PerformRefresh
-	err := p.PerformRefresh(ctx, dn)
+	err = p.PerformRefresh(ctx, dn, username, subject)
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 			"Upstream refresh failed using provider %q of type %q.",

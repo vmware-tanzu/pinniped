@@ -1223,15 +1223,25 @@ func TestUpstreamRefresh(t *testing.T) {
 		TimeLimit:    90,
 		TypesOnly:    false,
 		Filter:       "(objectClass=*)",
-		Attributes:   []string{},
+		Attributes:   []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute},
 		Controls:     nil, // don't need paging because we set the SizeLimit so small
 	}
 
 	happyPathUserSearchResult := &ldap.SearchResult{
 		Entries: []*ldap.Entry{
 			{
-				DN:         testUserSearchResultDNValue,
-				Attributes: []*ldap.EntryAttribute{},
+				DN: testUserSearchResultDNValue,
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   testUserSearchUsernameAttribute,
+						Values: []string{testUserSearchResultUsernameAttributeValue},
+					},
+					{
+						Name:       testUserSearchUIDAttribute,
+						Values:     []string{testUserSearchResultUIDAttributeValue},
+						ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+					},
+				},
 			},
 		},
 	}
@@ -1244,7 +1254,9 @@ func TestUpstreamRefresh(t *testing.T) {
 		BindUsername:       testBindUsername,
 		BindPassword:       testBindPassword,
 		UserSearch: UserSearchConfig{
-			Base: testUserSearchBase,
+			Base:              testUserSearchBase,
+			UIDAttribute:      testUserSearchUIDAttribute,
+			UsernameAttribute: testUserSearchUsernameAttribute,
 		},
 	}
 
@@ -1322,6 +1334,80 @@ func TestUpstreamRefresh(t *testing.T) {
 			},
 			wantErr: "searching for user \"some-upstream-user-dn\" resulted in 2 search results, but expected 1 result",
 		},
+		{
+			name:           "search result has wrong uid",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									Values:     []string{"wrong-uid"},
+									ByteValues: [][]byte{[]byte("wrong-uid")},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" produced a different subject than the previous value. expected: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU\", actual: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=d3JvbmctdWlk\"",
+		},
+		{
+			name:           "search result has wrong username",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{"wrong-username"},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" returned a different username than the previous value. expected: \"some-upstream-username-value\", actual: \"wrong-username\"",
+		},
+		{
+			name:           "search result has no dn",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:   testUserSearchUIDAttribute,
+									Values: []string{testUserSearchResultUIDAttributeValue},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user with original DN \"some-upstream-user-dn\" resulted in search result without DN",
+		},
 	}
 
 	for _, test := range tests {
@@ -1347,9 +1433,10 @@ func TestUpstreamRefresh(t *testing.T) {
 			})
 
 			provider := New(*providerConfig)
-			err := provider.PerformRefresh(context.Background(), testUserSearchResultDNValue)
+			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
+			err := provider.PerformRefresh(context.Background(), testUserSearchResultDNValue, testUserSearchResultUsernameAttributeValue, subject)
 			if tt.wantErr != "" {
-				require.NotNil(t, err)
+				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())
 			} else {
 				require.NoError(t, err)

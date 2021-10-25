@@ -27,6 +27,7 @@ import (
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
@@ -169,7 +170,7 @@ func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, userDN string) error {
+func (p *Provider) PerformRefresh(ctx context.Context, userDN string, expectedUsername string, expectedSubject string) error {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	search := p.refreshUserSearchRequest(userDN)
@@ -199,6 +200,30 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN string) error {
 		return fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			userDN, len(searchResult.Entries),
 		)
+	}
+
+	userEntry := searchResult.Entries[0]
+	if len(userEntry.DN) == 0 {
+		return fmt.Errorf(`searching for user with original DN "%s" resulted in search result without DN`, userDN)
+	}
+
+	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
+	if err != nil {
+		return err // TODO test having no values or more than one maybe
+	}
+	if newUsername != expectedUsername {
+		return fmt.Errorf(`searching for user "%s" returned a different username than the previous value. expected: "%s", actual: "%s"`,
+			userDN, expectedUsername, newUsername,
+		)
+	}
+
+	newUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, userDN)
+	if err != nil {
+		return err // TODO test
+	}
+	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
+	if newSubject != expectedSubject {
+		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, expectedSubject, newSubject)
 	}
 
 	// do nothing. if we got exactly one search result back then that means the user
@@ -615,9 +640,9 @@ func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
 		SizeLimit:    2,
 		TimeLimit:    90,
 		TypesOnly:    false,
-		Filter:       "(objectClass=*)", // we already have the dn, so the filter doesn't matter
-		Attributes:   []string{},        // TODO this will need to include some other AD attributes
-		Controls:     nil,               // this could be used to enable paging, but we're already limiting the result max size
+		Filter:       "(objectClass=*)",                 // we already have the dn, so the filter doesn't matter
+		Attributes:   p.userSearchRequestedAttributes(), // TODO this will need to include some other AD attributes
+		Controls:     nil,                               // this could be used to enable paging, but we're already limiting the result max size
 	}
 }
 

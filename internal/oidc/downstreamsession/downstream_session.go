@@ -169,6 +169,13 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 	return valueAsString, nil
 }
 
+func DownstreamLDAPSubject(uid string, ldapURL url.URL) string {
+	q := ldapURL.Query()
+	q.Set(oidc.IDTokenSubjectClaim, uid)
+	ldapURL.RawQuery = q.Encode()
+	return ldapURL.String()
+}
+
 func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
 }

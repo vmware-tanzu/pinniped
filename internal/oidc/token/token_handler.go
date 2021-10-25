@@ -235,3 +235,16 @@ func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession)
 	}
 	return downstreamUsername, nil
 }
+
+func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession) (string, error) {
+	extra := session.Fosite.Claims.Extra
+	if extra == nil {
+		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamUsernameInterface := extra["username"]
+	if downstreamUsernameInterface == nil {
+		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamUsername := downstreamUsernameInterface.(string)
+	return downstreamUsername, nil
+}

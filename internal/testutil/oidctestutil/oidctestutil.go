@@ -16,11 +16,11 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -31,6 +31,7 @@ import (
 	pkce2 "go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -57,13 +58,33 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 	Password string
 }
 
+// PerformRefreshArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.PerformRefreshFunc().
+type PerformRefreshArgs struct {
+	Ctx          context.Context
+	RefreshToken string
+}
+
+// ValidateTokenArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.ValidateTokenFunc().
+type ValidateTokenArgs struct {
+	Ctx                  context.Context
+	Tok                  *oauth2.Token
+	ExpectedIDTokenNonce nonce.Nonce
+}
+
 type TestUpstreamLDAPIdentityProvider struct {
 	Name             string
+	ResourceUID      types.UID
 	URL              *url.URL
 	AuthenticateFunc func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
 }
 
 var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
+
+func (u *TestUpstreamLDAPIdentityProvider) GetResourceUID() types.UID {
+	return u.ResourceUID
+}
 
 func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
@@ -78,13 +99,15 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
-	Name               string
-	ClientID           string
-	AuthorizationURL   url.URL
-	UsernameClaim      string
-	GroupsClaim        string
-	Scopes             []string
-	AllowPasswordGrant bool
+	Name                     string
+	ClientID                 string
+	ResourceUID              types.UID
+	AuthorizationURL         url.URL
+	UsernameClaim            string
+	GroupsClaim              string
+	Scopes                   []string
+	AdditionalAuthcodeParams map[string]string
+	AllowPasswordGrant       bool
 
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
@@ -99,10 +122,28 @@ type TestUpstreamOIDCIdentityProvider struct {
 		password string,
 	) (*oidctypes.Token, error)
 
+	PerformRefreshFunc func(ctx context.Context, refreshToken string) (*oauth2.Token, error)
+
+	ValidateTokenFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
+
 	exchangeAuthcodeAndValidateTokensCallCount         int
 	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
 	passwordCredentialsGrantAndValidateTokensCallCount int
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
+	performRefreshCallCount                            int
+	performRefreshArgs                                 []*PerformRefreshArgs
+	validateTokenCallCount                             int
+	validateTokenArgs                                  []*ValidateTokenArgs
+}
+
+var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetResourceUID() types.UID {
+	return u.ResourceUID
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalAuthcodeParams() map[string]string {
+	return u.AdditionalAuthcodeParams
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
@@ -175,8 +216,51 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs
 	return u.exchangeAuthcodeAndValidateTokensArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(_ context.Context, _ *oauth2.Token, _ nonce.Nonce) (*oidctypes.Token, error) {
-	panic("implement me")
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	u.performRefreshCallCount++
+	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
+		Ctx:          ctx,
+		RefreshToken: refreshToken,
+	})
+	return u.PerformRefreshFunc(ctx, refreshToken)
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshCallCount() int {
+	return u.performRefreshCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *PerformRefreshArgs {
+	if u.performRefreshArgs == nil {
+		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+	}
+	return u.performRefreshArgs[call]
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+	if u.validateTokenArgs == nil {
+		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+	}
+	u.validateTokenCallCount++
+	u.validateTokenArgs = append(u.validateTokenArgs, &ValidateTokenArgs{
+		Ctx:                  ctx,
+		Tok:                  tok,
+		ExpectedIDTokenNonce: expectedIDTokenNonce,
+	})
+	return u.ValidateTokenFunc(ctx, tok, expectedIDTokenNonce)
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenCallCount() int {
+	return u.validateTokenCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenArgs(call int) *ValidateTokenArgs {
+	if u.validateTokenArgs == nil {
+		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+	}
+	return u.validateTokenArgs[call]
 }
 
 type UpstreamIDPListerBuilder struct {
@@ -298,25 +382,111 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndV
 	)
 }
 
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *PerformRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *PerformRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.performRefreshCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.performRefreshArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to PerformRefresh() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"PerformRefresh() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.performRefreshCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to PerformRefresh()",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *ValidateTokenArgs,
+) {
+	t.Helper()
+	var actualArgs *ValidateTokenArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.validateTokenCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.validateTokenArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to ValidateToken() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"ValidateToken() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to ValidateToken()",
+	)
+}
+
 func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 	return &UpstreamIDPListerBuilder{}
 }
 
 type TestUpstreamOIDCIdentityProviderBuilder struct {
-	name                string
-	clientID            string
-	scopes              []string
-	idToken             map[string]interface{}
-	usernameClaim       string
-	groupsClaim         string
-	authorizationURL    url.URL
-	allowPasswordGrant  bool
-	authcodeExchangeErr error
-	passwordGrantErr    error
+	name                     string
+	resourceUID              types.UID
+	clientID                 string
+	scopes                   []string
+	idToken                  map[string]interface{}
+	refreshToken             *oidctypes.RefreshToken
+	usernameClaim            string
+	groupsClaim              string
+	refreshedTokens          *oauth2.Token
+	validatedTokens          *oidctypes.Token
+	authorizationURL         url.URL
+	additionalAuthcodeParams map[string]string
+	allowPasswordGrant       bool
+	authcodeExchangeErr      error
+	passwordGrantErr         error
+	performRefreshErr        error
+	validateTokenErr         error
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.name = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithResourceUID(value types.UID) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.resourceUID = value
 	return u
 }
 
@@ -373,6 +543,26 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutIDTokenClaim(claim stri
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAdditionalAuthcodeParams(params map[string]string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.additionalAuthcodeParams = params
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRefreshToken(token string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = &oidctypes.RefreshToken{Token: token}
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithEmptyRefreshToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = &oidctypes.RefreshToken{Token: ""}
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutRefreshToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshToken = nil
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUpstreamAuthcodeExchangeError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.authcodeExchangeErr = err
 	return u
@@ -383,26 +573,60 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPasswordGrantError(err err
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRefreshedTokens(tokens *oauth2.Token) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.refreshedTokens = tokens
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPerformRefreshError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.performRefreshErr = err
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidatedTokens(tokens *oidctypes.Token) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validatedTokens = tokens
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validateTokenErr = err
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
 	return &TestUpstreamOIDCIdentityProvider{
-		Name:               u.name,
-		ClientID:           u.clientID,
-		UsernameClaim:      u.usernameClaim,
-		GroupsClaim:        u.groupsClaim,
-		Scopes:             u.scopes,
-		AllowPasswordGrant: u.allowPasswordGrant,
-		AuthorizationURL:   u.authorizationURL,
+		Name:                     u.name,
+		ClientID:                 u.clientID,
+		ResourceUID:              u.resourceUID,
+		UsernameClaim:            u.usernameClaim,
+		GroupsClaim:              u.groupsClaim,
+		Scopes:                   u.scopes,
+		AllowPasswordGrant:       u.allowPasswordGrant,
+		AuthorizationURL:         u.authorizationURL,
+		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
 		},
 		PasswordCredentialsGrantAndValidateTokensFunc: func(ctx context.Context, username, password string) (*oidctypes.Token, error) {
 			if u.passwordGrantErr != nil {
 				return nil, u.passwordGrantErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
+		},
+		PerformRefreshFunc: func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+			if u.performRefreshErr != nil {
+				return nil, u.performRefreshErr
+			}
+			return u.refreshedTokens, nil
+		},
+		ValidateTokenFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+			if u.validateTokenErr != nil {
+				return nil, u.validateTokenErr
+			}
+			return u.validatedTokens, nil
 		},
 	}
 }
@@ -479,6 +703,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamNonce string,
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
+	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
 
@@ -513,6 +738,7 @@ func RequireAuthCodeRegexpMatch(
 		wantDownstreamRequestedScopes,
 		wantDownstreamClientID,
 		wantDownstreamRedirectURI,
+		wantCustomSessionData,
 	)
 
 	// One PKCE should have been stored.
@@ -563,7 +789,8 @@ func validateAuthcodeStorage(
 	wantDownstreamRequestedScopes []string,
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
-) (*fosite.Request, *openid.DefaultSession) {
+	wantCustomSessionData *psession.CustomSessionData,
+) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
 	const (
@@ -591,16 +818,16 @@ func validateAuthcodeStorage(
 	testutil.RequireTimeInDelta(t, time.Now(), storedRequestFromAuthcode.RequestedAt, timeComparisonFudgeFactor)
 
 	// We're not using these fields yet, so confirm that we did not set them (for now).
-	require.Empty(t, storedSessionFromAuthcode.Subject)
-	require.Empty(t, storedSessionFromAuthcode.Username)
-	require.Empty(t, storedSessionFromAuthcode.Headers)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Subject)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Username)
+	require.Empty(t, storedSessionFromAuthcode.Fosite.Headers)
 
 	// The authcode that we are issuing should be good for the length of time that we declare in the fosite config.
-	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
-	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
+	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.Fosite.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+	require.Len(t, storedSessionFromAuthcode.Fosite.ExpiresAt, 1)
 
 	// Now confirm the ID token claims.
-	actualClaims := storedSessionFromAuthcode.Claims
+	actualClaims := storedSessionFromAuthcode.Fosite.Claims
 
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
@@ -634,6 +861,9 @@ func validateAuthcodeStorage(
 	require.Empty(t, actualClaims.AuthenticationContextClassReference)
 	require.Empty(t, actualClaims.AuthenticationMethodsReference)
 
+	// Check that the custom Pinniped session data matches.
+	require.Equal(t, wantCustomSessionData, storedSessionFromAuthcode.Custom)
+
 	return storedRequestFromAuthcode, storedSessionFromAuthcode
 }
 
@@ -642,7 +872,7 @@ func validatePKCEStorage(
 	oauthStore fositestoragei.AllFositeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
+	storedSessionFromAuthcode *psession.PinnipedSession,
 	wantDownstreamPKCEChallenge, wantDownstreamPKCEChallengeMethod string,
 ) {
 	t.Helper()
@@ -667,7 +897,7 @@ func validateIDSessionStorage(
 	oauthStore fositestoragei.AllFositeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
+	storedSessionFromAuthcode *psession.PinnipedSession,
 	wantDownstreamNonce string,
 ) {
 	t.Helper()
@@ -686,13 +916,13 @@ func validateIDSessionStorage(
 	require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
 }
 
-func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *openid.DefaultSession) {
+func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
 	storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest, &fosite.Request{})
-	storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
+	storedSession, ok := storedAuthorizeRequest.GetSession().(*psession.PinnipedSession)
+	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &psession.PinnipedSession{})
 
 	return storedRequest, storedSession
 }

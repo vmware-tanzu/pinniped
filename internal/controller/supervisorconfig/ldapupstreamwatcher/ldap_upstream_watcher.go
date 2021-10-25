@@ -226,8 +226,9 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 	spec := upstream.Spec
 
 	config := &upstreamldap.ProviderConfig{
-		Name: upstream.Name,
-		Host: spec.Host,
+		Name:        upstream.Name,
+		ResourceUID: upstream.UID,
+		Host:        spec.Host,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
 			Filter:            spec.UserSearch.Filter,

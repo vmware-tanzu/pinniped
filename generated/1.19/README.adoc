@@ -1099,8 +1099,9 @@ OIDCAuthorizationConfig provides information about how to form the OAuth2 author
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`additionalScopes`* __string array__ | AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization request flow with an OIDC identity provider. In the case of a Resource Owner Password Credentials Grant flow, AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the token request (see also the allowPasswordGrant field). By default, only the "openid" scope will be requested.
-| *`allowPasswordGrant`* __boolean__ | AllowPasswordGrant, when true, will allow the use of OAuth 2.0's Resource Owner Password Credentials Grant (see https://datatracker.ietf.org/doc/html/rfc6749#section-4.3) to authenticate to the OIDC provider using a username and password without a web browser, in addition to the usual browser-based OIDC Authorization Code Flow. The Resource Owner Password Credentials Grant is not officially part of the OIDC specification, so it may not be supported by your OIDC provider. If your OIDC provider supports returning ID tokens from a Resource Owner Password Credentials Grant token request, then you can choose to set this field to true. This will allow end users to choose to present their username and password to the kubectl CLI (using the Pinniped plugin) to authenticate to the cluster, without using a web browser to log in as is customary in OIDC Authorization Code Flow. This may be convenient for users, especially for identities from your OIDC provider which are not intended to represent a human actor, such as service accounts performing actions in a CI/CD environment. Even if your OIDC provider supports it, you may wish to disable this behavior by setting this field to false when you prefer to only allow users of this OIDCIdentityProvider to log in via the browser-based OIDC Authorization Code Flow. Using the Resource Owner Password Credentials Grant means that the Pinniped CLI and Pinniped Supervisor will directly handle your end users' passwords (similar to LDAPIdentityProvider), and you will not be able to require multi-factor authentication or use the other web-based login features of your OIDC provider during Resource Owner Password Credentials Grant logins. AllowPasswordGrant defaults to false.
+| *`additionalScopes`* __string array__ | additionalScopes are the additional scopes that will be requested from your OIDC provider in the authorization request during an OIDC Authorization Code Flow and in the token request during a Resource Owner Password Credentials Grant. Note that the "openid" scope will always be requested regardless of the value in this setting, since it is always required according to the OIDC spec. By default, when this field is not set, the Supervisor will request the following scopes: "openid", "offline_access", "email", and "profile". See https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims for a description of the "profile" and "email" scopes. See https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess for a description of the "offline_access" scope. This default value may change in future versions of Pinniped as the standard evolves, or as common patterns used by providers who implement the standard in the ecosystem evolve. By setting this list to anything other than an empty list, you are overriding the default value, so you may wish to include some of "offline_access", "email", and "profile" in your override list. If you do not want any of these scopes to be requested, you may set this list to contain only "openid". Some OIDC providers may also require a scope to get access to the user's group membership, in which case you may wish to include it in this list. Sometimes the scope to request the user's group membership is called "groups", but unfortunately this is not specified in the OIDC standard. Generally speaking, you should include any scopes required to cause the appropriate claims to be the returned by your OIDC provider in the ID token or userinfo endpoint results for those claims which you would like to use in the oidcClaims settings to determine the usernames and group memberships of your Kubernetes users. See your OIDC provider's documentation for more information about what scopes are available to request claims. Additionally, the Pinniped Supervisor requires that your OIDC provider returns refresh tokens to the Supervisor from these authorization flows. For most OIDC providers, the scope required to receive refresh tokens will be "offline_access". See the documentation of your OIDC provider's authorization and token endpoints for its requirements for what to include in the request in order to receive a refresh token in the response, if anything. Note that it may be safe to send "offline_access" even to providers which do not require it, since the provider may ignore scopes that it does not understand or require (see https://datatracker.ietf.org/doc/html/rfc6749#section-3.3). In the unusual case that you must avoid sending the "offline_access" scope, then you must override the default value of this setting. This is required if your OIDC provider will reject the request when it includes "offline_access" (e.g. GitLab's OIDC provider).
+| *`additionalAuthorizeParameters`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-parameter[$$Parameter$$] array__ | additionalAuthorizeParameters are extra query parameters that should be included in the authorize request to your OIDC provider in the authorization request during an OIDC Authorization Code Flow. By default, no extra parameters are sent. The standard parameters that will be sent are "response_type", "scope", "client_id", "state", "nonce", "code_challenge", "code_challenge_method", and "redirect_uri". These parameters cannot be included in this setting. Additionally, the "hd" parameter cannot be included in this setting at this time. The "hd" parameter is used by Google's OIDC provider to provide a hint as to which "hosted domain" the user should use during login. However, Pinniped does not yet support validating the hosted domain in the resulting ID token, so it is not yet safe to use this feature of Google's OIDC provider with Pinniped. This setting does not influence the parameters sent to the token endpoint in the Resource Owner Password Credentials Grant. The Pinniped Supervisor requires that your OIDC provider returns refresh tokens to the Supervisor from the authorization flows. Some OIDC providers may require a certain value for the "prompt" parameter in order to properly request refresh tokens. See the documentation of your OIDC provider's authorization endpoint for its requirements for what to include in the request in order to receive a refresh token in the response, if anything. If your provider requires the prompt parameter to request a refresh token, then include it here. Also note that most providers also require a certain scope to be requested in order to receive refresh tokens. See the additionalScopes setting for more information about using scopes to request refresh tokens.
+| *`allowPasswordGrant`* __boolean__ | allowPasswordGrant, when true, will allow the use of OAuth 2.0's Resource Owner Password Credentials Grant (see https://datatracker.ietf.org/doc/html/rfc6749#section-4.3) to authenticate to the OIDC provider using a username and password without a web browser, in addition to the usual browser-based OIDC Authorization Code Flow. The Resource Owner Password Credentials Grant is not officially part of the OIDC specification, so it may not be supported by your OIDC provider. If your OIDC provider supports returning ID tokens from a Resource Owner Password Credentials Grant token request, then you can choose to set this field to true. This will allow end users to choose to present their username and password to the kubectl CLI (using the Pinniped plugin) to authenticate to the cluster, without using a web browser to log in as is customary in OIDC Authorization Code Flow. This may be convenient for users, especially for identities from your OIDC provider which are not intended to represent a human actor, such as service accounts performing actions in a CI/CD environment. Even if your OIDC provider supports it, you may wish to disable this behavior by setting this field to false when you prefer to only allow users of this OIDCIdentityProvider to log in via the browser-based OIDC Authorization Code Flow. Using the Resource Owner Password Credentials Grant means that the Pinniped CLI and Pinniped Supervisor will directly handle your end users' passwords (similar to LDAPIdentityProvider), and you will not be able to require multi-factor authentication or use the other web-based login features of your OIDC provider during Resource Owner Password Credentials Grant logins. allowPasswordGrant defaults to false.
 |===
 
 
@@ -1117,8 +1118,8 @@ OIDCClaims provides a mapping from upstream claims into identities.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`groups`* __string__ | Groups provides the name of the token claim that will be used to ascertain the groups to which an identity belongs.
-| *`username`* __string__ | Username provides the name of the token claim that will be used to ascertain an identity's username.
+| *`groups`* __string__ | Groups provides the name of the ID token claim or userinfo endpoint response claim that will be used to ascertain the groups to which an identity belongs. By default, the identities will not include any group memberships when this setting is not configured.
+| *`username`* __string__ | Username provides the name of the ID token claim or userinfo endpoint response claim that will be used to ascertain an identity's username. When not set, the username will be an automatically constructed unique string which will include the issuer URL of your OIDC provider along with the value of the "sub" (subject) claim from the ID token.
 |===
 
 
@@ -1164,7 +1165,7 @@ OIDCIdentityProvider describes the configuration of an upstream OpenID Connect i
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec"]
 ==== OIDCIdentityProviderSpec 
 
-Spec for configuring an OIDC identity provider.
+OIDCIdentityProviderSpec is the spec for configuring an OIDC identity provider.
 
 .Appears In:
 ****
@@ -1185,7 +1186,7 @@ Spec for configuring an OIDC identity provider.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus"]
 ==== OIDCIdentityProviderStatus 
 
-Status of an OIDC identity provider.
+OIDCIdentityProviderStatus is the status of an OIDC identity provider.
 
 .Appears In:
 ****
@@ -1197,6 +1198,24 @@ Status of an OIDC identity provider.
 | Field | Description
 | *`phase`* __OIDCIdentityProviderPhase__ | Phase summarizes the overall status of the OIDCIdentityProvider.
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of an identity provider's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-parameter"]
+==== Parameter 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`name`* __string__ | The name of the parameter. Required.
+| *`value`* __string__ | The value of the parameter.
 |===
 
 

@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/mocks/mockkeyset"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
@@ -284,6 +285,171 @@ func TestProviderConfig(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, &tt.wantToken, tok)
 				require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
+			})
+		}
+	})
+
+	t.Run("PerformRefresh", func(t *testing.T) {
+		tests := []struct {
+			name             string
+			returnIDTok      string
+			returnAccessTok  string
+			returnRefreshTok string
+			returnTokType    string
+			returnExpiresIn  string
+			tokenStatusCode  int
+
+			wantErr         string
+			wantToken       *oauth2.Token
+			wantTokenExtras map[string]interface{}
+		}{
+			{
+				name:             "success when the server returns all tokens in the refresh result",
+				returnIDTok:      "test-id-token",
+				returnAccessTok:  "test-access-token",
+				returnRefreshTok: "test-refresh-token",
+				returnTokType:    "test-token-type",
+				returnExpiresIn:  "42",
+				tokenStatusCode:  http.StatusOK,
+				wantToken: &oauth2.Token{
+					AccessToken:  "test-access-token",
+					RefreshToken: "test-refresh-token",
+					TokenType:    "test-token-type",
+					Expiry:       time.Now().Add(42 * time.Second),
+				},
+				wantTokenExtras: map[string]interface{}{
+					// the ID token only appears in the extras map
+					"id_token": "test-id-token",
+					// the library also repeats all the other keys/values returned by the server in the raw extras map
+					"access_token":  "test-access-token",
+					"refresh_token": "test-refresh-token",
+					"token_type":    "test-token-type",
+					"expires_in":    "42",
+					// the library also adds this zero-value even though the server did not return it
+					"expiry": "0001-01-01T00:00:00Z",
+				},
+			},
+			{
+				name:             "success when the server does not return a new refresh token in the refresh result",
+				returnIDTok:      "test-id-token",
+				returnAccessTok:  "test-access-token",
+				returnRefreshTok: "",
+				returnTokType:    "test-token-type",
+				returnExpiresIn:  "42",
+				tokenStatusCode:  http.StatusOK,
+				wantToken: &oauth2.Token{
+					AccessToken: "test-access-token",
+					// the library sets the original refresh token into the result, even though the server did not return that
+					RefreshToken: "test-initial-refresh-token",
+					TokenType:    "test-token-type",
+					Expiry:       time.Now().Add(42 * time.Second),
+				},
+				wantTokenExtras: map[string]interface{}{
+					// the ID token only appears in the extras map
+					"id_token": "test-id-token",
+					// the library also repeats all the other keys/values returned by the server in the raw extras map
+					"access_token": "test-access-token",
+					"token_type":   "test-token-type",
+					"expires_in":   "42",
+					// the library also adds this zero-value even though the server did not return it
+					"expiry": "0001-01-01T00:00:00Z",
+				},
+			},
+			{
+				name:             "success when the server does not return a new ID token in the refresh result",
+				returnIDTok:      "",
+				returnAccessTok:  "test-access-token",
+				returnRefreshTok: "test-refresh-token",
+				returnTokType:    "test-token-type",
+				returnExpiresIn:  "42",
+				tokenStatusCode:  http.StatusOK,
+				wantToken: &oauth2.Token{
+					AccessToken:  "test-access-token",
+					RefreshToken: "test-refresh-token",
+					TokenType:    "test-token-type",
+					Expiry:       time.Now().Add(42 * time.Second),
+				},
+				wantTokenExtras: map[string]interface{}{
+					// the library also repeats all the other keys/values returned by the server in the raw extras map
+					"access_token":  "test-access-token",
+					"refresh_token": "test-refresh-token",
+					"token_type":    "test-token-type",
+					"expires_in":    "42",
+					// the library also adds this zero-value even though the server did not return it
+					"expiry": "0001-01-01T00:00:00Z",
+				},
+			},
+			{
+				name:            "server returns an error on token refresh",
+				tokenStatusCode: http.StatusForbidden,
+				wantErr:         "oauth2: cannot fetch token: 403 Forbidden\nResponse: fake error\n",
+			},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, http.MethodPost, r.Method)
+					require.NoError(t, r.ParseForm())
+					require.Equal(t, 4, len(r.Form))
+					require.Equal(t, "test-client-id", r.Form.Get("client_id"))
+					require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
+					require.Equal(t, "refresh_token", r.Form.Get("grant_type"))
+					require.Equal(t, "test-initial-refresh-token", r.Form.Get("refresh_token"))
+					if tt.tokenStatusCode != http.StatusOK {
+						http.Error(w, "fake error", tt.tokenStatusCode)
+						return
+					}
+					var response struct {
+						oauth2.Token
+						IDToken   string `json:"id_token,omitempty"`
+						ExpiresIn string `json:"expires_in,omitempty"`
+					}
+					response.IDToken = tt.returnIDTok
+					response.AccessToken = tt.returnAccessTok
+					response.RefreshToken = tt.returnRefreshTok
+					response.TokenType = tt.returnTokType
+					response.ExpiresIn = tt.returnExpiresIn
+					w.Header().Set("content-type", "application/json")
+					require.NoError(t, json.NewEncoder(w).Encode(&response))
+				}))
+				t.Cleanup(tokenServer.Close)
+
+				p := ProviderConfig{
+					Name:          "test-name",
+					UsernameClaim: "test-username-claim",
+					GroupsClaim:   "test-groups-claim",
+					Config: &oauth2.Config{
+						ClientID:     "test-client-id",
+						ClientSecret: "test-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:   "https://example.com",
+							TokenURL:  tokenServer.URL,
+							AuthStyle: oauth2.AuthStyleInParams,
+						},
+						Scopes: []string{"scope1", "scope2"},
+					},
+				}
+
+				tok, err := p.PerformRefresh(
+					context.Background(),
+					"test-initial-refresh-token",
+				)
+
+				if tt.wantErr != "" {
+					require.EqualError(t, err, tt.wantErr)
+					require.Nil(t, tok)
+					return
+				}
+
+				require.NoError(t, err)
+				require.Equal(t, tt.wantToken.TokenType, tok.TokenType)
+				require.Equal(t, tt.wantToken.RefreshToken, tok.RefreshToken)
+				require.Equal(t, tt.wantToken.AccessToken, tok.AccessToken)
+				testutil.RequireTimeInDelta(t, tt.wantToken.Expiry, tok.Expiry, 5*time.Second)
+				for k, v := range tt.wantTokenExtras {
+					require.Equal(t, v, tok.Extra(k))
+				}
 			})
 		}
 	})

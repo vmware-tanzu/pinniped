@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/handler/pkce"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -18,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
@@ -26,7 +26,9 @@ const (
 	ErrInvalidPKCERequestVersion = constable.Error("pkce request data has wrong version")
 	ErrInvalidPKCERequestData    = constable.Error("pkce request data must be present")
 
-	pkceStorageVersion = "1"
+	// Version 1 was the initial release of storage.
+	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
+	pkceStorageVersion = "2"
 )
 
 var _ pkce.PKCERequestStorage = &pkceStorage{}
@@ -96,7 +98,7 @@ func newValidEmptyPKCESession() *session {
 	return &session{
 		Request: &fosite.Request{
 			Client:  &clientregistry.Client{},
-			Session: &openid.DefaultSession{},
+			Session: &psession.PinnipedSession{},
 		},
 	}
 }

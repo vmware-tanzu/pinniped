@@ -264,6 +264,7 @@ func TestManager(t *testing.T) {
 								"groups":   "test-group1",
 							},
 						},
+						RefreshToken: &oidctypes.RefreshToken{Token: "some-opaque-token"},
 					}, nil
 				},
 			}).Build()

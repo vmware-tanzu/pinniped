@@ -301,8 +301,9 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 	adUpstreamImpl := &activeDirectoryUpstreamGenericLDAPImpl{activeDirectoryIdentityProvider: *upstream}
 
 	config := &upstreamldap.ProviderConfig{
-		Name: upstream.Name,
-		Host: spec.Host,
+		Name:        upstream.Name,
+		ResourceUID: upstream.UID,
+		Host:        spec.Host,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
 			Filter:            adUpstreamImpl.Spec().UserSearch().Filter(),

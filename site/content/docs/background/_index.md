@@ -6,7 +6,7 @@ menu:
   docs:
     name: Background
     identifier: background
-    weight: 110
+    weight: 11
 ---
 
 {{< docsmenu "background" >}}

@@ -92,6 +92,9 @@ while (("$#")); do
     ;;
   -*)
     log_error "Unsupported flag $1" >&2
+    if [[ "$1" == *"active-directory"* ]]; then
+      log_error "Did you mean --get-active-directory-vars?"
+    fi
     exit 1
     ;;
   *)

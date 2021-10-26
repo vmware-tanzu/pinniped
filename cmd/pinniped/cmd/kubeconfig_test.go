@@ -133,6 +133,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --credential-cache string                  Path to cluster-specific credentials cache
 				      --generated-name-suffix string             Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
 				  -h, --help                                     help for kubeconfig
+				      --install-hint string                      This text is shown to the user when the pinniped CLI is not installed. (default "The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli for more details")
 				      --kubeconfig string                        Path to kubeconfig file
 				      --kubeconfig-context string                Kubeconfig context name (default: current active context)
 				      --no-concierge                             Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly
@@ -1326,6 +1327,8 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
+                installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+                  for more details
         		      provideClusterInfo: true
 			`)
 			},
@@ -1389,6 +1392,8 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
+                installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+                  for more details
         		      provideClusterInfo: true
 			`)
 			},
@@ -1457,6 +1462,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1541,6 +1548,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
@@ -1652,6 +1661,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
@@ -1759,6 +1770,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1836,6 +1849,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1913,6 +1928,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=oidc
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1986,6 +2003,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2057,6 +2076,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2135,6 +2156,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2211,6 +2234,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2292,6 +2317,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2348,6 +2375,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2407,6 +2436,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2466,6 +2497,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2526,6 +2559,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2587,6 +2622,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2646,6 +2683,8 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=cli_password
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2704,10 +2743,75 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=cli_password
 						  command: '.../path/to/pinniped'
 						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+             for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "user specified message for install-hint flag",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--install-hint", "Test installHint message",
+					"--static-token", "test-token",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+				}
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Doc(`
+        		apiVersion: v1
+        		clusters:
+        		- cluster:
+        		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		    server: https://fake-server-url-value
+        		  name: kind-cluster-pinniped
+        		contexts:
+        		- context:
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
+        		kind: Config
+        		preferences: {}
+        		users:
+        		- name: kind-user-pinniped
+        		  user:
+        		    exec:
+        		      apiVersion: client.authentication.k8s.io/v1beta1
+        		      args:
+        		      - login
+        		      - static
+        		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
+        		      - --concierge-authenticator-name=test-authenticator
+        		      - --concierge-authenticator-type=webhook
+        		      - --concierge-endpoint=https://fake-server-url-value
+        		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --token=test-token
+        		      command: '.../path/to/pinniped'
+        		      env: []
+                installHint: Test installHint message
+        		      provideClusterInfo: true
+			`)
 			},
 		},
 	}

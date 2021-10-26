@@ -148,7 +148,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
 	f.StringVar(&flags.generatedNameSuffix, "generated-name-suffix", "-pinniped", "Suffix to append to generated cluster, context, user kubeconfig entries")
 	f.StringVar(&flags.credentialCachePath, "credential-cache", "", "Path to cluster-specific credentials cache")
-	f.StringVar(&flags.installHint, "install-hint", "The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli for more details", "This text is shown to the user when the pinniped CLI is not installed.")
+	f.StringVar(&flags.installHint, "install-hint", "The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli for more details", "This text is shown to the user when the pinniped CLI is not installed.")
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
 
 	// --oidc-skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.

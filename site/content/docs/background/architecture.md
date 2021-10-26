@@ -7,7 +7,7 @@ cascade:
 menu:
   docs:
     name: Architecture
-    weight: 20
+    weight: 100
     parent: background
 ---
 The principal purpose of Pinniped is to allow users to access Kubernetes

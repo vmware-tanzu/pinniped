@@ -641,9 +641,9 @@ func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
 		SizeLimit:    2,
 		TimeLimit:    90,
 		TypesOnly:    false,
-		Filter:       "(objectClass=*)",                 // we already have the dn, so the filter doesn't matter
-		Attributes:   p.userSearchRequestedAttributes(), // TODO this will need to include some other AD attributes
-		Controls:     nil,                               // this could be used to enable paging, but we're already limiting the result max size
+		Filter:       "(objectClass=*)", // we already have the dn, so the filter doesn't matter
+		Attributes:   p.userSearchRequestedAttributes(),
+		Controls:     nil, // this could be used to enable paging, but we're already limiting the result max size
 	}
 }
 

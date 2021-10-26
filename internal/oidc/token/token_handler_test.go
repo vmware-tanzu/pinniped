@@ -1020,12 +1020,28 @@ func TestRefreshGrant(t *testing.T) {
 		return tokens
 	}
 
+	happyActiveDirectoryCustomSessionData := &psession.CustomSessionData{
+		ProviderUID:  activeDirectoryUpstreamResourceUID,
+		ProviderName: activeDirectoryUpstreamName,
+		ProviderType: activeDirectoryUpstreamType,
+		ActiveDirectory: &psession.ActiveDirectorySessionData{
+			UserDN: activeDirectoryUpstreamDN,
+		},
+	}
+	happyLDAPCustomSessionData := &psession.CustomSessionData{
+		ProviderUID:  ldapUpstreamResourceUID,
+		ProviderName: ldapUpstreamName,
+		ProviderType: ldapUpstreamType,
+		LDAP: &psession.LDAPSessionData{
+			UserDN: ldapUpstreamDN,
+		},
+	}
 	tests := []struct {
-		name                           string
-		idps                           *oidctestutil.UpstreamIDPListerBuilder
-		authcodeExchange               authcodeExchangeInputs
-		authEndpointInitialSessionData *psession.CustomSessionData
-		refreshRequest                 refreshRequestInputs
+		name                      string
+		idps                      *oidctestutil.UpstreamIDPListerBuilder
+		authcodeExchange          authcodeExchangeInputs
+		refreshRequest            refreshRequestInputs
+		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string)
 	}{
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
@@ -1544,35 +1560,14 @@ func TestRefreshGrant(t *testing.T) {
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  ldapUpstreamResourceUID,
-					ProviderName: ldapUpstreamName,
-					ProviderType: ldapUpstreamType,
-					LDAP: &psession.LDAPSessionData{
-						UserDN: ldapUpstreamDN,
-					},
-				},
+				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  ldapUpstreamResourceUID,
-						ProviderName: ldapUpstreamName,
-						ProviderType: ldapUpstreamType,
-						LDAP: &psession.LDAPSessionData{
-							UserDN: ldapUpstreamDN,
-						},
-					},
+					happyLDAPCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForLDAP(
-					&psession.CustomSessionData{
-						ProviderUID:  ldapUpstreamResourceUID,
-						ProviderName: ldapUpstreamName,
-						ProviderType: ldapUpstreamType,
-						LDAP: &psession.LDAPSessionData{
-							UserDN: ldapUpstreamDN,
-						},
-					},
+					happyLDAPCustomSessionData,
 				),
 			},
 		},
@@ -1585,35 +1580,14 @@ func TestRefreshGrant(t *testing.T) {
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  activeDirectoryUpstreamResourceUID,
-					ProviderName: activeDirectoryUpstreamName,
-					ProviderType: activeDirectoryUpstreamType,
-					ActiveDirectory: &psession.ActiveDirectorySessionData{
-						UserDN: activeDirectoryUpstreamDN,
-					},
-				},
+				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  activeDirectoryUpstreamResourceUID,
-						ProviderName: activeDirectoryUpstreamName,
-						ProviderType: activeDirectoryUpstreamType,
-						ActiveDirectory: &psession.ActiveDirectorySessionData{
-							UserDN: activeDirectoryUpstreamDN,
-						},
-					},
+					happyActiveDirectoryCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForActiveDirectory(
-					&psession.CustomSessionData{
-						ProviderUID:  activeDirectoryUpstreamResourceUID,
-						ProviderName: activeDirectoryUpstreamName,
-						ProviderType: activeDirectoryUpstreamType,
-						ActiveDirectory: &psession.ActiveDirectorySessionData{
-							UserDN: activeDirectoryUpstreamDN,
-						},
-					},
+					happyActiveDirectoryCustomSessionData,
 				),
 			},
 		},
@@ -1779,23 +1753,9 @@ func TestRefreshGrant(t *testing.T) {
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  ldapUpstreamResourceUID,
-					ProviderName: ldapUpstreamName,
-					ProviderType: ldapUpstreamType,
-					LDAP: &psession.LDAPSessionData{
-						UserDN: ldapUpstreamDN,
-					},
-				},
+				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  ldapUpstreamResourceUID,
-						ProviderName: ldapUpstreamName,
-						ProviderType: ldapUpstreamType,
-						LDAP: &psession.LDAPSessionData{
-							UserDN: ldapUpstreamDN,
-						},
-					},
+					happyLDAPCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1821,23 +1781,9 @@ func TestRefreshGrant(t *testing.T) {
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  activeDirectoryUpstreamResourceUID,
-					ProviderName: activeDirectoryUpstreamName,
-					ProviderType: activeDirectoryUpstreamType,
-					ActiveDirectory: &psession.ActiveDirectorySessionData{
-						UserDN: activeDirectoryUpstreamDN,
-					},
-				},
+				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  activeDirectoryUpstreamResourceUID,
-						ProviderName: activeDirectoryUpstreamName,
-						ProviderType: activeDirectoryUpstreamType,
-						ActiveDirectory: &psession.ActiveDirectorySessionData{
-							UserDN: activeDirectoryUpstreamDN,
-						},
-					},
+					happyActiveDirectoryCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1858,23 +1804,9 @@ func TestRefreshGrant(t *testing.T) {
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  ldapUpstreamResourceUID,
-					ProviderName: ldapUpstreamName,
-					ProviderType: ldapUpstreamType,
-					LDAP: &psession.LDAPSessionData{
-						UserDN: ldapUpstreamDN,
-					},
-				},
+				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  ldapUpstreamResourceUID,
-						ProviderName: ldapUpstreamName,
-						ProviderType: ldapUpstreamType,
-						LDAP: &psession.LDAPSessionData{
-							UserDN: ldapUpstreamDN,
-						},
-					},
+					happyLDAPCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1894,23 +1826,9 @@ func TestRefreshGrant(t *testing.T) {
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				customSessionData: &psession.CustomSessionData{
-					ProviderUID:  activeDirectoryUpstreamResourceUID,
-					ProviderName: activeDirectoryUpstreamName,
-					ProviderType: activeDirectoryUpstreamType,
-					ActiveDirectory: &psession.ActiveDirectorySessionData{
-						UserDN: activeDirectoryUpstreamDN,
-					},
-				},
+				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
-					&psession.CustomSessionData{
-						ProviderUID:  activeDirectoryUpstreamResourceUID,
-						ProviderName: activeDirectoryUpstreamName,
-						ProviderType: activeDirectoryUpstreamType,
-						ActiveDirectory: &psession.ActiveDirectorySessionData{
-							UserDN: activeDirectoryUpstreamDN,
-						},
-					},
+					happyActiveDirectoryCustomSessionData,
 				),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1920,6 +1838,85 @@ func TestRefreshGrant(t *testing.T) {
 						{
 							"error":             "error",
 							"error_description": "Error during upstream refresh. Provider 'some-ad-idp' of type 'activedirectory' from upstream session data was not found."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "fosite session is empty",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "username not found in extra field",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				//fositeSessionData: &openid.DefaultSession{},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Extra: map[string]interface{}{},
+					},
+				}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
 						}
 					`),
 				},
@@ -1952,6 +1949,10 @@ func TestRefreshGrant(t *testing.T) {
 			// Send the refresh token back and preform a refresh.
 			firstRefreshToken := parsedAuthcodeExchangeResponseBody["refresh_token"].(string)
 			require.NotEmpty(t, firstRefreshToken)
+
+			if test.modifyRefreshTokenStorage != nil {
+				test.modifyRefreshTokenStorage(t, oauthStore, firstRefreshToken)
+			}
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
 				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).WithContext(reqContext)

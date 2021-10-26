@@ -6,7 +6,6 @@ package token
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/ory/fosite"
@@ -76,17 +75,16 @@ func NewHandler(
 
 func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, providerCache oidc.UpstreamIdentityProvidersLister) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
-	fositeSession := session.Fosite
-	if fositeSession == nil {
-		return fmt.Errorf("fosite session not found")
+	extra := session.Fosite.Claims.Extra
+	if extra == nil {
+		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-	claims := fositeSession.Claims
-	if claims == nil {
-		return fmt.Errorf("fosite session claims not found")
+	downstreamUsernameInterface := extra["username"]
+	if downstreamUsernameInterface == nil {
+		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-	extra := claims.Extra
-	downstreamUsername := extra["username"].(string)
-	downstreamSubject := claims.Subject
+	downstreamUsername := downstreamUsernameInterface.(string)
+	downstreamSubject := session.Fosite.Claims.Subject
 
 	customSessionData := session.Custom
 	if customSessionData == nil {

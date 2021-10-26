@@ -14,6 +14,7 @@ import (
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -31,17 +32,29 @@ func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Clie
 
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
 type ProviderConfig struct {
-	Name               string
-	UsernameClaim      string
-	GroupsClaim        string
-	Config             *oauth2.Config
-	Client             *http.Client
-	AllowPasswordGrant bool
-	Provider           interface {
+	Name                     string
+	ResourceUID              types.UID
+	UsernameClaim            string
+	GroupsClaim              string
+	Config                   *oauth2.Config
+	Client                   *http.Client
+	AllowPasswordGrant       bool
+	AdditionalAuthcodeParams map[string]string
+	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
 		Claims(v interface{}) error
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
+}
+
+var _ provider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
+
+func (p *ProviderConfig) GetResourceUID() types.UID {
+	return p.ResourceUID
+}
+
+func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
+	return p.AdditionalAuthcodeParams
 }
 
 func (p *ProviderConfig) GetName() string {
@@ -109,6 +122,16 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
 }
 
+func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	// Use the provided HTTP client to benefit from its CA, proxy, and other settings.
+	httpClientContext := coreosoidc.ClientContext(ctx, p.Client)
+	// Create a TokenSource without an access token, so it thinks that a refresh is immediately required.
+	// Then ask it for the tokens to cause it to perform the refresh and return the results.
+	return p.Config.TokenSource(httpClientContext, &oauth2.Token{RefreshToken: refreshToken}).Token()
+}
+
+// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,
+// if the provider offers the userinfo endpoint.
 func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
@@ -135,7 +158,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	}
 	maybeLogClaims("claims from ID token", p.Name, validatedClaims)
 
-	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
+	if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
 
@@ -156,7 +179,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	}, nil
 }
 
-func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
+func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
 	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
 	if len(idTokenSubject) == 0 {
 		return nil // defer to existing ID token validation

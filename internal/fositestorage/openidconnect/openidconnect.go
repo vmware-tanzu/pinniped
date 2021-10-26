@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
@@ -27,7 +28,9 @@ const (
 	ErrInvalidOIDCRequestData     = constable.Error("oidc request data must be present")
 	ErrMalformedAuthorizationCode = constable.Error("malformed authorization code")
 
-	oidcStorageVersion = "1"
+	// Version 1 was the initial release of storage.
+	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
+	oidcStorageVersion = "2"
 )
 
 var _ openid.OpenIDConnectRequestStorage = &openIDConnectRequestStorage{}
@@ -112,7 +115,7 @@ func newValidEmptyOIDCSession() *session {
 	return &session{
 		Request: &fosite.Request{
 			Client:  &clientregistry.Client{},
-			Session: &openid.DefaultSession{},
+			Session: &psession.PinnipedSession{},
 		},
 	}
 }

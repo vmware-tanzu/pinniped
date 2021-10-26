@@ -247,7 +247,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.SupervisorUpstreamOIDC = TestOIDCUpstream{
 		Issuer:           needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
 		CABundle:         base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE")),
-		AdditionalScopes: strings.Fields(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES")),
+		AdditionalScopes: filterEmpty(strings.Split(strings.ReplaceAll(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES"), " ", ""), ",")),
 		UsernameClaim:    os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM"),
 		GroupsClaim:      os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM"),
 		ClientID:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID"),

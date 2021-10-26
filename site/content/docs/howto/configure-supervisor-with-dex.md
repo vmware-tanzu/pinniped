@@ -85,11 +85,19 @@ spec:
   # Specify the upstream issuer URL (no trailing slash).
   issuer: https://<dex-dns-record>
 
-  # Request any scopes other than "openid" for claims besides
-  # the default claims in your token. The "openid" scope is always
-  # included.
+  # Specify how to form authorization requests to Dex.
   authorizationConfig:
-    additionalScopes: [groups, email]
+
+    # Request any scopes other than "openid" for claims besides
+    # the default claims in your token. The "openid" scope is always
+    # included.
+    additionalScopes: [offline_access, groups, email]
+
+    # If you would also like to allow your end users to authenticate using
+    # a password grant, then change this to true.
+    # Password grants with Dex will only work in Dex versions that include
+    # this bug fix: https://github.com/dexidp/dex/pull/2234
+    allowPasswordGrant: false
 
   # Specify how Dex claims are mapped to Kubernetes identities.
   claims:

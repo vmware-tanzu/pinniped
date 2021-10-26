@@ -29,6 +29,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -50,6 +51,11 @@ func TestSupervisorLogin(t *testing.T) {
 		wantDownstreamIDTokenGroups          []string
 		wantErrorDescription                 string
 		wantErrorType                        string
+
+		// We don't necessarily have any way to revoke the user's session on the upstream provider,
+		// so to cause the upstream refresh to fail we can cheat by manipulating the user's session
+		// data in such a way that it should cause the next upstream refresh attempt to fail.
+		breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData)
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
@@ -69,6 +75,11 @@ func TestSupervisorLogin(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
+				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
+			},
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
@@ -98,7 +109,12 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				}, idpv1alpha1.PhaseReady)
 			},
-			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
+				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
+			},
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$",
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
@@ -131,6 +147,11 @@ func TestSupervisorLogin(t *testing.T) {
 					httpClient,
 					false,
 				)
+			},
+			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
+				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
 			},
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
@@ -193,6 +214,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -259,6 +281,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.StartTLSOnlyHost+
@@ -325,8 +348,9 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:        "access_denied",
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantErrorType:           "access_denied",
 		},
 		{
 			name: "ldap login still works after updating bind secret",
@@ -402,6 +426,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -500,6 +525,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -554,6 +580,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -621,6 +648,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -693,6 +721,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -780,6 +809,7 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -834,8 +864,9 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:        "access_denied",
+			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantErrorType:           "access_denied",
 		},
 	}
 	for _, test := range tests {
@@ -846,10 +877,12 @@ func TestSupervisorLogin(t *testing.T) {
 			testSupervisorLogin(t,
 				tt.createIDP,
 				tt.requestAuthorization,
+				tt.breakRefreshSessionData,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
-				tt.wantErrorDescription, tt.wantErrorType,
+				tt.wantErrorDescription,
+				tt.wantErrorType,
 			)
 		})
 	}
@@ -976,6 +1009,7 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T),
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
+	breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData),
 	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 	wantErrorDescription string, wantErrorType string,
 ) {
@@ -1140,12 +1174,57 @@ func testSupervisorLogin(
 
 		// token exchange on the refreshed token
 		doTokenExchange(t, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery)
+
+		// Now that we have successfully performed a refresh, let's test what happens when an
+		// upstream refresh fails during the next downstream refresh.
+		if breakRefreshSessionData != nil {
+			latestRefreshToken := refreshedTokenResponse.RefreshToken
+			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+			kubeClient := testlib.NewKubernetesClientset(t)
+			supervisorSecretsClient := kubeClient.CoreV1().Secrets(env.SupervisorNamespace)
+			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, oidc.DefaultOIDCTimeoutsConfiguration())
+			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+			require.NoError(t, err)
+
+			// Next mutate the part of the session that is used during upstream refresh.
+			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+			breakRefreshSessionData(t, pinnipedSession.Custom)
+
+			// Then save the mutated Secret back to Kubernetes.
+			// There is no update function, so delete and create again at the same name.
+			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+
+			// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
+			_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
+			// Should have got an error since the upstream refresh should have failed.
+			require.Error(t, err)
+			require.Regexp(t,
+				regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
+					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed using provider '`)+
+					"[^']+"+ // this would be the name of the identity provider CR
+					regexp.QuoteMeta(fmt.Sprintf(`' of type '%s'."`, pinnipedSession.Custom.ProviderType)),
+				err.Error(),
+			)
+		}
 	} else {
 		errorDescription := callback.URL.Query().Get("error_description")
 		errorType := callback.URL.Query().Get("error")
 		require.Equal(t, errorDescription, wantErrorDescription)
 		require.Equal(t, errorType, wantErrorType)
 	}
+}
+
+// getFositeDataSignature returns the signature of the provided data. The provided data could be an auth code, access
+// token, etc. It is assumed that the code is of the format "data.signature", which is how Fosite generates auth codes
+// and access tokens.
+func getFositeDataSignature(t *testing.T, data string) string {
+	split := strings.Split(data, ".")
+	require.Len(t, split, 2)
+	return split[1]
 }
 
 func verifyTokenResponse(

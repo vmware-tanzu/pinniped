@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
@@ -81,6 +82,9 @@ const (
 type ProviderConfig struct {
 	// Name is the unique name of this upstream LDAP IDP.
 	Name string
+
+	// ResourceUID is the Kubernetes resource UID of this identity provider.
+	ResourceUID types.UID
 
 	// Host is the hostname or "hostname:port" of the LDAP server. When the port is not specified,
 	// the default LDAP port will be used.
@@ -263,6 +267,10 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 // A name for this upstream provider.
 func (p *Provider) GetName() string {
 	return p.c.Name
+}
+
+func (p *Provider) GetResourceUID() types.UID {
+	return p.c.ResourceUID
 }
 
 // Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234?base=user-search-base".

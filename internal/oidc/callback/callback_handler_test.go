@@ -18,6 +18,7 @@ import (
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -25,9 +26,11 @@ import (
 )
 
 const (
-	happyUpstreamIDPName = "upstream-idp-name"
+	happyUpstreamIDPName        = "upstream-idp-name"
+	happyUpstreamIDPResourceUID = "upstream-uid"
 
 	oidcUpstreamIssuer              = "https://my-upstream-issuer.com"
+	oidcUpstreamRefreshToken        = "test-refresh-token"
 	oidcUpstreamSubject             = "abc123-some guid" // has a space character which should get escaped in URL
 	oidcUpstreamSubjectQueryEscaped = "abc123-some+guid"
 	oidcUpstreamUsername            = "test-pinniped-username"
@@ -69,7 +72,13 @@ var (
 		"code_challenge_method": []string{downstreamPKCEChallengeMethod},
 		"redirect_uri":          []string{downstreamRedirectURI},
 	}
-	happyDownstreamRequestParams = happyDownstreamRequestParamsQuery.Encode()
+	happyDownstreamRequestParams     = happyDownstreamRequestParamsQuery.Encode()
+	happyDownstreamCustomSessionData = &psession.CustomSessionData{
+		ProviderUID:  happyUpstreamIDPResourceUID,
+		ProviderName: happyUpstreamIDPName,
+		ProviderType: psession.ProviderTypeOIDC,
+		OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamRefreshToken},
+	}
 )
 
 func TestCallbackEndpoint(t *testing.T) {
@@ -130,6 +139,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamNonce               string
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
+		wantDownstreamCustomSessionData   *psession.CustomSessionData
 
 		wantAuthcodeExchangeCall *expectedAuthcodeExchange
 	}{
@@ -157,6 +167,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -179,6 +190,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -203,6 +215,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -227,6 +240,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -253,6 +267,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -280,6 +295,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -297,6 +313,34 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
 			wantBody:        "Unprocessable Entity: email_verified claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:            "return an error when upstream IDP did not return a refresh token",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().Build()),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: refresh token not returned by upstream provider during authcode exchange\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:            "return an error when upstream IDP returned an empty refresh token",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().Build()),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: refresh token not returned by upstream provider during authcode exchange\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -339,6 +383,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -363,6 +408,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -387,6 +433,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -537,6 +584,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -563,6 +611,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -660,6 +709,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -907,6 +957,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamNonce,
 					downstreamClientID,
 					downstreamRedirectURI,
+					test.wantDownstreamCustomSessionData,
 				)
 
 			// Otherwise, expect an empty response body.
@@ -933,6 +984,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamNonce,
 					downstreamClientID,
 					downstreamRedirectURI,
+					test.wantDownstreamCustomSessionData,
 				)
 			}
 		})
@@ -1036,6 +1088,7 @@ func (b *upstreamStateParamBuilder) WithStateVersion(version string) *upstreamSt
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
 	return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 		WithName(happyUpstreamIDPName).
+		WithResourceUID(happyUpstreamIDPResourceUID).
 		WithClientID("some-client-id").
 		WithScopes([]string{"scope1", "scope2"}).
 		WithUsernameClaim(oidcUpstreamUsernameClaim).
@@ -1046,6 +1099,7 @@ func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
 		WithIDTokenClaim(oidcUpstreamGroupsClaim, oidcUpstreamGroupMembership).
 		WithIDTokenClaim("other-claim", "should be ignored").
 		WithAllowPasswordGrant(false).
+		WithRefreshToken(oidcUpstreamRefreshToken).
 		WithPasswordGrantError(errors.New("the callback endpoint should not use password grants"))
 }
 

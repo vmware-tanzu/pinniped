@@ -17,7 +17,9 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/ory/fosite v0.40.2
+	github.com/ory/x v0.0.212
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
@@ -96,12 +98,10 @@ require (
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
-	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ory/go-acc v0.2.6 // indirect
 	github.com/ory/go-convenience v0.1.0 // indirect
 	github.com/ory/viper v1.7.5 // indirect
-	github.com/ory/x v0.0.212 // indirect
 	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

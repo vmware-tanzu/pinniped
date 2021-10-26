@@ -105,6 +105,7 @@ func TestFormPostHTML_Parallel(t *testing.T) {
 //
 // The test server supports special `?fail=close` and `?fail=500` to force error cases.
 func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values)) {
+	t.Helper()
 	results := make(chan url.Values)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +156,7 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 
 // formpostTemplateServer runs a test server that serves formposthtml.Template() rendered with test parameters.
 func formpostTemplateServer(t *testing.T, redirectURI string, responseParams url.Values) string {
+	t.Helper()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fosite.WriteAuthorizeFormPostResponse(redirectURI, responseParams, formposthtml.Template(), w)
 	})
@@ -168,6 +170,7 @@ func formpostTemplateServer(t *testing.T, redirectURI string, responseParams url
 
 // formpostRandomParams is a helper to generate random OAuth2 response parameters for testing.
 func formpostRandomParams(t *testing.T) url.Values {
+	t.Helper()
 	generator := &hmac.HMACStrategy{GlobalSecret: testlib.RandBytes(t, 32), TokenEntropy: 32}
 	authCode, _, err := generator.Generate()
 	require.NoError(t, err)
@@ -180,6 +183,7 @@ func formpostRandomParams(t *testing.T) url.Values {
 
 // formpostExpectTitle asserts that the page has the expected title.
 func formpostExpectTitle(t *testing.T, page *agouti.Page, expected string) {
+	t.Helper()
 	actual, err := page.Title()
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)
@@ -187,6 +191,7 @@ func formpostExpectTitle(t *testing.T, page *agouti.Page, expected string) {
 
 // formpostExpectTitle asserts that the page has the expected SVG/emoji favicon.
 func formpostExpectFavicon(t *testing.T, page *agouti.Page, expected string) {
+	t.Helper()
 	iconURL, err := page.First("#favicon").Attribute("href")
 	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(iconURL, "data:image/svg+xml,<svg"))
@@ -203,6 +208,7 @@ func formpostExpectFavicon(t *testing.T, page *agouti.Page, expected string) {
 // formpostInitiate navigates to the template server endpoint and expects the
 // loading animation to be shown.
 func formpostInitiate(t *testing.T, page *agouti.Page, url string) {
+	t.Helper()
 	require.NoError(t, page.Reset())
 	t.Logf("navigating to mock form_post template URL %s...", url)
 	require.NoError(t, page.Navigate(url))
@@ -215,6 +221,7 @@ func formpostInitiate(t *testing.T, page *agouti.Page, url string) {
 
 // formpostExpectSuccessState asserts that the page is in the "success" state.
 func formpostExpectSuccessState(t *testing.T, page *agouti.Page) {
+	t.Helper()
 	t.Logf("expecting to see success message become visible...")
 	browsertest.WaitForVisibleElements(t, page, "#success")
 	successDivText, err := page.First("#success").Text()
@@ -227,6 +234,7 @@ func formpostExpectSuccessState(t *testing.T, page *agouti.Page) {
 
 // formpostExpectManualState asserts that the page is in the "manual" state and returns the auth code.
 func formpostExpectManualState(t *testing.T, page *agouti.Page) string {
+	t.Helper()
 	t.Logf("expecting to see manual message become visible...")
 	browsertest.WaitForVisibleElements(t, page, "#manual")
 	manualDivText, err := page.First("#manual").Text()

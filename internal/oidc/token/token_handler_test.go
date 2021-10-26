@@ -23,12 +23,13 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/handler/pkce"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
 	josejwt "gopkg.in/square/go-jose.v2/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,8 +45,11 @@ import (
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
@@ -58,7 +62,6 @@ const (
 	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	goodSubject          = "https://issuer?sub=some-subject"
 	goodUsername         = "some-username"
-	goodGroups           = "group1,groups2"
 
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
@@ -72,6 +75,8 @@ const (
 var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
+	goodGroups          = []string{"group1", "groups2"}
+	expectedGoodGroups  = []interface{}{"group1", "groups2"}
 
 	hmacSecretFunc = func() []byte {
 		return []byte(hmacSecret)
@@ -177,6 +182,13 @@ var (
 		}
 	`)
 
+	pinnipedUpstreamSessionDataNotFoundErrorBody = here.Doc(`
+		{
+			"error":             "error",
+			"error_description": "There was an internal server error. Required upstream data not found in session."
+		}
+	`)
+
 	happyAuthRequest = &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
@@ -204,12 +216,25 @@ var (
 	}
 )
 
+type expectedUpstreamRefresh struct {
+	performedByUpstreamName string
+	args                    *oidctestutil.PerformRefreshArgs
+}
+
+type expectedUpstreamValidateTokens struct {
+	performedByUpstreamName string
+	args                    *oidctestutil.ValidateTokenArgs
+}
+
 type tokenEndpointResponseExpectedValues struct {
-	wantStatus            int
-	wantSuccessBodyFields []string
-	wantErrorResponseBody string
-	wantRequestedScopes   []string
-	wantGrantedScopes     []string
+	wantStatus                        int
+	wantSuccessBodyFields             []string
+	wantErrorResponseBody             string
+	wantRequestedScopes               []string
+	wantGrantedScopes                 []string
+	wantUpstreamOIDCRefreshCall       *expectedUpstreamRefresh
+	wantUpstreamOIDCValidateTokenCall *expectedUpstreamValidateTokens
+	wantCustomSessionDataStored       *psession.CustomSessionData
 }
 
 type authcodeExchangeInputs struct {
@@ -220,13 +245,9 @@ type authcodeExchangeInputs struct {
 		s fositestoragei.AllFositeStorage,
 		authCode string,
 	)
-	makeOathHelper func(
-		t *testing.T,
-		authRequest *http.Request,
-		store fositestoragei.AllFositeStorage,
-	) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
-
-	want tokenEndpointResponseExpectedValues
+	makeOathHelper    OauthHelperFactoryFunc
+	customSessionData *psession.CustomSessionData
+	want              tokenEndpointResponseExpectedValues
 }
 
 func TestTokenEndpoint(t *testing.T) {
@@ -518,7 +539,8 @@ func TestTokenEndpoint(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
+			exchangeAuthcodeForTokens(t, test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
 		})
 	}
 }
@@ -547,7 +569,9 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			t.Parallel()
 
 			// First call - should be successful.
-			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
+			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
 			var parsedResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
@@ -571,9 +595,11 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
 			// This was previously invalidated by the first request, so it remains invalidated
 			requireInvalidPKCEStorage(t, authCode, oauthStore)
-			// Fosite never cleans up OpenID Connect session storage, so it is still there
+			// Fosite never cleans up OpenID Connect session storage, so it is still there.
+			// Note that customSessionData is only relevant to refresh grant, so we leave it as nil for this
+			// authcode exchange test, even though in practice it would actually be in the session.
 			requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore,
-				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes)
+				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes, nil)
 
 			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -600,6 +626,7 @@ func TestTokenExchange(t *testing.T) {
 		},
 		want: successfulAuthCodeExchange,
 	}
+
 	tests := []struct {
 		name string
 
@@ -740,7 +767,9 @@ func TestTokenExchange(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
+			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -813,7 +842,7 @@ func TestTokenExchange(t *testing.T) {
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
 			require.Equal(t, goodUsername, tokenClaims["username"])
-			require.Equal(t, goodGroups, tokenClaims["groups"])
+			require.Equal(t, expectedGoodGroups, tokenClaims["groups"])
 
 			// Also assert that some are the same as the original downstream ID token.
 			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
@@ -843,80 +872,219 @@ type refreshRequestInputs struct {
 }
 
 func TestRefreshGrant(t *testing.T) {
+	const (
+		oidcUpstreamName                  = "some-oidc-idp"
+		oidcUpstreamResourceUID           = "oidc-resource-uid"
+		oidcUpstreamType                  = "oidc"
+		oidcUpstreamInitialRefreshToken   = "initial-upstream-refresh-token"
+		oidcUpstreamRefreshedIDToken      = "fake-refreshed-id-token"
+		oidcUpstreamRefreshedRefreshToken = "fake-refreshed-refresh-token"
+	)
+
+	// The below values are funcs so every test can have its own copy of the objects, to avoid data races
+	// in these parallel tests.
+
+	upstreamOIDCIdentityProviderBuilder := func() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
+		return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+			WithName(oidcUpstreamName).
+			WithResourceUID(oidcUpstreamResourceUID)
+	}
+
+	initialUpstreamOIDCCustomSessionData := func() *psession.CustomSessionData {
+		return &psession.CustomSessionData{
+			ProviderName: oidcUpstreamName,
+			ProviderUID:  oidcUpstreamResourceUID,
+			ProviderType: oidcUpstreamType,
+			OIDC: &psession.OIDCSessionData{
+				UpstreamRefreshToken: oidcUpstreamInitialRefreshToken,
+			},
+		}
+	}
+
+	upstreamOIDCCustomSessionDataWithNewRefreshToken := func(newRefreshToken string) *psession.CustomSessionData {
+		sessionData := initialUpstreamOIDCCustomSessionData()
+		sessionData.OIDC.UpstreamRefreshToken = newRefreshToken
+		return sessionData
+	}
+
+	happyUpstreamRefreshCall := func() *expectedUpstreamRefresh {
+		return &expectedUpstreamRefresh{
+			performedByUpstreamName: oidcUpstreamName,
+			args: &oidctestutil.PerformRefreshArgs{
+				Ctx:          nil, // this will be filled in with the actual request context by the test below
+				RefreshToken: oidcUpstreamInitialRefreshToken,
+			},
+		}
+	}
+
+	happyUpstreamValidateTokenCall := func(expectedTokens *oauth2.Token) *expectedUpstreamValidateTokens {
+		return &expectedUpstreamValidateTokens{
+			performedByUpstreamName: oidcUpstreamName,
+			args: &oidctestutil.ValidateTokenArgs{
+				Ctx:                  nil, // this will be filled in with the actual request context by the test below
+				Tok:                  expectedTokens,
+				ExpectedIDTokenNonce: "", // always expect empty string
+			},
+		}
+	}
+
+	happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
+		want := tokenEndpointResponseExpectedValues{
+			wantStatus:                  http.StatusOK,
+			wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+			wantRequestedScopes:         []string{"openid", "offline_access"},
+			wantGrantedScopes:           []string{"openid", "offline_access"},
+			wantCustomSessionDataStored: wantCustomSessionDataStored,
+		}
+		return want
+	}
+
+	happyRefreshTokenResponseForOpenIDAndOfflineAccess := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token) tokenEndpointResponseExpectedValues {
+		// Should always have some custom session data stored. The other expectations happens to be the
+		// same as the same values as the authcode exchange case.
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
+		// Should always try to perform an upstream refresh.
+		want.wantUpstreamOIDCRefreshCall = happyUpstreamRefreshCall()
+		// Should only try to ValidateToken when there was an id token returned by the upstream refresh.
+		if expectToValidateToken != nil {
+			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken)
+		}
+		return want
+	}
+
+	refreshedUpstreamTokensWithRefreshTokenWithoutIDToken := func() *oauth2.Token {
+		return &oauth2.Token{
+			AccessToken:  "fake-refreshed-access-token",
+			TokenType:    "Bearer",
+			RefreshToken: oidcUpstreamRefreshedRefreshToken,
+			Expiry:       time.Date(2050, 1, 1, 1, 1, 1, 1, time.UTC),
+		}
+	}
+
+	refreshedUpstreamTokensWithIDAndRefreshTokens := func() *oauth2.Token {
+		return refreshedUpstreamTokensWithRefreshTokenWithoutIDToken().
+			WithExtra(map[string]interface{}{"id_token": oidcUpstreamRefreshedIDToken})
+	}
+
+	refreshedUpstreamTokensWithIDTokenWithoutRefreshToken := func() *oauth2.Token {
+		tokens := refreshedUpstreamTokensWithIDAndRefreshTokens()
+		tokens.RefreshToken = "" // remove the refresh token
+		return tokens
+	}
+
 	tests := []struct {
 		name             string
+		idps             *oidctestutil.UpstreamIDPListerBuilder
 		authcodeExchange authcodeExchangeInputs
 		refreshRequest   refreshRequestInputs
 	}{
 		{
-			name: "happy path refresh grant with ID token",
+			name: "happy path refresh grant with openid scope granted (id token returned)",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				},
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				}},
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				),
+			},
 		},
 		{
-			name: "happy path refresh grant without ID token",
+			name: "happy path refresh grant without openid scope granted (no id token returned)",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"offline_access"},
-					wantGrantedScopes:     []string{"offline_access"},
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"offline_access"},
+					wantGrantedScopes:           []string{"offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCCustomSessionData(),
 				},
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"offline_access"},
-					wantGrantedScopes:     []string{"offline_access"},
-				}},
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"offline_access"},
+					wantGrantedScopes:                 []string{"offline_access"},
+					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh does not return a new ID token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					nil, // expect ValidateToken is *not* called
+				),
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh does not return a new refresh token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDTokenWithoutRefreshToken()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					initialUpstreamOIDCCustomSessionData(), // still has the initial refresh token stored
+					refreshedUpstreamTokensWithIDTokenWithoutRefreshToken(),
+				),
+			},
 		},
 		{
 			name: "when the refresh request adds a new scope to the list of requested scopes then it is ignored",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				},
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
 					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid some-other-scope-not-from-auth-request").ReadCloser()
 				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				}},
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				),
+			},
 		},
 		{
 			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is granted anyway",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience") },
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped:request-audience"},
-					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantCustomSessionDataStored: initialUpstreamOIDCCustomSessionData(),
 				},
 			},
 			refreshRequest: refreshRequestInputs{
@@ -924,43 +1092,47 @@ func TestRefreshGrant(t *testing.T) {
 					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid").ReadCloser() // do not ask for "pinniped:request-audience" again
 				},
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped:request-audience"},
-					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
-				}},
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
 		},
 		{
 			name: "when the refresh request does not include a scope param then it gets all the same scopes as the original authorization request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				},
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
 					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser()
 				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
-				}},
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				),
+			},
 		},
 		{
 			name: "when a bad refresh token is sent in the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"offline_access"},
-					wantGrantedScopes:     []string{"offline_access"},
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"offline_access"},
+					wantGrantedScopes:           []string{"offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCCustomSessionData(),
 				},
 			},
 			refreshRequest: refreshRequestInputs{
@@ -970,17 +1142,21 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
-				}},
+				},
+			},
 		},
 		{
 			name: "when the access token is sent as if it were a refresh token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"offline_access"},
-					wantGrantedScopes:     []string{"offline_access"},
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"offline_access"},
+					wantGrantedScopes:           []string{"offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCCustomSessionData(),
 				},
 			},
 			refreshRequest: refreshRequestInputs{
@@ -990,17 +1166,21 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
-				}},
+				},
+			},
 		},
 		{
 			name: "when the wrong client ID is included in the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"offline_access"},
-					wantGrantedScopes:     []string{"offline_access"},
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"offline_access"},
+					wantGrantedScopes:           []string{"offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCCustomSessionData(),
 				},
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1010,7 +1190,301 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusUnauthorized,
 					wantErrorResponseBody: fositeInvalidClientErrorBody,
-				}},
+				},
+			},
+		},
+		{
+			name: "when there is no custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: nil, // this should not happen in practice
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(nil),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is no provider name in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: "", // this should not happen in practice
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: oidcUpstreamType,
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: "", // this should not happen in practice
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: oidcUpstreamType,
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is no provider UID in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  "", // this should not happen in practice
+					ProviderType: oidcUpstreamType,
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  "", // this should not happen in practice
+						ProviderType: oidcUpstreamType,
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is no provider type in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: "", // this should not happen in practice
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: "", // this should not happen in practice
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is an illegal provider type in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: "not-an-allowed-provider-type", // this should not happen in practice
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: "not-an-allowed-provider-type", // this should not happen in practice
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is no OIDC-specific data in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: oidcUpstreamType,
+					OIDC:         nil, // this should not happen in practice
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: oidcUpstreamType,
+						OIDC:         nil, // this should not happen in practice
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when there is no OIDC refresh token in custom session data found in the session storage during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: oidcUpstreamType,
+					OIDC: &psession.OIDCSessionData{
+						UpstreamRefreshToken: "", // this should not happen in practice
+					},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: oidcUpstreamType,
+						OIDC: &psession.OIDCSessionData{
+							UpstreamRefreshToken: "", // this should not happen in practice
+						},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusInternalServerError,
+					wantErrorResponseBody: pinnipedUpstreamSessionDataNotFoundErrorBody,
+				},
+			},
+		},
+		{
+			name: "when the provider in the session storage is not found due to its name during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
+					ProviderUID:  oidcUpstreamResourceUID,
+					ProviderType: oidcUpstreamType,
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
+						ProviderUID:  oidcUpstreamResourceUID,
+						ProviderType: oidcUpstreamType,
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider 'this-name-will-not-be-found' of type 'oidc' from upstream session data was not found."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the provider in the session storage is found but has the wrong resource UID during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: &psession.CustomSessionData{
+					ProviderName: oidcUpstreamName,
+					ProviderUID:  "this is the wrong uid", // this could happen if the OIDCIdentityProvider was deleted and recreated at the same name since original login
+					ProviderType: oidcUpstreamType,
+					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+				},
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						ProviderName: oidcUpstreamName,
+						ProviderUID:  "this is the wrong uid", // this could happen if the OIDCIdentityProvider was deleted and recreated at the same name since original login
+						ProviderType: oidcUpstreamType,
+						OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh fails during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+				WithPerformRefreshError(errors.New("some upstream refresh error")).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamOIDCRefreshCall: happyUpstreamRefreshCall(),
+					wantStatus:                  http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-oidc-idp' of type 'oidc'."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh returns an invalid ID token during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+				// This is the current format of the errors returned by the production code version of ValidateToken, see ValidateToken in upstreamoidc.go
+				WithValidateTokenError(httperr.Wrap(http.StatusBadRequest, "some validate error", errors.New("some validate cause"))).
+				Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
+					wantStatus:                        http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token using provider 'some-oidc-idp' of type 'oidc'."
+						}
+					`),
+				},
+			},
 		},
 	}
 	for _, test := range tests {
@@ -1019,9 +1493,14 @@ func TestRefreshGrant(t *testing.T) {
 			t.Parallel()
 
 			// First exchange the authcode for tokens, including a refresh token.
-			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange, test.idps.Build())
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
+
+			// Performing an authcode exchange should not have caused any upstream refresh, which should only
+			// happen during a downstream refresh.
+			test.idps.RequireExactlyZeroCallsToPerformRefresh(t)
+			test.idps.RequireExactlyZeroCallsToValidateToken(t)
 
 			// Wait one second before performing the refresh so we can see that the refreshed ID token has new issued
 			// at and expires at dates which are newer than the old tokens.
@@ -1031,8 +1510,10 @@ func TestRefreshGrant(t *testing.T) {
 
 			// Send the refresh token back and preform a refresh.
 			firstRefreshToken := parsedAuthcodeExchangeResponseBody["refresh_token"].(string)
+			require.NotEmpty(t, firstRefreshToken)
+			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
-				happyRefreshRequestBody(firstRefreshToken).ReadCloser())
+				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).WithContext(reqContext)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			if test.refreshRequest.modifyTokenRequest != nil {
 				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
@@ -1043,11 +1524,45 @@ func TestRefreshGrant(t *testing.T) {
 			t.Logf("second response: %#v", refreshResponse)
 			t.Logf("second response body: %q", refreshResponse.Body.String())
 
+			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
+			if test.refreshRequest.want.wantUpstreamOIDCRefreshCall != nil {
+				test.refreshRequest.want.wantUpstreamOIDCRefreshCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToPerformRefresh(t,
+					test.refreshRequest.want.wantUpstreamOIDCRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantUpstreamOIDCRefreshCall.args,
+				)
+			} else {
+				test.idps.RequireExactlyZeroCallsToPerformRefresh(t)
+			}
+
+			// Test that we did or did not make a call to the upstream OIDC provider interface to validate the
+			// new ID token that was returned by the upstream refresh.
+			if test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall != nil {
+				test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToValidateToken(t,
+					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.performedByUpstreamName,
+					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args,
+				)
+			} else {
+				test.idps.RequireExactlyZeroCallsToValidateToken(t)
+			}
+
 			// The bug in fosite that prevents at_hash from appearing in the initial ID token does not impact the refreshed ID token
 			wantAtHashClaimInIDToken := true
 			// Refreshed ID tokens do not include the nonce from the original auth request
 			wantNonceValueInIDToken := false
-			requireTokenEndpointBehavior(t, test.refreshRequest.want, wantAtHashClaimInIDToken, wantNonceValueInIDToken, refreshResponse, authCode, oauthStore, jwtSigningKey, secrets)
+
+			requireTokenEndpointBehavior(t,
+				test.refreshRequest.want,
+				test.authcodeExchange.customSessionData,
+				wantAtHashClaimInIDToken,
+				wantNonceValueInIDToken,
+				refreshResponse,
+				authCode,
+				oauthStore,
+				jwtSigningKey,
+				secrets,
+			)
 
 			if test.refreshRequest.want.wantStatus == http.StatusOK {
 				wantIDToken := contains(test.refreshRequest.want.wantSuccessBodyFields, "id_token")
@@ -1107,7 +1622,7 @@ func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[st
 	require.Equal(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
 }
 
-func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
+func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps provider.DynamicUpstreamIDPProvider) (
 	subject http.Handler,
 	rsp *httptest.ResponseRecorder,
 	authCode string,
@@ -1127,15 +1642,17 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 
 	oauthStore = oidc.NewKubeStorage(secrets, oidc.DefaultOIDCTimeoutsConfiguration())
 	if test.makeOathHelper != nil {
-		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
+		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore, test.customSessionData)
 	} else {
-		oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore)
+		// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
+		oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.customSessionData)
 	}
 
 	if test.modifyStorage != nil {
 		test.modifyStorage(t, oauthStore, authCode)
 	}
-	subject = NewHandler(oauthHelper)
+
+	subject = NewHandler(idps, oauthHelper)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
 	expectedNumberOfIDSessionsStored := 0
@@ -1161,7 +1678,18 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 
 	wantAtHashClaimInIDToken := false // due to a bug in fosite, the at_hash claim is not filled in during authcode exchange
 	wantNonceValueInIDToken := true   // ID tokens returned by the authcode exchange must include the nonce from the auth request (unliked refreshed ID tokens)
-	requireTokenEndpointBehavior(t, test.want, wantAtHashClaimInIDToken, wantNonceValueInIDToken, rsp, authCode, oauthStore, jwtSigningKey, secrets)
+
+	requireTokenEndpointBehavior(t,
+		test.want,
+		test.customSessionData,
+		wantAtHashClaimInIDToken,
+		wantNonceValueInIDToken,
+		rsp,
+		authCode,
+		oauthStore,
+		jwtSigningKey,
+		secrets,
+	)
 
 	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore
 }
@@ -1169,6 +1697,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 func requireTokenEndpointBehavior(
 	t *testing.T,
 	test tokenEndpointResponseExpectedValues,
+	oldCustomSessionData *psession.CustomSessionData,
 	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
 	tokenEndpointResponse *httptest.ResponseRecorder,
@@ -1191,9 +1720,10 @@ func requireTokenEndpointBehavior(
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
 		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
-		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, secrets)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantCustomSessionDataStored, secrets)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
-		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data from the initial login.
+		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, oldCustomSessionData)
 
 		expectedNumberOfRefreshTokenSessionsStored := 0
 		if wantRefreshToken {
@@ -1205,7 +1735,7 @@ func requireTokenEndpointBehavior(
 			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, parsedResponseBody["access_token"].(string))
 		}
 		if wantRefreshToken {
-			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, secrets)
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantCustomSessionDataStored, secrets)
 		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -1302,16 +1832,24 @@ func getFositeDataSignature(t *testing.T, data string) string {
 	return split[1]
 }
 
+type OauthHelperFactoryFunc func(
+	t *testing.T,
+	authRequest *http.Request,
+	store fositestoragei.AllFositeStorage,
+	initialCustomSessionData *psession.CustomSessionData,
+) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
+
 func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
 	store fositestoragei.AllFositeStorage,
+	initialCustomSessionData *psession.CustomSessionData,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
 	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
 
@@ -1332,12 +1870,13 @@ func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 	t *testing.T,
 	authRequest *http.Request,
 	store fositestoragei.AllFositeStorage,
+	initialCustomSessionData *psession.CustomSessionData,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
 	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
 
@@ -1345,31 +1884,40 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 	t *testing.T,
 	authRequest *http.Request,
 	store fositestoragei.AllFositeStorage,
+	initialCustomSessionData *psession.CustomSessionData,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
 	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
 	return oauthHelper, authResponder.GetCode(), nil
 }
 
 // Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
-func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Request, oauthHelper fosite.OAuth2Provider) fosite.AuthorizeResponder {
+func simulateAuthEndpointHavingAlreadyRun(
+	t *testing.T,
+	authRequest *http.Request,
+	oauthHelper fosite.OAuth2Provider,
+	initialCustomSessionData *psession.CustomSessionData,
+) fosite.AuthorizeResponder {
 	// We only set the fields in the session that Fosite wants us to set.
 	ctx := context.Background()
-	session := &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject:     goodSubject,
-			RequestedAt: goodRequestedAtTime,
-			AuthTime:    goodAuthTime,
-			Extra: map[string]interface{}{
-				oidc.DownstreamUsernameClaim: goodUsername,
-				oidc.DownstreamGroupsClaim:   goodGroups,
+	session := &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:     goodSubject,
+				RequestedAt: goodRequestedAtTime,
+				AuthTime:    goodAuthTime,
+				Extra: map[string]interface{}{
+					oidc.DownstreamUsernameClaim: goodUsername,
+					oidc.DownstreamGroupsClaim:   goodGroups,
+				},
 			},
+			Subject:  "", // not used, note that callback_handler.go does not set this
+			Username: "", // not used, note that callback_handler.go does not set this
 		},
-		Subject:  "", // not used, note that callback_handler.go does not set this
-		Username: "", // not used, note that callback_handler.go does not set this
+		Custom: initialCustomSessionData,
 	}
 	authRequester, err := oauthHelper.NewAuthorizeRequest(ctx, authRequest)
 	require.NoError(t, err)
@@ -1407,7 +1955,7 @@ func generateJWTSigningKeyAndJWKSProvider(t *testing.T, issuer string) (*ecdsa.P
 func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
-	storage oauth2.CoreStorage,
+	storage fositeoauth2.CoreStorage,
 	secrets v1.SecretInterface,
 ) {
 	t.Helper()
@@ -1422,9 +1970,10 @@ func requireInvalidAuthCodeStorage(
 func requireValidRefreshTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage oauth2.CoreStorage,
+	storage fositeoauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
 ) {
 	t.Helper()
@@ -1446,6 +1995,7 @@ func requireValidRefreshTokenStorage(
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
+		wantCustomSessionData,
 	)
 
 	requireGarbageCollectTimeInDelta(t, refreshTokenString, "refresh-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
@@ -1454,9 +2004,10 @@ func requireValidRefreshTokenStorage(
 func requireValidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage oauth2.CoreStorage,
+	storage fositeoauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
 ) {
 	t.Helper()
@@ -1497,6 +2048,7 @@ func requireValidAccessTokenStorage(
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
+		wantCustomSessionData,
 	)
 
 	requireGarbageCollectTimeInDelta(t, accessTokenString, "access-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
@@ -1505,7 +2057,7 @@ func requireValidAccessTokenStorage(
 func requireInvalidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage oauth2.CoreStorage,
+	storage fositeoauth2.CoreStorage,
 ) {
 	t.Helper()
 
@@ -1538,6 +2090,7 @@ func requireValidOIDCStorage(
 	storage openid.OpenIDConnectRequestStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
 
@@ -1560,6 +2113,7 @@ func requireValidOIDCStorage(
 			wantRequestedScopes,
 			wantGrantedScopes,
 			false,
+			wantCustomSessionData,
 		)
 	} else {
 		_, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
@@ -1574,6 +2128,7 @@ func requireValidStoredRequest(
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantAccessTokenExpiresAt bool,
+	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
 
@@ -1588,19 +2143,19 @@ func requireValidStoredRequest(
 	require.Equal(t, wantRequestForm, request.GetRequestForm()) // Fosite stores access token request without form
 
 	// Cast session to the type we think it should be.
-	session, ok := request.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", request.GetSession(), &openid.DefaultSession{})
+	session, ok := request.GetSession().(*psession.PinnipedSession)
+	require.Truef(t, ok, "could not cast %T to %T", request.GetSession(), &psession.PinnipedSession{})
 
 	// Assert that the session claims are what we think they should be, but only if we are doing OIDC.
 	if contains(wantGrantedScopes, "openid") {
-		claims := session.Claims
+		claims := session.Fosite.Claims
 		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
 		require.Equal(t, goodSubject, claims.Subject)
 
 		// Our custom claims from the authorize endpoint should still be set.
 		require.Equal(t, map[string]interface{}{
 			"username": goodUsername,
-			"groups":   goodGroups,
+			"groups":   expectedGoodGroups,
 		}, claims.Extra)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -1610,7 +2165,7 @@ func requireValidStoredRequest(
 
 		// These fields will all be given good defaults by fosite at runtime and we only need to use them
 		// if we want to override the default behaviors. We currently don't need to override these defaults,
-		// so they do not end up being stored. Fosite sets its defaults at runtime in openid.DefaultSession's
+		// so they do not end up being stored. Fosite sets its defaults at runtime in openid.DefaultStrategy's
 		// GenerateIDToken() method.
 		require.Empty(t, claims.Issuer)
 		require.Empty(t, claims.Audience)
@@ -1630,11 +2185,11 @@ func requireValidStoredRequest(
 	}
 
 	// Assert that the session headers are what we think they should be.
-	headers := session.Headers
+	headers := session.Fosite.Headers
 	require.Empty(t, headers)
 
 	// Assert that the token expirations are what we think they should be.
-	authCodeExpiresAt, ok := session.ExpiresAt[fosite.AuthorizeCode]
+	authCodeExpiresAt, ok := session.Fosite.ExpiresAt[fosite.AuthorizeCode]
 	require.True(t, ok, "expected session to hold expiration time for auth code")
 	testutil.RequireTimeInDelta(
 		t,
@@ -1644,7 +2199,7 @@ func requireValidStoredRequest(
 	)
 
 	// OpenID Connect sessions do not store access token expiration information.
-	accessTokenExpiresAt, ok := session.ExpiresAt[fosite.AccessToken]
+	accessTokenExpiresAt, ok := session.Fosite.ExpiresAt[fosite.AccessToken]
 	if wantAccessTokenExpiresAt {
 		require.True(t, ok, "expected session to hold expiration time for access token")
 		testutil.RequireTimeInDelta(
@@ -1658,8 +2213,11 @@ func requireValidStoredRequest(
 	}
 
 	// We don't use these, so they should be empty.
-	require.Empty(t, session.Username)
-	require.Empty(t, session.Subject)
+	require.Empty(t, session.Fosite.Username)
+	require.Empty(t, session.Fosite.Subject)
+
+	// The custom session data was stored as expected.
+	require.Equal(t, wantCustomSessionData, session.Custom)
 }
 
 func requireGarbageCollectTimeInDelta(t *testing.T, tokenString string, typeLabel string, secrets v1.SecretInterface, wantExpirationTime time.Time, deltaTime time.Duration) {
@@ -1709,7 +2267,7 @@ func requireValidIDToken(
 		IssuedAt        int64    `json:"iat"`
 		RequestedAt     int64    `json:"rat"`
 		AuthTime        int64    `json:"auth_time"`
-		Groups          string   `json:"groups"`
+		Groups          []string `json:"groups"`
 		Username        string   `json:"username"`
 	}
 

@@ -130,6 +130,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
+			m.upstreamIDPs,
 			oauthHelperWithKubeStorage,
 		)
 

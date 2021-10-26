@@ -150,6 +150,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 	const (
 		testNamespace         = "test-namespace"
+		testResourceUID       = "test-uid"
 		testName              = "test-name"
 		testSecretName        = "test-bind-secret"
 		testBindUsername      = "test-bind-username"
@@ -172,7 +173,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 	testCABundleBase64Encoded := base64.StdEncoding.EncodeToString(testCABundle)
 
 	validUpstream := &v1alpha1.ActiveDirectoryIdentityProvider{
-		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
+		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234, UID: testResourceUID},
 		Spec: v1alpha1.ActiveDirectoryIdentityProviderSpec{
 			Host: testHost,
 			TLS:  &v1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
@@ -202,6 +203,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 	providerConfigForValidUpstreamWithTLS := &upstreamldap.ProviderConfig{
 		Name:               testName,
+		ResourceUID:        testResourceUID,
 		Host:               testHost,
 		ConnectionProtocol: upstreamldap.TLS,
 		CABundle:           testCABundle,
@@ -364,7 +366,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -379,7 +381,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -407,7 +409,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -434,7 +436,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -460,7 +462,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -486,7 +488,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -517,6 +519,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           nil,
@@ -537,7 +540,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -572,6 +575,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           nil,
@@ -592,7 +596,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -630,6 +634,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               "ldap.example.com",
 					ConnectionProtocol: upstreamldap.StartTLS, // successfully fell back to using StartTLS
 					CABundle:           testCABundle,
@@ -650,7 +655,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -688,6 +693,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				// even though the connection test failed, still loads into the cache because it is treated like a warning
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               "ldap.example.com:5678",
 					ConnectionProtocol: upstreamldap.TLS, // need to pick TLS or StartTLS to load into the cache when both fail, so choose TLS
 					CABundle:           testCABundle,
@@ -709,7 +715,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -745,6 +751,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           nil,
@@ -765,7 +772,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -779,6 +786,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Name = "other-upstream"
 				upstream.Generation = 42
 				upstream.Spec.Bind.SecretName = "non-existent-secret"
+				upstream.UID = "other-uid"
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -790,7 +798,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{
 				{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42, UID: "other-uid"},
 					Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 						Phase: "Error",
 						Conditions: []v1alpha1.Condition{
@@ -807,7 +815,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 					Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 						Phase:      "Ready",
 						Conditions: allConditionsTrue(1234, "4242"),
@@ -831,7 +839,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -872,6 +880,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -892,7 +901,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -928,7 +937,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -966,7 +975,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -995,6 +1004,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1015,7 +1025,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -1045,6 +1055,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1065,7 +1076,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -1100,7 +1111,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithStartTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -1137,7 +1148,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -1175,7 +1186,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -1212,7 +1223,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -1243,6 +1254,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1264,7 +1276,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
@@ -1295,6 +1307,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1315,7 +1328,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -1350,6 +1363,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1370,7 +1384,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -1399,6 +1413,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1419,7 +1434,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
@@ -1447,7 +1462,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -1483,7 +1498,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -1525,7 +1540,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -1554,7 +1569,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
@@ -1594,6 +1609,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:               testName,
+					ResourceUID:        testResourceUID,
 					Host:               testHost,
 					ConnectionProtocol: upstreamldap.TLS,
 					CABundle:           testCABundle,
@@ -1614,7 +1630,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{

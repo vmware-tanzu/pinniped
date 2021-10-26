@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/types"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -23,6 +24,9 @@ type UpstreamOIDCIdentityProviderI interface {
 
 	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
 	GetClientID() string
+
+	// GetResourceUID returns the Kubernetes resource ID
+	GetResourceUID() types.UID
 
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
@@ -42,6 +46,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	// flow with this upstream provider. When false, it should not be allowed.
 	AllowsPasswordGrant() bool
 
+	// GetAdditionalAuthcodeParams returns additional params to be sent on authcode requests.
+	GetAdditionalAuthcodeParams() map[string]string
+
 	// PasswordCredentialsGrantAndValidateTokens performs upstream OIDC resource owner password credentials grant and
 	// token validation. Returns the validated raw tokens as well as the parsed claims of the ID token.
 	PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error)
@@ -56,6 +63,14 @@ type UpstreamOIDCIdentityProviderI interface {
 		redirectURI string,
 	) (*oidctypes.Token, error)
 
+	// PerformRefresh will call the provider's token endpoint to perform a refresh grant. The provider may or may not
+	// return a new ID or refresh token in the response. If it returns an ID token, then use ValidateToken to
+	// validate the ID token.
+	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
+
+	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
+	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
+	// tokens, or an error.
 	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 }
 
@@ -67,6 +82,9 @@ type UpstreamLDAPIdentityProviderI interface {
 	// This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 	// identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
 	GetURL() *url.URL
+
+	// GetResourceUID returns the Kubernetes resource ID
+	GetResourceUID() types.UID
 
 	// UserAuthenticator adds an interface method for performing user authentication against the upstream LDAP provider.
 	authenticators.UserAuthenticator

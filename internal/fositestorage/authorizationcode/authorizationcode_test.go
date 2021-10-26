@@ -18,7 +18,6 @@ import (
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -27,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -34,6 +34,8 @@ import (
 
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/internal/testutil"
 )
 
 const namespace = "test-ns"
@@ -62,7 +64,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}},"requestedAudience":null,"grantedAudience":null},"version":"2"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -81,7 +83,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}},"requestedAudience":null,"grantedAudience":null},"version":"2"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -113,16 +115,10 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				TokenEndpointAuthSigningAlgorithm: "",
 			},
 		},
-		RequestedScope: nil,
-		GrantedScope:   nil,
-		Form:           url.Values{"key": []string{"val"}},
-		Session: &openid.DefaultSession{
-			Claims:    nil,
-			Headers:   nil,
-			ExpiresAt: nil,
-			Username:  "snorlax",
-			Subject:   "panda",
-		},
+		RequestedScope:    nil,
+		GrantedScope:      nil,
+		Form:              url.Values{"key": []string{"val"}},
+		Session:           testutil.NewFakePinnipedSession(),
 		RequestedAudience: nil,
 		GrantedAudience:   nil,
 	}
@@ -136,6 +132,8 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	err = storage.InvalidateAuthorizeCodeSession(ctx, "fancy-signature")
 	require.NoError(t, err)
 
+	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
+	testutil.LogActualJSONFromUpdateAction(t, client, 3) // makes it easier to update expected values when needed
 	require.Equal(t, wantActions, client.Actions())
 
 	// Doing a Get on an invalidated session should still return the session, but also return an error.
@@ -173,7 +171,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 	request := &fosite.Request{
 		ID:      "some-request-id",
 		Client:  &clientregistry.Client{},
-		Session: &openid.DefaultSession{},
+		Session: testutil.NewFakePinnipedSession(),
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
 	require.NoError(t, err)
@@ -193,7 +191,7 @@ func TestWrongVersion(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"not-the-right-version", "active": true}`),
+			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"not-the-right-version","active": true}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/authcode",
@@ -203,7 +201,7 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
 
-	require.EqualError(t, err, "authorization request data has wrong version: authorization code session for fancy-signature has version not-the-right-version instead of 1")
+	require.EqualError(t, err, "authorization request data has wrong version: authorization code session for fancy-signature has version not-the-right-version instead of 2")
 }
 
 func TestNilSessionRequest(t *testing.T) {
@@ -218,7 +216,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value", "version":"1", "active": true}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value", "version":"2", "active": true}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/authcode",
@@ -246,10 +244,10 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
+	require.EqualError(t, err, "requester's session must be of type PinnipedSession")
 
 	request = &fosite.Request{
-		Session: &openid.DefaultSession{},
+		Session: &psession.PinnipedSession{},
 		Client:  nil,
 	}
 	err = storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
@@ -274,7 +272,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 
 	// checked above
 	defaultClient := validSession.Request.Client.(*clientregistry.Client)
-	defaultSession := validSession.Request.Session.(*openid.DefaultSession)
+	pinnipedSession := validSession.Request.Session.(*psession.PinnipedSession)
 
 	// makes it easier to use a raw string
 	replacer := strings.NewReplacer("`", "a")
@@ -297,12 +295,12 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 			*fc = defaultClient
 		},
 		func(fs *fosite.Session, c fuzz.Continue) {
-			c.Fuzz(defaultSession)
-			*fs = defaultSession
+			c.Fuzz(pinnipedSession)
+			*fs = pinnipedSession
 		},
 
 		// these types contain an interface{} that we need to handle
-		// this is safe because we explicitly provide the openid.DefaultSession concrete type
+		// this is safe because we explicitly provide the PinnipedSession concrete type
 		func(value *map[string]interface{}, c fuzz.Continue) {
 			// cover all the JSON data types just in case
 			*value = map[string]interface{}{
@@ -346,6 +344,9 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		func(s *fosite.TokenType, c fuzz.Continue) {
 			*s = fosite.TokenType(randString(c))
 		},
+		func(s *types.UID, c fuzz.Continue) {
+			*s = types.UID(randString(c))
+		},
 		// handle string type alias
 		func(s *fosite.Arguments, c fuzz.Continue) {
 			n := c.Intn(3) + 1 // 1 to 3 items
@@ -382,7 +383,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 
 	// set these to match CreateAuthorizeCodeSession so that .JSONEq works
 	validSession.Active = true
-	validSession.Version = "1"
+	validSession.Version = "2"
 
 	validSessionJSONBytes, err := json.MarshalIndent(validSession, "", "\t")
 	require.NoError(t, err)

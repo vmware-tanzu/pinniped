@@ -210,8 +210,6 @@ func FositeOauth2Helper(
 
 		// The default is to support all prompt values from the spec.
 		// See https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
-		// We'll make a best effort to support these by passing the value of this prompt param to the upstream IDP
-		// and rely on its implementation of this param.
 		AllowedPromptValues: nil,
 
 		// Use the fosite default to make it more likely that off the shelf OIDC clients can work with the supervisor.
@@ -232,7 +230,7 @@ func FositeOauth2Helper(
 		compose.OpenIDConnectExplicitFactory,
 		compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
-		TokenExchangeFactory,
+		TokenExchangeFactory, // handle the "urn:ietf:params:oauth:grant-type:token-exchange" grant type
 	)
 	provider.(*fosite.Fosite).FormPostHTMLTemplate = formposthtml.Template()
 	return provider

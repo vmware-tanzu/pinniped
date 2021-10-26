@@ -5,16 +5,16 @@ package fositestorage
 
 import (
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
 	ErrInvalidRequestType     = constable.Error("requester must be of type fosite.Request")
 	ErrInvalidClientType      = constable.Error("requester's client must be of type clientregistry.Client")
-	ErrInvalidSessionType     = constable.Error("requester's session must be of type openid.DefaultSession")
+	ErrInvalidSessionType     = constable.Error("requester's session must be of type PinnipedSession")
 	StorageRequestIDLabelName = "storage.pinniped.dev/request-id" //nolint:gosec // this is not a credential
 )
 
@@ -27,7 +27,7 @@ func ValidateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Req
 	if !ok2 {
 		return nil, ErrInvalidClientType
 	}
-	_, ok3 := request.Session.(*openid.DefaultSession)
+	_, ok3 := request.Session.(*psession.PinnipedSession)
 	if !ok3 {
 		return nil, ErrInvalidSessionType
 	}

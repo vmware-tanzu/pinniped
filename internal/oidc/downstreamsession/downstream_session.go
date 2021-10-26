@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
@@ -35,19 +36,22 @@ const (
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(subject string, username string, groups []string) *openid.DefaultSession {
+func MakeDownstreamSession(subject string, username string, groups []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
 	now := time.Now().UTC()
-	openIDSession := &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject:     subject,
-			RequestedAt: now,
-			AuthTime:    now,
+	openIDSession := &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Subject:     subject,
+				RequestedAt: now,
+				AuthTime:    now,
+			},
 		},
+		Custom: custom,
 	}
 	if groups == nil {
 		groups = []string{}
 	}
-	openIDSession.Claims.Extra = map[string]interface{}{
+	openIDSession.IDTokenClaims().Extra = map[string]interface{}{
 		oidc.DownstreamUsernameClaim: username,
 		oidc.DownstreamGroupsClaim:   groups,
 	}

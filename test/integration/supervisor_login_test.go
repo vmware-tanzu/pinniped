@@ -55,7 +55,7 @@ func TestSupervisorLogin(t *testing.T) {
 		// We don't necessarily have any way to revoke the user's session on the upstream provider,
 		// so to cause the upstream refresh to fail we can cheat by manipulating the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
-		breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData)
+		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession)
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
@@ -75,7 +75,8 @@ func TestSupervisorLogin(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -110,7 +111,8 @@ func TestSupervisorLogin(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -148,7 +150,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -214,10 +217,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
-				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -285,10 +290,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
-				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "not-the-same"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -355,11 +362,6 @@ func TestSupervisorLogin(t *testing.T) {
 					httpClient,
 					true,
 				)
-			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
-				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
-				require.NotEmpty(t, customSessionData.LDAP.UserDN)
-				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
 			},
 			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
 			wantErrorType:        "access_denied",
@@ -438,7 +440,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
 				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
@@ -541,7 +544,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
 				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
@@ -600,10 +604,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
-				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "not-the-same"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -672,10 +678,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
-				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -749,7 +757,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
 				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
@@ -841,7 +850,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
 				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
@@ -1045,7 +1055,7 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T),
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
-	breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData),
+	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession),
 	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 	wantErrorDescription string, wantErrorType string,
 ) {
@@ -1227,7 +1237,7 @@ func testSupervisorLogin(
 			// Next mutate the part of the session that is used during upstream refresh.
 			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-			breakRefreshSessionData(t, pinnipedSession.Custom)
+			breakRefreshSessionData(t, pinnipedSession)
 
 			// Then save the mutated Secret back to Kubernetes.
 			// There is no update function, so delete and create again at the same name.

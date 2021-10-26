@@ -133,7 +133,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --credential-cache string                  Path to cluster-specific credentials cache
 				      --generated-name-suffix string             Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
 				  -h, --help                                     help for kubeconfig
-				      --install-hint string                      This text is shown to the user when the pinniped CLI is not installed. (default "The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli for more details")
+				      --install-hint string                      This text is shown to the user when the pinniped CLI is not installed. (default "The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli for more details")
 				      --kubeconfig string                        Path to kubeconfig file
 				      --kubeconfig-context string                Kubeconfig context name (default: current active context)
 				      --no-concierge                             Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly
@@ -1327,7 +1327,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
-                installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+                installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
                   for more details
         		      provideClusterInfo: true
 			`)
@@ -1392,7 +1392,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
-                installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+                installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
                   for more details
         		      provideClusterInfo: true
 			`)
@@ -1462,7 +1462,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -1548,7 +1548,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -1661,7 +1661,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -1770,7 +1770,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -1849,7 +1849,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -1928,7 +1928,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=oidc
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2003,7 +2003,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2076,7 +2076,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2156,7 +2156,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2234,7 +2234,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2317,7 +2317,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2375,7 +2375,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2436,7 +2436,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2497,7 +2497,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2559,7 +2559,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-type=ldap
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2622,7 +2622,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=foobar
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2683,7 +2683,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=cli_password
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,
@@ -2743,7 +2743,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --upstream-identity-provider-flow=cli_password
 						  command: '.../path/to/pinniped'
 						  env: []
-						  installHint: The pinniped CLI does not appear to be installed.  See https://pinniped.dev/docs/howto/install-cli
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
              for more details
 						  provideClusterInfo: true
 					`,

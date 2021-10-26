@@ -5,6 +5,12 @@
   force = true
 
 [[redirects]]
+  from = "/cli"
+  to = "https://pinniped.dev/docs/howto/install-cli"
+  status = 302
+  force = true
+
+[[redirects]]
   from = "/latest/*"
   to = "https://github.com/vmware-tanzu/pinniped/releases/latest/download/:splat"
   status = 302

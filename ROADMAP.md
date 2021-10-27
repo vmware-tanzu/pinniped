@@ -36,7 +36,7 @@ The following table includes the current roadmap for Pinniped. If you have any q
 Last Updated: Sept 2021
 |Theme|Description|Timeline|
 |--|--|--|
-|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Oct 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Nov 2021|
 |Improving Security Posture|Supervisor token refresh fails when the upstream user is in an invalid state for LDAP/AD |Nov 2021|
 |Improving Security Posture|Set stricter default TLS versions and Ciphers |Nov 2021|
 |Improving Security Posture|Support FIPS compliant Boring crypto libraries |Dec 2021|

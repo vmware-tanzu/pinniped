@@ -1644,10 +1644,10 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{
-						ProviderUID:  activeDirectoryUpstreamResourceUID,
-						ProviderName: activeDirectoryUpstreamName,
-						ProviderType: activeDirectoryUpstreamType,
-						LDAP:         nil,
+						ProviderUID:     activeDirectoryUpstreamResourceUID,
+						ProviderName:    activeDirectoryUpstreamName,
+						ProviderType:    activeDirectoryUpstreamType,
+						ActiveDirectory: nil,
 					},
 				),
 			},
@@ -1705,9 +1705,9 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh when the active directory session data does not contain dn",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: activeDirectoryUpstreamResourceUID,
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
@@ -1716,7 +1716,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderUID:  ldapUpstreamResourceUID,
 					ProviderName: ldapUpstreamName,
 					ProviderType: ldapUpstreamType,
-					LDAP: &psession.LDAPSessionData{
+					ActiveDirectory: &psession.ActiveDirectorySessionData{
 						UserDN: "",
 					},
 				},
@@ -1725,7 +1725,7 @@ func TestRefreshGrant(t *testing.T) {
 						ProviderUID:  ldapUpstreamResourceUID,
 						ProviderName: ldapUpstreamName,
 						ProviderType: ldapUpstreamType,
-						LDAP: &psession.LDAPSessionData{
+						ActiveDirectory: &psession.ActiveDirectorySessionData{
 							UserDN: "",
 						},
 					},
@@ -1917,6 +1917,58 @@ func TestRefreshGrant(t *testing.T) {
 						{
 							"error":             "error",
 							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the ldap provider in the session storage is found but has the wrong resource UID during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: "the-wrong-uid",
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider 'some-ldap-idp' of type 'ldap' from upstream session data has changed its resource UID since authentication."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the active directory provider in the session storage is found but has the wrong resource UID during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: "the-wrong-uid",
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyActiveDirectoryCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider 'some-ad-idp' of type 'activedirectory' from upstream session data has changed its resource UID since authentication."
 						}
 					`),
 				},

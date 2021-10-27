@@ -75,15 +75,10 @@ func NewHandler(
 
 func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, providerCache oidc.UpstreamIdentityProvidersLister) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
-	extra := session.Fosite.Claims.Extra
-	if extra == nil {
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	downstreamUsername, err := getDownstreamUsernameFromPinnipedSession(session)
+	if err != nil {
+		return err
 	}
-	downstreamUsernameInterface := extra["username"]
-	if downstreamUsernameInterface == nil {
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
-	}
-	downstreamUsername := downstreamUsernameInterface.(string)
 	downstreamSubject := session.Fosite.Claims.Subject
 
 	customSessionData := session.Custom
@@ -224,4 +219,17 @@ func findLDAPProviderByNameAndValidateUID(
 
 	return nil, "", errorsx.WithStack(errUpstreamRefreshError.
 		WithHintf("Provider %q of type %q from upstream session data was not found.", s.ProviderName, s.ProviderType))
+}
+
+func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession) (string, error) {
+	extra := session.Fosite.Claims.Extra
+	if extra == nil {
+		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamUsernameInterface := extra["username"]
+	if downstreamUsernameInterface == nil {
+		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamUsername := downstreamUsernameInterface.(string)
+	return downstreamUsername, nil
 }

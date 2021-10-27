@@ -210,7 +210,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN string, expectedUs
 
 	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
 	if err != nil {
-		return err // TODO test having no values or more than one maybe
+		return err
 	}
 	if newUsername != expectedUsername {
 		return fmt.Errorf(`searching for user "%s" returned a different username than the previous value. expected: "%s", actual: "%s"`,
@@ -220,15 +220,14 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN string, expectedUs
 
 	newUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, userDN)
 	if err != nil {
-		return err // TODO test
+		return err
 	}
 	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
 	if newSubject != expectedSubject {
 		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, expectedSubject, newSubject)
 	}
 
-	// do nothing. if we got exactly one search result back then that means the user
-	// still exists.
+	// we checked that the user still exists and their information is the same, so just return.
 	return nil
 }
 

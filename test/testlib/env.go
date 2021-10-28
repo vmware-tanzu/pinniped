@@ -84,6 +84,7 @@ type TestOIDCUpstream struct {
 
 type TestLDAPUpstream struct {
 	Host                                            string   `json:"host"`
+	Domain                                          string   `json:"domain"`
 	StartTLSOnlyHost                                string   `json:"startTLSOnlyHost"`
 	CABundle                                        string   `json:"caBundle"`
 	BindUsername                                    string   `json:"bindUsername"`
@@ -279,6 +280,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorUpstreamActiveDirectory = TestLDAPUpstream{
 		Host:                                  wantEnv("PINNIPED_TEST_AD_HOST", ""),
+		Domain:                                wantEnv("PINNIPED_TEST_AD_DOMAIN", ""),
 		CABundle:                              base64Decoded(t, os.Getenv("PINNIPED_TEST_AD_LDAPS_CA_BUNDLE")),
 		BindUsername:                          wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME", ""),
 		BindPassword:                          wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD", ""),

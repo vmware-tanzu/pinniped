@@ -221,6 +221,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			GroupNameAttribute: testGroupNameAttrName,
 		},
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+		RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 	}
 
 	// Make a copy with targeted changes.
@@ -537,6 +538,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -593,6 +595,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: "sAMAccountName",
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -652,6 +655,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -711,6 +715,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
@@ -769,6 +774,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -898,6 +904,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1022,6 +1029,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1073,6 +1081,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1273,6 +1282,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 					UIDAttributeParsingOverrides:   map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
 					GroupAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"sAMAccountName": upstreamldap.GroupSAMAccountNameWithDomainSuffix},
+					RefreshAttributeChecks:         map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1325,6 +1335,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1381,6 +1392,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1431,6 +1443,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1627,6 +1640,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute: testGroupNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1751,6 +1765,16 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				for k, v := range expectedGroupAttributeParsingOverrides {
 					require.NotNil(t, actualGroupAttributeParsingOverrides[k])
 					require.Equal(t, reflect.ValueOf(v).Pointer(), reflect.ValueOf(actualGroupAttributeParsingOverrides[k]).Pointer())
+				}
+
+				expectedRefreshAttributeChecks := copyOfExpectedValueForResultingCache.RefreshAttributeChecks
+				actualRefreshAttributeChecks := actualConfig.RefreshAttributeChecks
+				copyOfExpectedValueForResultingCache.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{}
+				actualConfig.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{}
+				require.Equal(t, len(expectedRefreshAttributeChecks), len(actualRefreshAttributeChecks))
+				for k, v := range expectedRefreshAttributeChecks {
+					require.NotNil(t, actualRefreshAttributeChecks[k])
+					require.Equal(t, reflect.ValueOf(v).Pointer(), reflect.ValueOf(actualRefreshAttributeChecks[k]).Pointer())
 				}
 
 				require.Equal(t, copyOfExpectedValueForResultingCache, actualConfig)

@@ -7,7 +7,7 @@ package authenticators
 import (
 	"context"
 
-	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 // This interface is similar to the k8s token authenticator, but works with username/passwords instead
@@ -31,5 +31,10 @@ import (
 // See k8s.io/apiserver/pkg/authentication/authenticator/interfaces.go for the token authenticator
 // interface, as well as the Response type.
 type UserAuthenticator interface {
-	AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
+	AuthenticateUser(ctx context.Context, username, password string) (*Response, bool, error)
+}
+
+type Response struct {
+	User user.Info
+	DN   string
 }

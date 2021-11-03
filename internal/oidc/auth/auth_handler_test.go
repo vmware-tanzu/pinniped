@@ -19,12 +19,12 @@ import (
 	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/pointer"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
@@ -273,18 +273,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	parsedUpstreamLDAPURL, err := url.Parse(upstreamLDAPURL)
 	require.NoError(t, err)
 
-	ldapAuthenticateFunc := func(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+	ldapAuthenticateFunc := func(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 		if username == "" || password == "" {
 			return nil, false, fmt.Errorf("should not have passed empty username or password to the authenticator")
 		}
 		if username == happyLDAPUsername && password == happyLDAPPassword {
-			return &authenticator.Response{
+			return &authenticators.Response{
 				User: &user.DefaultInfo{
 					Name:   happyLDAPUsernameFromAuthenticator,
 					UID:    happyLDAPUID,
 					Groups: happyLDAPGroups,
-					Extra:  map[string][]string{"userDN": {happyLDAPUserDN}},
 				},
+				DN: happyLDAPUserDN,
 			}, true, nil
 		}
 		return nil, false, nil
@@ -307,7 +307,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	erroringUpstreamLDAPIdentityProvider := oidctestutil.TestUpstreamLDAPIdentityProvider{
 		Name:        ldapUpstreamName,
 		ResourceUID: ldapUpstreamResourceUID,
-		AuthenticateFunc: func(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+		AuthenticateFunc: func(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 			return nil, false, fmt.Errorf("some ldap upstream auth error")
 		},
 	}

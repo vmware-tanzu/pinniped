@@ -20,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/upstreamldap"
 	"go.pinniped.dev/test/testlib"
 )
@@ -677,7 +678,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 }
 
 type authUserResult struct {
-	response      *authenticator.Response
+	response      *authenticators.Response
 	authenticated bool
 	err           error
 }

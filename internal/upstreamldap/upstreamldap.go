@@ -21,7 +21,6 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
 
@@ -170,7 +169,7 @@ func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, userDN string, expectedUsername string, expectedSubject string) error {
+func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	search := p.refreshUserSearchRequest(userDN)
@@ -372,7 +371,7 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 // authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
-func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticator.Response, bool, error) {
+func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
@@ -381,14 +380,14 @@ func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) 
 }
 
 // Authenticate an end user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
-func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
 	}
 	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
-func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
@@ -428,13 +427,13 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		return nil, false, nil
 	}
 
-	response := &authenticator.Response{
+	response := &authenticators.Response{
 		User: &user.DefaultInfo{
 			Name:   mappedUsername,
 			UID:    mappedUID,
 			Groups: mappedGroupNames,
-			Extra:  map[string][]string{"userDN": {userDN}},
 		},
+		DN: userDN,
 	}
 	p.traceAuthSuccess(t)
 	return response, true, nil

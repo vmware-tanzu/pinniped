@@ -172,7 +172,9 @@ func findOIDCProviderByNameAndValidateUID(
 
 func upstreamLDAPRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister, username string, subject string) error {
 	// if you have neither a valid ldap session config nor a valid active directory session config
-	if (s.LDAP == nil || s.LDAP.UserDN == "") && (s.ActiveDirectory == nil || s.ActiveDirectory.UserDN == "") {
+	validLDAP := s.ProviderType == psession.ProviderTypeLDAP && s.LDAP != nil && s.LDAP.UserDN != ""
+	validAD := s.ProviderType == psession.ProviderTypeActiveDirectory && s.ActiveDirectory != nil && s.ActiveDirectory.UserDN != ""
+	if !(validLDAP || validAD) {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 
@@ -230,6 +232,9 @@ func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession)
 	if downstreamUsernameInterface == nil {
 		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-	downstreamUsername := downstreamUsernameInterface.(string)
+	downstreamUsername, ok := downstreamUsernameInterface.(string)
+	if !ok || len(downstreamUsername) == 0 {
+		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
 	return downstreamUsername, nil
 }

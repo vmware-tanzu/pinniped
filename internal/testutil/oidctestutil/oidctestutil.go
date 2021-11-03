@@ -21,10 +21,10 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
@@ -80,7 +80,7 @@ type TestUpstreamLDAPIdentityProvider struct {
 	Name                    string
 	ResourceUID             types.UID
 	URL                     *url.URL
-	AuthenticateFunc        func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
+	AuthenticateFunc        func(ctx context.Context, username, password string) (*authenticators.Response, bool, error)
 	performRefreshCallCount int
 	performRefreshArgs      []*PerformRefreshArgs
 	PerformRefreshErr       error
@@ -96,7 +96,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 	return u.AuthenticateFunc(ctx, username, password)
 }
 
@@ -104,7 +104,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN string, expectedUsername string, expectedSubject string) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}

@@ -15,9 +15,9 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
@@ -112,7 +112,7 @@ func handleAuthRequestForLDAPUpstream(
 	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
-	dn := userDNFromAuthenticatedResponse(authenticateResponse)
+	dn := authenticateResponse.DN
 
 	customSessionData := &psession.CustomSessionData{
 		ProviderUID:  ldapUpstream.GetResourceUID(),
@@ -482,16 +482,7 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	return nil
 }
 
-func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticator.Response) string {
+func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
 	ldapURL := *ldapUpstream.GetURL()
 	return downstreamsession.DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
-}
-
-func userDNFromAuthenticatedResponse(authenticatedResponse *authenticator.Response) string {
-	// We should always have something here, but do some error checking anyway so it doesn't panic
-	dnSlice := authenticatedResponse.User.GetExtra()["userDN"]
-	if len(dnSlice) != 1 {
-		return ""
-	}
-	return dnSlice[0]
 }

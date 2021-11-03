@@ -17,8 +17,8 @@ RUN \
   --mount=type=cache,target=/cache/gomodcache \
   mkdir out && \
   export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache CGO_ENABLED=0 GOOS=linux GOARCH=amd64 && \
-  go build -v -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/main.go && \
-  go build -v -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/main.go && \
+  go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
+  go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator

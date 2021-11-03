@@ -416,25 +416,16 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
-	mappedUsername, mappedUID, mappedGroupNames, userDN, err := p.searchAndBindUser(conn, username, bindFunc)
+	response, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
 	}
-	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
-		// Couldn't find the username or couldn't bind using the password.
+	if response == nil {
 		p.traceAuthFailure(t, fmt.Errorf("bad username or password"))
 		return nil, false, nil
 	}
 
-	response := &authenticators.Response{
-		User: &user.DefaultInfo{
-			Name:   mappedUsername,
-			UID:    mappedUID,
-			Groups: mappedGroupNames,
-		},
-		DN: userDN,
-	}
 	p.traceAuthSuccess(t)
 	return response, true, nil
 }
@@ -516,7 +507,7 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	return searchBase, nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, string, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,
@@ -524,7 +515,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			"username", username,
 			"err", err,
 		)
-		return "", "", nil, "", fmt.Errorf(`error searching for user: %w`, err)
+		return nil, fmt.Errorf(`error searching for user: %w`, err)
 	}
 	if len(searchResult.Entries) == 0 {
 		if plog.Enabled(plog.LevelAll) {
@@ -535,38 +526,38 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		} else {
 			plog.Debug("error finding user: user not found (cowardly avoiding printing username because log level is not 'all')", "upstreamName", p.GetName())
 		}
-		return "", "", nil, "", nil
+		return nil, nil
 	}
 
 	// At this point, we have matched at least one entry, so we can be confident that the username is not actually
 	// someone's password mistakenly entered into the username field, so we can log it without concern.
 	if len(searchResult.Entries) > 1 {
-		return "", "", nil, "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return "", "", nil, "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+		return nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
-		return "", "", nil, "", err
+		return nil, err
 	}
 
 	// We would like to support binary typed attributes for UIDs, so always read them as binary and encode them,
 	// even when the attribute may not be binary.
 	mappedUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
-		return "", "", nil, "", err
+		return nil, err
 	}
 
 	mappedGroupNames := []string{}
 	if len(p.c.GroupSearch.Base) > 0 {
 		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
 		if err != nil {
-			return "", "", nil, "", err
+			return nil, err
 		}
 	}
 	sort.Strings(mappedGroupNames)
@@ -578,12 +569,26 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
 		ldapErr := &ldap.Error{}
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
-			return "", "", nil, "", nil
+			return nil, nil
 		}
-		return "", "", nil, "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+		return nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 
-	return mappedUsername, mappedUID, mappedGroupNames, userEntry.DN, nil
+	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
+		// Couldn't find the username or couldn't bind using the password.
+		return nil, nil
+	}
+
+	response := &authenticators.Response{
+		User: &user.DefaultInfo{
+			Name:   mappedUsername,
+			UID:    mappedUID,
+			Groups: mappedGroupNames,
+		},
+		DN: userEntry.DN,
+	}
+
+	return response, nil
 }
 
 func (p *Provider) defaultNamingContextRequest() *ldap.SearchRequest {

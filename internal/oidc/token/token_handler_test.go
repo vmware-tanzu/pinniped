@@ -1465,7 +1465,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'this-name-will-not-be-found' of type 'oidc' from upstream session data was not found."
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
 						}
 					`),
 				},
@@ -1519,7 +1519,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-oidc-idp' of type 'oidc'."
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
 						}
 					`),
 				},
@@ -1545,7 +1545,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token using provider 'some-oidc-idp' of type 'oidc'."
+							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token."
 						}
 					`),
 				},
@@ -1765,7 +1765,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-ldap-idp' of type 'ldap'."
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
 						}
 					`),
 				},
@@ -1793,7 +1793,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-ad-idp' of type 'activedirectory'."
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
 						}
 					`),
 				},
@@ -1815,7 +1815,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'some-ldap-idp' of type 'ldap' from upstream session data was not found."
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
 						}
 					`),
 				},
@@ -1837,7 +1837,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'some-ad-idp' of type 'activedirectory' from upstream session data was not found."
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
 						}
 					`),
 				},
@@ -2026,7 +2026,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'some-ldap-idp' of type 'ldap' from upstream session data has changed its resource UID since authentication."
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
 						}
 					`),
 				},
@@ -2052,7 +2052,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'some-ad-idp' of type 'activedirectory' from upstream session data has changed its resource UID since authentication."
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
 						}
 					`),
 				},

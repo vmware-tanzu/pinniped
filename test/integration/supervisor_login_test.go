@@ -1250,9 +1250,8 @@ func testSupervisorLogin(
 			require.Error(t, err)
 			require.Regexp(t,
 				regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
-					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed using provider '`)+
-					"[^']+"+ // this would be the name of the identity provider CR
-					regexp.QuoteMeta(fmt.Sprintf(`' of type '%s'."`, pinnipedSession.Custom.ProviderType)),
+					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
+					"[^']+",
 				err.Error(),
 			)
 		}

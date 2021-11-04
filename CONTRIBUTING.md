@@ -19,7 +19,7 @@ The near-term and mid-term roadmap for the work planned for the project [maintai
 Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great
 software to the community. Please join us during our online community meetings,
 occurring every first and third Thursday of the month at 9 AM PT / 12 PM PT.
-Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09)
+Use [this Zoom Link](https://go.pinniped.dev/community/zoom)
 to attend and add any agenda items you wish to discuss
 to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view).
 Join our [Google Group](https://groups.google.com/g/project-pinniped) to receive invites to this meeting.

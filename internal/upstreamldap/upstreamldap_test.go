@@ -18,9 +18,9 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
@@ -151,7 +151,7 @@ func TestEndUserAuthentication(t *testing.T) {
 	}
 
 	// The auth response which matches the exampleUserSearchResult and exampleGroupSearchResult.
-	expectedAuthResponse := func(editFunc func(r *user.DefaultInfo)) *authenticator.Response {
+	expectedAuthResponse := func(editFunc func(r *user.DefaultInfo)) *authenticators.Response {
 		u := &user.DefaultInfo{
 			Name:   testUserSearchResultUsernameAttributeValue,
 			UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
@@ -160,7 +160,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		if editFunc != nil {
 			editFunc(u)
 		}
-		return &authenticator.Response{User: u}
+		return &authenticators.Response{User: u, DN: testUserSearchResultDNValue}
 	}
 
 	tests := []struct {
@@ -173,7 +173,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		dialError                  error
 		wantError                  string
 		wantToSkipDial             bool
-		wantAuthResponse           *authenticator.Response
+		wantAuthResponse           *authenticators.Response
 		wantUnauthenticated        bool
 		skipDryRunAuthenticateUser bool // tests about when the end user bind fails don't make sense for DryRunAuthenticateUser()
 	}{
@@ -498,12 +498,13 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: &authenticator.Response{
+			wantAuthResponse: &authenticators.Response{
 				User: &user.DefaultInfo{
 					Name:   testUserSearchResultUsernameAttributeValue,
 					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 					Groups: []string{"a", "b", "c"},
 				},
+				DN: testUserSearchResultDNValue,
 			},
 		},
 		{
@@ -1208,6 +1209,340 @@ func TestEndUserAuthentication(t *testing.T) {
 				require.True(t, authenticated)
 				require.Equal(t, tt.wantAuthResponse, authResponse)
 			}
+		})
+	}
+}
+
+func TestUpstreamRefresh(t *testing.T) {
+	expectedUserSearch := &ldap.SearchRequest{
+		BaseDN:       testUserSearchResultDNValue,
+		Scope:        ldap.ScopeBaseObject,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       "(objectClass=*)",
+		Attributes:   []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute},
+		Controls:     nil, // don't need paging because we set the SizeLimit so small
+	}
+
+	happyPathUserSearchResult := &ldap.SearchResult{
+		Entries: []*ldap.Entry{
+			{
+				DN: testUserSearchResultDNValue,
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   testUserSearchUsernameAttribute,
+						Values: []string{testUserSearchResultUsernameAttributeValue},
+					},
+					{
+						Name:       testUserSearchUIDAttribute,
+						ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+					},
+				},
+			},
+		},
+	}
+
+	providerConfig := &ProviderConfig{
+		Name:               "some-provider-name",
+		Host:               testHost,
+		CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+		ConnectionProtocol: TLS,
+		BindUsername:       testBindUsername,
+		BindPassword:       testBindPassword,
+		UserSearch: UserSearchConfig{
+			Base:              testUserSearchBase,
+			UIDAttribute:      testUserSearchUIDAttribute,
+			UsernameAttribute: testUserSearchUsernameAttribute,
+		},
+	}
+
+	tests := []struct {
+		name           string
+		providerConfig *ProviderConfig
+		setupMocks     func(conn *mockldapconn.MockConn)
+		dialError      error
+		wantErr        string
+	}{
+		{
+			name:           "happy path where searching the dn returns a single entry",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+		},
+		{
+			name:           "error where dial fails",
+			providerConfig: providerConfig,
+			dialError:      errors.New("some dial error"),
+			wantErr:        "error dialing host \"ldap.example.com:8443\": some dial error",
+		},
+		{
+			name:           "error binding",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "error binding as \"cn=some-bind-username,dc=pinniped,dc=dev\" before user search: some bind error",
+		},
+		{
+			name:           "search result returns no entries",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" resulted in 0 search results, but expected 1 result",
+		},
+		{
+			name:           "error searching",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(nil, errors.New("some search error"))
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "error searching for user \"some-upstream-user-dn\": some search error",
+		},
+		{
+			name:           "search result returns more than one entry",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN:         testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{},
+						},
+						{
+							DN:         "doesn't-matter",
+							Attributes: []*ldap.EntryAttribute{},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" resulted in 2 search results, but expected 1 result",
+		},
+		{
+			name:           "search result has wrong uid",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte("wrong-uid")},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" produced a different subject than the previous value. expected: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU\", actual: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=d3JvbmctdWlk\"",
+		},
+		{
+			name:           "search result has wrong username",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{"wrong-username"},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user \"some-upstream-user-dn\" returned a different username than the previous value. expected: \"some-upstream-username-value\", actual: \"wrong-username\"",
+		},
+		{
+			name:           "search result has no dn",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "searching for user with original DN \"some-upstream-user-dn\" resulted in search result without DN",
+		},
+		{
+			name:           "search result has 0 values for username attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 0 values for attribute \"some-upstream-username-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has more than one value for username attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue, "something-else"},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 2 values for attribute \"some-upstream-username-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has 0 values for uid attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 0 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+		{
+			name:           "search result has 2 values for uid attribute",
+			providerConfig: providerConfig,
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								{
+									Name:   testUserSearchUsernameAttribute,
+									Values: []string{testUserSearchResultUsernameAttributeValue},
+								},
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue), []byte("other-uid-value")},
+								},
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 2 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			conn := mockldapconn.NewMockConn(ctrl)
+			if tt.setupMocks != nil {
+				tt.setupMocks(conn)
+			}
+
+			dialWasAttempted := false
+			providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+				dialWasAttempted = true
+				require.Equal(t, providerConfig.Host, addr.Endpoint())
+				if tt.dialError != nil {
+					return nil, tt.dialError
+				}
+
+				return conn, nil
+			})
+
+			provider := New(*providerConfig)
+			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
+			err := provider.PerformRefresh(context.Background(), testUserSearchResultDNValue, testUserSearchResultUsernameAttributeValue, subject)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, true, dialWasAttempted)
 		})
 	}
 }

@@ -45,6 +45,10 @@ type CustomSessionData struct {
 
 	// Only used when ProviderType == "oidc".
 	OIDC *OIDCSessionData `json:"oidc,omitempty"`
+
+	LDAP *LDAPSessionData `json:"ldap,omitempty"`
+
+	ActiveDirectory *ActiveDirectorySessionData `json:"activedirectory,omitempty"`
 }
 
 type ProviderType string
@@ -58,6 +62,16 @@ const (
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
 type OIDCSessionData struct {
 	UpstreamRefreshToken string `json:"upstreamRefreshToken"`
+}
+
+// LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.
+type LDAPSessionData struct {
+	UserDN string `json:"userDN"`
+}
+
+// ActiveDirectorySessionData is the additional data needed by Pinniped when the upstream IDP is an Active Directory provider.
+type ActiveDirectorySessionData struct {
+	UserDN string `json:"userDN"`
 }
 
 // NewPinnipedSession returns a new empty session.

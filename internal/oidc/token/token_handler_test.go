@@ -232,7 +232,7 @@ type tokenEndpointResponseExpectedValues struct {
 	wantErrorResponseBody             string
 	wantRequestedScopes               []string
 	wantGrantedScopes                 []string
-	wantUpstreamOIDCRefreshCall       *expectedUpstreamRefresh
+	wantUpstreamRefreshCall           *expectedUpstreamRefresh
 	wantUpstreamOIDCValidateTokenCall *expectedUpstreamValidateTokens
 	wantCustomSessionDataStored       *psession.CustomSessionData
 }
@@ -879,7 +879,19 @@ func TestRefreshGrant(t *testing.T) {
 		oidcUpstreamInitialRefreshToken   = "initial-upstream-refresh-token"
 		oidcUpstreamRefreshedIDToken      = "fake-refreshed-id-token"
 		oidcUpstreamRefreshedRefreshToken = "fake-refreshed-refresh-token"
+
+		ldapUpstreamName        = "some-ldap-idp"
+		ldapUpstreamResourceUID = "ldap-resource-uid"
+		ldapUpstreamType        = "ldap"
+		ldapUpstreamDN          = "some-ldap-user-dn"
+
+		activeDirectoryUpstreamName        = "some-ad-idp"
+		activeDirectoryUpstreamResourceUID = "ad-resource-uid"
+		activeDirectoryUpstreamType        = "activedirectory"
+		activeDirectoryUpstreamDN          = "some-ad-user-dn"
 	)
+
+	ldapUpstreamURL, _ := url.Parse("some-url")
 
 	// The below values are funcs so every test can have its own copy of the objects, to avoid data races
 	// in these parallel tests.
@@ -907,12 +919,36 @@ func TestRefreshGrant(t *testing.T) {
 		return sessionData
 	}
 
-	happyUpstreamRefreshCall := func() *expectedUpstreamRefresh {
+	happyOIDCUpstreamRefreshCall := func() *expectedUpstreamRefresh {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: oidcUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
 				Ctx:          nil, // this will be filled in with the actual request context by the test below
 				RefreshToken: oidcUpstreamInitialRefreshToken,
+			},
+		}
+	}
+
+	happyLDAPUpstreamRefreshCall := func() *expectedUpstreamRefresh {
+		return &expectedUpstreamRefresh{
+			performedByUpstreamName: ldapUpstreamName,
+			args: &oidctestutil.PerformRefreshArgs{
+				Ctx:              nil,
+				DN:               ldapUpstreamDN,
+				ExpectedSubject:  goodSubject,
+				ExpectedUsername: goodUsername,
+			},
+		}
+	}
+
+	happyActiveDirectoryUpstreamRefreshCall := func() *expectedUpstreamRefresh {
+		return &expectedUpstreamRefresh{
+			performedByUpstreamName: activeDirectoryUpstreamName,
+			args: &oidctestutil.PerformRefreshArgs{
+				Ctx:              nil,
+				DN:               activeDirectoryUpstreamDN,
+				ExpectedSubject:  goodSubject,
+				ExpectedUsername: goodUsername,
 			},
 		}
 	}
@@ -944,11 +980,23 @@ func TestRefreshGrant(t *testing.T) {
 		// same as the same values as the authcode exchange case.
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
 		// Should always try to perform an upstream refresh.
-		want.wantUpstreamOIDCRefreshCall = happyUpstreamRefreshCall()
+		want.wantUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
 		// Should only try to ValidateToken when there was an id token returned by the upstream refresh.
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken)
 		}
+		return want
+	}
+
+	happyRefreshTokenResponseForLDAP := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
+		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
+		return want
+	}
+
+	happyRefreshTokenResponseForActiveDirectory := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
+		want.wantUpstreamRefreshCall = happyActiveDirectoryUpstreamRefreshCall()
 		return want
 	}
 
@@ -972,11 +1020,28 @@ func TestRefreshGrant(t *testing.T) {
 		return tokens
 	}
 
+	happyActiveDirectoryCustomSessionData := &psession.CustomSessionData{
+		ProviderUID:  activeDirectoryUpstreamResourceUID,
+		ProviderName: activeDirectoryUpstreamName,
+		ProviderType: activeDirectoryUpstreamType,
+		ActiveDirectory: &psession.ActiveDirectorySessionData{
+			UserDN: activeDirectoryUpstreamDN,
+		},
+	}
+	happyLDAPCustomSessionData := &psession.CustomSessionData{
+		ProviderUID:  ldapUpstreamResourceUID,
+		ProviderName: ldapUpstreamName,
+		ProviderType: ldapUpstreamType,
+		LDAP: &psession.LDAPSessionData{
+			UserDN: ldapUpstreamDN,
+		},
+	}
 	tests := []struct {
-		name             string
-		idps             *oidctestutil.UpstreamIDPListerBuilder
-		authcodeExchange authcodeExchangeInputs
-		refreshRequest   refreshRequestInputs
+		name                      string
+		idps                      *oidctestutil.UpstreamIDPListerBuilder
+		authcodeExchange          authcodeExchangeInputs
+		refreshRequest            refreshRequestInputs
+		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string)
 	}{
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
@@ -1015,7 +1080,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"offline_access"},
 					wantGrantedScopes:                 []string{"offline_access"},
-					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -1096,7 +1161,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:             []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience"},
-					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -1400,7 +1465,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Provider 'this-name-will-not-be-found' of type 'oidc' from upstream session data was not found."
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
 						}
 					`),
 				},
@@ -1449,12 +1514,12 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamOIDCRefreshCall: happyUpstreamRefreshCall(),
-					wantStatus:                  http.StatusUnauthorized,
+					wantUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh failed using provider 'some-oidc-idp' of type 'oidc'."
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
 						}
 					`),
 				},
@@ -1474,13 +1539,520 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamOIDCRefreshCall:       happyUpstreamRefreshCall(),
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token using provider 'some-oidc-idp' of type 'oidc'."
+							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap refresh happy path",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForLDAP(
+					happyLDAPCustomSessionData,
+				),
+			},
+		},
+		{
+			name: "upstream active directory refresh happy path",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: activeDirectoryUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyActiveDirectoryCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForActiveDirectory(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+		},
+		{
+			name: "upstream ldap refresh when the LDAP session data is nil",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:  ldapUpstreamResourceUID,
+					ProviderName: ldapUpstreamName,
+					ProviderType: ldapUpstreamType,
+					LDAP:         nil,
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:  ldapUpstreamResourceUID,
+						ProviderName: ldapUpstreamName,
+						ProviderType: ldapUpstreamType,
+						LDAP:         nil,
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream active directory refresh when the ad session data is nil",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: activeDirectoryUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:     activeDirectoryUpstreamResourceUID,
+					ProviderName:    activeDirectoryUpstreamName,
+					ProviderType:    activeDirectoryUpstreamType,
+					ActiveDirectory: nil,
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:     activeDirectoryUpstreamResourceUID,
+						ProviderName:    activeDirectoryUpstreamName,
+						ProviderType:    activeDirectoryUpstreamType,
+						ActiveDirectory: nil,
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap refresh when the LDAP session data does not contain dn",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:  ldapUpstreamResourceUID,
+					ProviderName: ldapUpstreamName,
+					ProviderType: ldapUpstreamType,
+					LDAP: &psession.LDAPSessionData{
+						UserDN: "",
+					},
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:  ldapUpstreamResourceUID,
+						ProviderName: ldapUpstreamName,
+						ProviderType: ldapUpstreamType,
+						LDAP: &psession.LDAPSessionData{
+							UserDN: "",
+						},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream active directory refresh when the active directory session data does not contain dn",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: activeDirectoryUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: &psession.CustomSessionData{
+					ProviderUID:  ldapUpstreamResourceUID,
+					ProviderName: ldapUpstreamName,
+					ProviderType: ldapUpstreamType,
+					ActiveDirectory: &psession.ActiveDirectorySessionData{
+						UserDN: "",
+					},
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					&psession.CustomSessionData{
+						ProviderUID:  ldapUpstreamResourceUID,
+						ProviderName: ldapUpstreamName,
+						ProviderType: ldapUpstreamType,
+						ActiveDirectory: &psession.ActiveDirectorySessionData{
+							UserDN: "",
+						},
+					},
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap refresh returns an error",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:              ldapUpstreamName,
+				ResourceUID:       ldapUpstreamResourceUID,
+				URL:               ldapUpstreamURL,
+				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream active directory refresh returns an error",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:              activeDirectoryUpstreamName,
+				ResourceUID:       activeDirectoryUpstreamResourceUID,
+				URL:               ldapUpstreamURL,
+				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyActiveDirectoryCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: happyActiveDirectoryUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap idp not found",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream active directory idp not found",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyActiveDirectoryCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider from upstream session data was not found."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "fosite session is empty",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "username not found in extra field",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				//fositeSessionData: &openid.DefaultSession{},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Extra: map[string]interface{}{},
+					},
+				}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "username in extra is not a string",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				//fositeSessionData: &openid.DefaultSession{},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Extra: map[string]interface{}{"username": 123},
+					},
+				}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "username in extra is an empty string",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: ldapUpstreamResourceUID,
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				//fositeSessionData: &openid.DefaultSession{},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				session := firstRequester.GetSession().(*psession.PinnipedSession)
+				session.Fosite = &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Extra: map[string]interface{}{"username": ""},
+					},
+				}
+				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
+				require.NoError(t, err)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				require.NoError(t, err)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusInternalServerError,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "There was an internal server error. Required upstream data not found in session."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the ldap provider in the session storage is found but has the wrong resource UID during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        ldapUpstreamName,
+				ResourceUID: "the-wrong-uid",
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the active directory provider in the session storage is found but has the wrong resource UID during the refresh request",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:        activeDirectoryUpstreamName,
+				ResourceUID: "the-wrong-uid",
+				URL:         ldapUpstreamURL,
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyActiveDirectoryCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyActiveDirectoryCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Provider from upstream session data has changed its resource UID since authentication."
 						}
 					`),
 				},
@@ -1493,6 +2065,8 @@ func TestRefreshGrant(t *testing.T) {
 			t.Parallel()
 
 			// First exchange the authcode for tokens, including a refresh token.
+			// its actually fine to use this function even when simulating ldap (which uses a different flow) because it's
+			// just populating a secret in storage.
 			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange, test.idps.Build())
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -1511,6 +2085,10 @@ func TestRefreshGrant(t *testing.T) {
 			// Send the refresh token back and preform a refresh.
 			firstRefreshToken := parsedAuthcodeExchangeResponseBody["refresh_token"].(string)
 			require.NotEmpty(t, firstRefreshToken)
+
+			if test.modifyRefreshTokenStorage != nil {
+				test.modifyRefreshTokenStorage(t, oauthStore, firstRefreshToken)
+			}
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
 				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).WithContext(reqContext)
@@ -1525,11 +2103,11 @@ func TestRefreshGrant(t *testing.T) {
 			t.Logf("second response body: %q", refreshResponse.Body.String())
 
 			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
-			if test.refreshRequest.want.wantUpstreamOIDCRefreshCall != nil {
-				test.refreshRequest.want.wantUpstreamOIDCRefreshCall.args.Ctx = reqContext
+			if test.refreshRequest.want.wantUpstreamRefreshCall != nil {
+				test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
 				test.idps.RequireExactlyOneCallToPerformRefresh(t,
-					test.refreshRequest.want.wantUpstreamOIDCRefreshCall.performedByUpstreamName,
-					test.refreshRequest.want.wantUpstreamOIDCRefreshCall.args,
+					test.refreshRequest.want.wantUpstreamRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantUpstreamRefreshCall.args,
 				)
 			} else {
 				test.idps.RequireExactlyZeroCallsToPerformRefresh(t)

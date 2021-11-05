@@ -21,12 +21,12 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
@@ -167,6 +167,73 @@ func New(config ProviderConfig) *Provider {
 // A reader for the config. Returns a copy of the config to keep the underlying config read-only.
 func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
+}
+
+func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
+	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
+	searchResult, err := p.performRefresh(ctx, userDN)
+	if err != nil {
+		p.traceRefreshFailure(t, err)
+		return err
+	}
+
+	// if any more or less than one entry, error.
+	// we don't need to worry about logging this because we know it's a dn.
+	if len(searchResult.Entries) != 1 {
+		return fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+			userDN, len(searchResult.Entries),
+		)
+	}
+
+	userEntry := searchResult.Entries[0]
+	if len(userEntry.DN) == 0 {
+		return fmt.Errorf(`searching for user with original DN "%s" resulted in search result without DN`, userDN)
+	}
+
+	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
+	if err != nil {
+		return err
+	}
+	if newUsername != expectedUsername {
+		return fmt.Errorf(`searching for user "%s" returned a different username than the previous value. expected: "%s", actual: "%s"`,
+			userDN, expectedUsername, newUsername,
+		)
+	}
+
+	newUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, userDN)
+	if err != nil {
+		return err
+	}
+	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
+	if newSubject != expectedSubject {
+		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, expectedSubject, newSubject)
+	}
+
+	// we checked that the user still exists and their information is the same, so just return.
+	return nil
+}
+
+func (p *Provider) performRefresh(ctx context.Context, userDN string) (*ldap.SearchResult, error) {
+	search := p.refreshUserSearchRequest(userDN)
+
+	conn, err := p.dial(ctx)
+	if err != nil {
+		return nil, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
+	if err != nil {
+		return nil, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+	}
+
+	searchResult, err := conn.Search(search)
+
+	if err != nil {
+		return nil, fmt.Errorf(`error searching for user "%s": %w`, userDN, err)
+	}
+	return searchResult, nil
 }
 
 func (p *Provider) dial(ctx context.Context) (Conn, error) {
@@ -310,7 +377,7 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 // authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
-func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticator.Response, bool, error) {
+func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
@@ -319,14 +386,14 @@ func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) 
 }
 
 // Authenticate an end user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
-func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
 	}
 	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
-func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
@@ -355,24 +422,16 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
-	mappedUsername, mappedUID, mappedGroupNames, err := p.searchAndBindUser(conn, username, bindFunc)
+	response, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
 	}
-	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
-		// Couldn't find the username or couldn't bind using the password.
+	if response == nil {
 		p.traceAuthFailure(t, fmt.Errorf("bad username or password"))
 		return nil, false, nil
 	}
 
-	response := &authenticator.Response{
-		User: &user.DefaultInfo{
-			Name:   mappedUsername,
-			UID:    mappedUID,
-			Groups: mappedGroupNames,
-		},
-	}
 	p.traceAuthSuccess(t)
 	return response, true, nil
 }
@@ -454,7 +513,7 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	return searchBase, nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,
@@ -462,7 +521,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			"username", username,
 			"err", err,
 		)
-		return "", "", nil, fmt.Errorf(`error searching for user: %w`, err)
+		return nil, fmt.Errorf(`error searching for user: %w`, err)
 	}
 	if len(searchResult.Entries) == 0 {
 		if plog.Enabled(plog.LevelAll) {
@@ -473,38 +532,38 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		} else {
 			plog.Debug("error finding user: user not found (cowardly avoiding printing username because log level is not 'all')", "upstreamName", p.GetName())
 		}
-		return "", "", nil, nil
+		return nil, nil
 	}
 
 	// At this point, we have matched at least one entry, so we can be confident that the username is not actually
 	// someone's password mistakenly entered into the username field, so we can log it without concern.
 	if len(searchResult.Entries) > 1 {
-		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+		return nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
 	// We would like to support binary typed attributes for UIDs, so always read them as binary and encode them,
 	// even when the attribute may not be binary.
 	mappedUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
 	mappedGroupNames := []string{}
 	if len(p.c.GroupSearch.Base) > 0 {
 		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
 		if err != nil {
-			return "", "", nil, err
+			return nil, err
 		}
 	}
 	sort.Strings(mappedGroupNames)
@@ -516,12 +575,26 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
 		ldapErr := &ldap.Error{}
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
-			return "", "", nil, nil
+			return nil, nil
 		}
-		return "", "", nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+		return nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 
-	return mappedUsername, mappedUID, mappedGroupNames, nil
+	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
+		// Couldn't find the username or couldn't bind using the password.
+		return nil, nil
+	}
+
+	response := &authenticators.Response{
+		User: &user.DefaultInfo{
+			Name:   mappedUsername,
+			UID:    mappedUID,
+			Groups: mappedGroupNames,
+		},
+		DN: userEntry.DN,
+	}
+
+	return response, nil
 }
 
 func (p *Provider) defaultNamingContextRequest() *ldap.SearchRequest {
@@ -565,6 +638,21 @@ func (p *Provider) groupSearchRequest(userDN string) *ldap.SearchRequest {
 		Filter:       p.groupSearchFilter(userDN),
 		Attributes:   p.groupSearchRequestedAttributes(),
 		Controls:     nil, // nil because ldap.SearchWithPaging() will set the appropriate controls for us
+	}
+}
+
+func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
+	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
+	return &ldap.SearchRequest{
+		BaseDN:       dn,
+		Scope:        ldap.ScopeBaseObject,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       "(objectClass=*)", // we already have the dn, so the filter doesn't matter
+		Attributes:   p.userSearchRequestedAttributes(),
+		Controls:     nil, // this could be used to enable paging, but we're already limiting the result max size
 	}
 }
 
@@ -685,6 +773,12 @@ func (p *Provider) traceAuthSuccess(t *trace.Trace) {
 func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
 	t.Step("search base discovery failed",
 		trace.Field{Key: "reason", Value: err.Error()})
+}
+
+func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
+	t.Step("refresh failed",
+		trace.Field{Key: "reason", Value: err.Error()},
+	)
 }
 
 func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {

@@ -2092,3 +2092,63 @@ func TestWin32TimestampToTime(t *testing.T) {
 		})
 	}
 }
+
+func TestValidUserAccountControl(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   *ldap.Entry
+		wantErr string
+	}{
+		{
+			name: "happy normal user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"512"},
+					},
+				},
+			},
+		},
+		{
+			name: "happy user whose password doesn't expire",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"65536"},
+					},
+				},
+			},
+		},
+		{
+			name: "deactivated user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"514"},
+					},
+				},
+			},
+			wantErr: "user has been deactivated",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidUserAccountControl(tt.entry, provider2.StoredRefreshAttributes{})
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

@@ -952,7 +952,69 @@ func TestSupervisorLogin(t *testing.T) {
 				)
 			},
 			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
-				changeADTestUserPassword(t, env, username) // this will fail for now
+				changeADTestUserPassword(t, env, username)
+			},
+			// we can't know the subject ahead of time because we created a new user and don't know their uid,
+			// so skip wantDownstreamIDTokenSubjectToMatch
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
+				return "^" + regexp.QuoteMeta(username+"@"+env.SupervisorUpstreamActiveDirectory.Domain) + "$"
+			},
+			wantDownstreamIDTokenGroups: []string{}, // none for now.
+		},
+		{
+			name: "active directory login fails after the user is deactivated",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+				if env.SupervisorUpstreamActiveDirectory.Host == "" {
+					t.Skip("Active Directory hostname not specified")
+				}
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				)
+				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+					Host: env.SupervisorUpstreamActiveDirectory.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+					},
+					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+				return adIDP.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				return createFreshADTestUser(t, env)
+			},
+			deleteTestUser: func(t *testing.T, username string) {
+				deleteTestADUser(t, env, username)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					testUserName,     // username to present to server during login
+					testUserPassword, // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
+				deactivateADTestUser(t, env, username)
 			},
 			// we can't know the subject ahead of time because we created a new user and don't know their uid,
 			// so skip wantDownstreamIDTokenSubjectToMatch
@@ -1727,6 +1789,20 @@ func createFreshADTestUser(t *testing.T, env *testlib.TestEnv) (string, string) 
 	err = conn.Modify(m)
 	require.NoError(t, err)
 	return testUserName, testUserPassword
+}
+
+// deactivate the test user's password
+func deactivateADTestUser(t *testing.T, env *testlib.TestEnv, testUserName string) {
+	conn := dialTLS(t, env)
+	// bind
+	err := conn.Bind(env.SupervisorUpstreamActiveDirectory.BindUsername, env.SupervisorUpstreamActiveDirectory.BindPassword)
+	require.NoError(t, err)
+
+	userDN := fmt.Sprintf("CN=%s,OU=test-users,%s", testUserName, env.SupervisorUpstreamActiveDirectory.UserSearchBase)
+	m := ldap.NewModifyRequest(userDN, []ldap.Control{})
+	m.Replace("userAccountControl", []string{"514"}) // normal user, account disabled
+	err = conn.Modify(m)
+	require.NoError(t, err)
 }
 
 // change the user's password to a new one.

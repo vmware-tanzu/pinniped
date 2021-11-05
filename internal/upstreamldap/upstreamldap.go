@@ -42,6 +42,7 @@ const (
 	defaultLDAPSPort                        = uint16(636)
 	sAMAccountNameAttribute                 = "sAMAccountName"
 	pwdLastSetAttribute                     = "pwdLastSet"
+	userAccountControlAttribute             = "userAccountControl"
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -894,4 +895,17 @@ func win32timestampToTime(win32timestamp string) (*time.Time, error) {
 
 	convertedTime := time.Unix(unixsec, unixns).UTC()
 	return &convertedTime, nil
+}
+
+func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
+	if err != nil {
+		return err
+	}
+
+	deactivated := userAccountControl & 2 // bitwise and.
+	if deactivated != 0 {
+		return fmt.Errorf("user has been deactivated")
+	}
+	return nil
 }

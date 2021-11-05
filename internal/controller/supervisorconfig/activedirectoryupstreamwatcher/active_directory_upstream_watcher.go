@@ -317,7 +317,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		},
 		Dialer:                       c.ldapDialer,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
-		RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin},
+		RefreshAttributeChecks:       map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{"pwdLastSet": upstreamldap.PwdUnchangedSinceLogin, "userAccountControl": upstreamldap.ValidUserAccountControl},
 	}
 
 	if spec.GroupSearch.Attributes.GroupName == "" {

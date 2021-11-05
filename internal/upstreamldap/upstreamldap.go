@@ -172,26 +172,10 @@ func (p *Provider) GetConfig() ProviderConfig {
 func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
-	search := p.refreshUserSearchRequest(userDN)
-
-	conn, err := p.dial(ctx)
+	searchResult, err := p.performRefresh(ctx, userDN)
 	if err != nil {
 		p.traceRefreshFailure(t, err)
-		return fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
-	}
-	defer conn.Close()
-
-	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
-	if err != nil {
-		p.traceRefreshFailure(t, err)
-		return fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
-	}
-
-	searchResult, err := conn.Search(search)
-
-	if err != nil {
-		p.traceRefreshFailure(t, err)
-		return fmt.Errorf(`error searching for user "%s": %w`, userDN, err)
+		return err
 	}
 
 	// if any more or less than one entry, error.
@@ -228,6 +212,28 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername,
 
 	// we checked that the user still exists and their information is the same, so just return.
 	return nil
+}
+
+func (p *Provider) performRefresh(ctx context.Context, userDN string) (*ldap.SearchResult, error) {
+	search := p.refreshUserSearchRequest(userDN)
+
+	conn, err := p.dial(ctx)
+	if err != nil {
+		return nil, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
+	if err != nil {
+		return nil, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+	}
+
+	searchResult, err := conn.Search(search)
+
+	if err != nil {
+		return nil, fmt.Errorf(`error searching for user "%s": %w`, userDN, err)
+	}
+	return searchResult, nil
 }
 
 func (p *Provider) dial(ctx context.Context) (Conn, error) {

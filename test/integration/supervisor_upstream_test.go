@@ -40,6 +40,12 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
 Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": dial tcp: address 444444: in [truncated 10 chars]`,
 			},
+			{
+				Type:    "AdditionalAuthorizeParametersValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: "additionalAuthorizeParameters parameter names are allowed",
+			},
 		})
 	})
 
@@ -72,6 +78,12 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				Message: `failed to perform OIDC discovery against "` + env.SupervisorUpstreamOIDC.Issuer + `/":
 oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorUpstreamOIDC.Issuer + `/" got "` + env.SupervisorUpstreamOIDC.Issuer + `"`,
 			},
+			{
+				Type:    "AdditionalAuthorizeParametersValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: "additionalAuthorizeParameters parameter names are allowed",
+			},
 		})
 	})
 
@@ -102,6 +114,12 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Status:  v1alpha1.ConditionTrue,
 				Reason:  "Success",
 				Message: "discovered issuer configuration",
+			},
+			{
+				Type:    "AdditionalAuthorizeParametersValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
 		})
 	})

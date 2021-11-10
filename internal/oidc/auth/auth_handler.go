@@ -15,9 +15,9 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
@@ -112,11 +112,23 @@ func handleAuthRequestForLDAPUpstream(
 	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
+	dn := authenticateResponse.DN
 
 	customSessionData := &psession.CustomSessionData{
 		ProviderUID:  ldapUpstream.GetResourceUID(),
 		ProviderName: ldapUpstream.GetName(),
 		ProviderType: idpType,
+	}
+
+	if idpType == psession.ProviderTypeLDAP {
+		customSessionData.LDAP = &psession.LDAPSessionData{
+			UserDN: dn,
+		}
+	}
+	if idpType == psession.ProviderTypeActiveDirectory {
+		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
+			UserDN: dn,
+		}
 	}
 
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w,
@@ -470,10 +482,7 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	return nil
 }
 
-func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticator.Response) string {
+func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
 	ldapURL := *ldapUpstream.GetURL()
-	q := ldapURL.Query()
-	q.Set(oidc.IDTokenSubjectClaim, authenticateResponse.User.GetUID())
-	ldapURL.RawQuery = q.Encode()
-	return ldapURL.String()
+	return downstreamsession.DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
 }

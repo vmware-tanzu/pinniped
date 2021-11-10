@@ -44,7 +44,7 @@ func TestSupervisorLogin(t *testing.T) {
 	tests := []struct {
 		name                                 string
 		maybeSkip                            func(t *testing.T)
-		createIDP                            func(t *testing.T)
+		createIDP                            func(t *testing.T) string
 		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client)
 		wantDownstreamIDTokenSubjectToMatch  string
 		wantDownstreamIDTokenUsernameToMatch string
@@ -55,16 +55,16 @@ func TestSupervisorLogin(t *testing.T) {
 		// We don't necessarily have any way to revoke the user's session on the upstream provider,
 		// so to cause the upstream refresh to fail we can cheat by manipulating the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
-		breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData)
+		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName string)
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
 			maybeSkip: func(t *testing.T) {
 				// never need to skip this test
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
-				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -73,9 +73,11 @@ func TestSupervisorLogin(t *testing.T) {
 						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 					},
 				}, idpv1alpha1.PhaseReady)
+				return oidcIDP.Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -90,9 +92,9 @@ func TestSupervisorLogin(t *testing.T) {
 			maybeSkip: func(t *testing.T) {
 				// never need to skip this test
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
-				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -108,9 +110,11 @@ func TestSupervisorLogin(t *testing.T) {
 						AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
 					},
 				}, idpv1alpha1.PhaseReady)
+				return oidcIDP.Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -124,9 +128,9 @@ func TestSupervisorLogin(t *testing.T) {
 			maybeSkip: func(t *testing.T) {
 				// never need to skip this test
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
-				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -138,6 +142,7 @@ func TestSupervisorLogin(t *testing.T) {
 						AllowPasswordGrant: true, // allow the CLI password flow for this OIDCIdentityProvider
 					},
 				}, idpv1alpha1.PhaseReady)
+				return oidcIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -148,7 +153,8 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: func(t *testing.T, customSessionData *psession.CustomSessionData) {
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
@@ -166,7 +172,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -204,6 +210,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -214,7 +221,13 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -233,7 +246,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -271,6 +284,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -281,7 +295,13 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "not-the-same"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.StartTLSOnlyHost+
@@ -300,7 +320,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -338,6 +358,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -348,9 +369,8 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
-			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:           "access_denied",
+			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantErrorType:        "access_denied",
 		},
 		{
 			name: "ldap login still works after updating bind secret",
@@ -360,7 +380,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -416,6 +436,7 @@ func TestSupervisorLogin(t *testing.T) {
 					requireEventually.NoError(err)
 					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
+				return ldapIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -426,7 +447,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -445,7 +471,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -515,6 +541,7 @@ func TestSupervisorLogin(t *testing.T) {
 					requireEventually.NoError(err)
 					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
+				return ldapIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -525,7 +552,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -547,7 +579,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("Active Directory hostname not specified")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -570,6 +602,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+				return adIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -580,7 +613,13 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "not-the-same"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -601,7 +640,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("Active Directory hostname not specified")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -638,6 +677,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+				return adIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -648,7 +688,13 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -670,7 +716,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("Active Directory hostname not specified")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
@@ -711,6 +757,7 @@ func TestSupervisorLogin(t *testing.T) {
 					requireEventually.NoError(err)
 					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
+				return adIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -721,7 +768,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -743,7 +795,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("Active Directory hostname not specified")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
@@ -799,6 +851,7 @@ func TestSupervisorLogin(t *testing.T) {
 					requireEventually.NoError(err)
 					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
+				return adIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -809,7 +862,12 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
+			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
@@ -831,7 +889,7 @@ func TestSupervisorLogin(t *testing.T) {
 					t.Skip("Active Directory hostname not specified")
 				}
 			},
-			createIDP: func(t *testing.T) {
+			createIDP: func(t *testing.T) string {
 				t.Helper()
 				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
@@ -854,6 +912,7 @@ func TestSupervisorLogin(t *testing.T) {
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+				return adIDP.Name
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -864,9 +923,92 @@ func TestSupervisorLogin(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil, // upstream refresh not yet implemented for this IDP type
+			breakRefreshSessionData: nil,
 			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
 			wantErrorType:           "access_denied",
+		},
+		{
+			name: "ldap refresh fails when username changes from email as username to dn as username",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
+				}, idpv1alpha1.LDAPPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string) {
+				// get the idp, update the config.
+				client := testlib.NewSupervisorClientset(t)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+
+				// Create the LDAPIdentityProvider using GenerateName to get a random name.
+				upstreams := client.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace)
+				ldapIDP, err := upstreams.Get(ctx, idpName, metav1.GetOptions{})
+				require.NoError(t, err)
+				ldapIDP.Spec.UserSearch.Attributes.Username = "dn"
+
+				_, err = upstreams.Update(ctx, ldapIDP, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				time.Sleep(10 * time.Second) // wait for controllers to pick up the change
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$",
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 	}
 	for _, test := range tests {
@@ -1007,9 +1149,9 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 
 func testSupervisorLogin(
 	t *testing.T,
-	createIDP func(t *testing.T),
+	createIDP func(t *testing.T) string,
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
-	breakRefreshSessionData func(t *testing.T, customSessionData *psession.CustomSessionData),
+	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string),
 	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 	wantErrorDescription string, wantErrorType string,
 ) {
@@ -1097,7 +1239,7 @@ func testSupervisorLogin(
 	}, 30*time.Second, 200*time.Millisecond)
 
 	// Create upstream IDP and wait for it to become ready.
-	createIDP(t)
+	idpName := createIDP(t)
 
 	// Perform OIDC discovery for our downstream.
 	var discovery *coreosoidc.Provider
@@ -1191,7 +1333,7 @@ func testSupervisorLogin(
 			// Next mutate the part of the session that is used during upstream refresh.
 			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-			breakRefreshSessionData(t, pinnipedSession.Custom)
+			breakRefreshSessionData(t, pinnipedSession, idpName)
 
 			// Then save the mutated Secret back to Kubernetes.
 			// There is no update function, so delete and create again at the same name.
@@ -1204,9 +1346,8 @@ func testSupervisorLogin(
 			require.Error(t, err)
 			require.Regexp(t,
 				regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
-					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed using provider '`)+
-					"[^']+"+ // this would be the name of the identity provider CR
-					regexp.QuoteMeta(fmt.Sprintf(`' of type '%s'."`, pinnipedSession.Custom.ProviderType)),
+					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
+					"[^']+",
 				err.Error(),
 			)
 		}

@@ -15,5 +15,5 @@ image_tag: latest
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
-run_as_user: 1001 #! run_as_user specifies the user ID that will own the process
-run_as_group: 1001 #! run_as_group specifies the group ID that will own the process
+run_as_user: 65532 #! run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
+run_as_group: 65532 #! run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice

@@ -495,6 +495,43 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 	)
 }
 
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToRevokeRefreshToken(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *RevokeRefreshTokenArgs,
+) {
+	t.Helper()
+	var actualArgs *RevokeRefreshTokenArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstreamOIDC.revokeRefreshTokenCallCount
+		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualArgs = upstreamOIDC.revokeRefreshTokenArgs[0]
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
+		"should have been exactly one call to RevokeRefreshToken() by all OIDC upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"RevokeRefreshToken() was called on the wrong OIDC upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToRevokeRefreshToken(t *testing.T) {
+	t.Helper()
+	actualCallCountAcrossAllOIDCUpstreams := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.revokeRefreshTokenCallCount
+	}
+	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
+		"expected exactly zero calls to RevokeRefreshToken()",
+	)
+}
+
 func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 	return &UpstreamIDPListerBuilder{}
 }
@@ -630,6 +667,11 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidatedTokens(tokens *oi
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.validateTokenErr = err
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRevokeRefreshTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.revokeRefreshTokenErr = err
 	return u
 }
 

@@ -403,7 +403,7 @@ func TestReadFromSecret(t *testing.T) {
 	tests := []struct {
 		name        string
 		secret      *corev1.Secret
-		wantSession *AuthorizeCodeSession
+		wantSession *Session
 		wantErr     string
 	}{
 		{
@@ -422,7 +422,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/authcode",
 			},
-			wantSession: &AuthorizeCodeSession{
+			wantSession: &Session{
 				Version: "2",
 				Active:  true,
 				Request: &fosite.Request{

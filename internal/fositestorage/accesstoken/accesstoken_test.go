@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
+	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -276,4 +277,120 @@ func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInt
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
 	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
+}
+
+func TestReadFromSecret(t *testing.T) {
+	tests := []struct {
+		name        string
+		secret      *corev1.Secret
+		wantSession *Session
+		wantErr     string
+	}{
+		{
+			name: "happy path",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "access-token",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/access-token",
+			},
+			wantSession: &Session{
+				Version: "2",
+				Request: &fosite.Request{
+					ID:     "abcd-1",
+					Client: &clientregistry.Client{},
+					Session: &psession.PinnipedSession{
+						Fosite: &openid.DefaultSession{
+							Username: "snorlax",
+							Subject:  "panda",
+						},
+						Custom: &psession.CustomSessionData{
+							ProviderUID:  "fake-provider-uid",
+							ProviderName: "fake-provider-name",
+							ProviderType: "fake-provider-type",
+							OIDC: &psession.OIDCSessionData{
+								UpstreamRefreshToken: "fake-upstream-refresh-token",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "wrong secret type",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "access-token",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/not-access-token",
+			},
+			wantErr: "secret storage data has incorrect type: storage.pinniped.dev/not-access-token must equal storage.pinniped.dev/access-token",
+		},
+		{
+			name: "wrong session version",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "access-token",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"wrong-version-here","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/access-token",
+			},
+			wantErr: "access token request data has wrong version: access token session has version wrong-version-here instead of 2",
+		},
+		{
+			name: "missing request",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "access-token",
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"version":"2","active": true}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/access-token",
+			},
+			wantErr: "malformed access token session: access token request data must be present",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			session, err := ReadFromSecret(tt.secret)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.wantSession, session)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+				require.Nil(t, session)
+			}
+		})
+	}
 }

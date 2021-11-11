@@ -140,6 +140,7 @@ func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string
 // RevokeRefreshToken will attempt to revoke the given token, if the provider has a revocation endpoint.
 func (p *ProviderConfig) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
 	if p.RevocationURL == nil {
+		plog.Trace("RevokeRefreshToken() was called but upstream provider has no available revocation endpoint", "providerName", p.Name)
 		return nil
 	}
 	// First try using client auth in the request params.
@@ -199,9 +200,11 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Success!
+		plog.Trace("RevokeRefreshToken() got 200 OK response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		return false, nil
 	case http.StatusBadRequest:
 		// Bad request might be due to bad client auth method. Try to detect that.
+		plog.Trace("RevokeRefreshToken() got 400 Bad Request response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return false,
@@ -224,9 +227,11 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 		}
 		// Got an "invalid_client" response, which might mean client auth failed, so it may be worth trying again
 		// using another client auth method. See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+		plog.Trace("RevokeRefreshToken()'s 400 Bad Request response from provider's revocation endpoint was type 'invalid_client'", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		return true, err
 	default:
 		// Any other error is probably not due to failed client auth.
+		plog.Trace("RevokeRefreshToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", resp.StatusCode)
 		return false, fmt.Errorf("server responded with status %d", resp.StatusCode)
 	}
 }

@@ -41,8 +41,11 @@ const (
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
 	sAMAccountNameAttribute                 = "sAMAccountName"
-	pwdLastSetAttribute                     = "pwdLastSet"
-	userAccountControlAttribute             = "userAccountControl"
+	PwdLastSetAttribute                     = "pwdLastSet"
+	UserAccountControlAttribute             = "userAccountControl"
+	UserAccountControlComputedAttribute     = "msDS-User-Account-Control-Computed"
+	accountDisabledBitmapValue              = 2
+	accountLockedBitmapValue                = 16
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -860,9 +863,9 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 
 func PwdUnchangedSinceLogin(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
 	authTime := attributes.AuthTime
-	pwdLastSetWin32Format := entry.GetAttributeValues(pwdLastSetAttribute)
+	pwdLastSetWin32Format := entry.GetAttributeValues(PwdLastSetAttribute)
 	if len(pwdLastSetWin32Format) != 1 {
-		return fmt.Errorf("expected to find 1 value for %s attribute, but found %d", pwdLastSetAttribute, len(pwdLastSetWin32Format))
+		return fmt.Errorf("expected to find 1 value for %s attribute, but found %d", PwdLastSetAttribute, len(pwdLastSetWin32Format))
 	}
 	// convert to a time.Time
 	pwdLastSetParsed, err := win32timestampToTime(pwdLastSetWin32Format[0])
@@ -898,14 +901,27 @@ func win32timestampToTime(win32timestamp string) (*time.Time, error) {
 }
 
 func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
-	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlAttribute))
 	if err != nil {
 		return err
 	}
 
-	deactivated := userAccountControl & 2 // bitwise and.
+	deactivated := userAccountControl & accountDisabledBitmapValue // bitwise and.
 	if deactivated != 0 {
 		return fmt.Errorf("user has been deactivated")
+	}
+	return nil
+}
+
+func ValidComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlComputedAttribute))
+	if err != nil {
+		return err
+	}
+
+	locked := userAccountControl & accountLockedBitmapValue // bitwise and
+	if locked != 0 {
+		return fmt.Errorf("user has been locked")
 	}
 	return nil
 }

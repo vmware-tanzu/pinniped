@@ -45,6 +45,7 @@ import (
 	"go.pinniped.dev/test/testlib/browsertest"
 )
 
+// nolint:gocyclo
 func TestSupervisorLogin(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
@@ -1025,6 +1026,68 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups: []string{}, // none for now.
 		},
 		{
+			name: "active directory login fails after the user is locked",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+				if env.SupervisorUpstreamActiveDirectory.Host == "" {
+					t.Skip("Active Directory hostname not specified")
+				}
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				)
+				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+					Host: env.SupervisorUpstreamActiveDirectory.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+					},
+					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+				return adIDP.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				return createFreshADTestUser(t, env)
+			},
+			deleteTestUser: func(t *testing.T, username string) {
+				deleteTestADUser(t, env, username)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					testUserName,     // username to present to server during login
+					testUserPassword, // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
+				lockADTestUser(t, env, username)
+			},
+			// we can't know the subject ahead of time because we created a new user and don't know their uid,
+			// so skip wantDownstreamIDTokenSubjectToMatch
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
+				return "^" + regexp.QuoteMeta(username+"@"+env.SupervisorUpstreamActiveDirectory.Domain) + "$"
+			},
+			wantDownstreamIDTokenGroups: []string{},
+		},
+		{
 			name: "logging in to activedirectory with a deactivated user fails",
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
@@ -1153,7 +1216,7 @@ func TestSupervisorLogin(t *testing.T) {
 					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
 			) + "$",
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
@@ -1788,10 +1851,12 @@ func createFreshADTestUser(t *testing.T, env *testlib.TestEnv) (string, string) 
 	m.Replace("userAccountControl", []string{"512"})
 	err = conn.Modify(m)
 	require.NoError(t, err)
+
+	time.Sleep(20 * time.Second) // intrasite domain controller replication can take up to 15 seconds, so wait to ensure the change has propogated.
 	return testUserName, testUserPassword
 }
 
-// deactivate the test user's password
+// deactivate the test user.
 func deactivateADTestUser(t *testing.T, env *testlib.TestEnv, testUserName string) {
 	conn := dialTLS(t, env)
 	// bind
@@ -1803,6 +1868,24 @@ func deactivateADTestUser(t *testing.T, env *testlib.TestEnv, testUserName strin
 	m.Replace("userAccountControl", []string{"514"}) // normal user, account disabled
 	err = conn.Modify(m)
 	require.NoError(t, err)
+
+	time.Sleep(20 * time.Second) // intrasite domain controller replication can take up to 15 seconds, so wait to ensure the change has propogated.
+}
+
+// lock the test user's account by entering the wrong password a bunch of times.
+func lockADTestUser(t *testing.T, env *testlib.TestEnv, testUserName string) {
+	userDN := fmt.Sprintf("CN=%s,OU=test-users,%s", testUserName, env.SupervisorUpstreamActiveDirectory.UserSearchBase)
+	conn := dialTLS(t, env)
+
+	for i := 0; i <= 21; i++ { // our password policy allows 20 wrong attempts before locking the account, so do 21.
+		err := conn.Bind(userDN, "not-the-right-password-"+fmt.Sprint(i))
+		require.Error(t, err) // this should be an error
+	}
+
+	err := conn.Bind(env.SupervisorUpstreamActiveDirectory.BindUsername, env.SupervisorUpstreamActiveDirectory.BindPassword)
+	require.NoError(t, err)
+
+	time.Sleep(20 * time.Second) // intrasite domain controller replication can take up to 15 seconds, so wait to ensure the change has propogated.
 }
 
 // change the user's password to a new one.
@@ -1822,13 +1905,14 @@ func changeADTestUserPassword(t *testing.T, env *testlib.TestEnv, testUserName s
 	m.Replace("unicodePwd", []string{encodedTestUserPassword})
 	err = conn.Modify(m)
 	require.NoError(t, err)
+
+	time.Sleep(20 * time.Second) // intrasite domain controller replication can take up to 15 seconds, so wait to ensure the change has propogated.
 	// don't bother to return the new password... we won't be using it, just checking that it's changed.
 }
 
 // delete the test user created for this test.
 func deleteTestADUser(t *testing.T, env *testlib.TestEnv, testUserName string) {
 	t.Helper()
-
 	conn := dialTLS(t, env)
 	// bind
 	err := conn.Bind(env.SupervisorUpstreamActiveDirectory.BindUsername, env.SupervisorUpstreamActiveDirectory.BindPassword)

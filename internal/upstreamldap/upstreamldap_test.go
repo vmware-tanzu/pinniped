@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	provider2 "go.pinniped.dev/internal/oidc/provider"
-
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -28,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
+	provider2 "go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
@@ -2142,6 +2141,54 @@ func TestValidUserAccountControl(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidUserAccountControl(tt.entry, provider2.StoredRefreshAttributes{})
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidComputedUserAccountControl(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   *ldap.Entry
+		wantErr string
+	}{
+		{
+			name: "happy normal user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"0"},
+					},
+				},
+			},
+		},
+		{
+			name: "locked user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"16"},
+					},
+				},
+			},
+			wantErr: "user has been locked",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidComputedUserAccountControl(tt.entry, provider2.StoredRefreshAttributes{})
 
 			if tt.wantErr != "" {
 				require.Error(t, err)

@@ -59,6 +59,9 @@ type Config struct {
 	// the kubecertagent package's controllers should manage the agent pods.
 	KubeCertAgentConfig *concierge.KubeCertAgentSpec
 
+	// ImpersonationProxyServerPort decides which port the impersonation proxy should bind.
+	ImpersonationProxyServerPort int
+
 	// DiscoveryURLOverride allows a caller to inject a hardcoded discovery URL into Pinniped
 	// discovery document.
 	DiscoveryURLOverride *string
@@ -93,7 +96,7 @@ type Config struct {
 	Labels map[string]string
 }
 
-// Prepare the controllers and their informers and return a function that will start them when called.
+// PrepareControllers prepares the controllers and their informers and returns a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
 func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(c.APIGroupSuffix)
@@ -262,6 +265,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				informers.installationNamespaceK8s.Core().V1().Services(),
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
+				c.ImpersonationProxyServerPort,
 				c.NamesConfig.ImpersonationLoadBalancerService,
 				c.NamesConfig.ImpersonationClusterIPService,
 				c.NamesConfig.ImpersonationTLSCertificateSecret,

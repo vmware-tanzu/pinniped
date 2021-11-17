@@ -27,6 +27,11 @@ const (
 	// allow traffic from the control plane to most ports, but do allow traffic to port 10250. This allows
 	// the Concierge to work without additional configuration on these types of clusters.
 	aggregatedAPIServerPortDefault = 10250
+
+	// Use port 8444 because that is the port that was selected for the first released version of the
+	// impersonation proxy, and has been the value since. It was originally selected because the
+	// aggregated API server used to run on 8443 (has since changed), so 8444 was the next available port.
+	impersonationProxyPortDefault = 8444
 )
 
 // FromPath loads an Config from a provided local file path, inserts any
@@ -49,6 +54,7 @@ func FromPath(path string) (*Config, error) {
 
 	maybeSetAPIDefaults(&config.APIConfig)
 	maybeSetAggregatedAPIServerPortDefaults(&config.AggregatedAPIServerPort)
+	maybeSetImpersonationProxyServerPortDefaults(&config.ImpersonationProxyServerPort)
 	maybeSetAPIGroupSuffixDefault(&config.APIGroupSuffix)
 	maybeSetKubeCertAgentDefaults(&config.KubeCertAgentConfig)
 
@@ -60,8 +66,12 @@ func FromPath(path string) (*Config, error) {
 		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
 	}
 
-	if err := validateAggregatedAPIServerPort(config.AggregatedAPIServerPort); err != nil {
+	if err := validateServerPort(config.AggregatedAPIServerPort); err != nil {
 		return nil, fmt.Errorf("validate aggregatedAPIServerPort: %w", err)
+	}
+
+	if err := validateServerPort(config.ImpersonationProxyServerPort); err != nil {
+		return nil, fmt.Errorf("validate impersonationProxyServerPort: %w", err)
 	}
 
 	if err := validateNames(&config.NamesConfig); err != nil {
@@ -95,9 +105,15 @@ func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	}
 }
 
-func maybeSetAggregatedAPIServerPortDefaults(aggregatedAPIServerPort **int64) {
-	if *aggregatedAPIServerPort == nil {
-		*aggregatedAPIServerPort = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
+func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
+	if *port == nil {
+		*port = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
+	}
+}
+
+func maybeSetImpersonationProxyServerPortDefaults(port **int64) {
+	if *port == nil {
+		*port = pointer.Int64Ptr(impersonationProxyPortDefault)
 	}
 }
 
@@ -165,9 +181,9 @@ func validateAPIGroupSuffix(apiGroupSuffix string) error {
 	return groupsuffix.Validate(apiGroupSuffix)
 }
 
-func validateAggregatedAPIServerPort(aggregatedAPIServerPort *int64) error {
+func validateServerPort(port *int64) error {
 	// It cannot be below 1024 because the container is not running as root.
-	if *aggregatedAPIServerPort < 1024 || *aggregatedAPIServerPort > 65535 {
+	if *port < 1024 || *port > 65535 {
 		return constable.Error("must be within range 1024 to 65535")
 	}
 	return nil

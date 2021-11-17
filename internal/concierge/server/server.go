@@ -150,6 +150,8 @@ func (a *App) runServer(ctx context.Context) error {
 			ServingCertDuration:              time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:           time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
 			AuthenticatorCache:               authenticators,
+			// This port should be safe to cast because the config reader already validated it.
+			ImpersonationProxyServerPort: int(*cfg.ImpersonationProxyServerPort),
 		},
 	)
 	if err != nil {

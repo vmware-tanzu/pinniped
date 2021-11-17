@@ -34,6 +34,7 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: 2400
 				apiGroupSuffix: some.suffix.com
 				aggregatedAPIServerPort: 12345
+				impersonationProxyServerPort: 4242
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
@@ -66,8 +67,9 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: pointer.Int64Ptr(2400),
 					},
 				},
-				APIGroupSuffix:          pointer.StringPtr("some.suffix.com"),
-				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
+				APIGroupSuffix:               pointer.StringPtr("some.suffix.com"),
+				AggregatedAPIServerPort:      pointer.Int64Ptr(12345),
+				ImpersonationProxyServerPort: pointer.Int64Ptr(4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
@@ -110,8 +112,9 @@ func TestFromPath(t *testing.T) {
 				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: nil,
 				},
-				APIGroupSuffix:          pointer.StringPtr("pinniped.dev"),
-				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
+				APIGroupSuffix:               pointer.StringPtr("pinniped.dev"),
+				AggregatedAPIServerPort:      pointer.Int64Ptr(10250),
+				ImpersonationProxyServerPort: pointer.Int64Ptr(8444),
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
 						DurationSeconds:    pointer.Int64Ptr(60 * 60 * 24 * 365),    // about a year
@@ -341,6 +344,22 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 65536
 			`),
 			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
+		},
+		{
+			name: "ImpersonationProxyServerPort too small",
+			yaml: here.Doc(`
+				---
+				impersonationProxyServerPort: 1023
+			`),
+			wantError: "validate impersonationProxyServerPort: must be within range 1024 to 65535",
+		},
+		{
+			name: "ImpersonationProxyServerPort too large",
+			yaml: here.Doc(`
+				---
+				impersonationProxyServerPort: 65536
+			`),
+			wantError: "validate impersonationProxyServerPort: must be within range 1024 to 65535",
 		},
 		{
 			name: "ZeroRenewBefore",

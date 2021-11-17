@@ -121,28 +121,40 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 			continue
 		}
 
-		if garbageCollectAfterTime.Before(frozenClock.Now()) {
-			storageType, isSessionStorage := secret.Labels[crud.SecretLabelKey]
-			if isSessionStorage {
-				err := c.maybeRevokeUpstreamOIDCRefreshToken(ctx.Context, storageType, secret)
-				if err != nil {
-					// Log the error for debugging purposes, but still carry on to delete the Secret despite the error.
-					plog.WarningErr("garbage collector could not revoke upstream refresh token", err, logKV(secret))
+		if !garbageCollectAfterTime.Before(frozenClock.Now()) {
+			// not old enough yet
+			continue
+		}
+
+		storageType, isSessionStorage := secret.Labels[crud.SecretLabelKey]
+		if isSessionStorage {
+			err := c.maybeRevokeUpstreamOIDCRefreshToken(ctx.Context, storageType, secret)
+			if err != nil {
+				// Log the error for debugging purposes, but still carry on to delete the Secret despite the error.
+				plog.WarningErr("garbage collector could not revoke upstream refresh token", err, logKV(secret))
+				// If the error is of a type that is worth retrying, then not delete the Secret right away.
+				// A future call to Sync will try revocation again for that secret. However, if the Secret is
+				// getting too old, then just delete it anyway. We don't want to extend the lifetime of these
+				// session Secrets by too much time, since the garbage collector is the only thing that is
+				// cleaning them out of etcd storage.
+				fourHoursAgo := frozenClock.Now().Add(-4 * time.Hour)
+				if errors.As(err, &retryableRevocationError{}) && garbageCollectAfterTime.After(fourHoursAgo) {
+					continue
 				}
 			}
-
-			err = c.kubeClient.CoreV1().Secrets(secret.Namespace).Delete(ctx.Context, secret.Name, metav1.DeleteOptions{
-				Preconditions: &metav1.Preconditions{
-					UID:             &secret.UID,
-					ResourceVersion: &secret.ResourceVersion,
-				},
-			})
-			if err != nil {
-				plog.WarningErr("failed to garbage collect resource", err, logKV(secret))
-				continue
-			}
-			plog.Info("storage garbage collector deleted resource", logKV(secret))
 		}
+
+		err = c.kubeClient.CoreV1().Secrets(secret.Namespace).Delete(ctx.Context, secret.Name, metav1.DeleteOptions{
+			Preconditions: &metav1.Preconditions{
+				UID:             &secret.UID,
+				ResourceVersion: &secret.ResourceVersion,
+			},
+		})
+		if err != nil {
+			plog.WarningErr("failed to garbage collect resource", err, logKV(secret))
+			continue
+		}
+		plog.Info("storage garbage collector deleted resource", logKV(secret))
 	}
 
 	return nil
@@ -222,6 +234,7 @@ func (c *garbageCollectorController) revokeUpstreamOIDCRefreshToken(ctx context.
 	for _, p := range c.idpCache.GetOIDCIdentityProviders() {
 		if p.GetName() == customSessionData.ProviderName && p.GetResourceUID() == customSessionData.ProviderUID {
 			foundOIDCIdentityProviderI = p
+			break
 		}
 	}
 	if foundOIDCIdentityProviderI == nil {
@@ -231,11 +244,27 @@ func (c *garbageCollectorController) revokeUpstreamOIDCRefreshToken(ctx context.
 	// Revoke the upstream refresh token. This is a noop if the upstream provider does not offer a revocation endpoint.
 	err := foundOIDCIdentityProviderI.RevokeRefreshToken(ctx, customSessionData.OIDC.UpstreamRefreshToken)
 	if err != nil {
-		return err
+		// This could be a network failure, a 503 result which we should retry
+		// (see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1),
+		// or any other non-200 response from the revocation endpoint.
+		// Regardless of which, it is probably worth retrying.
+		return retryableRevocationError{wrapped: err}
 	}
 
 	plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret))
 	return nil
+}
+
+type retryableRevocationError struct {
+	wrapped error
+}
+
+func (e retryableRevocationError) Error() string {
+	return fmt.Sprintf("retryable revocation error: %v", e.wrapped)
+}
+
+func (e retryableRevocationError) Unwrap() error {
+	return e.wrapped
 }
 
 func logKV(secret *v1.Secret) []interface{} {

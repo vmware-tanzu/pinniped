@@ -625,7 +625,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there is a valid, expired authcode secret but the upstream revocation fails", func() {
+		when("there is a valid, recently expired authcode secret but the upstream revocation fails", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
 					Version: "2",
@@ -654,7 +654,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						UID:             "uid-123",
 						ResourceVersion: "rv-123",
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
+							// expired almost 4 hours ago, but not quite 4 hours
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add((-time.Hour * 4) + time.Second).Format(time.RFC3339),
 						},
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": authorizationcode.TypeLabelValue,
@@ -672,7 +673,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
 			})
 
-			it("should remove the secret anyway because it has expired", func() {
+			it("keeps the secret for a while longer so the revocation can be retried on a future sync", func() {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
@@ -691,7 +692,79 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 				)
 
-				// The authcode session secrets is still deleted because it is expired.
+				// The authcode session secrets is not deleted.
+				r.Empty(kubeClient.Actions())
+			})
+		})
+
+		when("there is a valid, long-since expired authcode secret but the upstream revocation fails", func() {
+			it.Before(func() {
+				activeOIDCAuthcodeSession := &authorizationcode.Session{
+					Version: "2",
+					Active:  true,
+					Request: &fosite.Request{
+						ID:     "request-id-1",
+						Client: &clientregistry.Client{},
+						Session: &psession.PinnipedSession{
+							Custom: &psession.CustomSessionData{
+								ProviderUID:  "upstream-oidc-provider-uid",
+								ProviderName: "upstream-oidc-provider-name",
+								ProviderType: psession.ProviderTypeOIDC,
+								OIDC: &psession.OIDCSessionData{
+									UpstreamRefreshToken: "fake-upstream-refresh-token",
+								},
+							},
+						},
+					},
+				}
+				activeOIDCAuthcodeSessionJSON, err := json.Marshal(activeOIDCAuthcodeSession)
+				r.NoError(err)
+				activeOIDCAuthcodeSessionSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "activeOIDCAuthcodeSession",
+						Namespace:       installedInNamespace,
+						UID:             "uid-123",
+						ResourceVersion: "rv-123",
+						Annotations: map[string]string{
+							// expired just over 4 hours ago
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add((-time.Hour * 4) - time.Second).Format(time.RFC3339),
+						},
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": authorizationcode.TypeLabelValue,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    activeOIDCAuthcodeSessionJSON,
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/" + authorizationcode.TypeLabelValue,
+				}
+				_, err = authorizationcode.ReadFromSecret(activeOIDCAuthcodeSessionSecret)
+				r.NoError(err, "the test author accidentally formed an invalid authcode secret")
+				r.NoError(kubeInformerClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
+				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
+			})
+
+			it("deletes the secret because it has probably been retrying revocation for hours without success", func() {
+				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+					WithName("upstream-oidc-provider-name").
+					WithResourceUID("upstream-oidc-provider-uid").
+					WithRevokeRefreshTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
+				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+
+				startInformersAndController(idpListerBuilder.Build())
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+				// Tried to revoke it, although this revocation will fail.
+				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+					"upstream-oidc-provider-name",
+					&oidctestutil.RevokeRefreshTokenArgs{
+						Ctx:          syncContext.Context,
+						RefreshToken: "fake-upstream-refresh-token",
+					},
+				)
+
+				// The authcode session secrets is deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
 						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession"),

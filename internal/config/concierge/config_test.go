@@ -33,6 +33,7 @@ func TestFromPath(t *testing.T) {
 					durationSeconds: 3600
 					renewBeforeSeconds: 2400
 				apiGroupSuffix: some.suffix.com
+				aggregatedAPIServerPort: 12345
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
@@ -65,7 +66,8 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: pointer.Int64Ptr(2400),
 					},
 				},
-				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				APIGroupSuffix:          pointer.StringPtr("some.suffix.com"),
+				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
@@ -108,7 +110,8 @@ func TestFromPath(t *testing.T) {
 				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: nil,
 				},
-				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				APIGroupSuffix:          pointer.StringPtr("pinniped.dev"),
+				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
 						DurationSeconds:    pointer.Int64Ptr(60 * 60 * 24 * 365),    // about a year
@@ -322,6 +325,22 @@ func TestFromPath(t *testing.T) {
 				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate api: renewBefore must be positive",
+		},
+		{
+			name: "AggregatedAPIServerPortDefault too small",
+			yaml: here.Doc(`
+				---
+				aggregatedAPIServerPort: 1023
+			`),
+			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
+		},
+		{
+			name: "AggregatedAPIServerPortDefault too large",
+			yaml: here.Doc(`
+				---
+				aggregatedAPIServerPort: 65536
+			`),
+			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
 		},
 		{
 			name: "ZeroRenewBefore",

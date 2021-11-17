@@ -7,13 +7,14 @@ import "go.pinniped.dev/internal/plog"
 
 // Config contains knobs to setup an instance of the Pinniped Concierge.
 type Config struct {
-	DiscoveryInfo       DiscoveryInfoSpec `json:"discovery"`
-	APIConfig           APIConfigSpec     `json:"api"`
-	APIGroupSuffix      *string           `json:"apiGroupSuffix,omitempty"`
-	NamesConfig         NamesConfigSpec   `json:"names"`
-	KubeCertAgentConfig KubeCertAgentSpec `json:"kubeCertAgent"`
-	Labels              map[string]string `json:"labels"`
-	LogLevel            plog.LogLevel     `json:"logLevel"`
+	DiscoveryInfo           DiscoveryInfoSpec `json:"discovery"`
+	APIConfig               APIConfigSpec     `json:"api"`
+	APIGroupSuffix          *string           `json:"apiGroupSuffix,omitempty"`
+	AggregatedAPIServerPort *int64            `json:"aggregatedAPIServerPort"`
+	NamesConfig             NamesConfigSpec   `json:"names"`
+	KubeCertAgentConfig     KubeCertAgentSpec `json:"kubeCertAgent"`
+	Labels                  map[string]string `json:"labels"`
+	LogLevel                plog.LogLevel     `json:"logLevel"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

@@ -21,6 +21,12 @@ import (
 const (
 	aboutAYear   = 60 * 60 * 24 * 365
 	about9Months = 60 * 60 * 24 * 30 * 9
+
+	// Use 10250 because it happens to be the same port on which the Kubelet listens, so some cluster types
+	// are more permissive with servers that run on this port. For example, GKE private clusters do not
+	// allow traffic from the control plane to most ports, but do allow traffic to port 10250. This allows
+	// the Concierge to work without additional configuration on these types of clusters.
+	aggregatedAPIServerPortDefault = 10250
 )
 
 // FromPath loads an Config from a provided local file path, inserts any
@@ -42,6 +48,7 @@ func FromPath(path string) (*Config, error) {
 	}
 
 	maybeSetAPIDefaults(&config.APIConfig)
+	maybeSetAggregatedAPIServerPortDefaults(&config.AggregatedAPIServerPort)
 	maybeSetAPIGroupSuffixDefault(&config.APIGroupSuffix)
 	maybeSetKubeCertAgentDefaults(&config.KubeCertAgentConfig)
 
@@ -51,6 +58,10 @@ func FromPath(path string) (*Config, error) {
 
 	if err := validateAPIGroupSuffix(*config.APIGroupSuffix); err != nil {
 		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
+	}
+
+	if err := validateAggregatedAPIServerPort(config.AggregatedAPIServerPort); err != nil {
+		return nil, fmt.Errorf("validate aggregatedAPIServerPort: %w", err)
 	}
 
 	if err := validateNames(&config.NamesConfig); err != nil {
@@ -81,6 +92,12 @@ func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
 		*apiGroupSuffix = pointer.StringPtr(groupsuffix.PinnipedDefaultSuffix)
+	}
+}
+
+func maybeSetAggregatedAPIServerPortDefaults(aggregatedAPIServerPort **int64) {
+	if *aggregatedAPIServerPort == nil {
+		*aggregatedAPIServerPort = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
 	}
 }
 
@@ -146,4 +163,12 @@ func validateAPI(apiConfig *APIConfigSpec) error {
 
 func validateAPIGroupSuffix(apiGroupSuffix string) error {
 	return groupsuffix.Validate(apiGroupSuffix)
+}
+
+func validateAggregatedAPIServerPort(aggregatedAPIServerPort *int64) error {
+	// It cannot be below 1024 because the container is not running as root.
+	if *aggregatedAPIServerPort < 1024 || *aggregatedAPIServerPort > 65535 {
+		return constable.Error("must be within range 1024 to 65535")
+	}
+	return nil
 }

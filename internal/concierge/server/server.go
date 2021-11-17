@@ -168,6 +168,7 @@ func (a *App) runServer(ctx context.Context) error {
 		certIssuer,
 		buildControllers,
 		*cfg.APIGroupSuffix,
+		*cfg.AggregatedAPIServerPort,
 		scheme,
 		loginGV,
 		identityGV,
@@ -193,6 +194,7 @@ func getAggregatedAPIServerConfig(
 	issuer issuer.ClientCertIssuer,
 	buildControllers controllerinit.RunnerBuilder,
 	apiGroupSuffix string,
+	aggregatedAPIServerPort int64,
 	scheme *runtime.Scheme,
 	loginConciergeGroupVersion, identityConciergeGroupVersion schema.GroupVersion,
 ) (*apiserver.Config, error) {
@@ -207,7 +209,9 @@ func getAggregatedAPIServerConfig(
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
-	recommendedOptions.SecureServing.BindPort = 8443 // Don't run on default 443 because that requires root
+
+	// This port is configurable. It should be safe to cast because the config reader already validated it.
+	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
 
 	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
 	// Note that among other things, this ApplyTo() function copies

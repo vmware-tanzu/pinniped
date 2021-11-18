@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"k8s.io/component-base/logs"
+	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/constable"
 )
@@ -54,5 +55,5 @@ func ValidateAndSetLogLevelGlobally(level LogLevel) error {
 // Enabled returns whether the provided plog level is enabled, i.e., whether print statements at the
 // provided level will show up.
 func Enabled(level LogLevel) bool {
-	return getKlogLevel() >= klogLevelForPlogLevel(level)
+	return klog.V(klogLevelForPlogLevel(level)).Enabled()
 }

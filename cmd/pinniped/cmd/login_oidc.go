@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -21,12 +20,12 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-	"k8s.io/client-go/transport"
 	"k8s.io/klog/v2/klogr"
 
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/execcredcache"
 	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -308,18 +307,7 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 		}
 		pool.AppendCertsFromPEM(pem)
 	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			TLSClientConfig: &tls.Config{
-				RootCAs:    pool,
-				MinVersion: tls.VersionTLS12,
-			},
-		},
-	}
-
-	client.Transport = transport.DebugWrappers(client.Transport)
-	return client, nil
+	return phttp.Default(pool), nil
 }
 
 func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
@@ -338,7 +326,7 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel(lookupEnv func(string) (string, bool)) (*plog.PLogger, error) {
+func SetLogLevel(lookupEnv func(string) (string, bool)) (plog.Logger, error) {
 	debug, _ := lookupEnv("PINNIPED_DEBUG")
 	if debug == "true" {
 		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
@@ -347,7 +335,7 @@ func SetLogLevel(lookupEnv func(string) (string, bool)) (*plog.PLogger, error) {
 		}
 	}
 	logger := plog.New("Pinniped login: ")
-	return &logger, nil
+	return logger, nil
 }
 
 // mustGetConfigDir returns a directory that follows the XDG base directory convention:

@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	oidc2 "github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -60,8 +60,8 @@ func MakeDownstreamSession(subject string, username string, groups []string, cus
 
 // GrantScopesIfRequested auto-grants the scopes for which we do not require end-user approval, if they were requested.
 func GrantScopesIfRequested(authorizeRequester fosite.AuthorizeRequester) {
-	oidc.GrantScopeIfRequested(authorizeRequester, oidc2.ScopeOpenID)
-	oidc.GrantScopeIfRequested(authorizeRequester, oidc2.ScopeOfflineAccess)
+	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
+	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
 	oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
 }
 

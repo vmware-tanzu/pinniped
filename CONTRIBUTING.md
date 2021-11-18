@@ -114,11 +114,12 @@ docker build .
    - [`kind`](https://kind.sigs.k8s.io/docs/user/quick-start)
    - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
    - [`ytt`](https://carvel.dev/#getting-started)
+   - [`nmap`](https://nmap.org/download.html)
 
    On macOS, these tools can be installed with [Homebrew](https://brew.sh/) (assuming you have Chrome installed already):
 
    ```bash
-   brew install kind k14s/tap/ytt k14s/tap/kapp kubectl chromedriver && brew cask install docker
+   brew install kind k14s/tap/ytt k14s/tap/kapp kubectl chromedriver nmap && brew cask install docker
    ```
 
 1. Create a kind cluster, compile, create container images, and install Pinniped and supporting dependencies using:

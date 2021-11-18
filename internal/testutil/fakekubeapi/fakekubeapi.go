@@ -18,7 +18,6 @@
 package fakekubeapi
 
 import (
-	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"mime"
@@ -37,7 +36,9 @@ import (
 
 	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
 	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 // Start starts an httptest.Server (with TLS) that pretends to be a Kube API server.
@@ -54,7 +55,9 @@ func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server,
 		resources = make(map[string]runtime.Object)
 	}
 
-	server := httptest.NewTLSServer(httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (err error) {
+	server := tlsserver.TLSTestServer(t, httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		tlsserver.AssertTLS(t, r, ptls.Secure)
+
 		obj, err := decodeObj(r)
 		if err != nil {
 			return err
@@ -74,11 +77,11 @@ func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server,
 		}
 
 		return nil
-	}))
+	}), tlsserver.RecordTLSHello)
 	restConfig := &restclient.Config{
 		Host: server.URL,
 		TLSClientConfig: restclient.TLSClientConfig{
-			CAData: pem.EncodeToMemory(&pem.Block{Bytes: server.Certificate().Raw, Type: "CERTIFICATE"}),
+			CAData: tlsserver.TLSTestServerCA(server),
 		},
 	}
 	return server, restConfig

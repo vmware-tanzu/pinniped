@@ -7,22 +7,31 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	clientauthenticationv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 	"k8s.io/client-go/rest"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/transport"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
+	// register all client-go auth plugins.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/testutil/fakekubeapi"
 )
 
@@ -514,9 +523,12 @@ func TestKubeclient(t *testing.T) {
 				return []*spyMiddleware{newSimpleMiddleware(t, true, false, false)}
 			},
 			editRestConfig: func(t *testing.T, restConfig *rest.Config) {
-				restConfig.Dial = func(_ context.Context, _, _ string) (net.Conn, error) {
-					return nil, fmt.Errorf("some fake connection error")
-				}
+				// avoid messing with restConfig.Dial since it breaks client-go TLS cache logic
+				restConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+					return roundtripper.WrapFunc(rt, func(_ *http.Request) (*http.Response, error) {
+						return nil, fmt.Errorf("some fake connection error")
+					})
+				})
 			},
 			reallyRunTest: func(t *testing.T, c *Client) {
 				_, err := c.PinnipedSupervisor.
@@ -591,8 +603,7 @@ func TestKubeclient(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			server, restConfig := fakekubeapi.Start(t, nil)
-			defer server.Close()
+			_, restConfig := fakekubeapi.Start(t, nil)
 
 			if test.editRestConfig != nil {
 				test.editRestConfig(t, restConfig)
@@ -754,21 +765,45 @@ func newFailingMiddleware(t *testing.T, name string, mutateReqFails, mutateRespF
 }
 
 type wantCloser struct {
-	io.ReadCloser
-	closeCount                      int
-	closeCalls                      []string
-	couldReadBytesJustBeforeClosing bool
+	m sync.Mutex
+
+	_rc                              io.ReadCloser
+	_closeCalls                      []string
+	_couldReadBytesJustBeforeClosing bool
 }
 
-func (wc *wantCloser) Close() error {
-	wc.closeCount++
-	wc.closeCalls = append(wc.closeCalls, getCaller())
-	n, _ := wc.ReadCloser.Read([]byte{0})
+func (w *wantCloser) Close() error {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	w._closeCalls = append(w._closeCalls, getCaller())
+	n, _ := w._rc.Read([]byte{0})
 	if n > 0 {
 		// there were still bytes left to be read
-		wc.couldReadBytesJustBeforeClosing = true
+		w._couldReadBytesJustBeforeClosing = true
 	}
-	return wc.ReadCloser.Close()
+	return w._rc.Close()
+}
+
+func (w *wantCloser) Read(p []byte) (int, error) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	return w._rc.Read(p)
+}
+
+func (w *wantCloser) couldRead() bool {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	return w._couldReadBytesJustBeforeClosing
+}
+
+func (w *wantCloser) calls() []string {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	return w._closeCalls
 }
 
 func getCaller() string {
@@ -785,11 +820,14 @@ func getCaller() string {
 func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 	caller := getCaller()
 	return func(rt http.RoundTripper) http.RoundTripper {
-		return roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
+		return roundtripper.WrapFunc(rt, roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
 			if req.Body != nil {
-				wc := &wantCloser{ReadCloser: req.Body}
+				wc := &wantCloser{_rc: req.Body}
 				t.Cleanup(func() {
-					require.Equalf(t, wc.closeCount, 1, "did not close req body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
+					require.Eventuallyf(t, func() bool {
+						return 1 == len(wc.calls())
+					}, 5*time.Second, 100*time.Millisecond,
+						"did not close req body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.calls())
 				})
 				req.Body = wc
 			}
@@ -800,9 +838,12 @@ func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 					if originalErr != nil {
 						return nil, originalErr
 					}
-					wc := &wantCloser{ReadCloser: originalBodyCopy}
+					wc := &wantCloser{_rc: originalBodyCopy}
 					t.Cleanup(func() {
-						require.Equalf(t, wc.closeCount, 1, "did not close req body copy expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
+						require.Eventuallyf(t, func() bool {
+							return 1 == len(wc.calls())
+						}, 5*time.Second, 100*time.Millisecond,
+							"did not close req body copy expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.calls())
 					})
 					return wc, nil
 				}
@@ -810,7 +851,7 @@ func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 
 			resp, err := rt.RoundTrip(req)
 			return false, resp, err
-		})
+		}).RoundTrip)
 	}
 }
 
@@ -819,20 +860,24 @@ func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 func wantCloseRespWrapper(t *testing.T) transport.WrapperFunc {
 	caller := getCaller()
 	return func(rt http.RoundTripper) http.RoundTripper {
-		return roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
+		return roundtripper.WrapFunc(rt, roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
 			resp, err := rt.RoundTrip(req)
 			if err != nil {
 				// request failed, so there is no response body to watch for Close() calls on
 				return false, resp, err
 			}
-			wc := &wantCloser{ReadCloser: resp.Body}
+			wc := &wantCloser{_rc: resp.Body}
 			t.Cleanup(func() {
-				require.False(t, wc.couldReadBytesJustBeforeClosing, "did not consume all response body bytes before closing %s", caller)
-				require.Equalf(t, wc.closeCount, 1, "did not close resp body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
+				require.Eventuallyf(t, func() bool {
+					return wc.couldRead() == false &&
+						1 == len(wc.calls())
+				}, 5*time.Second, 10*time.Millisecond,
+					`did not close resp body expected number of times at %s for req %#v; actual calls = %s
+did not consume all response body bytes before closing %s, couldRead=%v`, caller, req, wc.calls(), caller, wc.couldRead())
 			})
 			resp.Body = wc
 			return false, resp, err
-		})
+		}).RoundTrip)
 	}
 }
 
@@ -894,4 +939,222 @@ func createGetFederationDomainTest(t *testing.T, client *Client) {
 		Get(context.Background(), federationDomain.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, goodFederationDomain, federationDomain)
+}
+
+// TestUnwrap ensures that the Client struct returned by this package only contains
+// transports that can be fully unwrapped to get access to the underlying TLS config.
+func TestUnwrap(t *testing.T) {
+	t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+	server, restConfig := fakekubeapi.Start(t, nil)
+
+	serverSubjects := server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs.Subjects()
+
+	t.Run("regular client", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		regularClient := makeClient(t, restConfig, func(_ *rest.Config) {})
+
+		testUnwrap(t, regularClient, serverSubjects)
+	})
+
+	t.Run("exec client", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		execClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.ExecProvider = &clientcmdapi.ExecConfig{
+				Command:         "echo",
+				Args:            []string{"pandas are awesome"},
+				APIVersion:      clientauthenticationv1.SchemeGroupVersion.String(),
+				InteractiveMode: clientcmdapi.NeverExecInteractiveMode,
+			}
+		})
+
+		testUnwrap(t, execClient, serverSubjects)
+	})
+
+	t.Run("gcp client", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		gcpClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
+				Name: "gcp",
+			}
+		})
+
+		testUnwrap(t, gcpClient, serverSubjects)
+	})
+
+	t.Run("oidc client", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		oidcClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
+				Name: "oidc",
+				Config: map[string]string{
+					"idp-issuer-url": "https://pandas.local",
+					"client-id":      "walrus",
+				},
+			}
+		})
+
+		testUnwrap(t, oidcClient, serverSubjects)
+	})
+
+	t.Run("azure client", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		azureClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
+				Name: "azure",
+				Config: map[string]string{
+					"client-id":    "pinny",
+					"tenant-id":    "danger",
+					"apiserver-id": "1234",
+				},
+			}
+		})
+
+		testUnwrap(t, azureClient, serverSubjects)
+	})
+}
+
+func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
+	tests := []struct {
+		name string
+		rt   http.RoundTripper
+	}{
+		{
+			name: "core v1",
+			rt:   extractTransport(client.Kubernetes.CoreV1()),
+		},
+		{
+			name: "coordination v1",
+			rt:   extractTransport(client.Kubernetes.CoordinationV1()),
+		},
+		{
+			name: "api registration v1",
+			rt:   extractTransport(client.Aggregation.ApiregistrationV1()),
+		},
+		{
+			name: "concierge login",
+			rt:   extractTransport(client.PinnipedConcierge.LoginV1alpha1()),
+		},
+		{
+			name: "concierge config",
+			rt:   extractTransport(client.PinnipedConcierge.ConfigV1alpha1()),
+		},
+		{
+			name: "supervisor idp",
+			rt:   extractTransport(client.PinnipedSupervisor.IDPV1alpha1()),
+		},
+		{
+			name: "supervisor config",
+			rt:   extractTransport(client.PinnipedSupervisor.ConfigV1alpha1()),
+		},
+		{
+			name: "json config",
+			rt:   configToTransport(t, client.JSONConfig),
+		},
+		{
+			name: "proto config",
+			rt:   configToTransport(t, client.ProtoConfig),
+		},
+		{
+			name: "anonymous json config",
+			rt:   configToTransport(t, SecureAnonymousClientConfig(client.JSONConfig)),
+		},
+		{
+			name: "anonymous proto config",
+			rt:   configToTransport(t, SecureAnonymousClientConfig(client.ProtoConfig)),
+		},
+		{
+			name: "json config - no cache",
+			rt:   configToTransport(t, bustTLSCache(client.JSONConfig)),
+		},
+		{
+			name: "proto config - no cache",
+			rt:   configToTransport(t, bustTLSCache(client.ProtoConfig)),
+		},
+		{
+			name: "anonymous json config - no cache, inner bust",
+			rt:   configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig))),
+		},
+		{
+			name: "anonymous proto config - no cache, inner bust",
+			rt:   configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig))),
+		},
+		{
+			name: "anonymous json config - no cache, double bust",
+			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig)))),
+		},
+		{
+			name: "anonymous proto config - no cache, double bust",
+			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig)))),
+		},
+		{
+			name: "anonymous json config - no cache, outer bust",
+			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.JSONConfig))),
+		},
+		{
+			name: "anonymous proto config - no cache, outer bust",
+			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.ProtoConfig))),
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+			tlsConfig, err := netTLSClientConfig(tt.rt)
+			require.NoError(t, err)
+			require.NotNil(t, tlsConfig)
+
+			secureTLSConfig := ptls.Secure(nil)
+
+			require.Equal(t, secureTLSConfig.MinVersion, tlsConfig.MinVersion)
+			require.Equal(t, secureTLSConfig.CipherSuites, tlsConfig.CipherSuites)
+			require.Equal(t, secureTLSConfig.NextProtos, tlsConfig.NextProtos)
+
+			// x509.CertPool has some embedded functions that make it hard to compare so just look at the subjects
+			require.Equal(t, serverSubjects, tlsConfig.RootCAs.Subjects())
+		})
+	}
+}
+
+type restClientGetter interface {
+	RESTClient() rest.Interface
+}
+
+func extractTransport(getter restClientGetter) http.RoundTripper {
+	return getter.RESTClient().(*rest.RESTClient).Client.Transport
+}
+
+func configToTransport(t *testing.T, config *rest.Config) http.RoundTripper {
+	t.Helper()
+
+	rt, err := rest.TransportFor(config)
+	require.NoError(t, err)
+	return rt
+}
+
+func bustTLSCache(config *rest.Config) *rest.Config {
+	c := rest.CopyConfig(config)
+	c.Proxy = func(h *http.Request) (*url.URL, error) {
+		return nil, nil // having a non-nil proxy func makes client-go not cache the TLS config
+	}
+	return c
+}
+
+func makeClient(t *testing.T, restConfig *rest.Config, f func(*rest.Config)) *Client {
+	t.Helper()
+
+	restConfig = rest.CopyConfig(restConfig)
+
+	f(restConfig)
+
+	client, err := New(WithConfig(restConfig))
+	require.NoError(t, err)
+
+	return client
 }

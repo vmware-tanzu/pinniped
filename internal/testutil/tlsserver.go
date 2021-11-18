@@ -5,39 +5,36 @@ package testutil
 
 import (
 	"crypto/tls"
-	"encoding/pem"
 	"errors"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 // TLSTestServer starts a test server listening on a local port using a test CA. It returns the PEM CA bundle and the
 // URL of the listening server. The lifetime of the server is bound to the provided *testing.T.
-func TLSTestServer(t *testing.T, handler http.HandlerFunc) (caBundlePEM string, url string) {
+func TLSTestServer(t *testing.T, handler http.HandlerFunc) (caBundlePEM, url string) {
 	t.Helper()
-	server := httptest.NewTLSServer(handler)
-	t.Cleanup(server.Close)
 
-	caBundle := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: server.TLS.Certificates[0].Certificate[0],
-	}))
-	return caBundle, server.URL
+	server := tlsserver.TLSTestServer(t, handler, nil)
+
+	return string(tlsserver.TLSTestServerCA(server)), server.URL
 }
 
 func TLSTestServerWithCert(t *testing.T, handler http.HandlerFunc, certificate *tls.Certificate) (url string) {
 	t.Helper()
 
+	c := ptls.Default(nil) // mimic API server config
+	c.Certificates = []tls.Certificate{*certificate}
+
 	server := http.Server{
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{*certificate},
-			MinVersion:   tls.VersionTLS12,
-		},
-		Handler: handler,
+		TLSConfig: c,
+		Handler:   handler,
 	}
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")

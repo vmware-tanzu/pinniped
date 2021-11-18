@@ -26,6 +26,8 @@ type kubeClientPodCommandExecutor struct {
 // NewPodCommandExecutor returns a PodCommandExecutor that will interact with a pod via the provided
 // kubeConfig and corresponding kubeClient.
 func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.Interface) PodCommandExecutor {
+	kubeConfig = restclient.CopyConfig(kubeConfig)
+	kubeConfig.NextProtos = []string{"http/1.1"} // we explicitly need to upgrade from http1 to spdy, exec cannot use http2
 	return &kubeClientPodCommandExecutor{kubeConfig: kubeConfig, kubeClient: kubeClient}
 }
 

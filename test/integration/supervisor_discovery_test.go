@@ -320,6 +320,22 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	return ca
 }
 
+func createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx context.Context, t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	adminClient := testlib.NewKubernetesClientset(t)
+
+	ns := env.SupervisorNamespace
+	name := defaultTLSCertSecretName(env)
+
+	_, err := adminClient.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
+
+	if k8serrors.IsNotFound(err) {
+		_ = createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", nil, name, adminClient)
+	} else {
+		require.NoError(t, err)
+	}
+}
+
 func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 	ctx context.Context,
 	t *testing.T,

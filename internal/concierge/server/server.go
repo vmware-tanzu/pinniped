@@ -29,10 +29,12 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllermanager"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/issuer"
+	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
@@ -215,6 +217,13 @@ func getAggregatedAPIServerConfig(
 	// This port is configurable. It should be safe to cast because the config reader already validated it.
 	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
 
+	// secure TLS for connections coming from and going to the Kube API server
+	// this is best effort because not all options provide the right hooks to override TLS config
+	// since our only client is the Kube API server, this uses the most secure TLS config
+	if err := ptls.SecureRecommendedOptions(recommendedOptions, kubeclient.Secure); err != nil {
+		return nil, fmt.Errorf("failed to secure recommended options: %w", err)
+	}
+
 	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
@@ -226,7 +235,7 @@ func getAggregatedAPIServerConfig(
 	// If the provider later starts returning certs, then the API server
 	// will use them to handle the incoming requests successfully.
 	if err := recommendedOptions.ApplyTo(serverConfig); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to apply recommended options: %w", err)
 	}
 
 	apiServerConfig := &apiserver.Config{

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -47,6 +49,7 @@ import (
 	"k8s.io/client-go/transport"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
@@ -70,13 +73,14 @@ func New(
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 ) (func(stopCh <-chan struct{}) error, error) {
-	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, nil, nil, nil)
+	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, kubeclient.Secure, nil, nil, nil)
 }
 
 func newInternal( //nolint:funlen // yeah, it's kind of long.
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
+	restConfigFunc ptls.RestConfigFunc, // for unit testing, should always be kubeclient.Secure in production
 	clientOpts []kubeclient.Option, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
 	recConfig func(*genericapiserver.RecommendedConfig), // for unit testing, should always be nil in production
@@ -99,6 +103,13 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		recommendedOptions.Etcd = nil                                                   // turn off etcd storage because we don't need it yet
 		recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider // serving certs (end user facing)
 		recommendedOptions.SecureServing.BindPort = port
+
+		// secure TLS for connections coming from external clients and going to the Kube API server
+		// this is best effort because not all options provide the right hooks to override TLS config
+		// since any client could connect to the impersonation proxy, this uses the default TLS config
+		if err := ptls.DefaultRecommendedOptions(recommendedOptions, restConfigFunc); err != nil {
+			return nil, fmt.Errorf("failed to secure recommended options: %w", err)
+		}
 
 		// Wire up the impersonation proxy signer CA as another valid authenticator for client cert auth,
 		// along with the Kube API server's CA.
@@ -258,7 +269,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		delegatingAuthorizer := serverConfig.Authorization.Authorizer
 		customReasonAuthorizer := &comparableAuthorizer{
-			authorizerFunc: func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+			AuthorizerFunc: func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
 				const baseReason = "decision made by impersonation-proxy.concierge.pinniped.dev"
 				switch a.GetVerb() {
 				case "":
@@ -347,14 +358,14 @@ func getReverseProxyClient(clientOpts []kubeclient.Option) (*kubeclient.Client, 
 	if err != nil {
 		return nil, err
 	}
-	impersonationProxyRestConfig = rest.AnonymousClientConfig(impersonationProxyRestConfig)
+	impersonationProxyRestConfig = kubeclient.SecureAnonymousClientConfig(impersonationProxyRestConfig)
 	impersonationProxyRestConfig.BearerTokenFile = tokenFile
 
 	return kubeclient.New(kubeclient.WithConfig(impersonationProxyRestConfig))
 }
 
 func isAnonymousAuthEnabled(config *rest.Config) (bool, error) {
-	anonymousConfig := rest.AnonymousClientConfig(config)
+	anonymousConfig := kubeclient.SecureAnonymousClientConfig(config)
 
 	// we do not need either of these but RESTClientFor complains if they are not set
 	anonymousConfig.GroupVersion = &schema.GroupVersion{}
@@ -413,14 +424,7 @@ type comparableAuthenticator struct {
 
 // No-op wrapping around AuthorizerFunc to allow for comparisons.
 type comparableAuthorizer struct {
-	authorizerFunc
-}
-
-// TODO: delete when we pick up https://github.com/kubernetes/kubernetes/pull/100963
-type authorizerFunc func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error)
-
-func (f authorizerFunc) Authorize(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
-	return f(ctx, a)
+	authorizer.AuthorizerFunc
 }
 
 func withBearerTokenPreservation(delegate http.Handler) http.Handler {
@@ -462,16 +466,16 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/1.1 round tripper: %w", err)
 	}
-	http1RoundTripperAnonymous, err := getTransportForProtocol(rest.AnonymousClientConfig(restConfig), "http/1.1")
+	http1RoundTripperAnonymous, err := getTransportForProtocol(kubeclient.SecureAnonymousClientConfig(restConfig), "http/1.1")
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/1.1 anonymous round tripper: %w", err)
 	}
 
-	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2")
+	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2") // TODO figure out why this leads to still supporting http1
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/2.0 round tripper: %w", err)
 	}
-	http2RoundTripperAnonymous, err := getTransportForProtocol(rest.AnonymousClientConfig(restConfig), "h2")
+	http2RoundTripperAnonymous, err := getTransportForProtocol(kubeclient.SecureAnonymousClientConfig(restConfig), "h2")
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/2.0 anonymous round tripper: %w", err)
 	}
@@ -565,12 +569,55 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				r.Header.Del("X-Forwarded-For")
 			}
 
+			// the http2 code seems to call Close concurrently which can lead to data races
+			if r.Body != nil {
+				r = utilnet.CloneRequest(r)
+				r.Body = &safeReadWriteCloser{rc: r.Body}
+			}
+
 			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
 			reverseProxy.Transport = rt
 			reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
 			reverseProxy.ServeHTTP(w, r)
 		})
 	}, nil
+}
+
+var _ io.ReadWriteCloser = &safeReadWriteCloser{}
+
+type safeReadWriteCloser struct {
+	m sync.Mutex // all methods allowed concurrently, this only guards concurrent calls to Close
+
+	rc io.ReadCloser
+
+	once     sync.Once // set up rwc and writeErr
+	rwc      io.ReadWriteCloser
+	writeErr error
+}
+
+func (r *safeReadWriteCloser) Read(p []byte) (int, error) {
+	return r.rc.Read(p)
+}
+
+func (r *safeReadWriteCloser) Write(p []byte) (int, error) {
+	r.once.Do(func() {
+		var ok bool
+		r.rwc, ok = r.rc.(io.ReadWriteCloser)
+		if !ok { // this method should only be caused during flows that switch protocols
+			r.writeErr = fmt.Errorf("switching protocols failed: io.ReadCloser %T is not io.ReadWriteCloser", r.rc)
+		}
+	})
+	if r.writeErr != nil {
+		return 0, r.writeErr
+	}
+	return r.rwc.Write(p)
+}
+
+func (r *safeReadWriteCloser) Close() error {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	return r.rc.Close()
 }
 
 func ensureNoImpersonationHeaders(r *http.Request) error {
@@ -759,5 +806,14 @@ func getTransportForProtocol(restConfig *rest.Config, protocol string) (http.Rou
 	}
 	transportConfig.TLS.NextProtos = []string{protocol}
 
-	return transport.New(transportConfig)
+	rt, err := transport.New(transportConfig)
+	if err != nil {
+		return nil, fmt.Errorf("could not build transport: %w", err)
+	}
+
+	if err := kubeclient.AssertSecureTransport(rt); err != nil {
+		return nil, err // make sure we only use a secure TLS config
+	}
+
+	return rt, nil
 }

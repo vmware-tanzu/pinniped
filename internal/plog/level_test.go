@@ -114,3 +114,15 @@ func undoGlobalLogLevelChanges(t *testing.T, originalLogLevel klog.Level) {
 	_, err := logs.GlogSetter(strconv.Itoa(int(originalLogLevel)))
 	require.NoError(t, err)
 }
+
+func getKlogLevel() klog.Level {
+	// hack around klog not exposing a Get method
+	for i := klog.Level(0); i < 256; i++ {
+		if klog.V(i).Enabled() {
+			continue
+		}
+		return i - 1
+	}
+
+	return -1
+}

@@ -132,7 +132,7 @@ func newClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interf
 func NewAnonymousClientRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
-	return rest.AnonymousClientConfig(NewClientConfig(t))
+	return kubeclient.SecureAnonymousClientConfig(NewClientConfig(t))
 }
 
 // Starting with an anonymous client config, add a cert and key to use for authentication in the API server.

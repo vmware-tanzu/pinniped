@@ -6,7 +6,6 @@ package localuserauthenticator
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -25,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -32,6 +32,7 @@ import (
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/net/phttp"
 )
 
 func TestWebhook(t *testing.T) {
@@ -102,7 +103,7 @@ func TestWebhook(t *testing.T) {
 	defer func() { _ = l.Close() }()
 	require.NoError(t, w.start(ctx, l))
 
-	client := newClient(caBundle, serverName)
+	client := newClient(t, caBundle, serverName)
 
 	goodURL := fmt.Sprintf("https://%s/authenticate", l.Addr().String())
 	goodRequestHeaders := map[string][]string{
@@ -475,18 +476,20 @@ func newCertProvider(t *testing.T) (dynamiccert.Private, []byte, string) {
 
 // newClient creates an http.Client that can be used to make an HTTPS call to a
 // service whose serving certs can be verified by the provided CA bundle.
-func newClient(caBundle []byte, serverName string) *http.Client {
+func newClient(t *testing.T, caBundle []byte, serverName string) *http.Client {
+	t.Helper()
+
 	rootCAs := x509.NewCertPool()
-	rootCAs.AppendCertsFromPEM(caBundle)
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS13,
-				RootCAs:    rootCAs,
-				ServerName: serverName,
-			},
-		},
-	}
+	ok := rootCAs.AppendCertsFromPEM(caBundle)
+	require.True(t, ok)
+
+	c := phttp.Secure(rootCAs)
+
+	tlsConfig, err := utilnet.TLSClientConfig(c.Transport)
+	require.NoError(t, err)
+	tlsConfig.ServerName = serverName
+
+	return c
 }
 
 // newTokenReviewBody creates an io.ReadCloser that contains a JSON-encodeed

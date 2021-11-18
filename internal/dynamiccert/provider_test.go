@@ -19,6 +19,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -160,11 +161,8 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 			err = certKeyContent.SetCertKeyContent(cert, key)
 			require.NoError(t, err)
 
-			tlsConfig := &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				NextProtos: []string{"h2", "http/1.1"},
-				ClientAuth: tls.RequestClientCert,
-			}
+			tlsConfig := ptls.Default(nil)
+			tlsConfig.ClientAuth = tls.RequestClientCert
 
 			dynamicCertificateController := dynamiccertificates.NewDynamicServingCertificateController(
 				tlsConfig,

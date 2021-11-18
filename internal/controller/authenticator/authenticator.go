@@ -9,6 +9,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"k8s.io/client-go/util/cert"
+
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
@@ -23,19 +25,20 @@ type Closer interface {
 // CABundle returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
 // nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
 // encoded, an error will be returned.
-func CABundle(spec *auth1alpha1.TLSSpec) ([]byte, error) {
+func CABundle(spec *auth1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
 	if spec == nil || len(spec.CertificateAuthorityData) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	pem, err := base64.StdEncoding.DecodeString(spec.CertificateAuthorityData)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if ok := x509.NewCertPool().AppendCertsFromPEM(pem); !ok {
-		return nil, fmt.Errorf("certificateAuthorityData is not valid PEM")
+	rootCAs, err := cert.NewPoolFromBytes(pem)
+	if err != nil {
+		return nil, nil, fmt.Errorf("certificateAuthorityData is not valid PEM: %w", err)
 	}
 
-	return pem, nil
+	return rootCAs, pem, nil
 }

@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
@@ -71,16 +72,15 @@ func newWebhook(
 // start runs the webhook in a separate goroutine and returns whether or not the
 // webhook was started successfully.
 func (w *webhook) start(ctx context.Context, l net.Listener) error {
+	c := ptls.Secure(nil)
+	c.GetCertificate = func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		certPEM, keyPEM := w.certProvider.CurrentCertKeyContent()
+		cert, err := tls.X509KeyPair(certPEM, keyPEM)
+		return &cert, err
+	}
 	server := http.Server{
-		Handler: w,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				certPEM, keyPEM := w.certProvider.CurrentCertKeyContent()
-				cert, err := tls.X509KeyPair(certPEM, keyPEM)
-				return &cert, err
-			},
-		},
+		Handler:   w,
+		TLSConfig: c,
 	}
 
 	errCh := make(chan error)

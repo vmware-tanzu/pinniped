@@ -36,6 +36,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
@@ -44,12 +45,13 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 func TestImpersonator(t *testing.T) {
@@ -697,7 +699,9 @@ func TestImpersonator(t *testing.T) {
 			// will proxy incoming calls to this fake server.
 			testKubeAPIServerWasCalled := false
 			var testKubeAPIServerSawHeaders http.Header
-			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tlsserver.AssertTLS(t, r, ptls.Secure)
+
 				switch r.URL.Path {
 				case "/api/v1/namespaces/kube-system/configmaps":
 					require.Equal(t, http.MethodGet, r.Method)
@@ -705,6 +709,13 @@ func TestImpersonator(t *testing.T) {
 					// The production code uses NewDynamicCAFromConfigMapController which fetches a ConfigMap,
 					// so treat that differently. It wants to read the Kube API server CA from that ConfigMap
 					// to use it to validate client certs. We don't need it for this test, so return NotFound.
+					http.NotFound(w, r)
+					return
+
+				case "/apis/flowcontrol.apiserver.k8s.io/v1beta1/prioritylevelconfigurations",
+					"/apis/flowcontrol.apiserver.k8s.io/v1beta1/flowschemas":
+					// ignore requests related to priority and fairness logic
+					require.Equal(t, http.MethodGet, r.Method)
 					http.NotFound(w, r)
 					return
 
@@ -785,13 +796,13 @@ func TestImpersonator(t *testing.T) {
 					require.Fail(t, "fake Kube API server got an unexpected request", "path: %s", r.URL.Path)
 					return
 				}
-			})
+			}), tlsserver.RecordTLSHello)
 
 			// Create the client config that the impersonation server should use to talk to the Kube API server.
 			testKubeAPIServerKubeconfig := rest.Config{
-				Host:            testKubeAPIServerURL,
+				Host:            testKubeAPIServer.URL,
 				BearerToken:     "some-service-account-token",
-				TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testKubeAPIServerCA)},
+				TLSClientConfig: rest.TLSClientConfig{CAData: tlsserver.TLSTestServerCA(testKubeAPIServer)},
 				BearerTokenFile: tt.kubeAPIServerClientBearerTokenFile,
 			}
 			clientOpts := []kubeclient.Option{kubeclient.WithConfig(&testKubeAPIServerKubeconfig)}
@@ -800,7 +811,6 @@ func TestImpersonator(t *testing.T) {
 			recOpts := func(options *genericoptions.RecommendedOptions) {
 				options.Authentication.RemoteKubeConfigFileOptional = true
 				options.Authorization.RemoteKubeConfigFileOptional = true
-				options.CoreAPI = nil
 				options.Admission = nil
 				options.SecureServing.Listener = listener // use our listener with the dynamic port
 			}
@@ -814,8 +824,8 @@ func TestImpersonator(t *testing.T) {
 			// Allow standard REST verbs to be authorized so that tests pass without invasive changes
 			recConfig := func(config *genericapiserver.RecommendedConfig) {
 				authz := config.Authorization.Authorizer.(*comparableAuthorizer)
-				delegate := authz.authorizerFunc
-				authz.authorizerFunc = func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+				delegate := authz.AuthorizerFunc
+				authz.AuthorizerFunc = func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
 					recorder.record(a)
 					switch a.GetVerb() {
 					case "create", "get", "list":
@@ -826,8 +836,15 @@ func TestImpersonator(t *testing.T) {
 				}
 			}
 
+			restConfigFunc := func(config *rest.Config) (kubernetes.Interface, *rest.Config, error) {
+				if config == nil {
+					config = &testKubeAPIServerKubeconfig
+				}
+				return kubeclient.Secure(config)
+			}
+
 			// Create an impersonator.  Use an invalid port number to make sure our listener override works.
-			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, clientOpts, recOpts, recConfig)
+			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, restConfigFunc, clientOpts, recOpts, recConfig)
 			if len(tt.wantConstructionError) > 0 {
 				require.EqualError(t, constructionErr, tt.wantConstructionError)
 				require.Nil(t, runner)
@@ -864,7 +881,7 @@ func TestImpersonator(t *testing.T) {
 						return rt
 					}
 
-					return roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+					return roundtripper.WrapFunc(rt, func(req *http.Request) (*http.Response, error) {
 						req = req.Clone(req.Context())
 						tt.clientMutateHeaders(req.Header)
 						return rt.RoundTrip(req)
@@ -928,10 +945,10 @@ func TestImpersonator(t *testing.T) {
 
 			// anonymous TCR should always work
 
-			tcrRegGroup, err := kubeclient.New(kubeclient.WithConfig(rest.AnonymousClientConfig(clientKubeconfig)))
+			tcrRegGroup, err := kubeclient.New(kubeclient.WithConfig(kubeclient.SecureAnonymousClientConfig(clientKubeconfig)))
 			require.NoError(t, err)
 
-			tcrOtherGroup, err := kubeclient.New(kubeclient.WithConfig(rest.AnonymousClientConfig(clientKubeconfig)),
+			tcrOtherGroup, err := kubeclient.New(kubeclient.WithConfig(kubeclient.SecureAnonymousClientConfig(clientKubeconfig)),
 				kubeclient.WithMiddleware(groupsuffix.New("walrus.tld")))
 			require.NoError(t, err)
 
@@ -950,7 +967,7 @@ func TestImpersonator(t *testing.T) {
 
 			// these calls should only work when anonymous auth is enabled
 
-			anonymousConfig := rest.AnonymousClientConfig(clientKubeconfig)
+			anonymousConfig := kubeclient.SecureAnonymousClientConfig(clientKubeconfig)
 			anonymousConfig.GroupVersion = &schema.GroupVersion{
 				Group:   "not-concierge.walrus.tld",
 				Version: "v1",
@@ -989,7 +1006,7 @@ func TestImpersonator(t *testing.T) {
 
 			// this should always fail as unauthorized (even for TCR) because the cert is not valid
 
-			badCertConfig := rest.AnonymousClientConfig(clientKubeconfig)
+			badCertConfig := kubeclient.SecureAnonymousClientConfig(clientKubeconfig)
 			badCert := newClientCert(t, unrelatedCA, "bad-user", []string{"bad-group"})
 			badCertConfig.TLSClientConfig.CertData = badCert.certPEM
 			badCertConfig.TLSClientConfig.KeyData = badCert.keyPEM
@@ -1041,7 +1058,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				ExecProvider: &api.ExecConfig{},
 				AuthProvider: &api.AuthProviderConfig{},
 			},
-			wantCreationErr: "could not get http/1.1 round tripper: could not get in-cluster transport config: execProvider and authProvider cannot be used in combination",
+			wantCreationErr: "could not create secure client config: execProvider and authProvider cannot be used in combination",
 		},
 		{
 			name: "fail to get transport from config",
@@ -1051,7 +1068,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				Transport:       http.DefaultTransport,
 				TLSClientConfig: rest.TLSClientConfig{Insecure: true},
 			},
-			wantCreationErr: "could not get http/1.1 round tripper: using a custom transport with TLS certificate options or the insecure flag is not allowed",
+			wantCreationErr: "could not create secure client config: failed to build transport: using a custom transport with TLS certificate options or the insecure flag is not allowed",
 		},
 		{
 			name:           "Impersonate-User header already in request",
@@ -1761,7 +1778,9 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 
 			testKubeAPIServerWasCalled := false
 			testKubeAPIServerSawHeaders := http.Header{}
-			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tlsserver.AssertTLS(t, r, ptls.Secure)
+
 				testKubeAPIServerWasCalled = true
 				testKubeAPIServerSawHeaders = r.Header
 				if tt.kubeAPIServerStatusCode != http.StatusOK {
@@ -1769,17 +1788,26 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				} else {
 					_, _ = w.Write([]byte("successful proxied response"))
 				}
-			})
+			}), tlsserver.RecordTLSHello)
+
 			testKubeAPIServerKubeconfig := rest.Config{
-				Host:            testKubeAPIServerURL,
+				Host:            testKubeAPIServer.URL,
 				BearerToken:     "some-service-account-token",
-				TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testKubeAPIServerCA)},
+				TLSClientConfig: rest.TLSClientConfig{CAData: tlsserver.TLSTestServerCA(testKubeAPIServer)},
 			}
 			if tt.restConfig == nil {
 				tt.restConfig = &testKubeAPIServerKubeconfig
 			}
 
-			impersonatorHTTPHandlerFunc, err := newImpersonationReverseProxyFunc(tt.restConfig)
+			// mimic how newInternal would call newImpersonationReverseProxyFunc
+			impersonatorHTTPHandlerFunc, err := func() (func(*genericapiserver.Config) http.Handler, error) {
+				kubeClientForProxy, err := kubeclient.New(kubeclient.WithConfig(tt.restConfig))
+				if err != nil {
+					return nil, err
+				}
+				return newImpersonationReverseProxyFunc(rest.CopyConfig(kubeClientForProxy.ProtoConfig))
+			}()
+
 			if tt.wantCreationErr != "" {
 				require.EqualError(t, err, tt.wantCreationErr)
 				require.Nil(t, impersonatorHTTPHandlerFunc)

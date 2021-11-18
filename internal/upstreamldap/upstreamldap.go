@@ -25,6 +25,7 @@ import (
 	"k8s.io/utils/trace"
 
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -328,7 +329,7 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 			return nil, fmt.Errorf("could not parse CA bundle")
 		}
 	}
-	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCAs}, nil
+	return ptls.DefaultLDAP(rootCAs), nil
 }
 
 // A name for this upstream provider.

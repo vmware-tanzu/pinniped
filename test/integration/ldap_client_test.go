@@ -759,8 +759,6 @@ func startLongRunningCommandAndWaitForInitialOutput(
 	cmd := exec.CommandContext(ctx, command, args...)
 
 	var stdoutBuf, stderrBuf syncBuffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
 	cmd.Stdout = io.MultiWriter(os.Stdout, &stdoutBuf)
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 

@@ -26,13 +26,11 @@
 // act of desperation to determine why the system is broken.
 package plog
 
-import (
-	"k8s.io/klog/v2"
-)
+import "k8s.io/klog/v2"
 
 const errorKey = "error"
 
-type _ interface {
+type Logger interface {
 	Error(msg string, err error, keysAndValues ...interface{})
 	Warning(msg string, keysAndValues ...interface{})
 	WarningErr(msg string, err error, keysAndValues ...interface{})
@@ -45,23 +43,23 @@ type _ interface {
 	All(msg string, keysAndValues ...interface{})
 }
 
-type PLogger struct {
+type pLogger struct {
 	prefix string
 	depth  int
 }
 
-func New(prefix string) PLogger {
-	return PLogger{
+func New(prefix string) Logger {
+	return &pLogger{
 		depth:  0,
 		prefix: prefix,
 	}
 }
 
-func (p *PLogger) Error(msg string, err error, keysAndValues ...interface{}) {
+func (p *pLogger) Error(msg string, err error, keysAndValues ...interface{}) {
 	klog.ErrorSDepth(p.depth+1, err, p.prefix+msg, keysAndValues...)
 }
 
-func (p *PLogger) warningDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p *pLogger) warningDepth(msg string, depth int, keysAndValues ...interface{}) {
 	// klog's structured logging has no concept of a warning (i.e. no WarningS function)
 	// Thus we use info at log level zero as a proxy
 	// klog's info logs have an I prefix and its warning logs have a W prefix
@@ -72,111 +70,111 @@ func (p *PLogger) warningDepth(msg string, depth int, keysAndValues ...interface
 	}
 }
 
-func (p *PLogger) Warning(msg string, keysAndValues ...interface{}) {
+func (p *pLogger) Warning(msg string, keysAndValues ...interface{}) {
 	p.warningDepth(msg, p.depth+1, keysAndValues...)
 }
 
 // Use WarningErr to issue a Warning message with an error object as part of the message.
-func (p *PLogger) WarningErr(msg string, err error, keysAndValues ...interface{}) {
+func (p *pLogger) WarningErr(msg string, err error, keysAndValues ...interface{}) {
 	p.warningDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
-func (p *PLogger) infoDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p *pLogger) infoDepth(msg string, depth int, keysAndValues ...interface{}) {
 	if klog.V(klogLevelInfo).Enabled() {
 		klog.InfoSDepth(depth+1, p.prefix+msg, keysAndValues...)
 	}
 }
 
-func (p *PLogger) Info(msg string, keysAndValues ...interface{}) {
+func (p *pLogger) Info(msg string, keysAndValues ...interface{}) {
 	p.infoDepth(msg, p.depth+1, keysAndValues...)
 }
 
 // Use InfoErr to log an expected error, e.g. validation failure of an http parameter.
-func (p *PLogger) InfoErr(msg string, err error, keysAndValues ...interface{}) {
+func (p *pLogger) InfoErr(msg string, err error, keysAndValues ...interface{}) {
 	p.infoDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
-func (p *PLogger) debugDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p *pLogger) debugDepth(msg string, depth int, keysAndValues ...interface{}) {
 	if klog.V(klogLevelDebug).Enabled() {
 		klog.InfoSDepth(depth+1, p.prefix+msg, keysAndValues...)
 	}
 }
 
-func (p *PLogger) Debug(msg string, keysAndValues ...interface{}) {
+func (p *pLogger) Debug(msg string, keysAndValues ...interface{}) {
 	p.debugDepth(msg, p.depth+1, keysAndValues...)
 }
 
 // Use DebugErr to issue a Debug message with an error object as part of the message.
-func (p *PLogger) DebugErr(msg string, err error, keysAndValues ...interface{}) {
+func (p *pLogger) DebugErr(msg string, err error, keysAndValues ...interface{}) {
 	p.debugDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
-func (p *PLogger) traceDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p *pLogger) traceDepth(msg string, depth int, keysAndValues ...interface{}) {
 	if klog.V(klogLevelTrace).Enabled() {
 		klog.InfoSDepth(depth+1, p.prefix+msg, keysAndValues...)
 	}
 }
 
-func (p *PLogger) Trace(msg string, keysAndValues ...interface{}) {
+func (p *pLogger) Trace(msg string, keysAndValues ...interface{}) {
 	p.traceDepth(msg, p.depth+1, keysAndValues...)
 }
 
 // Use TraceErr to issue a Trace message with an error object as part of the message.
-func (p *PLogger) TraceErr(msg string, err error, keysAndValues ...interface{}) {
+func (p *pLogger) TraceErr(msg string, err error, keysAndValues ...interface{}) {
 	p.traceDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
-func (p *PLogger) All(msg string, keysAndValues ...interface{}) {
+func (p *pLogger) All(msg string, keysAndValues ...interface{}) {
 	if klog.V(klogLevelAll).Enabled() {
 		klog.InfoSDepth(p.depth+1, p.prefix+msg, keysAndValues...)
 	}
 }
 
-var pLogger = PLogger{ //nolint:gochecknoglobals
+var logger Logger = &pLogger{ //nolint:gochecknoglobals
 	depth: 1,
 }
 
 // Use Error to log an unexpected system error.
 func Error(msg string, err error, keysAndValues ...interface{}) {
-	pLogger.Error(msg, err, keysAndValues...)
+	logger.Error(msg, err, keysAndValues...)
 }
 
 func Warning(msg string, keysAndValues ...interface{}) {
-	pLogger.Warning(msg, keysAndValues...)
+	logger.Warning(msg, keysAndValues...)
 }
 
 // Use WarningErr to issue a Warning message with an error object as part of the message.
 func WarningErr(msg string, err error, keysAndValues ...interface{}) {
-	pLogger.WarningErr(msg, err, keysAndValues...)
+	logger.WarningErr(msg, err, keysAndValues...)
 }
 
 func Info(msg string, keysAndValues ...interface{}) {
-	pLogger.Info(msg, keysAndValues...)
+	logger.Info(msg, keysAndValues...)
 }
 
 // Use InfoErr to log an expected error, e.g. validation failure of an http parameter.
 func InfoErr(msg string, err error, keysAndValues ...interface{}) {
-	pLogger.InfoErr(msg, err, keysAndValues...)
+	logger.InfoErr(msg, err, keysAndValues...)
 }
 
 func Debug(msg string, keysAndValues ...interface{}) {
-	pLogger.Debug(msg, keysAndValues...)
+	logger.Debug(msg, keysAndValues...)
 }
 
 // Use DebugErr to issue a Debug message with an error object as part of the message.
 func DebugErr(msg string, err error, keysAndValues ...interface{}) {
-	pLogger.DebugErr(msg, err, keysAndValues...)
+	logger.DebugErr(msg, err, keysAndValues...)
 }
 
 func Trace(msg string, keysAndValues ...interface{}) {
-	pLogger.Trace(msg, keysAndValues...)
+	logger.Trace(msg, keysAndValues...)
 }
 
 // Use TraceErr to issue a Trace message with an error object as part of the message.
 func TraceErr(msg string, err error, keysAndValues ...interface{}) {
-	pLogger.TraceErr(msg, err, keysAndValues...)
+	logger.TraceErr(msg, err, keysAndValues...)
 }
 
 func All(msg string, keysAndValues ...interface{}) {
-	pLogger.All(msg, keysAndValues...)
+	logger.All(msg, keysAndValues...)
 }

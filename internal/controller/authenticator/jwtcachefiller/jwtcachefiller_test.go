@@ -15,7 +15,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -35,8 +34,10 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 func TestController(t *testing.T) {
@@ -57,8 +58,10 @@ func TestController(t *testing.T) {
 	goodRSASigningAlgo := jose.RS256
 
 	mux := http.NewServeMux()
-	server := httptest.NewTLSServer(mux)
-	t.Cleanup(server.Close)
+	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tlsserver.AssertTLS(t, r, ptls.Default)
+		mux.ServeHTTP(w, r)
+	}), tlsserver.RecordTLSHello)
 
 	mux.Handle("/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -290,11 +293,7 @@ func TestController(t *testing.T) {
 					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
-			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache doesn't have the CA for our test discovery server
+			wantErr: `failed to build jwt authenticator: could not initialize provider: Get "` + goodIssuer + `/.well-known/openid-configuration": x509: certificate signed by unknown authority`,
 		},
 		{
 			name:    "invalid jwt authenticator CA",

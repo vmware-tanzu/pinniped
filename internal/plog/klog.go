@@ -33,7 +33,7 @@ func RemoveKlogGlobalFlags() {
 	}
 }
 
-// KRef is (mostly) copied from klog - it is a standard way to represent a a metav1.Object in logs
+// KRef is (mostly) copied from klog - it is a standard way to represent a metav1.Object in logs
 // when you only have access to the namespace and name of the object.
 func KRef(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
@@ -44,33 +44,19 @@ func KObj(obj klog.KMetadata) string {
 	return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
 }
 
-func klogLevelForPlogLevel(plogLevel LogLevel) (klogLevel klog.Level) {
+func klogLevelForPlogLevel(plogLevel LogLevel) klog.Level {
 	switch plogLevel {
 	case LevelWarning:
-		klogLevel = klogLevelWarning // unset means minimal logs (Error and Warning)
+		return klogLevelWarning // unset means minimal logs (Error and Warning)
 	case LevelInfo:
-		klogLevel = klogLevelInfo
+		return klogLevelInfo
 	case LevelDebug:
-		klogLevel = klogLevelDebug
+		return klogLevelDebug
 	case LevelTrace:
-		klogLevel = klogLevelTrace
+		return klogLevelTrace
 	case LevelAll:
-		klogLevel = klogLevelAll + 100 // make all really mean all
+		return klogLevelAll + 100 // make all really mean all
 	default:
-		klogLevel = -1
+		return -1
 	}
-
-	return
-}
-
-func getKlogLevel() klog.Level {
-	// hack around klog not exposing a Get method
-	for i := klog.Level(0); i < 256; i++ {
-		if klog.V(i).Enabled() {
-			continue
-		}
-		return i - 1
-	}
-
-	return -1
 }

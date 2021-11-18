@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -1014,8 +1015,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 
 				// We always want to use the proxy from env on these clients, so although the following assertions
 				// are a little hacky, this is a cheap way to test that we are using it.
-				actualTransport, ok := actualIDP.Client.Transport.(*http.Transport)
-				require.True(t, ok, "expected cached provider to have client with Transport of type *http.Transport")
+				actualTransport := unwrapTransport(t, actualIDP.Client.Transport)
 				httpProxyFromEnvFunction := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
 				actualTransportProxyFunction := reflect.ValueOf(actualTransport.Proxy).Pointer()
 				require.Equal(t, httpProxyFromEnvFunction, actualTransportProxyFunction,
@@ -1038,6 +1038,22 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				require.NoError(t, err)
 			}
 		})
+	}
+}
+
+func unwrapTransport(t *testing.T, rt http.RoundTripper) *http.Transport {
+	t.Helper()
+
+	switch baseRT := rt.(type) {
+	case *http.Transport:
+		return baseRT
+
+	case net.RoundTripperWrapper:
+		return unwrapTransport(t, baseRT.WrappedRoundTripper())
+
+	default:
+		t.Fatalf("expected cached provider to have client with Transport of type *http.Transport, got: %T", baseRT)
+		return nil // unreachable
 	}
 }
 

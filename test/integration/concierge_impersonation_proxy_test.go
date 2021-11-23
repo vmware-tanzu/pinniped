@@ -317,7 +317,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		supervisorPod := supervisorPods.Items[0]
 
 		// make sure the supervisor has a default TLS cert during this test so that it can handle a TLS connection
-		_ = createTLSCertificateSecret(ctx, t, env.SupervisorNamespace, "cert-hostname-doesnt-matter", nil, defaultTLSCertSecretName(env), adminClient)
+		createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx, t)
 
 		// Test that the user can perform basic actions through the client with their username and group membership
 		// influencing RBAC checks correctly.

@@ -21,6 +21,11 @@ func TestFromPath(t *testing.T) {
 		yaml       string
 		wantConfig *Config
 		wantError  string
+
+		wantSupervisorHTTPListenerNetwork  string
+		wantSupervisorHTTPListenerAddress  string
+		wantSupervisorHTTPSListenerNetwork string
+		wantSupervisorHTTPSListenerAddress string
 	}{
 		{
 			name: "Happy",
@@ -32,6 +37,8 @@ func TestFromPath(t *testing.T) {
 				  myLabelKey2: myLabelValue2
 				names:
 				  defaultTLSCertificateSecret: my-secret-name
+				supervisorHTTPListener: "tcp,:8080"
+				supervisorHTTPSListener: "tcp,:8443"
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -42,7 +49,13 @@ func TestFromPath(t *testing.T) {
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
 				},
+				SupervisorHTTPListener:  "tcp,:8080",
+				SupervisorHTTPSListener: "tcp,:8443",
 			},
+			wantSupervisorHTTPListenerNetwork:  "tcp",
+			wantSupervisorHTTPListenerAddress:  ":8080",
+			wantSupervisorHTTPSListenerNetwork: "tcp",
+			wantSupervisorHTTPSListenerAddress: ":8443",
 		},
 		{
 			name: "When only the required fields are present, causes other fields to be defaulted",
@@ -50,6 +63,7 @@ func TestFromPath(t *testing.T) {
 				---
 				names:
 				  defaultTLSCertificateSecret: my-secret-name
+				supervisorHTTPSListener: "tcp,:8443"
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
@@ -57,12 +71,121 @@ func TestFromPath(t *testing.T) {
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
 				},
+				SupervisorHTTPSListener: "tcp,:8443",
 			},
+			wantSupervisorHTTPListenerNetwork:  "",
+			wantSupervisorHTTPListenerAddress:  "",
+			wantSupervisorHTTPSListenerNetwork: "tcp",
+			wantSupervisorHTTPSListenerAddress: ":8443",
+		},
+		{
+			name: "Missing supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: must have format 'network,address'",
+		},
+		{
+			name: "Blank supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPSListener: "   "
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: must have format 'network,address'",
+		},
+		{
+			name: "No comma supervisorHTTPListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPListener: "foo"
+				supervisorHTTPSListener: "tcp,:8443"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPListener: must have format 'network,address'",
+		},
+		{
+			name: "No comma supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPSListener: "foo"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: must have format 'network,address'",
+		},
+		{
+			name: "Empty network type supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPSListener: ",42"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: must have format 'network,address'",
+		},
+		{
+			name: "Empty network type supervisorHTTPListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPListener: ",42"
+				supervisorHTTPSListener: "tcp,:8443"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPListener: must have format 'network,address'",
+		},
+		{
+			name: "Empty address supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPSListener: "tcp,"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: must have format 'network,address'",
+		},
+		{
+			name: "Empty address supervisorHTTPListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPListener: "tcp,"
+				supervisorHTTPSListener: "tcp,:8443"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPListener: must have format 'network,address'",
+		},
+		{
+			name: "Invalid network type supervisorHTTPSListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPSListener: "foo,42"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPSListener: invalid network type",
+		},
+		{
+			name: "Invalid network type supervisorHTTPListener",
+			yaml: here.Doc(`
+				---
+				supervisorHTTPListener: "foo,42"
+				supervisorHTTPSListener: "tcp,:8443"
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+			`),
+			wantError: "validate supervisorHTTPListener: invalid network type",
 		},
 		{
 			name: "Missing defaultTLSCertificateSecret name",
 			yaml: here.Doc(`
 				---
+				supervisorHTTPSListener: "tcp,:8443"
 			`),
 			wantError: "validate names: missing required names: defaultTLSCertificateSecret",
 		},
@@ -100,6 +223,11 @@ func TestFromPath(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.wantConfig, config)
+
+				require.Equal(t, test.wantSupervisorHTTPListenerNetwork, config.SupervisorHTTPListenerNetwork())
+				require.Equal(t, test.wantSupervisorHTTPListenerAddress, config.SupervisorHTTPListenerAddress())
+				require.Equal(t, test.wantSupervisorHTTPSListenerNetwork, config.SupervisorHTTPSListenerNetwork())
+				require.Equal(t, test.wantSupervisorHTTPSListenerAddress, config.SupervisorHTTPSListenerAddress())
 			}
 		})
 	}

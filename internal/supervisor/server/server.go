@@ -385,19 +385,22 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		return err
 	}
 
-	//nolint: gosec // Intentionally binding to all network interfaces.
-	httpListener, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return fmt.Errorf("cannot create listener: %w", err)
+	httpAddressForLog := ""
+	if cfg.SupervisorHTTPListenerNetwork() != "" && cfg.SupervisorHTTPListenerAddress() != "" {
+		httpListener, err := net.Listen(cfg.SupervisorHTTPListenerNetwork(), cfg.SupervisorHTTPListenerAddress())
+		httpAddressForLog = httpListener.Addr().String()
+		if err != nil {
+			return fmt.Errorf("cannot create listener: %w", err)
+		}
+		defer func() { _ = httpListener.Close() }()
+		startServer(ctx, shutdown, httpListener, oidProvidersManager)
 	}
-	defer func() { _ = httpListener.Close() }()
-	startServer(ctx, shutdown, httpListener, oidProvidersManager)
 
 	c := ptls.Default(nil)
 	c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
 		defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
-		plog.Debug("GetCertificate called for port 8443",
+		plog.Debug("GetCertificate called for TLS port",
 			"info.ServerName", info.ServerName,
 			"foundSNICert", cert != nil,
 			"foundDefaultCert", defaultCert != nil,
@@ -407,8 +410,7 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		}
 		return cert, nil
 	}
-	//nolint: gosec // Intentionally binding to all network interfaces.
-	httpsListener, err := tls.Listen("tcp", ":8443", c)
+	httpsListener, err := tls.Listen(cfg.SupervisorHTTPSListenerNetwork(), cfg.SupervisorHTTPSListenerAddress(), c)
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
@@ -416,7 +418,7 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	startServer(ctx, shutdown, httpsListener, oidProvidersManager)
 
 	plog.Debug("supervisor is ready",
-		"httpAddress", httpListener.Addr().String(),
+		"httpAddress", httpAddressForLog,
 		"httpsAddress", httpsListener.Addr().String(),
 	)
 	defer plog.Debug("supervisor exiting")

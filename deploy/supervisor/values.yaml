@@ -73,3 +73,29 @@ api_group_suffix: pinniped.dev
 #! Optional.
 https_proxy: #! e.g. http://proxy.example.com
 no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
+
+#! Configure the Supervisor server's HTTP listener. The required format is "network,address", where network and
+#! address are each defined the same as the parameters of https://pkg.go.dev/net#Listen, joined by the separator ","
+#! (with no spaces around the ","). Specifying an empty string will cause the Supervisor to not open an HTTP port at all.
+#! Note that changing this value is not necessarily sufficient by itself, and will require also manually
+#! changing port numbers of Services and Deployment health checks in other parts of the YAML manifests.
+#! The default value of "tcp,:8080" will bind to all IPv4 and IPv6 addresses on port 8080. Note that this makes it
+#! possible to expose the Supervisor's APIs to the public via insecure HTTP, but this should never be done in a
+#! production system. It is never safe for the APIs to be public without TLS, since many of them deal with
+#! credentials and secret tokens. The only exception is the HTTP port's /healthz endpoint can be used safely for
+#! in-cluster health checking without TLS. It might be safe to use the HTTP port for traffic from a service mesh
+#! sidecar in the same pod, assuming that the service mesh is using other mechanisms to secure the network traffic.
+#! Refer to the documentation of your service mesh for more information. If using a service mesh to secure all traffic,
+#! consider changing this setting to bind only to localhost addresses to make it impossible to accidentally accept
+#! insecure traffic from outside the pod. The default value of this option may change in the future to a more restrictive
+#! default to help users avoid accidentally exposing the APIs to the public via HTTP.
+#! If the default value is changed in the future, it will be announced via release notes on the GitHub releases.
+container_http_listener: "tcp,:8080"
+
+#! Configure the Supervisor server's HTTPS listener. The required format is "network,address", where network and
+#! address are each defined the same as the parameters of https://pkg.go.dev/net#Listen, joined by the separator ","
+#! (with no spaces around the ","). Empty values are not allowed.
+#! Note that changing this value is not necessarily sufficient by itself, and will require also manually
+#! changing port numbers of Services and Deployment health checks in other parts of the YAML manifests.
+#! The default value of "tcp,:8443" will bind to all IPv4 and IPv6 addresses on port 8443.
+container_https_listener: "tcp,:8443"

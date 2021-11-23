@@ -42,6 +42,14 @@ func FromPath(path string) (*Config, error) {
 		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
 	}
 
+	if err := validateSupervisorListener(config.SupervisorHTTPSListener, false); err != nil {
+		return nil, fmt.Errorf("validate supervisorHTTPSListener: %w", err)
+	}
+
+	if err := validateSupervisorListener(config.SupervisorHTTPListener, true); err != nil {
+		return nil, fmt.Errorf("validate supervisorHTTPListener: %w", err)
+	}
+
 	if err := validateNames(&config.NamesConfig); err != nil {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
@@ -61,6 +69,30 @@ func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 
 func validateAPIGroupSuffix(apiGroupSuffix string) error {
 	return groupsuffix.Validate(apiGroupSuffix)
+}
+
+func validateSupervisorListener(supervisorHTTPListener string, allowBlank bool) error {
+	if allowBlank && supervisorHTTPListener == "" {
+		return nil
+	}
+
+	// The expected format is "network,address".
+	if !strings.Contains(supervisorHTTPListener, ",") {
+		return fmt.Errorf("must have format 'network,address'")
+	}
+	split := strings.SplitN(supervisorHTTPListener, ",", 2)
+	network := split[0]
+	address := split[1]
+	if network == "" || address == "" {
+		return fmt.Errorf("must have format 'network,address'")
+	}
+
+	// See https://pkg.go.dev/net#Listen
+	if network != "tcp" && network != "tcp4" && network != "tcp6" && network != "unix" && network != "unixpacket" {
+		return fmt.Errorf("invalid network type")
+	}
+
+	return nil
 }
 
 func validateNames(names *NamesConfigSpec) error {

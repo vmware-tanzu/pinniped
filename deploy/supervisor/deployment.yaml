@@ -32,6 +32,8 @@ data:
   #@yaml/text-templated-strings
   pinniped.yaml: |
     apiGroupSuffix: (@= data.values.api_group_suffix @)
+    supervisorHTTPListener: (@= data.values.container_http_listener @)
+    supervisorHTTPSListener: (@= data.values.container_https_listener @)
     names:
       defaultTLSCertificateSecret: (@= defaultResourceNameWithSuffix("default-tls-certificate") @)
     labels: (@= json.encode(labels()).rstrip() @)

@@ -48,7 +48,6 @@ import (
 )
 
 const (
-	impersonationProxyPort       = 8444
 	defaultHTTPSPort             = 443
 	approximatelyOneHundredYears = 100 * 365 * 24 * time.Hour
 	caCommonName                 = "Pinniped Impersonation Proxy Serving CA"
@@ -61,6 +60,7 @@ const (
 type impersonatorConfigController struct {
 	namespace                        string
 	credentialIssuerResourceName     string
+	impersonationProxyPort           int
 	generatedLoadBalancerServiceName string
 	generatedClusterIPServiceName    string
 	tlsSecretName                    string
@@ -96,6 +96,7 @@ func NewImpersonatorConfigController(
 	servicesInformer corev1informers.ServiceInformer,
 	secretsInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	impersonationProxyPort int,
 	generatedLoadBalancerServiceName string,
 	generatedClusterIPServiceName string,
 	tlsSecretName string,
@@ -115,6 +116,7 @@ func NewImpersonatorConfigController(
 			Syncer: &impersonatorConfigController{
 				namespace:                         namespace,
 				credentialIssuerResourceName:      credentialIssuerResourceName,
+				impersonationProxyPort:            impersonationProxyPort,
 				generatedLoadBalancerServiceName:  generatedLoadBalancerServiceName,
 				generatedClusterIPServiceName:     generatedClusterIPServiceName,
 				tlsSecretName:                     tlsSecretName,
@@ -401,9 +403,9 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 		}
 	}
 
-	c.infoLog.Info("starting impersonation proxy", "port", impersonationProxyPort)
+	c.infoLog.Info("starting impersonation proxy", "port", c.impersonationProxyPort)
 	startImpersonatorFunc, err := c.impersonatorFunc(
-		impersonationProxyPort,
+		c.impersonationProxyPort,
 		c.tlsServingCertDynamicCertProvider,
 		c.impersonationSigningCertProvider,
 	)
@@ -436,7 +438,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStopped(shouldCloseEr
 		return nil
 	}
 
-	c.infoLog.Info("stopping impersonation proxy", "port", impersonationProxyPort)
+	c.infoLog.Info("stopping impersonation proxy", "port", c.impersonationProxyPort)
 	close(c.serverStopCh)
 	stopErr := <-c.errorCh
 
@@ -457,7 +459,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 			Type: v1.ServiceTypeLoadBalancer,
 			Ports: []v1.ServicePort{
 				{
-					TargetPort: intstr.FromInt(impersonationProxyPort),
+					TargetPort: intstr.FromInt(c.impersonationProxyPort),
 					Port:       defaultHTTPSPort,
 					Protocol:   v1.ProtocolTCP,
 				},
@@ -503,7 +505,7 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 			Type: v1.ServiceTypeClusterIP,
 			Ports: []v1.ServicePort{
 				{
-					TargetPort: intstr.FromInt(impersonationProxyPort),
+					TargetPort: intstr.FromInt(c.impersonationProxyPort),
 					Port:       defaultHTTPSPort,
 					Protocol:   v1.ProtocolTCP,
 				},

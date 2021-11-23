@@ -51,6 +51,7 @@ import (
 func TestImpersonatorConfigControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const impersonationProxyPort = 8444
 		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
 		const generatedClusterIPServiceName = "some-cluster-ip-resource-name"
@@ -84,6 +85,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				servicesInformer,
 				secretsInformer,
 				observableWithInformerOption.WithInformer,
+				impersonationProxyPort,
 				generatedLoadBalancerServiceName,
 				generatedClusterIPServiceName,
 				tlsSecretName,
@@ -252,6 +254,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const impersonationProxyPort = 8444
 		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const loadBalancerServiceName = "some-service-resource-name"
 		const clusterIPServiceName = "some-cluster-ip-resource-name"
@@ -553,6 +556,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().Services(),
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
+				impersonationProxyPort,
 				loadBalancerServiceName,
 				clusterIPServiceName,
 				tlsSecretName,

@@ -304,7 +304,7 @@ func startControllers(ctx context.Context, shutdown *sync.WaitGroup, buildContro
 	return nil
 }
 
-func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error { //nolint:funlen // kinda long but wires the world
 	serverInstallationNamespace := podInfo.Namespace
 
 	dref, supervisorDeployment, err := deploymentref.New(podInfo)

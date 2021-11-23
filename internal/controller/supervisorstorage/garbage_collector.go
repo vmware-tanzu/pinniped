@@ -117,7 +117,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 
 		garbageCollectAfterTime, err := time.Parse(crud.SecretLifetimeAnnotationDateFormat, timeString)
 		if err != nil {
-			plog.WarningErr("could not parse resource timestamp for garbage collection", err, logKV(secret))
+			plog.WarningErr("could not parse resource timestamp for garbage collection", err, logKV(secret)...)
 			continue
 		}
 
@@ -130,15 +130,16 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 		if isSessionStorage {
 			err := c.maybeRevokeUpstreamOIDCRefreshToken(ctx.Context, storageType, secret)
 			if err != nil {
-				// Log the error for debugging purposes, but still carry on to delete the Secret despite the error.
-				plog.WarningErr("garbage collector could not revoke upstream refresh token", err, logKV(secret))
-				// If the error is of a type that is worth retrying, then not delete the Secret right away.
+				plog.WarningErr("garbage collector could not revoke upstream refresh token", err, logKV(secret)...)
+				// If the error is of a type that is worth retrying, then do not delete the Secret right away.
 				// A future call to Sync will try revocation again for that secret. However, if the Secret is
 				// getting too old, then just delete it anyway. We don't want to extend the lifetime of these
 				// session Secrets by too much time, since the garbage collector is the only thing that is
 				// cleaning them out of etcd storage.
 				fourHoursAgo := frozenClock.Now().Add(-4 * time.Hour)
-				if errors.As(err, &retryableRevocationError{}) && garbageCollectAfterTime.After(fourHoursAgo) {
+				nowIsLessThanFourHoursBeyondSecretGCTime := garbageCollectAfterTime.After(fourHoursAgo)
+				if errors.As(err, &retryableRevocationError{}) && nowIsLessThanFourHoursBeyondSecretGCTime {
+					// Hasn't been very long since secret expired, so skip deletion to try revocation again later.
 					continue
 				}
 			}
@@ -151,10 +152,10 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 			},
 		})
 		if err != nil {
-			plog.WarningErr("failed to garbage collect resource", err, logKV(secret))
+			plog.WarningErr("failed to garbage collect resource", err, logKV(secret)...)
 			continue
 		}
-		plog.Info("storage garbage collector deleted resource", logKV(secret))
+		plog.Info("storage garbage collector deleted resource", logKV(secret)...)
 	}
 
 	return nil
@@ -251,7 +252,7 @@ func (c *garbageCollectorController) revokeUpstreamOIDCRefreshToken(ctx context.
 		return retryableRevocationError{wrapped: err}
 	}
 
-	plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret))
+	plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret)...)
 	return nil
 }
 

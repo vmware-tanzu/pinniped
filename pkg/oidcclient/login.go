@@ -31,6 +31,7 @@ import (
 	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/upstreamoidc"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -274,7 +275,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		ctx:          context.Background(),
 		logger:       logr.Discard(), // discard logs unless a logger is specified
 		callbacks:    make(chan callbackResult, 2),
-		httpClient:   http.DefaultClient,
+		httpClient:   phttp.Default(nil),
 
 		// Default implementations of external dependencies (to be mocked in tests).
 		generateState: state.Generate,

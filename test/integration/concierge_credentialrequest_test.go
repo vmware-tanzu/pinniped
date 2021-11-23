@@ -45,8 +45,10 @@ func TestUnsuccessfulCredentialRequest_Parallel(t *testing.T) {
 	require.Equal(t, "authentication failed", *response.Status.Message)
 }
 
-// TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.
-func TestSuccessfulCredentialRequest_Parallel(t *testing.T) {
+// TestSuccessfulCredentialRequest cannot run in parallel because runPinnipedLoginOIDC uses a fixed port
+// for its localhost listener via --listen-port=env.CLIUpstreamOIDC.CallbackURL.Port() per oidcLoginCommand.
+// Since ports are global to the process, tests using oidcLoginCommand must be run serially.
+func TestSuccessfulCredentialRequest(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)

@@ -6,9 +6,13 @@
 package jwtcachefiller
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"reflect"
+	"time"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,6 +27,7 @@ import (
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/net/phttp"
 )
 
 // These default values come from the way that the Supervisor issues and signs tokens. We make these
@@ -145,7 +150,7 @@ func (c *controller) extractValueAsJWTAuthenticator(value authncache.Value) *jwt
 
 // newJWTAuthenticator creates a jwt authenticator from the provided spec.
 func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthenticator, error) {
-	caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
+	rootCAs, caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
@@ -167,20 +172,51 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 		groupsClaim = defaultGroupsClaim
 	}
 
-	authenticator, err := oidc.New(oidc.Options{
+	// copied from Kube OIDC code
+	issuerURL, err := url.Parse(spec.Issuer)
+	if err != nil {
+		return nil, err
+	}
+	if issuerURL.Scheme != "https" {
+		return nil, fmt.Errorf("issuer (%q) has invalid scheme (%q), require 'https'", spec.Issuer, issuerURL.Scheme)
+	}
+
+	client := phttp.Default(rootCAs)
+	client.Timeout = 30 * time.Second // copied from Kube OIDC code
+
+	ctx := coreosoidc.ClientContext(context.Background(), client)
+
+	provider, err := coreosoidc.NewProvider(ctx, spec.Issuer)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize provider: %w", err)
+	}
+	providerJSON := &struct {
+		JWKSURL string `json:"jwks_uri"`
+	}{}
+	if err := provider.Claims(providerJSON); err != nil {
+		return nil, fmt.Errorf("could not get provider jwks_uri: %w", err) // should be impossible because coreosoidc.NewProvider validates this
+	}
+	if len(providerJSON.JWKSURL) == 0 {
+		return nil, fmt.Errorf("issuer %q does not have jwks_uri set", spec.Issuer)
+	}
+
+	oidcAuthenticator, err := oidc.New(oidc.Options{
 		IssuerURL:            spec.Issuer,
+		KeySet:               coreosoidc.NewRemoteKeySet(ctx, providerJSON.JWKSURL),
 		ClientID:             spec.Audience,
 		UsernameClaim:        usernameClaim,
 		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
-		CAContentProvider:    caContentProvider,
+		// this is still needed for distributed claim resolution, meaning this uses a http client that does not honor our TLS config
+		// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106141
+		CAContentProvider: caContentProvider,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize authenticator: %w", err)
 	}
 
 	return &jwtAuthenticator{
-		tokenAuthenticatorCloser: authenticator,
+		tokenAuthenticatorCloser: oidcAuthenticator,
 		spec:                     spec,
 	}, nil
 }

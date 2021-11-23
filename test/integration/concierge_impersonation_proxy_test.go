@@ -65,6 +65,7 @@ import (
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
@@ -305,20 +306,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
 		})
 
-		// Get pods in concierge namespace and pick one.
-		// this is for tests that require performing actions against a running pod. We use the concierge pod because we already have it handy.
-		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to port-forward a running port.
-		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+		// Get pods in supervisor namespace and pick one.
+		// this is for tests that require performing actions against a running pod.
+		// We use the supervisor pod because we already have it handy and need to port-forward a running port.
+		// We avoid using the concierge for this because it requires TLS 1.3 which is not support by older versions of curl.
+		supervisorPods, err := adminClient.CoreV1().Pods(env.SupervisorNamespace).List(ctx,
+			metav1.ListOptions{LabelSelector: "deployment.pinniped.dev=supervisor"})
 		require.NoError(t, err)
-		require.Greater(t, len(pods.Items), 0)
-		var conciergePod *corev1.Pod
-		for _, pod := range pods.Items {
-			pod := pod
-			if !strings.Contains(pod.Name, "kube-cert-agent") {
-				conciergePod = &pod
-			}
-		}
-		require.NotNil(t, conciergePod, "could not find a concierge pod")
+		require.NotEmpty(t, supervisorPods.Items, "could not find supervisor pods")
+		supervisorPod := supervisorPods.Items[0]
+
+		// make sure the supervisor has a default TLS cert during this test so that it can handle a TLS connection
+		createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx, t)
 
 		// Test that the user can perform basic actions through the client with their username and group membership
 		// influencing RBAC checks correctly.
@@ -346,7 +345,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// Run the kubectl port-forward command.
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "10443:8443")
+			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", supervisorPod.Namespace, supervisorPod.Name, "10443:8443")
 			portForwardCmd.Env = envVarsWithProxy
 
 			// Start, but don't wait for the command to finish.
@@ -366,7 +365,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			defer cancelFunc()
 			startTime := time.Now()
 			for time.Now().Before(startTime.Add(70 * time.Second)) {
-				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10443") // -sS turns off the progressbar but still prints errors
+				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10443/healthz") // -sS turns off the progressbar but still prints errors
 				curlCmd.Stdout = &curlStdOut
 				curlCmd.Stderr = &curlStdErr
 				curlErr := curlCmd.Run()
@@ -382,7 +381,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// curl the endpoint once more, once 70 seconds has elapsed, to make sure the connection is still open.
 			timeout, cancelFunc = context.WithTimeout(ctx, 30*time.Second)
 			defer cancelFunc()
-			curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10443") // -sS turns off the progressbar but still prints errors
+			curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10443/healthz") // -sS turns off the progressbar but still prints errors
 			curlCmd.Stdout = &curlStdOut
 			curlCmd.Stderr = &curlStdErr
 			curlErr := curlCmd.Run()
@@ -392,9 +391,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				t.Log("curlStdErr: " + curlStdErr.String())
 				t.Log("stdout: " + curlStdOut.String())
 			}
-			// We expect this to 403, but all we care is that it gets through.
 			require.NoError(t, curlErr)
-			require.Contains(t, curlStdOut.String(), `"forbidden: User \"system:anonymous\" cannot get path \"/\""`)
+			require.Contains(t, curlStdOut.String(), "okokokokok") // a few successful healthz responses
 		})
 
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (idle)", func(t *testing.T) {
@@ -404,7 +402,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// Run the kubectl port-forward command.
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "10444:8443")
+			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", supervisorPod.Namespace, supervisorPod.Name, "10444:8443")
 			portForwardCmd.Env = envVarsWithProxy
 
 			// Start, but don't wait for the command to finish.
@@ -414,13 +412,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 			}()
 
-			// Wait to see if we time out. The default timeout is 60 seconds, but the server should recognize this this
+			// Wait to see if we time out. The default timeout is 60 seconds, but the server should recognize that this
 			// is going to be a long-running command and keep the connection open as long as the client stays connected.
 			time.Sleep(70 * time.Second)
 
 			timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10444") // -sS turns off the progressbar but still prints errors
+			curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:10444/healthz") // -sS turns off the progressbar but still prints errors
 			var curlStdOut, curlStdErr bytes.Buffer
 			curlCmd.Stdout = &curlStdOut
 			curlCmd.Stderr = &curlStdErr
@@ -430,9 +428,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				t.Log("curlStdErr: " + curlStdErr.String())
 				t.Log("stdout: " + curlStdOut.String())
 			}
-			// We expect this to 403, but all we care is that it gets through.
 			require.NoError(t, err)
-			require.Contains(t, curlStdOut.String(), `"forbidden: User \"system:anonymous\" cannot get path \"/\""`)
+			require.Equal(t, curlStdOut.String(), "ok")
 		})
 
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
@@ -760,7 +757,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil,
 			)
 			nestedImpersonationUIDOnly.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+				return roundtripper.WrapFunc(rt, func(r *http.Request) (*http.Response, error) {
 					r.Header.Set("iMperSONATE-uid", "some-awesome-uid")
 					return rt.RoundTrip(r)
 				})
@@ -798,7 +795,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				},
 			)
 			nestedImpersonationUID.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+				return roundtripper.WrapFunc(rt, func(r *http.Request) (*http.Response, error) {
 					r.Header.Set("imperSONate-uiD", "some-fancy-uid")
 					return rt.RoundTrip(r)
 				})
@@ -1115,7 +1112,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// run the kubectl logs command
 			logLinesCount := 10
-			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", conciergePod.Namespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
+			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", supervisorPod.Namespace, supervisorPod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 			require.NoError(t, err, `"kubectl logs" failed`)
 			// Expect _approximately_ logLinesCount lines in the output
 			// (we can't match 100% exactly due to https://github.com/kubernetes/kubernetes/issues/72628).
@@ -1499,6 +1496,20 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					require.Equal(t, &identityv1alpha1.WhoAmIRequest{}, whoAmI)
 				})
 			})
+		})
+
+		t.Run("assert impersonator runs with secure TLS config", func(t *testing.T) {
+			parallelIfNotEKS(t)
+
+			cancelCtx, cancel := context.WithCancel(ctx)
+			t.Cleanup(cancel)
+
+			startKubectlPortForward(cancelCtx, t, "10445", "443", env.ConciergeAppName+"-proxy", env.ConciergeNamespace)
+
+			stdout, stderr := runNmapSSLEnum(t, "127.0.0.1", 10445)
+
+			require.Empty(t, stderr)
+			require.Contains(t, stdout, getExpectedCiphers(ptls.Default), "stdout:\n%s", stdout)
 		})
 	})
 
@@ -1956,7 +1967,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 	// probe each pod directly for readiness since the concierge status is a lie - it just means a single pod is ready
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx,
-			metav1.ListOptions{LabelSelector: "app=" + env.ConciergeAppName + ",!kube-cert-agent.pinniped.dev"}) // TODO replace with deployment.pinniped.dev=concierge
+			metav1.ListOptions{LabelSelector: "deployment.pinniped.dev=concierge"})
 		requireEventually.NoError(err)
 		requireEventually.Len(pods.Items, 2) // has to stay in sync with the defaults in our YAML
 
@@ -2373,7 +2384,7 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	config = rest.CopyConfig(config)
 
 	config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+		return roundtripper.WrapFunc(rt, func(req *http.Request) (*http.Response, error) {
 			resp, err := rt.RoundTrip(req)
 
 			r := req

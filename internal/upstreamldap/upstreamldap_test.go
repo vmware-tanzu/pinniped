@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -22,9 +23,11 @@ import (
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 const (
@@ -1689,10 +1692,22 @@ func TestGetURL(t *testing.T) {
 
 // Testing of host parsing, TLS negotiation, and CA bundle, etc. for the production code's dialer.
 func TestRealTLSDialing(t *testing.T) {
-	testServerCABundle, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {})
-	parsedURL, err := url.Parse(testServerURL)
+	testServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		func(server *httptest.Server) {
+			tlsserver.RecordTLSHello(server)
+			recordFunc := server.TLS.GetConfigForClient
+			server.TLS.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+				_, _ = recordFunc(info)
+				r, err := http.NewRequestWithContext(info.Context(), http.MethodGet, "/this-is-ldap", nil)
+				require.NoError(t, err)
+				tlsserver.AssertTLS(t, r, ptls.DefaultLDAP)
+				return nil, nil
+			}
+		})
+	parsedURL, err := url.Parse(testServer.URL)
 	require.NoError(t, err)
 	testServerHostAndPort := parsedURL.Host
+	testServerCABundle := tlsserver.TLSTestServerCA(testServer)
 
 	caForTestServerWithBadCertName, err := certauthority.New("Test CA", time.Hour)
 	require.NoError(t, err)
@@ -1720,7 +1735,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "happy path",
 			host:      testServerHostAndPort,
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   context.Background(),
 		},
@@ -1751,7 +1766,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "invalid host with TLS",
 			host:      "this:is:not:a:valid:hostname",
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
@@ -1759,7 +1774,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "invalid host with StartTLS",
 			host:      "this:is:not:a:valid:hostname",
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: StartTLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
@@ -1776,7 +1791,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name: "cannot connect to host",
 			// This is assuming that this port was not reclaimed by another app since the test setup ran. Seems safe enough.
 			host:      recentlyClaimedHostAndPort,
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   context.Background(),
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
@@ -1784,7 +1799,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "pays attention to the passed context",
 			host:      testServerHostAndPort,
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   alreadyCancelledContext,
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
@@ -1792,7 +1807,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "unsupported connection protocol",
 			host:      testServerHostAndPort,
-			caBundle:  []byte(testServerCABundle),
+			caBundle:  testServerCABundle,
 			connProto: "bad usage of this type",
 			context:   alreadyCancelledContext,
 			wantError: `LDAP Result Code 200 "Network Error": did not specify valid ConnectionProtocol`,
@@ -1824,7 +1839,7 @@ func TestRealTLSDialing(t *testing.T) {
 
 				// Indirectly checking that the Dialer method constructed the ldap.Conn with isTLS set to true,
 				// since this is always the correct behavior unless/until we want to support StartTLS.
-				err := conn.(*ldap.Conn).StartTLS(&tls.Config{})
+				err := conn.(*ldap.Conn).StartTLS(ptls.DefaultLDAP(nil))
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)
 			}
 		})

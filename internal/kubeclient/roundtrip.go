@@ -20,6 +20,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 
+	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -78,7 +79,7 @@ func newWrapper(
 	middlewares []Middleware,
 ) transport.WrapperFunc {
 	return func(rt http.RoundTripper) http.RoundTripper {
-		return roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
+		return roundtripper.WrapFunc(rt, roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
 			reqInfo, err := resolver.NewRequestInfo(reqWithoutPrefix(req, hostURL, apiPathPrefix))
 			if err != nil || !reqInfo.IsResourceRequest {
 				resp, err := rt.RoundTrip(req) // we only handle kube resource requests
@@ -120,7 +121,7 @@ func newWrapper(
 				resp, err := rt.RoundTrip(req) // we only handle certain verbs
 				return false, resp, err
 			}
-		})
+		}).RoundTrip)
 	}
 }
 

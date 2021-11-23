@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -28,13 +27,13 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/client-go/transport"
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/net/phttp"
 )
 
 type kubeconfigDeps struct {
@@ -664,17 +663,8 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 		return fmt.Errorf("invalid kubeconfig (no certificateAuthorityData)")
 	}
 
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				RootCAs:    kubeconfigCA,
-			},
-			Proxy:               http.ProxyFromEnvironment,
-			TLSHandshakeTimeout: 10 * time.Second,
-		},
-		Timeout: 10 * time.Second,
-	}
+	httpClient := phttp.Default(kubeconfigCA)
+	httpClient.Timeout = 10 * time.Second
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -781,21 +771,14 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 }
 
 func newDiscoveryHTTPClient(caBundleFlag caBundleFlag) (*http.Client, error) {
-	t := &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	httpClient := &http.Client{Transport: t}
+	var rootCAs *x509.CertPool
 	if caBundleFlag != nil {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM(caBundleFlag)
-		if !ok {
+		rootCAs = x509.NewCertPool()
+		if ok := rootCAs.AppendCertsFromPEM(caBundleFlag); !ok {
 			return nil, fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse CA bundle")
 		}
-		t.TLSClientConfig.RootCAs = rootCAs
 	}
-	httpClient.Transport = transport.DebugWrappers(httpClient.Transport)
-	return httpClient, nil
+	return phttp.Default(rootCAs), nil
 }
 
 func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpClient *http.Client) (string, error) {

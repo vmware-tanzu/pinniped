@@ -41,7 +41,7 @@ kube_cert_agent_image:
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
 #! Pinniped will try to guess the right K8s API URL for sharing that information with potential clients.
-#! This settings allows the guess to be overridden.
+#! This setting allows the guess to be overridden.
 #! Optional.
 discovery_url: #! e.g., https://example.com
 

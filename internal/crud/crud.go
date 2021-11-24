@@ -51,22 +51,20 @@ type JSON interface{} // document that we need valid JSON types
 
 func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time, lifetime time.Duration) Storage {
 	return &secretsStorage{
-		resource:      resource,
-		secretType:    corev1.SecretType(fmt.Sprintf(secretTypeFormat, resource)),
-		secretVersion: []byte(secretVersion),
-		secrets:       secrets,
-		clock:         clock,
-		lifetime:      lifetime,
+		resource:   resource,
+		secretType: secretType(resource),
+		secrets:    secrets,
+		clock:      clock,
+		lifetime:   lifetime,
 	}
 }
 
 type secretsStorage struct {
-	resource      string
-	secretType    corev1.SecretType
-	secretVersion []byte
-	secrets       corev1client.SecretInterface
-	clock         func() time.Time
-	lifetime      time.Duration
+	resource   string
+	secretType corev1.SecretType
+	secrets    corev1client.SecretInterface
+	clock      func() time.Time
+	lifetime   time.Duration
 }
 
 func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (string, error) {
@@ -86,26 +84,12 @@ func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (
 	if err != nil {
 		return "", fmt.Errorf("failed to get %s for signature %s: %w", s.resource, signature, err)
 	}
-	if err := s.validateSecret(secret); err != nil {
-		return "", err
-	}
-	if err := json.Unmarshal(secret.Data[secretDataKey], data); err != nil {
-		return "", fmt.Errorf("failed to decode %s for signature %s: %w", s.resource, signature, err)
+
+	err = FromSecret(s.resource, secret, data)
+	if err != nil {
+		return "", fmt.Errorf("error during get for signature %s: %w", signature, err)
 	}
 	return secret.ResourceVersion, nil
-}
-
-func (s *secretsStorage) validateSecret(secret *corev1.Secret) error {
-	if secret.Type != s.secretType {
-		return fmt.Errorf("%w: %s must equal %s", ErrSecretTypeMismatch, secret.Type, s.secretType)
-	}
-	if labelResource := secret.Labels[SecretLabelKey]; labelResource != s.resource {
-		return fmt.Errorf("%w: %s must equal %s", ErrSecretLabelMismatch, labelResource, s.resource)
-	}
-	if !bytes.Equal(secret.Data[secretVersionKey], s.secretVersion) {
-		return ErrSecretVersionMismatch // TODO should this be fatal or not?
-	}
-	return nil
 }
 
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
@@ -154,6 +138,36 @@ func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, la
 	return nil
 }
 
+// FromSecret is similar to Get, but for when you already have a Secret in hand, e.g. from an informer.
+// It validates and unmarshals the Secret. The data parameter is filled in as the result.
+func FromSecret(resource string, secret *corev1.Secret, data JSON) error {
+	if err := validateSecret(resource, secret); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(secret.Data[secretDataKey], data); err != nil {
+		return fmt.Errorf("failed to decode %s: %w", resource, err)
+	}
+	return nil
+}
+
+func secretType(resource string) corev1.SecretType {
+	return corev1.SecretType(fmt.Sprintf(secretTypeFormat, resource))
+}
+
+func validateSecret(resource string, secret *corev1.Secret) error {
+	secretType := corev1.SecretType(fmt.Sprintf(secretTypeFormat, resource))
+	if secret.Type != secretType {
+		return fmt.Errorf("%w: %s must equal %s", ErrSecretTypeMismatch, secret.Type, secretType)
+	}
+	if labelResource := secret.Labels[SecretLabelKey]; labelResource != resource {
+		return fmt.Errorf("%w: %s must equal %s", ErrSecretLabelMismatch, labelResource, resource)
+	}
+	if !bytes.Equal(secret.Data[secretVersionKey], []byte(secretVersion)) {
+		return ErrSecretVersionMismatch // TODO should this be fatal or not?
+	}
+	return nil
+}
+
 //nolint: gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
@@ -190,7 +204,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 		},
 		Data: map[string][]byte{
 			secretDataKey:    buf,
-			secretVersionKey: s.secretVersion,
+			secretVersionKey: []byte(secretVersion),
 		},
 		Type: s.secretType,
 	}, nil

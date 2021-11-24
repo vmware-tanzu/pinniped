@@ -11,6 +11,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -38,7 +39,7 @@ type authorizeCodeStorage struct {
 	storage crud.Storage
 }
 
-type AuthorizeCodeSession struct {
+type Session struct {
 	Active  bool            `json:"active"`
 	Request *fosite.Request `json:"request"`
 	Version string          `json:"version"`
@@ -46,6 +47,23 @@ type AuthorizeCodeSession struct {
 
 func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) oauth2.AuthorizeCodeStorage {
 	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
+}
+
+// ReadFromSecret reads the contents of a Secret as a Session.
+func ReadFromSecret(secret *v1.Secret) (*Session, error) {
+	session := NewValidEmptyAuthorizeCodeSession()
+	err := crud.FromSecret(TypeLabelValue, secret, session)
+	if err != nil {
+		return nil, err
+	}
+	if session.Version != authorizeCodeStorageVersion {
+		return nil, fmt.Errorf("%w: authorization code session has version %s instead of %s",
+			ErrInvalidAuthorizeRequestVersion, session.Version, authorizeCodeStorageVersion)
+	}
+	if session.Request.ID == "" {
+		return nil, fmt.Errorf("malformed authorization code session: %w", ErrInvalidAuthorizeRequestData)
+	}
+	return session, nil
 }
 
 func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) error {
@@ -70,7 +88,7 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	//      of the consent authorization request. It is used to identify the session.
 	//  signature for lookup in the DB
 
-	_, err = a.storage.Create(ctx, signature, &AuthorizeCodeSession{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil)
+	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil)
 	return err
 }
 
@@ -108,7 +126,7 @@ func (a *authorizeCodeStorage) InvalidateAuthorizeCodeSession(ctx context.Contex
 	return nil
 }
 
-func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string) (*AuthorizeCodeSession, string, error) {
+func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string) (*Session, string, error) {
 	session := NewValidEmptyAuthorizeCodeSession()
 	rv, err := a.storage.Get(ctx, signature, session)
 
@@ -137,8 +155,8 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 	return session, rv, nil
 }
 
-func NewValidEmptyAuthorizeCodeSession() *AuthorizeCodeSession {
-	return &AuthorizeCodeSession{
+func NewValidEmptyAuthorizeCodeSession() *Session {
+	return &Session{
 		Request: &fosite.Request{
 			Client:  &clientregistry.Client{},
 			Session: &psession.PinnipedSession{},

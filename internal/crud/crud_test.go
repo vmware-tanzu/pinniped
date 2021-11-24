@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -793,7 +793,8 @@ func TestStorage(t *testing.T) {
 				require.Empty(t, rv1)
 				require.Empty(t, out.Data)
 				require.True(t, errors.Is(err, ErrSecretTypeMismatch))
-				require.EqualError(t, err, "secret storage data has incorrect type: storage.pinniped.dev/candies-not must equal storage.pinniped.dev/candies")
+				require.EqualError(t, err, "error during get for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I: "+
+					"secret storage data has incorrect type: storage.pinniped.dev/candies-not must equal storage.pinniped.dev/candies")
 
 				return nil
 			},
@@ -856,7 +857,8 @@ func TestStorage(t *testing.T) {
 				require.Empty(t, rv1)
 				require.Empty(t, out.Data)
 				require.True(t, errors.Is(err, ErrSecretLabelMismatch))
-				require.EqualError(t, err, "secret storage data has incorrect label: candies-are-bad must equal candies")
+				require.EqualError(t, err, "error during get for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I: "+
+					"secret storage data has incorrect label: candies-are-bad must equal candies")
 
 				return nil
 			},
@@ -919,7 +921,8 @@ func TestStorage(t *testing.T) {
 				require.Empty(t, rv1)
 				require.Empty(t, out.Data)
 				require.True(t, errors.Is(err, ErrSecretVersionMismatch))
-				require.EqualError(t, err, "secret storage data has incorrect version")
+				require.EqualError(t, err, "error during get for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I: "+
+					"secret storage data has incorrect version")
 
 				return nil
 			},
@@ -981,7 +984,8 @@ func TestStorage(t *testing.T) {
 				rv1, err := storage.Get(ctx, signature, out)
 				require.Empty(t, rv1)
 				require.Empty(t, out.Data)
-				require.EqualError(t, err, "failed to decode candies for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I: invalid character '}' looking for beginning of value")
+				require.EqualError(t, err, "error during get for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I: "+
+					"failed to decode candies: invalid character '}' looking for beginning of value")
 
 				return nil
 			},
@@ -1094,4 +1098,156 @@ func errString(err error) string {
 	}
 
 	return err.Error()
+}
+
+func TestFromSecret(t *testing.T) {
+	fakeNow := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	lifetime := time.Minute * 10
+	fakeNowPlusLifetimeAsString := metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+
+	type testJSON struct {
+		Data string
+	}
+
+	tests := []struct {
+		name     string
+		resource string
+		secret   *corev1.Secret
+		wantData *testJSON
+		wantErr  string
+	}{
+		{
+			name:     "happy path",
+			resource: "candies",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-candies-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+					Namespace:       "some-namespace",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "candies",
+					},
+					Annotations: map[string]string{
+						"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/candies",
+			},
+			wantData: &testJSON{Data: "snorlax"},
+		},
+		{
+			name:     "can't unmarshal",
+			resource: "candies",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-candies-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+					Namespace:       "some-namespace",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "candies",
+					},
+					Annotations: map[string]string{
+						"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`not-json`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/candies",
+			},
+			wantData: &testJSON{Data: "snorlax"},
+			wantErr:  "failed to decode candies: invalid character 'o' in literal null (expecting 'u')",
+		},
+		{
+			name:     "wrong storage version",
+			resource: "candies",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-candies-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+					Namespace:       "some-namespace",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "candies",
+					},
+					Annotations: map[string]string{
+						"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
+					"pinniped-storage-version": []byte("wrong-version-here"),
+				},
+				Type: "storage.pinniped.dev/candies",
+			},
+			wantData: &testJSON{Data: "snorlax"},
+			wantErr:  "secret storage data has incorrect version",
+		},
+		{
+			name:     "wrong type label",
+			resource: "candies",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-candies-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+					Namespace:       "some-namespace",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "candies",
+					},
+					Annotations: map[string]string{
+						"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/not-candies",
+			},
+			wantData: &testJSON{Data: "snorlax"},
+			wantErr:  "secret storage data has incorrect type: storage.pinniped.dev/not-candies must equal storage.pinniped.dev/candies",
+		},
+		{
+			name:     "wrong secret type",
+			resource: "candies",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pinniped-storage-candies-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+					Namespace:       "some-namespace",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"storage.pinniped.dev/type": "candies",
+					},
+					Annotations: map[string]string{
+						"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+					},
+				},
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+				Type: "storage.pinniped.dev/not-candies",
+			},
+			wantData: &testJSON{Data: "snorlax"},
+			wantErr:  "secret storage data has incorrect type: storage.pinniped.dev/not-candies must equal storage.pinniped.dev/candies",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			data := &testJSON{}
+			err := FromSecret("candies", tt.secret, data)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, data, tt.wantData)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+			}
+		})
+	}
 }

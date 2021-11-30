@@ -16,6 +16,8 @@ import (
 	"time"
 	"unsafe"
 
+	"go.pinniped.dev/internal/oidc/provider"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -584,6 +586,115 @@ func TestProviderConfig(t *testing.T) {
 
 				if tt.wantErr != "" {
 					require.EqualError(t, err, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("ValidateRefresh", func(t *testing.T) {
+		testTokenWithoutIDToken := &oauth2.Token{
+			AccessToken: "test-access-token",
+			// the library sets the original refresh token into the result, even though the server did not return that
+			RefreshToken: "test-initial-refresh-token",
+			TokenType:    "test-token-type",
+			Expiry:       time.Now().Add(42 * time.Second),
+		}
+
+		tests := []struct {
+			name             string
+			token            *oauth2.Token
+			storedAttributes provider.StoredRefreshAttributes
+			userInfo         *oidc.UserInfo
+			rawClaims        []byte
+			userInfoErr      error
+			wantErr          string
+		}{
+			{
+				name:             "id, access and refresh token returned from refresh",
+				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlzcyI6InNvbWUtaXNzdWVyIiwiaWF0IjoxNTE2MjM5MDIyfQ.qVMIsmrMLiMW7kJUNO4RpiBnkd6MYKdXXMMb6UWVXL0zXkalb1tP2DO3Yp73ZfWqCNdNEa1qqSJIR9F46cnAp04pZmOvVqTWCmaXaxvklRb_QzdlKi-3QNg7wEJ50a11vhUTJxLYrkH9pJpPILzd8Kx0yp43iEJbBG3nFVZFOSQOh7wCGUF4QkNLRMT9buq8DiypKPmjksVmObkF3AbvQ1IvaA_UPBmFvL-pun-TjUBR37xT7JI64wbczJJclThaqTcK6bQcbiBG4jonckYIIryoL8UUBSbxQGGz7lQK5_77Q4PTXAE3c5hrg-c6RK52YNBm-B5Gx7vAeBavrQJaPQ"}),
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
+				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
+				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+			},
+			{
+				name:             "id token exists but has no subject",
+				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlhdCI6MTUxNjIzOTAyMn0.FmkkY7MCnhD98F5Aupq_YdW54pH90O60O9SwjxWHZb6_k6LoJcjZEMyxba1Fg5tlGLOSqH7BffZOfMUZ5YqVeA7ZIZ9fhAiudGdJqKz5nI394xzR-EejGqBI0fTAuxa_0VsLSC5mV0hTctK01kvemPwMLhIUn_HHr0-khugPFZH8zlYxAFmBpe9YxWK5w1JcTWuSMjRn6_b1RDSgxpff-LcmvVz6akcnlb2j8Od7S9JinsSqKjb7zBjQmcVGT6BGdN43tsBJMEOzil6xpvsH_KIToWlyqmvCQFp_udcKWuUNNLdypGW4eMXvPF5GINMDhki0GZDoKLkPnHVk_mZFXw"}),
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
+				userInfo:         &oidc.UserInfo{Subject: "some-subject"},
+				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantErr:          "id token did not have a subject",
+			},
+			{
+				name:             "id token doesn't exist but userinfo does",
+				token:            testTokenWithoutIDToken,
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
+				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
+				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+			},
+			{
+				name:             "subject in id token doesn't match stored subject",
+				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlzcyI6InNvbWUtaXNzdWVyIiwiaWF0IjoxNTE2MjM5MDIyfQ.qVMIsmrMLiMW7kJUNO4RpiBnkd6MYKdXXMMb6UWVXL0zXkalb1tP2DO3Yp73ZfWqCNdNEa1qqSJIR9F46cnAp04pZmOvVqTWCmaXaxvklRb_QzdlKi-3QNg7wEJ50a11vhUTJxLYrkH9pJpPILzd8Kx0yp43iEJbBG3nFVZFOSQOh7wCGUF4QkNLRMT9buq8DiypKPmjksVmObkF3AbvQ1IvaA_UPBmFvL-pun-TjUBR37xT7JI64wbczJJclThaqTcK6bQcbiBG4jonckYIIryoL8UUBSbxQGGz7lQK5_77Q4PTXAE3c5hrg-c6RK52YNBm-B5Gx7vAeBavrQJaPQ"}),
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-other-subject"},
+				wantErr:          "subject from id token did not match previous stored value. New subject: some-subject. Old subject: some-other-subject",
+			},
+			{
+				name:             "malformed stored subject",
+				token:            testTokenWithoutIDToken,
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "wrong-format"},
+				wantErr:          "could not parse stored subject: downstream subject did not contain original upstream subject",
+			},
+			{
+				name:             "subject in user info doesn't match stored subject",
+				token:            testTokenWithoutIDToken,
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-other-subject"},
+				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
+				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantErr:          "userinfo 'sub' claim (some-subject) did not match id_token 'sub' claim (some-other-subject)", // TODO is this a good enough error message?...
+			},
+			{
+				name:             "subject in id token doesn't match userinfo",
+				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlhdCI6MTUxNjIzOTAyMn0.P_97A2ONBt-YV0JHM3DDugNhG-codkK8fLU4EOdlGHcVBmWVbbW1g7-U0jjB9gcvUt24TS5z0TxEnKNUG8LiqS-8FbHGjv8DN1gAz4huBxNqmMYwzGsFNKDBcUMpv9DNFT-oIrxSf3pPYFlg7N0YKzbMPRwVaL1iQmzeQDCQieV3mDCWXpxpdLa1Mfj_NRsEe4027xOZYJn14pn83h92rG0VcoV2e39LuuEir-tRtDniY4WFIMPudNJdC0NwoMoRIQuHStCIN5AkbHPuhGQivqoObWX6RgNU18qb6CcCi86WhG45uHO77gfz5TbGsyVhr5LRBEZP5HPqsq5D6853zQ"}),
+				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
+				userInfo:         &oidc.UserInfo{Subject: "some-other-subject"},
+				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantErr:          "userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
+			},
+			{
+				name:      "id token with format that isn't a jwt returned from refresh",
+				token:     testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "not-jwt-format"}),
+				userInfo:  &oidc.UserInfo{Subject: "test-user-2"},
+				rawClaims: []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantErr:   "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+			},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				p := ProviderConfig{
+					Name:          "test-name",
+					UsernameClaim: "test-username-claim",
+					GroupsClaim:   "test-groups-claim",
+					Config: &oauth2.Config{
+						ClientID:     "test-client-id",
+						ClientSecret: "test-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:   "https://example.com",
+							TokenURL:  "https://example.com",
+							AuthStyle: oauth2.AuthStyleInParams,
+						},
+						Scopes: []string{"scope1", "scope2"},
+					},
+					Provider: &mockProvider{
+						rawClaims:   tt.rawClaims,
+						userInfo:    tt.userInfo,
+						userInfoErr: tt.userInfoErr,
+					},
+				}
+
+				err := p.ValidateRefresh(context.Background(), tt.token, tt.storedAttributes)
+				if tt.wantErr != "" {
+					require.Error(t, err)
+					require.Equal(t, err.Error(), tt.wantErr)
 				} else {
 					require.NoError(t, err)
 				}

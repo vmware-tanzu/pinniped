@@ -7,6 +7,7 @@ package upstreamoidc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -129,6 +130,7 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
 }
 
+// TODO this is reused between the client and the supervisor... don't change it.
 func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 	// Use the provided HTTP client to benefit from its CA, proxy, and other settings.
 	httpClientContext := coreosoidc.ClientContext(ctx, p.Client)
@@ -236,6 +238,57 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 	}
 }
 
+func (p *ProviderConfig) ValidateRefresh(ctx context.Context, tok *oauth2.Token, storedAttributes provider.StoredRefreshAttributes) error {
+	idTok, hasIDTok := tok.Extra("id_token").(string)
+	var validatedClaims = make(map[string]interface{})
+	if hasIDTok {
+		coreosConfig := &coreosoidc.Config{ClientID: p.GetClientID()}
+		coreosClientContext := coreosoidc.ClientContext(ctx, p.Client)
+		verifier := p.Provider.Verifier(coreosConfig)
+		validated, err := verifier.Verify(coreosClientContext, idTok)
+		if err != nil {
+			return httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+		}
+		if err := validated.Claims(&validatedClaims); err != nil {
+			return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
+		}
+		maybeLogClaims("claims from ID token", p.Name, validatedClaims)
+	}
+
+	originalUpstreamSubject, err := extractUpstreamSubjectFromDownstream(storedAttributes.Subject)
+	if err != nil {
+		return httperr.Wrap(http.StatusInternalServerError, "could not parse stored subject", err)
+	}
+
+	// it's okay to not have an id token. It's okay to have an id token with a subject.
+	// but if we have an id token without a subject that's a problem.
+	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
+	switch {
+	case len(idTokenSubject) > 0:
+		// TODO url escape
+		if url.QueryEscape(idTokenSubject) != originalUpstreamSubject {
+			return httperr.Newf(http.StatusInternalServerError, "subject from id token did not match previous stored value. New subject: %s. Old subject: %s", idTokenSubject, originalUpstreamSubject)
+		}
+	case len(validatedClaims) == 0:
+		validatedClaims[oidc.IDTokenSubjectClaim] = originalUpstreamSubject
+	default:
+		return httperr.New(http.StatusInternalServerError, "id token did not have a subject")
+	}
+
+	if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func extractUpstreamSubjectFromDownstream(downstreamSubject string) (string, error) {
+	if !strings.Contains(downstreamSubject, "?sub=") {
+		return "", errors.New("downstream subject did not contain original upstream subject")
+	}
+	return strings.Split(downstreamSubject, "?sub=")[1], nil
+}
+
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,
 // if the provider offers the userinfo endpoint.
 func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
@@ -264,8 +317,11 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	}
 	maybeLogClaims("claims from ID token", p.Name, validatedClaims)
 
-	if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
-		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
+	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
+	if len(idTokenSubject) > 0 {
+		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
+			return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
+		}
 	}
 
 	return &oidctypes.Token{
@@ -286,29 +342,22 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 }
 
 func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
+	// TODO separate this.
+	//  extract: fetching userinfo
+	//  - validate some userinfo? subject stuff: for refresh subjects must match but also match stored subject
+	//  - extract: merging claims
+	//  - deciding when to do each of those things
 	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
-	if len(idTokenSubject) == 0 {
-		return nil // defer to existing ID token validation
-	}
 
-	providerJSON := &struct {
-		UserInfoURL string `json:"userinfo_endpoint"`
-	}{}
-	if err := p.Provider.Claims(providerJSON); err != nil {
-		// this should never happen because we should have already parsed these claims at an earlier stage
-		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal discovery JSON", err)
+	userInfo, err := p.fetchUserInfo(ctx, tok)
+	if err != nil {
+		return err
 	}
-
-	// implementing the user info endpoint is not required, skip this logic when it is absent
-	if len(providerJSON.UserInfoURL) == 0 {
+	if userInfo == nil {
 		return nil
 	}
 
-	userInfo, err := p.Provider.UserInfo(coreosoidc.ClientContext(ctx, p.Client), oauth2.StaticTokenSource(tok))
-	if err != nil {
-		return httperr.Wrap(http.StatusInternalServerError, "could not get user info", err)
-	}
-
+	// TODO if there is no idTokenSubject, defer to checking the stored claims.
 	// The sub (subject) Claim MUST always be returned in the UserInfo Response.
 	//
 	// NOTE: Due to the possibility of token substitution attacks (see Section 16.11), the UserInfo Response is not
@@ -317,7 +366,7 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	// the UserInfo Response values MUST NOT be used.
 	//
 	// http://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
-	if len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject {
+	if (len(idTokenSubject) > 0) && (len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject) {
 		return httperr.Newf(http.StatusUnprocessableEntity, "userinfo 'sub' claim (%s) did not match id_token 'sub' claim (%s)", userInfo.Subject, idTokenSubject)
 	}
 
@@ -329,6 +378,27 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	maybeLogClaims("claims from ID token and userinfo", p.Name, claims)
 
 	return nil
+}
+
+func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token) (*coreosoidc.UserInfo, error) {
+	providerJSON := &struct {
+		UserInfoURL string `json:"userinfo_endpoint"`
+	}{}
+	if err := p.Provider.Claims(providerJSON); err != nil {
+		// this should never happen because we should have already parsed these claims at an earlier stage
+		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal discovery JSON", err)
+	}
+
+	// implementing the user info endpoint is not required, skip this logic when it is absent
+	if len(providerJSON.UserInfoURL) == 0 {
+		return nil, nil
+	}
+
+	userInfo, err := p.Provider.UserInfo(coreosoidc.ClientContext(ctx, p.Client), oauth2.StaticTokenSource(tok))
+	if err != nil {
+		return nil, httperr.Wrap(http.StatusInternalServerError, "could not get user info", err)
+	}
+	return userInfo, nil
 }
 
 func maybeLogClaims(msg, name string, claims map[string]interface{}) {

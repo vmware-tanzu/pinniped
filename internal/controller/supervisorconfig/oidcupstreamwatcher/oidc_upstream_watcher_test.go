@@ -115,6 +115,8 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	testIssuerCABase64 := base64.StdEncoding.EncodeToString([]byte(testIssuerCA))
 	testIssuerAuthorizeURL, err := url.Parse("https://example.com/authorize")
 	require.NoError(t, err)
+	testIssuerRevocationURL, err := url.Parse("https://example.com/revoke")
+	require.NoError(t, err)
 
 	wrongCA, err := certauthority.New("foo", time.Hour)
 	require.NoError(t, err)
@@ -152,7 +154,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 		inputSecrets           []runtime.Object
 		wantErr                string
 		wantLogs               []string
-		wantResultingCache     []provider.UpstreamOIDCIdentityProviderI
+		wantResultingCache     []*oidctestutil.TestUpstreamOIDCIdentityProvider
 		wantResultingUpstreams []v1alpha1.OIDCIdentityProvider
 	}{
 		{
@@ -176,7 +178,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -223,7 +225,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -269,7 +271,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -318,7 +320,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -367,7 +369,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -414,7 +416,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -463,7 +465,7 @@ Get "invalid-url-that-is-really-really-long-nanananananananannanananan-batman-na
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": x509: certificate signed by unknown authority" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -511,7 +513,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -531,6 +533,53 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							LastTransitionTime: now,
 							Reason:             "InvalidResponse",
 							Message:            `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name: "issuer returns invalid revocation URL",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL + "/invalid-revocation-url",
+					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						happyAdditionalAuthorizeParametersValidCondition,
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidResponse",
+							Message:            `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`,
 						},
 					},
 				},
@@ -558,7 +607,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -578,6 +627,53 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							LastTransitionTime: now,
 							Reason:             "InvalidResponse",
 							Message:            `authorization endpoint URL scheme must be "https", not "http"`,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name: "issuer returns insecure revocation URL",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL + "/insecure-revocation-url",
+					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="revocation endpoint URL scheme must be \"https\", not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="revocation endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						happyAdditionalAuthorizeParametersValidCondition,
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidResponse",
+							Message:            `revocation endpoint URL scheme must be "https", not "http"`,
 						},
 					},
 				},
@@ -615,11 +711,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
 					Name:                     testName,
 					ClientID:                 testClientID,
 					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
 					Scopes:                   append(testExpectedScopes, "xyz"), // includes openid only once
 					UsernameClaim:            testUsernameClaim,
 					GroupsClaim:              testGroupsClaim,
@@ -669,11 +766,67 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
 					Name:                     testName,
 					ClientID:                 testClientID,
 					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "existing valid upstream with no revocation endpoint in the discovery document",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL + "/valid-without-revocation",
+					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						happyAdditionalAuthorizeParametersValidConditionEarlier,
+						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+					},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantLogs: []string{
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            nil, // no revocation URL is set in the cached provider because none was returned by discovery
 					Scopes:                   testDefaultExpectedScopes,
 					UsernameClaim:            testUsernameClaim,
 					GroupsClaim:              testGroupsClaim,
@@ -726,11 +879,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
 					Name:                     testName,
 					ClientID:                 testClientID,
 					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
 					Scopes:                   testExpectedScopes,
 					UsernameClaim:            testUsernameClaim,
 					GroupsClaim:              testGroupsClaim,
@@ -785,11 +939,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
 					Name:                     testName,
 					ClientID:                 testClientID,
 					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
 					Scopes:                   testExpectedScopes, // does not include the default scopes
 					UsernameClaim:            testUsernameClaim,
 					GroupsClaim:              testGroupsClaim,
@@ -846,7 +1001,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd" "reason"="DisallowedParameterName" "status"="False" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd" "name"="test-name" "namespace"="test-namespace" "reason"="DisallowedParameterName" "type"="AdditionalAuthorizeParametersValid"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -884,7 +1039,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -933,7 +1088,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
-			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
@@ -1011,6 +1166,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				require.Equal(t, tt.wantResultingCache[i].AllowsPasswordGrant(), actualIDP.AllowsPasswordGrant())
 				require.Equal(t, tt.wantResultingCache[i].GetAdditionalAuthcodeParams(), actualIDP.GetAdditionalAuthcodeParams())
 				require.Equal(t, tt.wantResultingCache[i].GetResourceUID(), actualIDP.GetResourceUID())
+				require.Equal(t, tt.wantResultingCache[i].GetRevocationURL(), actualIDP.GetRevocationURL())
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())
 
 				// We always want to use the proxy from env on these clients, so although the following assertions
@@ -1083,18 +1239,30 @@ func newTestIssuer(t *testing.T) (string, string) {
 	caBundlePEM, testURL := testutil.TLSTestServer(t, mux.ServeHTTP)
 
 	type providerJSON struct {
-		Issuer   string `json:"issuer"`
-		AuthURL  string `json:"authorization_endpoint"`
-		TokenURL string `json:"token_endpoint"`
-		JWKSURL  string `json:"jwks_uri"`
+		Issuer        string `json:"issuer"`
+		AuthURL       string `json:"authorization_endpoint"`
+		TokenURL      string `json:"token_endpoint"`
+		RevocationURL string `json:"revocation_endpoint,omitempty"`
+		JWKSURL       string `json:"jwks_uri"`
 	}
 
 	// At the root of the server, serve an issuer with a valid discovery response.
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:  testURL,
-			AuthURL: "https://example.com/authorize",
+			Issuer:        testURL,
+			AuthURL:       "https://example.com/authorize",
+			RevocationURL: "https://example.com/revoke",
+		})
+	})
+
+	// At "/valid-without-revocation", serve an issuer with a valid discovery response which does not have a revocation endpoint.
+	mux.HandleFunc("/valid-without-revocation/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:        testURL + "/valid-without-revocation",
+			AuthURL:       "https://example.com/authorize",
+			RevocationURL: "", // none
 		})
 	})
 
@@ -1107,12 +1275,32 @@ func newTestIssuer(t *testing.T) (string, string) {
 		})
 	})
 
+	// At "/invalid-revocation-url", serve an issuer that returns an invalid revocation URL (not parseable).
+	mux.HandleFunc("/invalid-revocation-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:        testURL + "/invalid-revocation-url",
+			AuthURL:       "https://example.com/authorize",
+			RevocationURL: "%",
+		})
+	})
+
 	// At "/insecure", serve an issuer that returns an insecure authorization URL (not https://).
 	mux.HandleFunc("/insecure/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
 			Issuer:  testURL + "/insecure",
 			AuthURL: "http://example.com/authorize",
+		})
+	})
+
+	// At "/insecure", serve an issuer that returns an insecure authorization URL (not https://).
+	mux.HandleFunc("/insecure-revocation-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:        testURL + "/insecure-revocation-url",
+			AuthURL:       "https://example.com/authorize",
+			RevocationURL: "http://example.com/revoke",
 		})
 	})
 
@@ -1125,8 +1313,9 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/ends-with-slash/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:  testURL + "/ends-with-slash/",
-			AuthURL: "https://example.com/authorize",
+			Issuer:        testURL + "/ends-with-slash/",
+			AuthURL:       "https://example.com/authorize",
+			RevocationURL: "https://example.com/revoke",
 		})
 	})
 

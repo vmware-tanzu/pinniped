@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -449,6 +450,142 @@ func TestProviderConfig(t *testing.T) {
 				testutil.RequireTimeInDelta(t, tt.wantToken.Expiry, tok.Expiry, 5*time.Second)
 				for k, v := range tt.wantTokenExtras {
 					require.Equal(t, v, tok.Extra(k))
+				}
+			})
+		}
+	})
+
+	t.Run("RevokeRefreshToken", func(t *testing.T) {
+		tests := []struct {
+			name             string
+			nilRevocationURL bool
+			statusCodes      []int
+			returnErrBodies  []string
+			wantErr          string
+			wantNumRequests  int
+		}{
+			{
+				name:             "success without calling the server when there is no revocation URL set",
+				nilRevocationURL: true,
+				wantNumRequests:  0,
+			},
+			{
+				name:            "success when the server returns 200 OK on the first call",
+				statusCodes:     []int{http.StatusOK},
+				wantNumRequests: 1,
+			},
+			{
+				name:        "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call",
+				statusCodes: []int{http.StatusBadRequest, http.StatusOK},
+				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
+				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
+				wantNumRequests: 2,
+			},
+			{
+				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
+				statusCodes:     []int{http.StatusBadRequest, http.StatusBadRequest},
+				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
+				wantErr:         `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
+				wantNumRequests: 2,
+			},
+			{
+				name:            "error when the server returns 400 Bad Request with bad JSON body on the first call",
+				statusCodes:     []int{http.StatusBadRequest},
+				returnErrBodies: []string{`invalid JSON body`},
+				wantErr:         `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
+				wantNumRequests: 1,
+			},
+			{
+				name:            "error when the server returns 400 Bad Request with empty body",
+				statusCodes:     []int{http.StatusBadRequest},
+				returnErrBodies: []string{``},
+				wantErr:         `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
+				wantNumRequests: 1,
+			},
+			{
+				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
+				statusCodes:     []int{http.StatusBadRequest, http.StatusForbidden},
+				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
+				wantErr:         "server responded with status 403",
+				wantNumRequests: 2,
+			},
+			{
+				name:            "error when server returns any other 400 error on first call",
+				statusCodes:     []int{http.StatusBadRequest},
+				returnErrBodies: []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
+				wantErr:         `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
+				wantNumRequests: 1,
+			},
+			{
+				name:            "error when server returns any other error aside from 400 on first call",
+				statusCodes:     []int{http.StatusForbidden},
+				returnErrBodies: []string{""},
+				wantErr:         "server responded with status 403",
+				wantNumRequests: 1,
+			},
+		}
+		for _, tt := range tests {
+			tt := tt
+			numRequests := 0
+			t.Run(tt.name, func(t *testing.T) {
+				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					numRequests++
+					require.LessOrEqual(t, numRequests, 2)
+					require.Equal(t, http.MethodPost, r.Method)
+					require.NoError(t, r.ParseForm())
+					if numRequests == 1 {
+						// First request should use client_id/client_secret params.
+						require.Equal(t, 4, len(r.Form))
+						require.Equal(t, "test-client-id", r.Form.Get("client_id"))
+						require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
+						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
+						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
+					} else {
+						// Second request, if there is one, should use basic auth.
+						require.Equal(t, 2, len(r.Form))
+						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
+						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
+						username, password, hasBasicAuth := r.BasicAuth()
+						require.True(t, hasBasicAuth, "request should have had basic auth but did not")
+						require.Equal(t, "test-client-id", username)
+						require.Equal(t, "test-client-secret", password)
+					}
+					if tt.statusCodes[numRequests-1] != http.StatusOK {
+						w.Header().Set("content-type", "application/json")
+						http.Error(w, tt.returnErrBodies[numRequests-1], tt.statusCodes[numRequests-1])
+					}
+					// Otherwise, responds with 200 OK and empty body by default.
+				}))
+				t.Cleanup(tokenServer.Close)
+
+				tokenURL, err := url.Parse(tokenServer.URL)
+				require.NoError(t, err)
+
+				p := ProviderConfig{
+					Name: "test-name",
+					Config: &oauth2.Config{
+						ClientID:     "test-client-id",
+						ClientSecret: "test-client-secret",
+					},
+					RevocationURL: tokenURL,
+					Client:        http.DefaultClient,
+				}
+				if tt.nilRevocationURL {
+					p.RevocationURL = nil
+				}
+
+				err = p.RevokeRefreshToken(
+					context.Background(),
+					"test-initial-refresh-token",
+				)
+
+				require.Equal(t, tt.wantNumRequests, numRequests,
+					"did not make expected number of requests to revocation endpoint")
+
+				if tt.wantErr != "" {
+					require.EqualError(t, err, tt.wantErr)
+				} else {
+					require.NoError(t, err)
 				}
 			})
 		}

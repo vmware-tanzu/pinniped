@@ -8,8 +8,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -40,6 +42,7 @@ type ProviderConfig struct {
 	Client                   *http.Client
 	AllowPasswordGrant       bool
 	AdditionalAuthcodeParams map[string]string
+	RevocationURL            *url.URL // will commonly be nil: many providers do not offer this
 	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
 		Claims(v interface{}) error
@@ -51,6 +54,10 @@ var _ provider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
 
 func (p *ProviderConfig) GetResourceUID() types.UID {
 	return p.ResourceUID
+}
+
+func (p *ProviderConfig) GetRevocationURL() *url.URL {
+	return p.RevocationURL
 }
 
 func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
@@ -128,6 +135,105 @@ func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string
 	// Create a TokenSource without an access token, so it thinks that a refresh is immediately required.
 	// Then ask it for the tokens to cause it to perform the refresh and return the results.
 	return p.Config.TokenSource(httpClientContext, &oauth2.Token{RefreshToken: refreshToken}).Token()
+}
+
+// RevokeRefreshToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+func (p *ProviderConfig) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	if p.RevocationURL == nil {
+		plog.Trace("RevokeRefreshToken() was called but upstream provider has no available revocation endpoint", "providerName", p.Name)
+		return nil
+	}
+	// First try using client auth in the request params.
+	tryAnotherClientAuthMethod, err := p.tryRevokeRefreshToken(ctx, refreshToken, false)
+	if tryAnotherClientAuthMethod {
+		// Try again using basic auth this time. Overwrite the first client auth error,
+		// which isn't useful anymore when retrying.
+		_, err = p.tryRevokeRefreshToken(ctx, refreshToken, true)
+	}
+	return err
+}
+
+// tryRevokeRefreshToken will call the revocation endpoint using either basic auth or by including
+// client auth in the request params. It will return an error when the request failed. If the
+// request failed for a reason that might be due to bad client auth, then it will return true
+// for the tryAnotherClientAuthMethod return value, indicating that it might be worth trying
+// again using the other client auth method.
+// RFC 7009 defines how to make a revocation request and how to interpret the response.
+// See https://datatracker.ietf.org/doc/html/rfc7009#section-2.1 for details.
+func (p *ProviderConfig) tryRevokeRefreshToken(
+	ctx context.Context,
+	refreshToken string,
+	useBasicAuth bool,
+) (tryAnotherClientAuthMethod bool, err error) {
+	clientID := p.Config.ClientID
+	clientSecret := p.Config.ClientSecret
+	// Use the provided HTTP client to benefit from its CA, proxy, and other settings.
+	httpClient := p.Client
+
+	params := url.Values{
+		"token":           []string{refreshToken},
+		"token_type_hint": []string{"refresh_token"},
+	}
+	if !useBasicAuth {
+		params["client_id"] = []string{clientID}
+		params["client_secret"] = []string{clientSecret}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.RevocationURL.String(), strings.NewReader(params.Encode()))
+	if err != nil {
+		// This shouldn't really happen since we already know that the method and URL are legal.
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if useBasicAuth {
+		req.SetBasicAuth(clientID, clientSecret)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		// Couldn't connect to the server or some similar error.
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Success!
+		plog.Trace("RevokeRefreshToken() got 200 OK response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
+		return false, nil
+	case http.StatusBadRequest:
+		// Bad request might be due to bad client auth method. Try to detect that.
+		plog.Trace("RevokeRefreshToken() got 400 Bad Request response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return false,
+				fmt.Errorf("error reading response body on response with status code %d: %w", resp.StatusCode, err)
+		}
+		var parsedResp struct {
+			ErrorType        string `json:"error"`
+			ErrorDescription string `json:"error_description"`
+		}
+		bodyStr := strings.TrimSpace(string(body)) // trimmed for logging purposes
+		err = json.Unmarshal(body, &parsedResp)
+		if err != nil {
+			return false,
+				fmt.Errorf("error parsing response body %q on response with status code %d: %w", bodyStr, resp.StatusCode, err)
+		}
+		err = fmt.Errorf("server responded with status %d with body: %s", resp.StatusCode, bodyStr)
+		if parsedResp.ErrorType != "invalid_client" {
+			// Got an error unrelated to client auth, so not worth trying again.
+			return false, err
+		}
+		// Got an "invalid_client" response, which might mean client auth failed, so it may be worth trying again
+		// using another client auth method. See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+		plog.Trace("RevokeRefreshToken()'s 400 Bad Request response from provider's revocation endpoint was type 'invalid_client'", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
+		return true, err
+	default:
+		// Any other error is probably not due to failed client auth.
+		plog.Trace("RevokeRefreshToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", resp.StatusCode)
+		return false, fmt.Errorf("server responded with status %d", resp.StatusCode)
+	}
 }
 
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,

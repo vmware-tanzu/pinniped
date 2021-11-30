@@ -979,6 +979,9 @@ func TestUnwrap(t *testing.T) {
 		gcpClient := makeClient(t, restConfig, func(config *rest.Config) {
 			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
 				Name: "gcp",
+				Config: map[string]string{
+					"cmd-path": `echo {"access_token":"fake","token_expiry":"2200-01-02T15:04:05.999999999Z07:00"}`,
+				},
 			}
 		})
 

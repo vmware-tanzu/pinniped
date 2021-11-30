@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
@@ -60,7 +61,7 @@ const (
 )
 
 func startServer(ctx context.Context, shutdown *sync.WaitGroup, l net.Listener, handler http.Handler) {
-	server := http.Server{Handler: handler}
+	server := http.Server{Handler: genericapifilters.WithWarningRecorder(handler)}
 
 	shutdown.Add(1)
 	go func() {

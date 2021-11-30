@@ -44,5 +44,6 @@ func defaultTransport() *http.Transport {
 func defaultWrap(rt http.RoundTripper) http.RoundTripper {
 	rt = safeDebugWrappers(rt, transport.DebugWrappers, func() bool { return plog.Enabled(plog.LevelTrace) })
 	rt = transport.NewUserAgentRoundTripper(rest.DefaultKubernetesUserAgent(), rt)
+	rt = warningWrapper(rt, getWarningHandler())
 	return rt
 }

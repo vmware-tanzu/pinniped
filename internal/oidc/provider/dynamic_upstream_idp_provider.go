@@ -17,6 +17,14 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
+type RevocableTokenType string
+
+// These strings correspond to the token types defined by https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+const (
+	RefreshTokenType RevocableTokenType = "refresh_token"
+	AccessTokenType  RevocableTokenType = "access_token"
+)
+
 type UpstreamOIDCIdentityProviderI interface {
 	// GetName returns a name for this upstream provider, which will be used as a component of the path for the
 	// callback endpoint hosted by the Supervisor.
@@ -68,8 +76,8 @@ type UpstreamOIDCIdentityProviderI interface {
 	// validate the ID token.
 	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
-	// RevokeRefreshToken will attempt to revoke the given token, if the provider has a revocation endpoint.
-	RevokeRefreshToken(ctx context.Context, refreshToken string) error
+	// RevokeToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+	RevokeToken(ctx context.Context, token string, tokenType RevocableTokenType) error
 
 	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated

@@ -243,7 +243,7 @@ func (c *garbageCollectorController) revokeUpstreamOIDCRefreshToken(ctx context.
 	}
 
 	// Revoke the upstream refresh token. This is a noop if the upstream provider does not offer a revocation endpoint.
-	err := foundOIDCIdentityProviderI.RevokeRefreshToken(ctx, customSessionData.OIDC.UpstreamRefreshToken)
+	err := foundOIDCIdentityProviderI.RevokeToken(ctx, customSessionData.OIDC.UpstreamRefreshToken, provider.RefreshTokenType)
 	if err != nil {
 		// This could be a network failure, a 503 result which we should retry
 		// (see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1),

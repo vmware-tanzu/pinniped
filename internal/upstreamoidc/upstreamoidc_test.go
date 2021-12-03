@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/mocks/mockkeyset"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -455,73 +456,114 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("RevokeRefreshToken", func(t *testing.T) {
+	t.Run("RevokeToken", func(t *testing.T) {
 		tests := []struct {
-			name             string
-			nilRevocationURL bool
-			statusCodes      []int
-			returnErrBodies  []string
-			wantErr          string
-			wantNumRequests  int
+			name              string
+			tokenType         provider.RevocableTokenType
+			nilRevocationURL  bool
+			statusCodes       []int
+			returnErrBodies   []string
+			wantErr           string
+			wantNumRequests   int
+			wantTokenTypeHint string
 		}{
 			{
-				name:             "success without calling the server when there is no revocation URL set",
+				name:             "success without calling the server when there is no revocation URL set for refresh token",
+				tokenType:        provider.RefreshTokenType,
 				nilRevocationURL: true,
 				wantNumRequests:  0,
 			},
 			{
-				name:            "success when the server returns 200 OK on the first call",
-				statusCodes:     []int{http.StatusOK},
-				wantNumRequests: 1,
+				name:             "success without calling the server when there is no revocation URL set for access token",
+				tokenType:        provider.AccessTokenType,
+				nilRevocationURL: true,
+				wantNumRequests:  0,
 			},
 			{
-				name:        "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call",
+				name:              "success when the server returns 200 OK on the first call for refresh token",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusOK},
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
+			},
+			{
+				name:              "success when the server returns 200 OK on the first call for access token",
+				tokenType:         provider.AccessTokenType,
+				statusCodes:       []int{http.StatusOK},
+				wantNumRequests:   1,
+				wantTokenTypeHint: "access_token",
+			},
+			{
+				name:        "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for refresh token",
+				tokenType:   provider.RefreshTokenType,
 				statusCodes: []int{http.StatusBadRequest, http.StatusOK},
 				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
-				wantNumRequests: 2,
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
+				wantNumRequests:   2,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
-				statusCodes:     []int{http.StatusBadRequest, http.StatusBadRequest},
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
-				wantErr:         `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
-				wantNumRequests: 2,
+				name:        "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for access token",
+				tokenType:   provider.AccessTokenType,
+				statusCodes: []int{http.StatusBadRequest, http.StatusOK},
+				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
+				wantNumRequests:   2,
+				wantTokenTypeHint: "access_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request with bad JSON body on the first call",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{`invalid JSON body`},
-				wantErr:         `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
-				wantNumRequests: 1,
+				name:              "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusBadRequest, http.StatusBadRequest},
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
+				wantErr:           `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
+				wantNumRequests:   2,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request with empty body",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{``},
-				wantErr:         `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
-				wantNumRequests: 1,
+				name:              "error when the server returns 400 Bad Request with bad JSON body on the first call",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusBadRequest},
+				returnErrBodies:   []string{`invalid JSON body`},
+				wantErr:           `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
-				statusCodes:     []int{http.StatusBadRequest, http.StatusForbidden},
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
-				wantErr:         "server responded with status 403",
-				wantNumRequests: 2,
+				name:              "error when the server returns 400 Bad Request with empty body",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusBadRequest},
+				returnErrBodies:   []string{``},
+				wantErr:           `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when server returns any other 400 error on first call",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
-				wantErr:         `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
-				wantNumRequests: 1,
+				name:              "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusBadRequest, http.StatusForbidden},
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
+				wantErr:           "server responded with status 403",
+				wantNumRequests:   2,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when server returns any other error aside from 400 on first call",
-				statusCodes:     []int{http.StatusForbidden},
-				returnErrBodies: []string{""},
-				wantErr:         "server responded with status 403",
-				wantNumRequests: 1,
+				name:              "error when server returns any other 400 error on first call",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusBadRequest},
+				returnErrBodies:   []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
+				wantErr:           `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
+			},
+			{
+				name:              "error when server returns any other error aside from 400 on first call",
+				tokenType:         provider.RefreshTokenType,
+				statusCodes:       []int{http.StatusForbidden},
+				returnErrBodies:   []string{""},
+				wantErr:           "server responded with status 403",
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
 			},
 		}
 		for _, tt := range tests {
@@ -536,15 +578,15 @@ func TestProviderConfig(t *testing.T) {
 					if numRequests == 1 {
 						// First request should use client_id/client_secret params.
 						require.Equal(t, 4, len(r.Form))
+						require.Equal(t, "test-upstream-token", r.Form.Get("token"))
+						require.Equal(t, tt.wantTokenTypeHint, r.Form.Get("token_type_hint"))
 						require.Equal(t, "test-client-id", r.Form.Get("client_id"))
 						require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
-						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
-						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
 					} else {
 						// Second request, if there is one, should use basic auth.
 						require.Equal(t, 2, len(r.Form))
-						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
-						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
+						require.Equal(t, "test-upstream-token", r.Form.Get("token"))
+						require.Equal(t, tt.wantTokenTypeHint, r.Form.Get("token_type_hint"))
 						username, password, hasBasicAuth := r.BasicAuth()
 						require.True(t, hasBasicAuth, "request should have had basic auth but did not")
 						require.Equal(t, "test-client-id", username)
@@ -574,9 +616,10 @@ func TestProviderConfig(t *testing.T) {
 					p.RevocationURL = nil
 				}
 
-				err = p.RevokeRefreshToken(
+				err = p.RevokeToken(
 					context.Background(),
-					"test-initial-refresh-token",
+					"test-upstream-token",
+					tt.tokenType,
 				)
 
 				require.Equal(t, tt.wantNumRequests, numRequests,

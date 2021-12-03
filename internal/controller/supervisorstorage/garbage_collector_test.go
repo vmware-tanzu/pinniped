@@ -366,18 +366,19 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the active authcode session.
-				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+				idpListerBuilder.RequireExactlyOneCallToRevokeToken(t,
 					"upstream-oidc-provider-name",
-					&oidctestutil.RevokeRefreshTokenArgs{
-						Ctx:          syncContext.Context,
-						RefreshToken: "fake-upstream-refresh-token",
+					&oidctestutil.RevokeTokenArgs{
+						Ctx:       syncContext.Context,
+						Token:     "fake-upstream-refresh-token",
+						TokenType: provider.RefreshTokenType,
 					},
 				)
 
@@ -448,14 +449,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't read the invalid secret.
-				idpListerBuilder.RequireExactlyZeroCallsToRevokeRefreshToken(t)
+				idpListerBuilder.RequireExactlyZeroCallsToRevokeToken(t)
 
 				// The invalid authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
@@ -524,14 +525,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
-				idpListerBuilder.RequireExactlyZeroCallsToRevokeRefreshToken(t)
+				idpListerBuilder.RequireExactlyZeroCallsToRevokeToken(t)
 
 				// The authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
@@ -600,14 +601,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
-				idpListerBuilder.RequireExactlyZeroCallsToRevokeRefreshToken(t)
+				idpListerBuilder.RequireExactlyZeroCallsToRevokeToken(t)
 
 				// The authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
@@ -677,18 +678,19 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
+					WithRevokeTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
-				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+				idpListerBuilder.RequireExactlyOneCallToRevokeToken(t,
 					"upstream-oidc-provider-name",
-					&oidctestutil.RevokeRefreshTokenArgs{
-						Ctx:          syncContext.Context,
-						RefreshToken: "fake-upstream-refresh-token",
+					&oidctestutil.RevokeTokenArgs{
+						Ctx:       syncContext.Context,
+						Token:     "fake-upstream-refresh-token",
+						TokenType: provider.RefreshTokenType,
 					},
 				)
 
@@ -749,18 +751,19 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
+					WithRevokeTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
-				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+				idpListerBuilder.RequireExactlyOneCallToRevokeToken(t,
 					"upstream-oidc-provider-name",
-					&oidctestutil.RevokeRefreshTokenArgs{
-						Ctx:          syncContext.Context,
-						RefreshToken: "fake-upstream-refresh-token",
+					&oidctestutil.RevokeTokenArgs{
+						Ctx:       syncContext.Context,
+						Token:     "fake-upstream-refresh-token",
+						TokenType: provider.RefreshTokenType,
 					},
 				)
 
@@ -875,18 +878,19 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the downstream session which had offline_access granted.
-				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+				idpListerBuilder.RequireExactlyOneCallToRevokeToken(t,
 					"upstream-oidc-provider-name",
-					&oidctestutil.RevokeRefreshTokenArgs{
-						Ctx:          syncContext.Context,
-						RefreshToken: "fake-upstream-refresh-token",
+					&oidctestutil.RevokeTokenArgs{
+						Ctx:       syncContext.Context,
+						Token:     "fake-upstream-refresh-token",
+						TokenType: provider.RefreshTokenType,
 					},
 				)
 
@@ -958,18 +962,19 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				happyOIDCUpstream := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
-					WithRevokeRefreshTokenError(nil)
+					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.Build())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is revoked.
-				idpListerBuilder.RequireExactlyOneCallToRevokeRefreshToken(t,
+				idpListerBuilder.RequireExactlyOneCallToRevokeToken(t,
 					"upstream-oidc-provider-name",
-					&oidctestutil.RevokeRefreshTokenArgs{
-						Ctx:          syncContext.Context,
-						RefreshToken: "fake-upstream-refresh-token",
+					&oidctestutil.RevokeTokenArgs{
+						Ctx:       syncContext.Context,
+						Token:     "fake-upstream-refresh-token",
+						TokenType: provider.RefreshTokenType,
 					},
 				)
 
@@ -1015,7 +1020,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.False(syncContext.Queue.(*testQueue).called)
 
 				// Run sync again when not enough time has passed since the most recent run, so no delete
-				// operations should happen even though there is a expired secret now.
+				// operations should happen even though there is an expired secret now.
 				fakeClock.Step(29 * time.Second)
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				require.Empty(t, kubeClient.Actions())

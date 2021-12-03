@@ -150,7 +150,7 @@ component, and will not be immediately obvious when looking at the controller so
 [internal/leaderelection/leaderelection.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/leaderelection/leaderelection.go).
 
 One of the Pods is always elected as leader, and only the Kubernetes API client calls made by that pod are allowed
-to perform writes. The non-leader Pods' controller are always running, but they will always result in failed writes,
+to perform writes. The non-leader Pods' controllers are always running, but their writes will always fail,
 so they are unable to compete to make changes to Kubernetes resources. These failed write operations will appear in the logs
 as write errors due to not being the leader. While this might look like an error, this is normal for the controllers.
 This still allows the non-leader Pods' controllers to read state, update in-memory caches, etc.
@@ -176,6 +176,8 @@ Calls made to the real API server are made as a service account using impersonat
 The code tries to reuse as much code from Kubernetes itself as possible, so it can behave as closely as possible
 to the real API server from the client's point of view. It can be found in
 [internal/concierge/impersonator/impersonator.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/concierge/impersonator/impersonator.go).
+Further discussion of this feature can be found in the
+[blog post for release v0.7.0]({{< ref "2021-04-01-concierge-on-managed-clusters" >}}).
 
 ## Supervisor API endpoints
 
@@ -212,5 +214,5 @@ for example one of the CRDs is `jwtauthenticators.authentication.concierge.pinni
 
 Making this group name configurable is not a common pattern in Kubernetes apps, but it yields several advantages.
 A discussion of this feature, including its implementation details, can be found in the
-[blog post for release v0.5.0](https://pinniped.dev/posts/multiple-pinnipeds/). Similar to leader election,
+[blog post for release v0.5.0]({{< ref "2021-02-04-multiple-pinnipeds" >}}). Similar to leader election,
 much of this behavior is implemented in client middleware, and will not be obvious when reading the code.

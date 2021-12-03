@@ -37,9 +37,9 @@ Last Updated: Sept 2021
 |Theme|Description|Timeline|
 |--|--|--|
 |Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Nov 2021|
-|Improving Security Posture|Supervisor token refresh fails when the upstream user is in an invalid state for LDAP/AD |Nov 2021|
+|Improving Security Posture|Supervisor token refresh fails when the upstream user is in an invalid state for LDAP/AD |Dec 2021|
 |Improving Security Posture|Set stricter default TLS versions and Ciphers |Nov 2021|
-|Improving Security Posture|Support FIPS compliant Boring crypto libraries |Dec 2021|
+|Improving Security Posture|Support FIPS compliant Boring crypto libraries |Jan 2022|
 |Improving Security Posture|Support Audit logging of security events related to Authentication |Jan 2022|
 |Improving Security Posture|mTLS for Supervisor sessions |Exploring/Ongoing|
 |Improving Security Posture|Key management/rotation for Pinniped components with minimal downtime |Exploring/Ongoing|

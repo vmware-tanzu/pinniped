@@ -47,7 +47,8 @@ There are three binaries in the Pinniped source:
    The Kube cert agent is a very simple binary that is sometimes deployed by the Pinniped Concierge server component
    at runtime as a separate Deployment. It exists as a separate binary in the same container image as the other
    Pinniped server components. When needed, the Concierge will exec into the Deployment's pods to invoke the cert agent
-   binary to query for data. This is to support the Token Credential Request API strategy described in the
+   binary to query for the cluster's keypair, which is used to sign client certificates used to access the Kubernetes API server.
+   This is to support the Token Credential Request API strategy described in the
    [Supported Cluster Types document]({{< ref "../reference/supported-clusters" >}}).
 
    The Kube cert agent code is in [cmd/pinniped-concierge-kube-cert-agent/main.go](https://github.com/vmware-tanzu/pinniped/blob/main/cmd/pinniped-concierge-kube-cert-agent/main.go).
@@ -205,6 +206,8 @@ The per-FederationDomain endpoints are:
   See [internal/oidc/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
   See [internal/oidc/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/idpdiscovery/idp_discovery_handler.go).
+
+The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).
 
 ## Kubernetes API group names
 

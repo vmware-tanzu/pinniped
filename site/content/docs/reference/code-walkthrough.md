@@ -210,7 +210,7 @@ The Kubernetes API groups used by the Pinniped CRDs and the Concierge's aggregat
 at install time. By default, everything is placed in the `*.pinniped.dev` group,
 for example one of the CRDs is `jwtauthenticators.authentication.concierge.pinniped.dev`.
 
-Making this group name configurable is not a common pattern in Kubernetes apps, but is yields several advantages.
+Making this group name configurable is not a common pattern in Kubernetes apps, but it yields several advantages.
 A discussion of this feature, including its implementation details, can be found in the
 [blog post for release v0.5.0](https://pinniped.dev/posts/multiple-pinnipeds/). Similar to leader election,
 much of this behavior is implemented in client middleware, and will not be obvious when reading the code.

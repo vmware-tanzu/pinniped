@@ -324,6 +324,11 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 			}
 		}
 
+		_, issuerURLCondition := validateHTTPSURL(upstream.Spec.Issuer, "issuer", reasonUnreachable)
+		if issuerURLCondition != nil {
+			return issuerURLCondition
+		}
+
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
 			const klogLevelTrace = 6
@@ -359,46 +364,35 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 		}
 	}
 	if additionalDiscoveryClaims.RevocationEndpoint != "" {
-		// Found a revocation URL. Try to parse it.
-		revocationURL, err := url.Parse(additionalDiscoveryClaims.RevocationEndpoint)
-		if err != nil {
-			return &v1alpha1.Condition{
-				Type:    typeOIDCDiscoverySucceeded,
-				Status:  v1alpha1.ConditionFalse,
-				Reason:  reasonInvalidResponse,
-				Message: fmt.Sprintf("failed to parse revocation endpoint URL: %v", err),
-			}
-		}
-		// Don't want to send refresh tokens to an insecure revocation endpoint, so require that it use https.
-		if revocationURL.Scheme != "https" {
-			return &v1alpha1.Condition{
-				Type:    typeOIDCDiscoverySucceeded,
-				Status:  v1alpha1.ConditionFalse,
-				Reason:  reasonInvalidResponse,
-				Message: fmt.Sprintf(`revocation endpoint URL scheme must be "https", not %q`, revocationURL.Scheme),
-			}
+		// Found a revocation URL. Validate it.
+		revocationURL, revocationURLCondition := validateHTTPSURL(
+			additionalDiscoveryClaims.RevocationEndpoint,
+			"revocation endpoint",
+			reasonInvalidResponse,
+		)
+		if revocationURLCondition != nil {
+			return revocationURLCondition
 		}
 		// Remember the URL for later use.
 		result.RevocationURL = revocationURL
 	}
 
-	// Parse out and validate the discovered authorize endpoint.
-	authURL, err := url.Parse(discoveredProvider.Endpoint().AuthURL)
-	if err != nil {
-		return &v1alpha1.Condition{
-			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonInvalidResponse,
-			Message: fmt.Sprintf("failed to parse authorization endpoint URL: %v", err),
-		}
+	_, authorizeURLCondition := validateHTTPSURL(
+		discoveredProvider.Endpoint().AuthURL,
+		"authorization endpoint",
+		reasonInvalidResponse,
+	)
+	if authorizeURLCondition != nil {
+		return authorizeURLCondition
 	}
-	if authURL.Scheme != "https" {
-		return &v1alpha1.Condition{
-			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonInvalidResponse,
-			Message: fmt.Sprintf(`authorization endpoint URL scheme must be "https", not %q`, authURL.Scheme),
-		}
+
+	_, tokenURLCondition := validateHTTPSURL(
+		discoveredProvider.Endpoint().TokenURL,
+		"token endpoint",
+		reasonInvalidResponse,
+	)
+	if tokenURLCondition != nil {
+		return tokenURLCondition
 	}
 
 	// If everything is valid, update the result and set the condition to true.
@@ -488,4 +482,33 @@ func truncateMostLongErr(err error) string {
 	}
 
 	return msg[:max] + fmt.Sprintf(" [truncated %d chars]", len(msg)-max)
+}
+
+func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *v1alpha1.Condition) {
+	parsedURL, err := url.Parse(maybeHTTPSURL)
+	if err != nil {
+		return nil, &v1alpha1.Condition{
+			Type:    typeOIDCDiscoverySucceeded,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reason,
+			Message: fmt.Sprintf("failed to parse %s URL: %v", endpointType, truncateMostLongErr(err)),
+		}
+	}
+	if parsedURL.Scheme != "https" {
+		return nil, &v1alpha1.Condition{
+			Type:    typeOIDCDiscoverySucceeded,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reason,
+			Message: fmt.Sprintf(`%s URL scheme must be "https", not %q`, endpointType, parsedURL.Scheme),
+		}
+	}
+	if len(parsedURL.Query()) != 0 || parsedURL.Fragment != "" {
+		return nil, &v1alpha1.Condition{
+			Type:    typeOIDCDiscoverySucceeded,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reason,
+			Message: fmt.Sprintf(`%s URL cannot contain query or fragment component`, endpointType),
+		}
+	}
+	return parsedURL, nil
 }

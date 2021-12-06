@@ -61,9 +61,22 @@ const (
 
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
 type OIDCSessionData struct {
+	// UpstreamRefreshToken will contain the refresh token from the upstream OIDC provider, if the upstream provider
+	// returned a refresh token during initial authorization. Otherwise, this field should be empty
+	// and the UpstreamAccessToken should be non-empty. We may not get a refresh token from the upstream provider,
+	// but we should always get an access token. However, when we do get a refresh token there is no need to
+	// also store the access token, since storing unnecessary tokens makes it possible for them to be leaked and
+	// creates more upstream revocation HTTP requests when it comes time to revoke the stored tokens.
 	UpstreamRefreshToken string `json:"upstreamRefreshToken"`
-	UpstreamSubject      string `json:"upstreamSubject"`
-	UpstreamIssuer       string `json:"upstreamIssuer"`
+
+	// UpstreamAccessToken will contain the access token returned by the upstream OIDC provider during initial
+	// authorization, but only when the provider did not also return a refresh token. When UpstreamRefreshToken is
+	// non-empty, then this field should be empty, indicating that we should use the upstream refresh token during
+	// downstream refresh.
+	UpstreamAccessToken string `json:"upstreamAccessToken"`
+	// TODO describe these
+	UpstreamSubject string `json:"upstreamSubject"`
+	UpstreamIssuer  string `json:"upstreamIssuer"`
 }
 
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.

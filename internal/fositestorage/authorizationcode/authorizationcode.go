@@ -371,32 +371,34 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"providerType": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
 				"oidc": {
 					"upstreamRefreshToken": "tC嵽痊w",
-					"upstreamSubject": "a紽ǒ|鰽ŋ猊I",
-					"upstreamIssuer": "妬\u003e6鉢緋uƴŤȱʀ"
+					"upstreamAccessToken": "a紽ǒ|鰽ŋ猊I",
+					"upstreamSubject": "妬\u003e6鉢緋uƴŤȱʀ",
+					"upstreamIssuer": ":設虝27就伒犘c"
 				},
 				"ldap": {
-					"userDN": "Â?墖\u003cƬb獭潜Ʃ饾k|鬌R蜚蠣",
+					"userDN": "ɏȫ齁š%Op",
 					"extraRefreshAttributes": {
-						"ȱ藚ɏ¬Ê蒭堜]ȗ韚ʫ": "鷞aŚB碠k9帴ʘ赱"
+						"T妼É4İ\u003e×1": "ʥ笿0D",
+						"÷驣7Ʀ澉1æɽ誮": "ʫ繕ȫ",
+						"ŚB碠k9": "i磊ůď逳鞪?3)藵睋邔\u0026Ű"
 					}
 				},
 				"activedirectory": {
-					"userDN": "瑹xȢ~1Įx欼笝?úT妼",
+					"userDN": "s",
 					"extraRefreshAttributes": {
-						"iYn": "麹Œ颛",
-						"İ\u003e×1飞O+î艔垎0OƉǢIȽ齤士": "ȐĨf跞@)¿,ɭS隑ip偶"
+						"ƉǢIȽ齤士bEǎ儯惝IozŁ5rƖ螼": "偶宾儮猷V麹Œ颛Ė應,Ɣ鬅X¤"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"應,Ɣ鬅X¤",
-			"¤.岵骘胲ƤkǦ"
+			"tO灞浛a齙\\蹼偦歛ơ",
+			"皦pSǬŝ社Vƅȭǝ*"
 		],
 		"grantedAudience": [
-			"鸖I¶媁y衑拁Ȃ",
-			"社Vƅȭǝ*擦28ǅ 甍 ć",
-			"bņ抰蛖a³2ʫ承dʬ)ġ,TÀqy_"
+			"ĝ\"zvưã置bņ抰蛖a³2ʫ",
+			"Ŷɽ蔒PR}Ųʓl{鼐jÃ轘屔挝",
+			"Œų崓ļ憽-蹐È_¸]fś"
 		]
 	},
 	"version": "2"

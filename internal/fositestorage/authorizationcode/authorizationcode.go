@@ -345,23 +345,26 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"providerName": "nŐǛ3",
 				"providerType": "闣ʬ橳(ý綃ʃʚƟ覣k眐4Ĉt",
 				"oidc": {
-					"upstreamRefreshToken": "嵽痊w©Ź榨Q|ôɵt毇妬"
+					"upstreamRefreshToken": "嵽痊w©Ź榨Q|ôɵt毇妬",
+					"upstreamAccessToken": "巈環_ɑ"
 				},
 				"ldap": {
-					"userDN": "6鉢緋uƴŤȱʀļÂ?墖\u003cƬb獭潜Ʃ饾"
+					"userDN": "ƍ蛊ʚ£:設虝27"
 				},
 				"activedirectory": {
-					"userDN": "|鬌R蜚蠣麹概÷驣7Ʀ澉1æɽ誮rʨ鷞"
+					"userDN": "伒犘c钡ɏȫ"
 				}
 			}
 		},
 		"requestedAudience": [
-			"ŚB碠k9"
+			"š%OpKȱ藚ɏ¬Ê蒭堜",
+			"ɽ誮rʨ鷞aŚB碠k",
+			"Ċi磊ůď逳鞪?3)藵睋"
 		],
 		"grantedAudience": [
-			"ʘ赱",
-			"ď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ¡圔",
-			"墀jMʥ"
+			"\u0026Ű惫蜀Ģ¡圔",
+			"墀jMʥ",
+			"+î艔垎0"
 		]
 	},
 	"version": "2"

@@ -2149,7 +2149,6 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
 				customSessionData: happyLDAPCustomSessionData,
-				//fositeSessionData: &openid.DefaultSession{},
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
 				),

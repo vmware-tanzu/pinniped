@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"go.pinniped.dev/internal/crypto/ptls"
+
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/stretchr/testify/assert"
@@ -1897,7 +1899,7 @@ func changeADTestUserPassword(t *testing.T, env *testlib.TestEnv, testUserName s
 
 	newTestUserPassword := createRandomASCIIString(t, 20)
 	enc := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder()
-	encodedTestUserPassword, err := enc.String("\"" + newTestUserPassword + "\"")
+	encodedTestUserPassword, err := enc.String(`"` + newTestUserPassword + `"`)
 	require.NoError(t, err)
 
 	userDN := fmt.Sprintf("CN=%s,OU=test-users,%s", testUserName, env.SupervisorUpstreamActiveDirectory.UserSearchBase)
@@ -1930,7 +1932,7 @@ func dialTLS(t *testing.T, env *testlib.TestEnv) *ldap.Conn {
 	rootCAs := x509.NewCertPool()
 	success := rootCAs.AppendCertsFromPEM([]byte(env.SupervisorUpstreamActiveDirectory.CABundle))
 	require.True(t, success)
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCAs}
+	tlsConfig := ptls.DefaultLDAP(rootCAs)
 	dialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: time.Minute}, Config: tlsConfig}
 	c, err := dialer.DialContext(context.Background(), "tcp", env.SupervisorUpstreamActiveDirectory.Host)
 	require.NoError(t, err)

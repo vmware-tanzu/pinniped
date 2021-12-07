@@ -41,11 +41,19 @@ const (
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
 	sAMAccountNameAttribute                 = "sAMAccountName"
-	PwdLastSetAttribute                     = "pwdLastSet"
-	UserAccountControlAttribute             = "userAccountControl"
-	UserAccountControlComputedAttribute     = "msDS-User-Account-Control-Computed"
-	accountDisabledBitmapValue              = 2
-	accountLockedBitmapValue                = 16
+	// PwdLastSetAttribute is the date and time that the password for this account was last changed.
+	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-pwdlastset
+	PwdLastSetAttribute = "pwdLastSet"
+	// UserAccountControlAttribute represents a bitmap of user properties.
+	// https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties
+	UserAccountControlAttribute = "userAccountControl"
+	// UserAccountControlComputedAttribute represents a bitmap of user properties.
+	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-msds-user-account-control-computed
+	UserAccountControlComputedAttribute = "msDS-User-Account-Control-Computed"
+	// 0x0002 ACCOUNTDISABLE in userAccountControl bitmap.
+	accountDisabledBitmapValue = 2
+	// 0x0010 UF_LOCKOUT in msDS-User-Account-Control-Computed bitmap.
+	accountLockedBitmapValue = 16
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -881,23 +889,23 @@ func PwdUnchangedSinceLogin(entry *ldap.Entry, attributes provider.StoredRefresh
 	return nil
 }
 
-func win32timestampToTime(win32timestamp string) (*time.Time, error) {
+func win32timestampToTime(win32timestamp string) (time.Time, error) {
 	// take a win32 timestamp (represented as the number of 100 ns intervals since
 	// January 1, 1601) and make a time.Time
 
-	const unixTimeBaseAsWin = 116444736000000000 // The unix base time (January 1, 1970 UTC) as 100 ns since Win32 epoch (1601-01-01)
-	const hundredNsToSecFactor = 10000000
+	const unixTimeBaseAsWin = 116_444_736_000_000_000 // The unix base time (January 1, 1970 UTC) as 100 ns since Win32 epoch (1601-01-01)
+	const hundredNsToSecFactor = 10_000_000
 
 	win32Time, err := strconv.ParseUint(win32timestamp, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't parse as timestamp")
+		return time.Time{}, fmt.Errorf("couldn't parse as timestamp")
 	}
 
 	unixsec := int64(win32Time-unixTimeBaseAsWin) / hundredNsToSecFactor
-	unixns := int64(win32Time % hundredNsToSecFactor)
+	unixns := int64(win32Time%hundredNsToSecFactor) * 100
 
 	convertedTime := time.Unix(unixsec, unixns).UTC()
-	return &convertedTime, nil
+	return convertedTime, nil
 }
 
 func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {

@@ -26,7 +26,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
-	provider2 "go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
@@ -1163,9 +1163,9 @@ func TestEndUserAuthentication(t *testing.T) {
 				return conn, nil
 			})
 
-			provider := New(*tt.providerConfig)
+			ldapProvider := New(*tt.providerConfig)
 
-			authResponse, authenticated, err := provider.AuthenticateUser(context.Background(), tt.username, tt.password)
+			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1197,7 +1197,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
 
-			authResponse, authenticated, err = provider.DryRunAuthenticateUser(context.Background(), tt.username)
+			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1265,7 +1265,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			UIDAttribute:      testUserSearchUIDAttribute,
 			UsernameAttribute: testUserSearchUsernameAttribute,
 		},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider2.StoredRefreshAttributes) error{pwdLastSetAttribute: PwdUnchangedSinceLogin},
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{pwdLastSetAttribute: PwdUnchangedSinceLogin},
 	}
 
 	tests := []struct {
@@ -1573,10 +1573,10 @@ func TestUpstreamRefresh(t *testing.T) {
 				return conn, nil
 			})
 
-			provider := New(*providerConfig)
+			ldapProvider := New(*providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
 			authTime := time.Date(2021, time.November, 1, 23, 43, 19, 0, time.UTC)
-			err := provider.PerformRefresh(context.Background(), provider2.StoredRefreshAttributes{
+			err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
 				Username: testUserSearchResultUsernameAttributeValue,
 				Subject:  subject,
 				DN:       testUserSearchResultDNValue,
@@ -2041,7 +2041,7 @@ func TestPwdUnchangedSinceLogin(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := PwdUnchangedSinceLogin(tt.entry, provider2.StoredRefreshAttributes{AuthTime: *tt.authTime})
+			err := PwdUnchangedSinceLogin(tt.entry, provider.StoredRefreshAttributes{AuthTime: *tt.authTime})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())
@@ -2057,13 +2057,13 @@ func TestWin32TimestampToTime(t *testing.T) {
 	tests := []struct {
 		name            string
 		timestampString string
-		wantTime        *time.Time
+		wantTime        time.Time
 		wantErr         string
 	}{
 		{
 			name:            "happy case with a valid timestamp",
 			timestampString: "132540199410000000",
-			wantTime:        &happyPasswordChangeTime,
+			wantTime:        happyPasswordChangeTime,
 		},
 		{
 			name:            "handles error with a string thats not a timestamp",
@@ -2074,6 +2074,16 @@ func TestWin32TimestampToTime(t *testing.T) {
 			name:            "handles error with too big of a timestamp",
 			timestampString: "132540199410000000000",
 			wantErr:         "couldn't parse as timestamp",
+		},
+		{
+			name:            "timestamp of zero",
+			timestampString: "0",
+			wantTime:        time.Date(1601, time.January, 1, 0, 0, 0, 0, time.UTC).UTC(),
+		},
+		{
+			name:            "fractional seconds",
+			timestampString: "132540199410000001",
+			wantTime:        time.Date(2021, time.January, 2, 0, 12, 21, 100, time.UTC).UTC(),
 		},
 	}
 
@@ -2135,12 +2145,25 @@ func TestValidUserAccountControl(t *testing.T) {
 			},
 			wantErr: "user has been deactivated",
 		},
+		{
+			name: "non-integer result",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"not-an-int"},
+					},
+				},
+			},
+			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
+		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidUserAccountControl(tt.entry, provider2.StoredRefreshAttributes{})
+			err := ValidUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -2183,12 +2206,25 @@ func TestValidComputedUserAccountControl(t *testing.T) {
 			},
 			wantErr: "user has been locked",
 		},
+		{
+			name: "non-integer result",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"not-an-int"},
+					},
+				},
+			},
+			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
+		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidComputedUserAccountControl(tt.entry, provider2.StoredRefreshAttributes{})
+			err := ValidComputedUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
 
 			if tt.wantErr != "" {
 				require.Error(t, err)

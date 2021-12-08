@@ -160,6 +160,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			Name:   testUserSearchResultUsernameAttributeValue,
 			UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 			Groups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
+			Extra:  map[string][]string{},
 		}
 		if editFunc != nil {
 			editFunc(u)
@@ -507,6 +508,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					Name:   testUserSearchResultUsernameAttributeValue,
 					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 					Groups: []string{"a", "b", "c"},
+					Extra:  map[string][]string{},
 				},
 				DN: testUserSearchResultDNValue,
 			},
@@ -609,6 +611,66 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
 				r.Groups = []string{"Animals@activedirectory.mycompany.example.com", "Mammals@activedirectory.mycompany.example.com"}
 			}),
+		},
+		{
+			name:     "requesting additional refresh related attributes",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+						return nil
+					},
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = append(r.Attributes, "some-attribute-to-check-during-refresh")
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								ldap.NewEntryAttribute("some-attribute-to-check-during-refresh", []string{"some-attribute-value"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
+				r.Extra = map[string][]string{"some-attribute-to-check-during-refresh": {"some-attribute-value"}}
+			}),
+		},
+		{
+			name:     "requesting additional refresh related attributes, but they aren't returned",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+						return nil
+					},
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = append(r.Attributes, "some-attribute-to-check-during-refresh")
+				})).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "found 0 values for attribute \"some-attribute-to-check-during-refresh\" while searching for user \"some-upstream-username\", but expected 1 result",
 		},
 		{
 			name:     "override group parsing when domain can't be determined from dn",
@@ -1265,7 +1327,9 @@ func TestUpstreamRefresh(t *testing.T) {
 			UIDAttribute:      testUserSearchUIDAttribute,
 			UsernameAttribute: testUserSearchUsernameAttribute,
 		},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{pwdLastSetAttribute: PwdUnchangedSinceLogin},
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+			pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+		},
 	}
 
 	tests := []struct {
@@ -1520,7 +1584,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantErr: "found 2 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
 		},
 		{
-			name:           "search result has a recent pwdLastSet value",
+			name:           "search result has a changed pwdLastSet value",
 			providerConfig: providerConfig,
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -1539,7 +1603,7 @@ func TestUpstreamRefresh(t *testing.T) {
 								},
 								{
 									Name:   pwdLastSetAttribute,
-									Values: []string{"132803468800000000"},
+									Values: []string{"132801740800000001"},
 								},
 							},
 						},
@@ -1547,7 +1611,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantErr: "validation for attribute \"pwdLastSet\" failed during upstream refresh: password has changed since login. login time: 2021-11-01 23:43:19 +0000 UTC, password set time: 2021-11-02 17:14:40 +0000 UTC",
+			wantErr: "validation for attribute \"pwdLastSet\" failed during upstream refresh: value for attribute \"pwdLastSet\" has changed since initial value at login. Previous value: \"132801740800000000\", new value: \"132801740800000001\"",
 		},
 	}
 
@@ -1577,10 +1641,11 @@ func TestUpstreamRefresh(t *testing.T) {
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
 			authTime := time.Date(2021, time.November, 1, 23, 43, 19, 0, time.UTC)
 			err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
-				Username: testUserSearchResultUsernameAttributeValue,
-				Subject:  subject,
-				DN:       testUserSearchResultDNValue,
-				AuthTime: authTime,
+				Username:             testUserSearchResultUsernameAttributeValue,
+				Subject:              subject,
+				DN:                   testUserSearchResultDNValue,
+				AuthTime:             authTime,
+				AdditionalAttributes: map[string][]string{pwdLastSetAttribute: {"132801740800000000"}},
 			})
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -1960,148 +2025,67 @@ func TestGetDomainFromDistinguishedName(t *testing.T) {
 	}
 }
 
-func TestPwdUnchangedSinceLogin(t *testing.T) {
-	authTime := "2021-11-01T23:43:19.826433579Z" // this is the format that fosite automatically stores
-	authTimeParsed, err := time.Parse(time.RFC3339Nano, authTime)
-	require.NoError(t, err)
-	pwdResetTimeAfterAuthTime := "132803468800000000"  // Nov 2
-	pwdResetTimeBeforeAuthTime := "132801740800000000" // Oct 31
+func TestAttributeUnchangedSinceLogin(t *testing.T) {
+	initialVal := "some-attribute-value"
+	changedVal := "some-different-attribute-value"
+	attributeName := "some-attribute-name"
 	tests := []struct {
 		name       string
-		authTime   *time.Time
 		entry      *ldap.Entry
 		wantResult bool
 		wantErr    string
 	}{
 		{
-			name:     "happy path where password has not been reset since login",
-			authTime: &authTimeParsed,
+			name: "happy path where value has not changed since login",
 			entry: &ldap.Entry{
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   "pwdLastSet",
-						Values: []string{pwdResetTimeBeforeAuthTime},
+						Name:   attributeName,
+						Values: []string{initialVal},
 					},
 				},
 			},
 		},
 		{
-			name:     "password has been reset since login",
-			authTime: &authTimeParsed,
+			name: "password has been reset since login",
 			entry: &ldap.Entry{
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   "pwdLastSet",
-						Values: []string{pwdResetTimeAfterAuthTime},
+						Name:   attributeName,
+						Values: []string{changedVal},
 					},
 				},
 			},
-			wantErr: "password has changed since login. login time: 2021-11-01 23:43:19.826433579 +0000 UTC, password set time: 2021-11-02 17:14:40 +0000 UTC",
+			wantErr: "value for attribute \"some-attribute-name\" has changed since initial value at login. Previous value: \"some-attribute-value\", new value: \"some-different-attribute-value\"",
 		},
 		{
-			name:     "ldap timestamp is in the wrong format",
-			authTime: &authTimeParsed,
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "pwdLastSet",
-						Values: []string{"invalid"},
-					},
-				},
-			},
-			wantErr: "couldn't parse as timestamp",
-		},
-		{
-			name:     "no value for pwdLastSet attribute",
-			authTime: &authTimeParsed,
+			name: "no value for attribute attribute",
 			entry: &ldap.Entry{
 				DN:         "some-dn",
 				Attributes: []*ldap.EntryAttribute{},
 			},
-			wantErr: "expected to find 1 value for pwdLastSet attribute, but found 0",
+			wantErr: "expected to find 1 value for \"some-attribute-name\" attribute, but found 0",
 		},
 		{
-			name:     "too many values for pwdLastSet attribute",
-			authTime: &authTimeParsed,
+			name: "too many values for attribute",
 			entry: &ldap.Entry{
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   "pwdLastSet",
+						Name:   attributeName,
 						Values: []string{"val1", "val2"},
 					},
 				},
 			},
-			wantErr: "expected to find 1 value for pwdLastSet attribute, but found 2",
+			wantErr: "expected to find 1 value for \"some-attribute-name\" attribute, but found 2",
 		},
 	}
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := PwdUnchangedSinceLogin(tt.entry, provider.StoredRefreshAttributes{AuthTime: *tt.authTime})
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr, err.Error())
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestWin32TimestampToTime(t *testing.T) {
-	happyPasswordChangeTime := time.Date(2021, time.January, 2, 0, 12, 21, 0, time.UTC).UTC()
-	tests := []struct {
-		name            string
-		timestampString string
-		wantTime        time.Time
-		wantErr         string
-	}{
-		{
-			name:            "happy case with a valid timestamp",
-			timestampString: "132540199410000000",
-			wantTime:        happyPasswordChangeTime,
-		},
-		{
-			name:            "handles error with a string thats not a timestamp",
-			timestampString: "not timestamp",
-			wantErr:         "couldn't parse as timestamp",
-		},
-		{
-			name:            "handles error with too big of a timestamp",
-			timestampString: "132540199410000000000",
-			wantErr:         "couldn't parse as timestamp",
-		},
-		{
-			name:            "timestamp of zero",
-			timestampString: "0",
-			wantTime:        time.Date(1601, time.January, 1, 0, 0, 0, 0, time.UTC).UTC(),
-		},
-		{
-			name:            "fractional seconds",
-			timestampString: "132540199410000001",
-			wantTime:        time.Date(2021, time.January, 2, 0, 12, 21, 100, time.UTC).UTC(),
-		},
-		{
-			name:            "max allowable value",
-			timestampString: "9223372036854775807", // 2^63-1
-			wantTime:        time.Date(30828, time.September, 14, 2, 48, 5, 477580700, time.UTC).UTC(),
-		},
-		{
-			name:            "just past max allowable value",
-			timestampString: "9223372036854775808", // 2^63
-			wantErr:         "couldn't parse as timestamp",
-		},
-	}
-
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			actualTime, err := win32timestampToTime(tt.timestampString)
-			require.Equal(t, tt.wantTime, actualTime)
+			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.StoredRefreshAttributes{AdditionalAttributes: map[string][]string{attributeName: {initialVal}}})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

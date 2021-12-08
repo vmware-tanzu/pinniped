@@ -180,6 +180,13 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 
+	var additionalAttributes map[string][]string
+	if s.ProviderType == psession.ProviderTypeLDAP {
+		additionalAttributes = s.LDAP.ExtraRefreshAttributes
+	} else {
+		additionalAttributes = s.ActiveDirectory.ExtraRefreshAttributes
+	}
+
 	// get ldap/ad provider out of cache
 	p, dn, err := findLDAPProviderByNameAndValidateUID(s, providerCache)
 	if err != nil {
@@ -190,10 +197,11 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 	}
 	// run PerformRefresh
 	err = p.PerformRefresh(ctx, provider.StoredRefreshAttributes{
-		Username: username,
-		Subject:  subject,
-		DN:       dn,
-		AuthTime: session.IDTokenClaims().AuthTime,
+		Username:             username,
+		Subject:              subject,
+		DN:                   dn,
+		AuthTime:             session.IDTokenClaims().AuthTime,
+		AdditionalAttributes: additionalAttributes,
 	})
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHint(

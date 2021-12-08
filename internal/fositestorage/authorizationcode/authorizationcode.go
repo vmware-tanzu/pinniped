@@ -348,20 +348,47 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					"upstreamRefreshToken": "嵽痊w©Ź榨Q|ôɵt毇妬"
 				},
 				"ldap": {
-					"userDN": "6鉢緋uƴŤȱʀļÂ?墖\u003cƬb獭潜Ʃ饾"
+					"userDN": "6鉢緋uƴŤȱʀļÂ?墖\u003cƬb獭潜Ʃ饾",
+					"extraRefreshAttributes": {
+						"ĝ": [
+							"IȽ齤士bEǎ",
+							"跞@)¿,ɭS隑ip偶宾儮猷V麹"
+						],
+						"齁š%OpKȱ藚ɏ¬Ê蒭堜]ȗ韚ʫ": [
+							"aŚB碠k9帴ʘ赱ŕ瑹xȢ~1Į",
+							"睋邔\u0026Ű惫蜀Ģ¡圔鎥墀jMʥ",
+							"+î艔垎0"
+						]
+					}
 				},
 				"activedirectory": {
-					"userDN": "|鬌R蜚蠣麹概÷驣7Ʀ澉1æɽ誮rʨ鷞"
+					"userDN": "ȝƋ鬯犦獢9c5¤.岵",
+					"extraRefreshAttributes": {
+						"\u0026錝D肁Ŷɽ蔒PR}Ųʓ": [
+							"_º$+溪ŸȢŒų崓ļ"
+						],
+						"P姧骦:駝重Eȫ": [
+							"ɂ/",
+							"Ƀɫ囤",
+							"鉌X縆跣ŠɞɮƎ賿礣©硇"
+						],
+						"a齙\\蹼偦歛ơ": [
+							"y衑拁Ȃ縅",
+							"Vƅȭǝ*擦28ǅ ",
+							"ã置bņ抰蛖"
+						]
+					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"ŚB碠k9"
+			"õC嶃",
+			"ɣƜ/気ū齢q萮左/篣AÚƄŕ~čfV",
+			"x荃墎]ac["
 		],
 		"grantedAudience": [
-			"ʘ赱",
-			"ď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ¡圔",
-			"墀jMʥ"
+			"XôĖ给溬d鞕",
+			"腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2Ķě"
 		]
 	},
 	"version": "2"

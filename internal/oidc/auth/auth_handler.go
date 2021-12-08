@@ -122,12 +122,14 @@ func handleAuthRequestForLDAPUpstream(
 
 	if idpType == psession.ProviderTypeLDAP {
 		customSessionData.LDAP = &psession.LDAPSessionData{
-			UserDN: dn,
+			UserDN:                 dn,
+			ExtraRefreshAttributes: authenticateResponse.User.GetExtra(),
 		}
 	}
 	if idpType == psession.ProviderTypeActiveDirectory {
 		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
-			UserDN: dn,
+			UserDN:                 dn,
+			ExtraRefreshAttributes: authenticateResponse.User.GetExtra(),
 		}
 	}
 

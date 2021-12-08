@@ -283,6 +283,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					Name:   happyLDAPUsernameFromAuthenticator,
 					UID:    happyLDAPUID,
 					Groups: happyLDAPGroups,
+					Extra:  map[string][]string{"some-refresh-attribute": {"some-refresh-attribute-value"}},
 				},
 				DN: happyLDAPUserDN,
 			}, true, nil
@@ -442,7 +443,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		OIDC:         nil,
 		LDAP:         nil,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string][]string{"some-refresh-attribute": {"some-refresh-attribute-value"}},
 		},
 	}
 
@@ -452,7 +454,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderType: psession.ProviderTypeLDAP,
 		OIDC:         nil,
 		LDAP: &psession.LDAPSessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string][]string{"some-refresh-attribute": {"some-refresh-attribute-value"}},
 		},
 		ActiveDirectory: nil,
 	}

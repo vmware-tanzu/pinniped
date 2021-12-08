@@ -593,6 +593,15 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	}
 	sort.Strings(mappedGroupNames)
 
+	mappedRefreshAttributes := make(map[string][]string)
+	for k := range p.c.RefreshAttributeChecks {
+		mappedVal, err := p.getSearchResultAttributeValue(k, userEntry, username)
+		if err != nil {
+			return nil, err
+		}
+		mappedRefreshAttributes[k] = []string{mappedVal}
+	}
+
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = bindFunc(conn, userEntry.DN)
 	if err != nil {
@@ -615,6 +624,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			Name:   mappedUsername,
 			UID:    mappedUID,
 			Groups: mappedGroupNames,
+			Extra:  mappedRefreshAttributes,
 		},
 		DN: userEntry.DN,
 	}
@@ -676,7 +686,7 @@ func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
 		TimeLimit:    90,
 		TypesOnly:    false,
 		Filter:       "(objectClass=*)", // we already have the dn, so the filter doesn't matter
-		Attributes:   p.refreshAttributes(),
+		Attributes:   p.userSearchRequestedAttributes(),
 		Controls:     nil, // this could be used to enable paging, but we're already limiting the result max size
 	}
 }
@@ -688,6 +698,9 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 	}
 	if p.c.UserSearch.UIDAttribute != distinguishedNameAttributeName {
 		attributes = append(attributes, p.c.UserSearch.UIDAttribute)
+	}
+	for k := range p.c.RefreshAttributeChecks {
+		attributes = append(attributes, k)
 	}
 	return attributes
 }
@@ -701,14 +714,6 @@ func (p *Provider) groupSearchRequestedAttributes() []string {
 	default:
 		return []string{p.c.GroupSearch.GroupNameAttribute}
 	}
-}
-
-func (p *Provider) refreshAttributes() []string {
-	attributes := p.userSearchRequestedAttributes()
-	for k := range p.c.RefreshAttributeChecks {
-		attributes = append(attributes, k)
-	}
-	return attributes
 }
 
 func (p *Provider) userSearchFilter(username string) string {
@@ -869,43 +874,22 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 	return strings.Join(domainComponents[1:], "."), nil
 }
 
-func PwdUnchangedSinceLogin(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
-	authTime := attributes.AuthTime
-	pwdLastSetWin32Format := entry.GetAttributeValues(PwdLastSetAttribute)
-	if len(pwdLastSetWin32Format) != 1 {
-		return fmt.Errorf("expected to find 1 value for %s attribute, but found %d", PwdLastSetAttribute, len(pwdLastSetWin32Format))
+func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.StoredRefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes provider.StoredRefreshAttributes) error {
+		prevAttributeValues := storedAttributes.AdditionalAttributes[attribute]
+		newValues := entry.GetAttributeValues(attribute)
+
+		if len(newValues) != 1 {
+			return fmt.Errorf(`expected to find 1 value for "%s" attribute, but found %d`, attribute, len(newValues))
+		}
+		if len(prevAttributeValues) != 1 {
+			return fmt.Errorf(`expected to find 1 stored value for "%s" attribute, but found %d`, attribute, len(prevAttributeValues))
+		}
+		if prevAttributeValues[0] != newValues[0] {
+			return fmt.Errorf(`value for attribute "%s" has changed since initial value at login. Previous value: "%s", new value: "%s"`, attribute, prevAttributeValues[0], newValues[0])
+		}
+		return nil
 	}
-	// convert to a time.Time
-	pwdLastSetParsed, err := win32timestampToTime(pwdLastSetWin32Format[0])
-	if err != nil {
-		return err
-	}
-
-	// if pwdLastSet > authTime, that means that the password has been changed since the initial login.
-	// return an error so the user is prompted to log in again.
-	if pwdLastSetParsed.After(authTime) {
-		return fmt.Errorf("password has changed since login. login time: %s, password set time: %s", authTime, pwdLastSetParsed)
-	}
-	return nil
-}
-
-func win32timestampToTime(win32timestamp string) (time.Time, error) {
-	// take a win32 timestamp (represented as the number of 100 ns intervals since
-	// January 1, 1601) and make a time.Time
-
-	const unixTimeBaseAsWin = 116_444_736_000_000_000 // The unix base time (January 1, 1970 UTC) as 100 ns since Win32 epoch (1601-01-01)
-	const hundredNsToSecFactor = 10_000_000
-
-	win32Time, err := strconv.ParseInt(win32timestamp, 10, 64)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("couldn't parse as timestamp")
-	}
-
-	unixsec := (win32Time - unixTimeBaseAsWin) / hundredNsToSecFactor
-	unixns := (win32Time % hundredNsToSecFactor) * 100
-
-	convertedTime := time.Unix(unixsec, unixns).UTC()
-	return convertedTime, nil
 }
 
 func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {

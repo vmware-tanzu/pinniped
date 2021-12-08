@@ -98,10 +98,11 @@ type UpstreamLDAPIdentityProviderI interface {
 }
 
 type StoredRefreshAttributes struct {
-	Username string
-	Subject  string
-	DN       string
-	AuthTime time.Time
+	Username             string
+	Subject              string
+	DN                   string
+	AuthTime             time.Time
+	AdditionalAttributes map[string][]string
 }
 
 type DynamicUpstreamIDPProvider interface {

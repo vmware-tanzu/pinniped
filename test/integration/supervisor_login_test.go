@@ -1879,7 +1879,12 @@ func lockADTestUser(t *testing.T, env *testlib.TestEnv, testUserName string) {
 	userDN := fmt.Sprintf("CN=%s,OU=test-users,%s", testUserName, env.SupervisorUpstreamActiveDirectory.UserSearchBase)
 	conn := dialTLS(t, env)
 
-	for i := 0; i <= 21; i++ { // our password policy allows 20 wrong attempts before locking the account, so do 21.
+	// our password policy allows 20 wrong attempts before locking the account, so do 21.
+	// these wrong password attempts could go to different domain controllers, but account
+	// lockout changes are urgently replicated, meaning that the domain controllers will be
+	// synced asap rather than in the usual 15 second interval.
+	// See https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/cc961787(v=technet.10)#urgent-replication-of-account-lockout-changes
+	for i := 0; i <= 21; i++ {
 		err := conn.Bind(userDN, "not-the-right-password-"+fmt.Sprint(i))
 		require.Error(t, err) // this should be an error
 	}

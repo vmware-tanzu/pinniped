@@ -896,13 +896,13 @@ func win32timestampToTime(win32timestamp string) (time.Time, error) {
 	const unixTimeBaseAsWin = 116_444_736_000_000_000 // The unix base time (January 1, 1970 UTC) as 100 ns since Win32 epoch (1601-01-01)
 	const hundredNsToSecFactor = 10_000_000
 
-	win32Time, err := strconv.ParseUint(win32timestamp, 10, 64)
+	win32Time, err := strconv.ParseInt(win32timestamp, 10, 64)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("couldn't parse as timestamp")
 	}
 
-	unixsec := int64(win32Time-unixTimeBaseAsWin) / hundredNsToSecFactor
-	unixns := int64(win32Time%hundredNsToSecFactor) * 100
+	unixsec := (win32Time - unixTimeBaseAsWin) / hundredNsToSecFactor
+	unixns := (win32Time % hundredNsToSecFactor) * 100
 
 	convertedTime := time.Unix(unixsec, unixns).UTC()
 	return convertedTime, nil

@@ -2085,6 +2085,16 @@ func TestWin32TimestampToTime(t *testing.T) {
 			timestampString: "132540199410000001",
 			wantTime:        time.Date(2021, time.January, 2, 0, 12, 21, 100, time.UTC).UTC(),
 		},
+		{
+			name:            "max allowable value",
+			timestampString: "9223372036854775807", // 2^63-1
+			wantTime:        time.Date(30828, time.September, 14, 2, 48, 5, 477580700, time.UTC).UTC(),
+		},
+		{
+			name:            "just past max allowable value",
+			timestampString: "9223372036854775808", // 2^63
+			wantErr:         "couldn't parse as timestamp",
+		},
 	}
 
 	for _, test := range tests {

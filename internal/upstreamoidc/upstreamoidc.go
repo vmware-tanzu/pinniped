@@ -138,6 +138,9 @@ func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string
 }
 
 // RevokeToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+// It may return an error wrapped by a RetryableRevocationError, which is an error indicating that it may
+// be worth trying to revoke the same token again later. Any other error returned should be assumed to
+// represent an error such that it is not worth retrying revocation later, even though revocation failed.
 func (p *ProviderConfig) RevokeToken(ctx context.Context, token string, tokenType provider.RevocableTokenType) error {
 	if p.RevocationURL == nil {
 		plog.Trace("RevokeToken() was called but upstream provider has no available revocation endpoint",
@@ -197,22 +200,25 @@ func (p *ProviderConfig) tryRevokeToken(
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		// Couldn't connect to the server or some similar error.
-		return false, err
+		// Could be a temporary network problem, so it might be worth retrying.
+		return false, provider.NewRetryableRevocationError(err)
 	}
 	defer resp.Body.Close()
 
-	switch resp.StatusCode {
-	case http.StatusOK:
+	status := resp.StatusCode
+
+	switch {
+	case status == http.StatusOK:
 		// Success!
 		plog.Trace("RevokeToken() got 200 OK response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		return false, nil
-	case http.StatusBadRequest:
+	case status == http.StatusBadRequest:
 		// Bad request might be due to bad client auth method. Try to detect that.
 		plog.Trace("RevokeToken() got 400 Bad Request response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return false,
-				fmt.Errorf("error reading response body on response with status code %d: %w", resp.StatusCode, err)
+				fmt.Errorf("error reading response body on response with status code %d: %w", status, err)
 		}
 		var parsedResp struct {
 			ErrorType        string `json:"error"`
@@ -222,21 +228,34 @@ func (p *ProviderConfig) tryRevokeToken(
 		err = json.Unmarshal(body, &parsedResp)
 		if err != nil {
 			return false,
-				fmt.Errorf("error parsing response body %q on response with status code %d: %w", bodyStr, resp.StatusCode, err)
+				fmt.Errorf("error parsing response body %q on response with status code %d: %w", bodyStr, status, err)
 		}
-		err = fmt.Errorf("server responded with status %d with body: %s", resp.StatusCode, bodyStr)
+		err = fmt.Errorf("server responded with status %d with body: %s", status, bodyStr)
 		if parsedResp.ErrorType != "invalid_client" {
-			// Got an error unrelated to client auth, so not worth trying again.
+			// Got an error unrelated to client auth, so not worth trying client auth again. Also, these are errors
+			// of the type where the server is pretty conclusively rejecting our request, so they are generally
+			// not worth trying again later either.
+			// These errors could be any of the other errors from https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+			// or "unsupported_token_type" from https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1
+			// or could be some unspecified custom error added by the OIDC provider.
 			return false, err
 		}
 		// Got an "invalid_client" response, which might mean client auth failed, so it may be worth trying again
 		// using another client auth method. See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
 		plog.Trace("RevokeToken()'s 400 Bad Request response from provider's revocation endpoint was type 'invalid_client'", "providerName", p.Name, "usedBasicAuth", useBasicAuth)
 		return true, err
+	case status >= 500 && status <= 599:
+		// The spec says 503 Service Unavailable should be retried by the client later.
+		// See https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1.
+		// Other forms of 5xx server errors are not particularly conclusive failures. For example, gateway errors could
+		// be caused by an underlying problem which could potentially become resolved in the near future. We'll be
+		// optimistic and call all 5xx errors retryable.
+		plog.Trace("RevokeToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", status)
+		return false, provider.NewRetryableRevocationError(fmt.Errorf("server responded with status %d", status))
 	default:
-		// Any other error is probably not due to failed client auth.
-		plog.Trace("RevokeToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", resp.StatusCode)
-		return false, fmt.Errorf("server responded with status %d", resp.StatusCode)
+		// Any other error is probably not due to failed client auth, and is probably not worth retrying later.
+		plog.Trace("RevokeToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", status)
+		return false, fmt.Errorf("server responded with status %d", status)
 	}
 }
 

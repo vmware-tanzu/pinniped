@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"sync"
 
@@ -77,6 +78,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
 	// RevokeToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+	// It may return an error wrapped by a RetryableRevocationError, which is an error indicating that it may
+	// be worth trying to revoke the same token again later. Any other error returned should be assumed to
+	// represent an error such that it is not worth retrying revocation later, even though revocation failed.
 	RevokeToken(ctx context.Context, token string, tokenType RevocableTokenType) error
 
 	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
@@ -162,4 +166,20 @@ func (p *dynamicUpstreamIDPProvider) GetActiveDirectoryIdentityProviders() []Ups
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
 	return p.activeDirectoryUpstreams
+}
+
+type RetryableRevocationError struct {
+	wrapped error
+}
+
+func NewRetryableRevocationError(wrapped error) RetryableRevocationError {
+	return RetryableRevocationError{wrapped: wrapped}
+}
+
+func (e RetryableRevocationError) Error() string {
+	return fmt.Sprintf("retryable revocation error: %v", e.wrapped)
+}
+
+func (e RetryableRevocationError) Unwrap() error {
+	return e.wrapped
 }

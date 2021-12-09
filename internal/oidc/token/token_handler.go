@@ -180,7 +180,7 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 
-	var additionalAttributes map[string][]string
+	var additionalAttributes map[string]string
 	if s.ProviderType == psession.ProviderTypeLDAP {
 		additionalAttributes = s.LDAP.ExtraRefreshAttributes
 	} else {
@@ -200,7 +200,6 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		Username:             username,
 		Subject:              subject,
 		DN:                   dn,
-		AuthTime:             session.IDTokenClaims().AuthTime,
 		AdditionalAttributes: additionalAttributes,
 	})
 	if err != nil {

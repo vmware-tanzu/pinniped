@@ -220,11 +220,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Filter:             testGroupSearchFilter,
 			GroupNameAttribute: testGroupNameAttrName,
 		},
-		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 			"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-			"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-			"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+			"userAccountControl":                 ValidUserAccountControl,
+			"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 		},
 	}
 
@@ -541,11 +541,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -602,11 +602,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: "sAMAccountName",
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -666,11 +666,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -730,11 +730,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -793,11 +793,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -927,11 +927,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1056,11 +1056,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					}},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1111,11 +1111,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1315,12 +1315,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))",
 						GroupNameAttribute: "sAMAccountName",
 					},
-					UIDAttributeParsingOverrides:   map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
-					GroupAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"sAMAccountName": upstreamldap.GroupSAMAccountNameWithDomainSuffix},
+					UIDAttributeParsingOverrides:   map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
+					GroupAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"sAMAccountName": GroupSAMAccountNameWithDomainSuffix},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1373,11 +1373,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1434,11 +1434,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1489,11 +1489,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1690,11 +1690,11 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
 					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
 						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
-						"userAccountControl":                 upstreamldap.ValidUserAccountControl,
-						"msDS-User-Account-Control-Computed": upstreamldap.ValidComputedUserAccountControl,
+						"userAccountControl":                 ValidUserAccountControl,
+						"msDS-User-Account-Control-Computed": ValidComputedUserAccountControl,
 					},
 				},
 			},
@@ -1878,4 +1878,271 @@ func normalizeActiveDirectoryUpstreams(upstreams []v1alpha1.ActiveDirectoryIdent
 	})
 
 	return result
+}
+
+func TestGroupSAMAccountNameWithDomainSuffix(t *testing.T) {
+	tests := []struct {
+		name       string
+		entry      *ldap.Entry
+		wantResult string
+		wantErr    string
+	}{
+		{
+			name: "happy path with DN and valid sAMAccountName",
+			entry: &ldap.Entry{
+				DN: "CN=animals,OU=Users,OU=pinniped-ad,DC=mycompany,DC=example,DC=com",
+				Attributes: []*ldap.EntryAttribute{
+					ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
+				},
+			},
+			wantResult: "Mammals@mycompany.example.com",
+		},
+		{
+			name: "no domain components in DN",
+			entry: &ldap.Entry{
+				DN: "no-domain-components",
+				Attributes: []*ldap.EntryAttribute{
+					ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
+				},
+			},
+			wantErr: "did not find domain components in group dn: no-domain-components",
+		},
+		{
+			name: "multiple values for sAMAccountName attribute",
+			entry: &ldap.Entry{
+				DN: "CN=animals,OU=Users,OU=pinniped-ad,DC=mycompany,DC=example,DC=com",
+				Attributes: []*ldap.EntryAttribute{
+					ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals", "Eukaryotes"}),
+				},
+			},
+			wantErr: "found 2 values for attribute \"sAMAccountName\", but expected 1 result",
+		},
+		{
+			name: "no values for sAMAccountName attribute",
+			entry: &ldap.Entry{
+				DN: "CN=animals,OU=Users,OU=pinniped-ad,DC=mycompany,DC=example,DC=com",
+				Attributes: []*ldap.EntryAttribute{
+					ldap.NewEntryAttribute("sAMAccountName", []string{}),
+				},
+			},
+			wantErr: "found 0 values for attribute \"sAMAccountName\", but expected 1 result",
+		},
+	}
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			suffixedSAMAccountName, err := GroupSAMAccountNameWithDomainSuffix(tt.entry)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantResult, suffixedSAMAccountName)
+		})
+	}
+}
+
+func TestGetMicrosoftFormattedUUID(t *testing.T) {
+	tests := []struct {
+		name       string
+		binaryUUID []byte
+		wantString string
+		wantErr    string
+	}{
+		{
+			name:       "happy path",
+			binaryUUID: []byte("\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16"),
+			wantString: "04030201-0605-0807-0910-111213141516",
+		},
+		{
+			name:       "not the right length",
+			binaryUUID: []byte("2\xf8\xb0\xaa\xb6V\xb1D\x8b(\xee"),
+			wantErr:    "invalid UUID (got 11 bytes)",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			actualUUIDString, err := microsoftUUIDFromBinary(tt.binaryUUID)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantString, actualUUIDString)
+		})
+	}
+}
+
+func TestGetDomainFromDistinguishedName(t *testing.T) {
+	tests := []struct {
+		name              string
+		distinguishedName string
+		wantDomain        string
+		wantErr           string
+	}{
+		{
+			name:              "happy path",
+			distinguishedName: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+			wantDomain:        "activedirectory.mycompany.example.com",
+		},
+		{
+			name:              "lowercased happy path",
+			distinguishedName: "cn=Mammals,ou=Users,ou=pinniped-ad,dc=activedirectory,dc=mycompany,dc=example,dc=com",
+			wantDomain:        "activedirectory.mycompany.example.com",
+		},
+		{
+			name:              "no domain components",
+			distinguishedName: "not-a-dn",
+			wantErr:           "did not find domain components in group dn: not-a-dn",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			actualDomain, err := getDomainFromDistinguishedName(tt.distinguishedName)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantDomain, actualDomain)
+		})
+	}
+}
+
+func TestValidUserAccountControl(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   *ldap.Entry
+		wantErr string
+	}{
+		{
+			name: "happy normal user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"512"},
+					},
+				},
+			},
+		},
+		{
+			name: "happy user whose password doesn't expire",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"65536"},
+					},
+				},
+			},
+		},
+		{
+			name: "deactivated user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"514"},
+					},
+				},
+			},
+			wantErr: "user has been deactivated",
+		},
+		{
+			name: "non-integer result",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "userAccountControl",
+						Values: []string{"not-an-int"},
+					},
+				},
+			},
+			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidComputedUserAccountControl(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   *ldap.Entry
+		wantErr string
+	}{
+		{
+			name: "happy normal user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"0"},
+					},
+				},
+			},
+		},
+		{
+			name: "locked user",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"16"},
+					},
+				},
+			},
+			wantErr: "user has been locked",
+		},
+		{
+			name: "non-integer result",
+			entry: &ldap.Entry{
+				DN: "some-dn",
+				Attributes: []*ldap.EntryAttribute{
+					{
+						Name:   "msDS-User-Account-Control-Computed",
+						Values: []string{"not-an-int"},
+					},
+				},
+			},
+			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidComputedUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, tt.wantErr, err.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

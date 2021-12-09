@@ -155,17 +155,17 @@ func TestEndUserAuthentication(t *testing.T) {
 	}
 
 	// The auth response which matches the exampleUserSearchResult and exampleGroupSearchResult.
-	expectedAuthResponse := func(editFunc func(r *user.DefaultInfo)) *authenticators.Response {
+	expectedAuthResponse := func(editFunc func(r *authenticators.Response)) *authenticators.Response {
 		u := &user.DefaultInfo{
 			Name:   testUserSearchResultUsernameAttributeValue,
 			UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 			Groups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
-			Extra:  map[string][]string{},
 		}
+		response := &authenticators.Response{User: u, DN: testUserSearchResultDNValue, ExtraRefreshAttributes: map[string]string{}}
 		if editFunc != nil {
-			editFunc(u)
+			editFunc(response)
 		}
-		return &authenticators.Response{User: u, DN: testUserSearchResultDNValue}
+		return response
 	}
 
 	tests := []struct {
@@ -252,8 +252,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Groups = []string{}
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Groups = []string{}
 			}),
 		},
 		{
@@ -284,8 +285,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Name = testUserSearchResultDNValue
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Name = testUserSearchResultDNValue
 			}),
 		},
 		{
@@ -316,8 +318,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.UID = base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultDNValue))
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.UID = base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultDNValue))
 			}),
 		},
 		{
@@ -339,8 +342,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Groups = []string{testGroupSearchResultDNValue1, testGroupSearchResultDNValue2}
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Groups = []string{testGroupSearchResultDNValue1, testGroupSearchResultDNValue2}
 			}),
 		},
 		{
@@ -362,8 +366,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Groups = []string{testGroupSearchResultDNValue1, testGroupSearchResultDNValue2}
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Groups = []string{testGroupSearchResultDNValue1, testGroupSearchResultDNValue2}
 			}),
 		},
 		{
@@ -508,109 +513,10 @@ func TestEndUserAuthentication(t *testing.T) {
 					Name:   testUserSearchResultUsernameAttributeValue,
 					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
 					Groups: []string{"a", "b", "c"},
-					Extra:  map[string][]string{},
 				},
-				DN: testUserSearchResultDNValue,
+				DN:                     testUserSearchResultDNValue,
+				ExtraRefreshAttributes: map[string]string{},
 			},
-		},
-		{
-			name:     "override UID parsing to work with microsoft style objectGUIDs",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
-					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
-				}
-				p.UserSearch.UIDAttribute = "objectGUID"
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{testUserSearchUsernameAttribute, "objectGUID"}
-				})).Return(&ldap.SearchResult{
-					Entries: []*ldap.Entry{
-						{
-							DN: testUserSearchResultDNValue,
-							Attributes: []*ldap.EntryAttribute{
-								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
-								ldap.NewEntryAttribute("objectGUID", []string{"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16"}),
-							},
-						},
-					}}, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
-					Return(exampleGroupSearchResult, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.UID = "04030201-0605-0807-0910-111213141516"
-			}),
-		},
-		{
-			name:     "override UID parsing when the attribute name doesn't match what's returned does default parsing",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.UIDAttributeParsingOverrides = map[string]func(entry *ldap.Entry) (string, error){
-					"objectGUID": MicrosoftUUIDFromBinary("objectGUID"),
-				}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
-					Return(exampleGroupSearchResult, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(nil),
-		},
-		{
-			name:     "override group parsing to create new group names",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
-					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
-				}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{"sAMAccountName"}
-				}), expectedGroupSearchPageSize).
-					Return(&ldap.SearchResult{
-						Entries: []*ldap.Entry{
-							{
-								DN: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
-								},
-							},
-							{
-								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
-								},
-							},
-						},
-						Referrals: []string{}, // note that we are not following referrals at this time
-						Controls:  []ldap.Control{},
-					}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Groups = []string{"Animals@activedirectory.mycompany.example.com", "Mammals@activedirectory.mycompany.example.com"}
-			}),
 		},
 		{
 			name:     "requesting additional refresh related attributes",
@@ -646,8 +552,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
-			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
-				r.Extra = map[string][]string{"some-attribute-to-check-during-refresh": {"some-attribute-value"}}
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				r.ExtraRefreshAttributes = map[string]string{"some-attribute-to-check-during-refresh": "c29tZS1hdHRyaWJ1dGUtdmFsdWU"}
 			}),
 		},
 		{
@@ -671,105 +577,6 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantError: "found 0 values for attribute \"some-attribute-to-check-during-refresh\" while searching for user \"some-upstream-username\", but expected 1 result",
-		},
-		{
-			name:     "override group parsing when domain can't be determined from dn",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
-					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
-				}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{"sAMAccountName"}
-				}), expectedGroupSearchPageSize).
-					Return(&ldap.SearchResult{
-						Entries: []*ldap.Entry{
-							{
-								DN: "no-domain-components",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
-								},
-							},
-							{
-								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
-								},
-							},
-						},
-						Referrals: []string{}, // note that we are not following referrals at this time
-						Controls:  []ldap.Control{},
-					}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantError: "error finding groups for user some-upstream-user-dn: did not find domain components in group dn: no-domain-components",
-		},
-		{
-			name:     "override group parsing when entry has multiple values for attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
-					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
-				}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{"sAMAccountName"}
-				}), expectedGroupSearchPageSize).
-					Return(&ldap.SearchResult{
-						Entries: []*ldap.Entry{
-							{
-								DN: "no-domain-components",
-								Attributes: []*ldap.EntryAttribute{
-									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals", "Eukaryotes"}),
-								},
-							},
-						},
-						Referrals: []string{}, // note that we are not following referrals at this time
-						Controls:  []ldap.Control{},
-					}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantError: "error finding groups for user some-upstream-user-dn: found 2 values for attribute \"sAMAccountName\", but expected 1 result",
-		}, {
-			name:     "override group parsing when entry has no values for attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
-				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
-					"sAMAccountName": GroupSAMAccountNameWithDomainSuffix,
-				}
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
-					r.Attributes = []string{"sAMAccountName"}
-				}), expectedGroupSearchPageSize).
-					Return(&ldap.SearchResult{
-						Entries: []*ldap.Entry{
-							{
-								DN:         "no-domain-components",
-								Attributes: []*ldap.EntryAttribute{},
-							},
-						},
-						Referrals: []string{}, // note that we are not following referrals at this time
-						Controls:  []ldap.Control{},
-					}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantError: "error finding groups for user some-upstream-user-dn: found 0 values for attribute \"sAMAccountName\", but expected 1 result",
 		},
 		{
 			name:           "when dial fails",
@@ -1307,8 +1114,9 @@ func TestUpstreamRefresh(t *testing.T) {
 						ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
 					},
 					{
-						Name:   pwdLastSetAttribute,
-						Values: []string{"132801740800000000"},
+						Name:       pwdLastSetAttribute,
+						Values:     []string{"132801740800000000"},
+						ByteValues: [][]byte{[]byte("132801740800000000")},
 					},
 				},
 			},
@@ -1611,7 +1419,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantErr: "validation for attribute \"pwdLastSet\" failed during upstream refresh: value for attribute \"pwdLastSet\" has changed since initial value at login. Previous value: \"132801740800000000\", new value: \"132801740800000001\"",
+			wantErr: "validation for attribute \"pwdLastSet\" failed during upstream refresh: value for attribute \"pwdLastSet\" has changed since initial value at login",
 		},
 	}
 
@@ -1637,15 +1445,14 @@ func TestUpstreamRefresh(t *testing.T) {
 				return conn, nil
 			})
 
+			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
-			authTime := time.Date(2021, time.November, 1, 23, 43, 19, 0, time.UTC)
 			err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   testUserSearchResultDNValue,
-				AuthTime:             authTime,
-				AdditionalAttributes: map[string][]string{pwdLastSetAttribute: {"132801740800000000"}},
+				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
 			})
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -1954,77 +1761,6 @@ func TestRealTLSDialing(t *testing.T) {
 	}
 }
 
-func TestGetMicrosoftFormattedUUID(t *testing.T) {
-	tests := []struct {
-		name       string
-		binaryUUID []byte
-		wantString string
-		wantErr    string
-	}{
-		{
-			name:       "happy path",
-			binaryUUID: []byte("\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10\x11\x12\x13\x14\x15\x16"),
-			wantString: "04030201-0605-0807-0910-111213141516",
-		},
-		{
-			name:       "not the right length",
-			binaryUUID: []byte("2\xf8\xb0\xaa\xb6V\xb1D\x8b(\xee"),
-			wantErr:    "invalid UUID (got 11 bytes)",
-		},
-	}
-
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			actualUUIDString, err := microsoftUUIDFromBinary(tt.binaryUUID)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.wantString, actualUUIDString)
-		})
-	}
-}
-
-func TestGetDomainFromDistinguishedName(t *testing.T) {
-	tests := []struct {
-		name              string
-		distinguishedName string
-		wantDomain        string
-		wantErr           string
-	}{
-		{
-			name:              "happy path",
-			distinguishedName: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
-			wantDomain:        "activedirectory.mycompany.example.com",
-		},
-		{
-			name:              "lowercased happy path",
-			distinguishedName: "cn=Mammals,ou=Users,ou=pinniped-ad,dc=activedirectory,dc=mycompany,dc=example,dc=com",
-			wantDomain:        "activedirectory.mycompany.example.com",
-		},
-		{
-			name:              "no domain components",
-			distinguishedName: "not-a-dn",
-			wantErr:           "did not find domain components in group dn: not-a-dn",
-		},
-	}
-
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			actualDomain, err := getDomainFromDistinguishedName(tt.distinguishedName)
-			if tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.wantDomain, actualDomain)
-		})
-	}
-}
-
 func TestAttributeUnchangedSinceLogin(t *testing.T) {
 	initialVal := "some-attribute-value"
 	changedVal := "some-different-attribute-value"
@@ -2041,8 +1777,9 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   attributeName,
-						Values: []string{initialVal},
+						Name:       attributeName,
+						Values:     []string{initialVal},
+						ByteValues: [][]byte{[]byte(initialVal)},
 					},
 				},
 			},
@@ -2053,12 +1790,13 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   attributeName,
-						Values: []string{changedVal},
+						Name:       attributeName,
+						Values:     []string{changedVal},
+						ByteValues: [][]byte{[]byte(changedVal)},
 					},
 				},
 			},
-			wantErr: "value for attribute \"some-attribute-name\" has changed since initial value at login. Previous value: \"some-attribute-value\", new value: \"some-different-attribute-value\"",
+			wantErr: "value for attribute \"some-attribute-name\" has changed since initial value at login",
 		},
 		{
 			name: "no value for attribute attribute",
@@ -2085,141 +1823,8 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.StoredRefreshAttributes{AdditionalAttributes: map[string][]string{attributeName: {initialVal}}})
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr, err.Error())
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidUserAccountControl(t *testing.T) {
-	tests := []struct {
-		name    string
-		entry   *ldap.Entry
-		wantErr string
-	}{
-		{
-			name: "happy normal user",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "userAccountControl",
-						Values: []string{"512"},
-					},
-				},
-			},
-		},
-		{
-			name: "happy user whose password doesn't expire",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "userAccountControl",
-						Values: []string{"65536"},
-					},
-				},
-			},
-		},
-		{
-			name: "deactivated user",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "userAccountControl",
-						Values: []string{"514"},
-					},
-				},
-			},
-			wantErr: "user has been deactivated",
-		},
-		{
-			name: "non-integer result",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "userAccountControl",
-						Values: []string{"not-an-int"},
-					},
-				},
-			},
-			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
-		},
-	}
-
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
-
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr, err.Error())
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidComputedUserAccountControl(t *testing.T) {
-	tests := []struct {
-		name    string
-		entry   *ldap.Entry
-		wantErr string
-	}{
-		{
-			name: "happy normal user",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "msDS-User-Account-Control-Computed",
-						Values: []string{"0"},
-					},
-				},
-			},
-		},
-		{
-			name: "locked user",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "msDS-User-Account-Control-Computed",
-						Values: []string{"16"},
-					},
-				},
-			},
-			wantErr: "user has been locked",
-		},
-		{
-			name: "non-integer result",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:   "msDS-User-Account-Control-Computed",
-						Values: []string{"not-an-int"},
-					},
-				},
-			},
-			wantErr: "strconv.Atoi: parsing \"not-an-int\": invalid syntax",
-		},
-	}
-
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidComputedUserAccountControl(tt.entry, provider.StoredRefreshAttributes{})
-
+			initialValRawEncoded := base64.RawURLEncoding.EncodeToString([]byte(initialVal))
+			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.StoredRefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

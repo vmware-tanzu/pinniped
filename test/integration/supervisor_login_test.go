@@ -23,8 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/crypto/ptls"
-
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +35,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"

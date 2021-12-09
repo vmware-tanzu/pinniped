@@ -102,7 +102,7 @@ type StoredRefreshAttributes struct {
 	Subject              string
 	DN                   string
 	AuthTime             time.Time
-	AdditionalAttributes map[string][]string
+	AdditionalAttributes map[string]string
 }
 
 type DynamicUpstreamIDPProvider interface {

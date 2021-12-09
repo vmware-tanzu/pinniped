@@ -13,14 +13,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
@@ -40,20 +37,6 @@ const (
 	groupSearchPageSize                     = uint32(250)
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
-	sAMAccountNameAttribute                 = "sAMAccountName"
-	// PwdLastSetAttribute is the date and time that the password for this account was last changed.
-	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-pwdlastset
-	PwdLastSetAttribute = "pwdLastSet"
-	// UserAccountControlAttribute represents a bitmap of user properties.
-	// https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties
-	UserAccountControlAttribute = "userAccountControl"
-	// UserAccountControlComputedAttribute represents a bitmap of user properties.
-	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-msds-user-account-control-computed
-	UserAccountControlComputedAttribute = "msDS-User-Account-Control-Computed"
-	// 0x0002 ACCOUNTDISABLE in userAccountControl bitmap.
-	accountDisabledBitmapValue = 2
-	// 0x0010 UF_LOCKOUT in msDS-User-Account-Control-Computed bitmap.
-	accountLockedBitmapValue = 16
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -593,13 +576,13 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	}
 	sort.Strings(mappedGroupNames)
 
-	mappedRefreshAttributes := make(map[string][]string)
+	mappedRefreshAttributes := make(map[string]string)
 	for k := range p.c.RefreshAttributeChecks {
-		mappedVal, err := p.getSearchResultAttributeValue(k, userEntry, username)
+		mappedVal, err := p.getSearchResultAttributeRawValueEncoded(k, userEntry, username)
 		if err != nil {
 			return nil, err
 		}
-		mappedRefreshAttributes[k] = []string{mappedVal}
+		mappedRefreshAttributes[k] = mappedVal
 	}
 
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
@@ -624,9 +607,9 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			Name:   mappedUsername,
 			UID:    mappedUID,
 			Groups: mappedGroupNames,
-			Extra:  mappedRefreshAttributes,
 		},
-		DN: userEntry.DN,
+		DN:                     userEntry.DN,
+		ExtraRefreshAttributes: mappedRefreshAttributes,
 	}
 
 	return response, nil
@@ -819,101 +802,18 @@ func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
 	)
 }
 
-func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
-	// validation has already been done so we can just get the attribute...
-	return func(entry *ldap.Entry) (string, error) {
-		binaryUUID := entry.GetRawAttributeValue(attributeName)
-		return microsoftUUIDFromBinary(binaryUUID)
-	}
-}
-
-func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
-	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
-	if err != nil {
-		return "", err
-	}
-	// then swap it because AD stores the first 3 fields little-endian rather than the expected
-	// big-endian.
-	uuidVal[0], uuidVal[1], uuidVal[2], uuidVal[3] = uuidVal[3], uuidVal[2], uuidVal[1], uuidVal[0]
-	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
-	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
-	return uuidVal.String(), nil
-}
-
-func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
-	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
-
-	if len(sAMAccountNameAttributeValues) != 1 {
-		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
-			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
-		)
-	}
-
-	sAMAccountName := sAMAccountNameAttributeValues[0]
-	if len(sAMAccountName) == 0 {
-		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
-			sAMAccountNameAttribute,
-		)
-	}
-
-	distinguishedName := entry.DN
-	domain, err := getDomainFromDistinguishedName(distinguishedName)
-	if err != nil {
-		return "", err
-	}
-	return sAMAccountName + "@" + domain, nil
-}
-
-var domainComponentsRegexp = regexp.MustCompile(",DC=|,dc=")
-
-func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
-	domainComponents := domainComponentsRegexp.Split(distinguishedName, -1)
-	if len(domainComponents) == 1 {
-		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
-	}
-	return strings.Join(domainComponents[1:], "."), nil
-}
-
 func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.StoredRefreshAttributes) error {
 	return func(entry *ldap.Entry, storedAttributes provider.StoredRefreshAttributes) error {
-		prevAttributeValues := storedAttributes.AdditionalAttributes[attribute]
+		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
 		newValues := entry.GetAttributeValues(attribute)
 
 		if len(newValues) != 1 {
 			return fmt.Errorf(`expected to find 1 value for "%s" attribute, but found %d`, attribute, len(newValues))
 		}
-		if len(prevAttributeValues) != 1 {
-			return fmt.Errorf(`expected to find 1 stored value for "%s" attribute, but found %d`, attribute, len(prevAttributeValues))
-		}
-		if prevAttributeValues[0] != newValues[0] {
-			return fmt.Errorf(`value for attribute "%s" has changed since initial value at login. Previous value: "%s", new value: "%s"`, attribute, prevAttributeValues[0], newValues[0])
+		encodedNewValue := base64.RawURLEncoding.EncodeToString(entry.GetRawAttributeValue(attribute))
+		if prevAttributeValue != encodedNewValue {
+			return fmt.Errorf(`value for attribute "%s" has changed since initial value at login`, attribute)
 		}
 		return nil
 	}
-}
-
-func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
-	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlAttribute))
-	if err != nil {
-		return err
-	}
-
-	deactivated := userAccountControl & accountDisabledBitmapValue // bitwise and.
-	if deactivated != 0 {
-		return fmt.Errorf("user has been deactivated")
-	}
-	return nil
-}
-
-func ValidComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
-	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlComputedAttribute))
-	if err != nil {
-		return err
-	}
-
-	locked := userAccountControl & accountLockedBitmapValue // bitwise and
-	if locked != 0 {
-		return fmt.Errorf("user has been locked")
-	}
-	return nil
 }

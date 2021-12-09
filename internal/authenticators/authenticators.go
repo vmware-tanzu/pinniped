@@ -35,6 +35,7 @@ type UserAuthenticator interface {
 }
 
 type Response struct {
-	User user.Info
-	DN   string
+	User                   user.Info
+	DN                     string
+	ExtraRefreshAttributes map[string]string
 }

@@ -7,8 +7,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"go.pinniped.dev/internal/plog"
 )
 
 //nolint: gochecknoglobals
@@ -17,12 +15,6 @@ var rootCmd = &cobra.Command{
 	Short:        "pinniped",
 	Long:         "pinniped is the client-side binary for use with Pinniped-enabled Kubernetes clusters.",
 	SilenceUsage: true, // do not print usage message when commands fail
-}
-
-//nolint: gochecknoinits
-func init() {
-	// We don't want klog flags showing up in our CLI.
-	plog.RemoveKlogGlobalFlags()
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

@@ -251,13 +251,10 @@ func TestExpirerControllerSync(t *testing.T) {
 				0,
 			)
 
-			opts := &[]metav1.DeleteOptions{}
-			trackDeleteClient := testutil.NewDeleteOptionsRecorder(kubeAPIClient, opts)
-
 			c := NewCertsExpirerController(
 				namespace,
 				certsSecretResourceName,
-				trackDeleteClient,
+				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				test.renewBefore,
@@ -281,7 +278,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			if test.wantDelete {
 				exActions = append(
 					exActions,
-					kubetesting.NewDeleteAction(
+					kubetesting.NewDeleteActionWithOptions(
 						schema.GroupVersionResource{
 							Group:    "",
 							Version:  "v1",
@@ -289,18 +286,12 @@ func TestExpirerControllerSync(t *testing.T) {
 						},
 						namespace,
 						name,
+						testutil.NewPreconditions(testUID, testRV),
 					),
 				)
 			}
 			acActions := kubeAPIClient.Actions()
 			require.Equal(t, exActions, acActions)
-
-			if test.wantDelete {
-				require.Len(t, *opts, 1)
-				require.Equal(t, testutil.NewPreconditions(testUID, testRV), (*opts)[0])
-			} else {
-				require.Len(t, *opts, 0)
-			}
 		})
 	}
 }

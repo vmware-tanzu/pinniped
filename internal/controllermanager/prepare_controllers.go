@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/clock"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
+	"k8s.io/utils/clock"
 
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"

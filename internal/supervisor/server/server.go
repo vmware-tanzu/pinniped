@@ -20,7 +20,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/clock"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -431,7 +431,6 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 func main() error { // return an error instead of klog.Fatal to allow defer statements to run
 	logs.InitLogs()
 	defer logs.FlushLogs()
-	plog.RemoveKlogGlobalFlags() // move this whenever the below code gets refactored to use cobra
 
 	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
 	klog.Infof("Command-line arguments were: %s %s %s", os.Args[0], os.Args[1], os.Args[2])

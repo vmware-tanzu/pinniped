@@ -28,10 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	kubetesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/oidc/clientregistry"
@@ -258,7 +258,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
-	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
+	return context.Background(), client, secrets, New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetime)
 }
 
 // TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession asserts that we can correctly round trip our authorize code session.
@@ -396,7 +396,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// while the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
 	// if it adds a new field that can be fuzzed, this check will fail
 	// thus if AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field)
-	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing)
+	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing, "actual:\n%s", authorizeCodeSessionJSONFromFuzzing)
 }
 
 func TestReadFromSecret(t *testing.T) {

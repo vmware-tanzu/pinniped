@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package testlogger implements a logr.Logger suitable for writing test assertions.
+// Package testlogger wraps logr.Logger to allow for writing test assertions.
 package testlogger
 
 import (
@@ -17,18 +17,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Logger implements logr.Logger in a way that captures logs for test assertions.
+// Logger wraps logr.Logger in a way that captures logs for test assertions.
 type Logger struct {
-	logr.Logger
+	Logger logr.Logger
 	t      *testing.T
 	buffer syncBuffer
 }
 
-// New returns a new test Logger.
+// New returns a new test Logger.  Use this for all new tests.
 func New(t *testing.T) *Logger {
 	res := Logger{t: t}
 	res.Logger = stdr.New(log.New(&res.buffer, "", 0))
 	return &res
+}
+
+// Deprecated: NewLegacy returns a new test Logger.  Use this for old tests if necessary.
+func NewLegacy(t *testing.T) *Logger {
+	res := New(t)
+	res.Logger = newStdLogger(log.New(&res.buffer, "", 0))
+	return res
 }
 
 // Lines returns the lines written to the test logger.

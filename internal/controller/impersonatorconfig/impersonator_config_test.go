@@ -29,12 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
@@ -95,7 +94,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 				caSignerName,
 				nil,
-				testLog,
+				testLog.Logger,
 			)
 			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
@@ -270,8 +269,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
-		var deleteOptions *[]metav1.DeleteOptions
-		var deleteOptionsRecorder kubernetes.Interface
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var pinnipedInformerClient *pinnipedfake.Clientset
 		var pinnipedInformers pinnipedinformers.SharedInformerFactory
@@ -550,7 +547,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			subject = NewImpersonatorConfigController(
 				installedInNamespace,
 				credentialIssuerResourceName,
-				deleteOptionsRecorder,
+				kubeAPIClient,
 				pinnipedAPIClient,
 				pinnipedInformers.Config().V1alpha1().CredentialIssuers(),
 				kubeInformers.Core().V1().Services(),
@@ -562,11 +559,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				tlsSecretName,
 				caSecretName,
 				labels,
-				clock.NewFakeClock(frozenNow),
+				clocktesting.NewFakeClock(frozenNow),
 				impersonatorFunc,
 				caSignerName,
 				signingCertProvider,
-				testLog,
+				testLog.Logger,
 			)
 			controllerlib.TestWrap(t, subject, func(syncer controllerlib.Syncer) controllerlib.Syncer {
 				tlsServingCertDynamicCertProvider = syncer.(*impersonatorConfigController).tlsServingCertDynamicCertProvider
@@ -1032,10 +1029,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal("secrets", deleteAction.GetResource().Resource)
 
 			// validate that we set delete preconditions correctly
-			r.NotEmpty(*deleteOptions)
-			for _, opt := range *deleteOptions {
-				r.Equal(testutil.NewPreconditions("uid-1234", "rv-5678"), opt)
-			}
+			r.Equal(testutil.NewPreconditions("uid-1234", "rv-5678"), deleteAction.GetDeleteOptions())
 		}
 
 		var requireCASecretWasCreated = func(action coretesting.Action) []byte {
@@ -1114,8 +1108,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				kubeinformers.WithNamespace(installedInNamespace),
 			)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
-			deleteOptions = &[]metav1.DeleteOptions{}
-			deleteOptionsRecorder = testutil.NewDeleteOptionsRecorder(kubeAPIClient, deleteOptions)
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			frozenNow = time.Date(2021, time.March, 2, 7, 42, 0, 0, time.Local)
 			signingCertProvider = dynamiccert.NewCA(name)

@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/stdr"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -1571,9 +1569,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.New(t)
-			klog.SetLogger(testLogger)
-			stdr.SetVerbosity(debugLogLevel) // set stdr's global log level to debug so the test logger will send output.
+			testLogger := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			klog.SetLogger(testLogger.Logger)
 
 			tok, err := Login(tt.issuer, tt.clientID,
 				WithContext(context.Background()),
@@ -1581,7 +1578,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 				WithScopes([]string{"test-scope"}),
 				WithSkipBrowserOpen(),
 				tt.opt(t),
-				WithLogger(testLogger),
+				WithLogger(testLogger.Logger),
 			)
 			testLogger.Expect(tt.wantLogs)
 			if tt.wantErr != "" {

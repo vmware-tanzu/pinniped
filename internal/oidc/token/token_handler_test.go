@@ -2971,7 +2971,7 @@ func requireValidStoredRequest(
 
 		// At this time, we don't use any of these optional (per the OIDC spec) fields.
 		require.Empty(t, claims.AuthenticationContextClassReference)
-		require.Empty(t, claims.AuthenticationMethodsReference)
+		require.Empty(t, claims.AuthenticationMethodsReferences)
 		require.Empty(t, claims.CodeHash)
 	}
 

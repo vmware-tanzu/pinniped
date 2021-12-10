@@ -18,11 +18,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
@@ -127,13 +127,11 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			subject                 controllerlib.Controller
 			kubeInformerClient      *kubernetesfake.Clientset
 			kubeClient              *kubernetesfake.Clientset
-			deleteOptions           *[]metav1.DeleteOptions
-			deleteOptionsRecorder   kubernetes.Interface
 			kubeInformers           kubeinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
 			syncContext             *controllerlib.Context
-			fakeClock               *clock.FakeClock
+			fakeClock               *clocktesting.FakeClock
 			frozenNow               time.Time
 		)
 
@@ -144,7 +142,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			subject = GarbageCollectorController(
 				idpCache,
 				fakeClock,
-				deleteOptionsRecorder,
+				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 			)
@@ -172,11 +170,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeClient = kubernetesfake.NewSimpleClientset()
-			deleteOptions = &[]metav1.DeleteOptions{}
-			deleteOptionsRecorder = testutil.NewDeleteOptionsRecorder(kubeClient, deleteOptions)
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			frozenNow = time.Now().UTC()
-			fakeClock = clock.NewFakeClock(frozenNow)
+			fakeClock = clocktesting.NewFakeClock(frozenNow)
 
 			unrelatedSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -252,17 +248,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "first expired secret"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "second expired secret"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "first expired secret", testutil.NewPreconditions("uid-123", "rv-456")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "second expired secret", testutil.NewPreconditions("uid-789", "rv-555")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-456"),
-						testutil.NewPreconditions("uid-789", "rv-555"),
-					},
-					*deleteOptions,
 				)
 				list, err := kubeClient.CoreV1().Secrets(installedInNamespace).List(context.Background(), metav1.ListOptions{})
 				r.NoError(err)
@@ -384,17 +373,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Both authcode session secrets are deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "inactiveOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "inactiveOIDCAuthcodeSession", testutil.NewPreconditions("uid-456", "rv-456")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-						testutil.NewPreconditions("uid-456", "rv-456"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -460,15 +442,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The invalid authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "invalidOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "invalidOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -536,15 +512,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "wrongProviderNameOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "wrongProviderNameOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -612,15 +582,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The authcode session secrets is still deleted because it is expired.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "wrongProviderNameOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "wrongProviderNameOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -767,15 +731,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The authcode session secrets is deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -893,17 +851,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Both session secrets are deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "offlineAccessGrantedOIDCAccessTokenSession"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "offlineAccessNotGrantedOIDCAccessTokenSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "offlineAccessGrantedOIDCAccessTokenSession", testutil.NewPreconditions("uid-123", "rv-123")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "offlineAccessNotGrantedOIDCAccessTokenSession", testutil.NewPreconditions("uid-456", "rv-456")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-						testutil.NewPreconditions("uid-456", "rv-456"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -976,15 +927,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The secret is deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "oidcRefreshSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "oidcRefreshSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -994,8 +939,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Add a secret that will expire in 20 seconds.
 				expiredSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "expired secret",
-						Namespace: installedInNamespace,
+						Name:            "expired secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-747",
+						ResourceVersion: "rv-609",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(20 * time.Second).Format(time.RFC3339),
 						},
@@ -1033,7 +980,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// It should have deleted the expired secret.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "expired secret"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "expired secret", testutil.NewPreconditions("uid-747", "rv-609")),
 					},
 					kubeClient.Actions(),
 				)
@@ -1059,8 +1006,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(malformedSecret))
 				expiredSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "expired secret",
-						Namespace: installedInNamespace,
+						Name:            "expired secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-748",
+						ResourceVersion: "rv-608",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
@@ -1076,7 +1025,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "expired secret"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "expired secret", testutil.NewPreconditions("uid-748", "rv-608")),
 					},
 					kubeClient.Actions(),
 				)
@@ -1091,8 +1040,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			it.Before(func() {
 				erroringSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "erroring secret",
-						Namespace: installedInNamespace,
+						Name:            "erroring secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-111",
+						ResourceVersion: "rv-222",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
@@ -1108,8 +1059,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				})
 				expiredSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "expired secret",
-						Namespace: installedInNamespace,
+						Name:            "expired secret",
+						Namespace:       installedInNamespace,
+						UID:             "uid-333",
+						ResourceVersion: "rv-444",
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
@@ -1125,8 +1078,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "erroring secret"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "expired secret"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "erroring secret", testutil.NewPreconditions("uid-111", "rv-222")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "expired secret", testutil.NewPreconditions("uid-333", "rv-444")),
 					},
 					kubeClient.Actions(),
 				)

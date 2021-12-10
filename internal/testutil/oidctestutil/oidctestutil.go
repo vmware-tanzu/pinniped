@@ -1001,7 +1001,7 @@ func validateAuthcodeStorage(
 	require.Empty(t, actualClaims.CodeHash)
 	require.Empty(t, actualClaims.AccessTokenHash)
 	require.Empty(t, actualClaims.AuthenticationContextClassReference)
-	require.Empty(t, actualClaims.AuthenticationMethodsReference)
+	require.Empty(t, actualClaims.AuthenticationMethodsReferences)
 
 	// Check that the custom Pinniped session data matches.
 	require.Equal(t, wantCustomSessionData, storedSessionFromAuthcode.Custom)

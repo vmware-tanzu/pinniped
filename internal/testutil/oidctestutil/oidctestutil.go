@@ -111,16 +111,16 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
 	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
 		Ctx:              ctx,
-		DN:               userDN,
-		ExpectedUsername: expectedUsername,
-		ExpectedSubject:  expectedSubject,
+		DN:               storedRefreshAttributes.DN,
+		ExpectedUsername: storedRefreshAttributes.Username,
+		ExpectedSubject:  storedRefreshAttributes.Subject,
 	})
 	if u.PerformRefreshErr != nil {
 		return u.PerformRefreshErr

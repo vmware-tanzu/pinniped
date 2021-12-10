@@ -7,8 +7,12 @@ package activedirectoryupstreamwatcher
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/go-ldap/ldap/v3"
+	"github.com/google/uuid"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +56,21 @@ const (
 	// - has a member that matches the DN of the user we successfully logged in as.
 	// - perform nested group search by default.
 	defaultActiveDirectoryGroupSearchFilter = "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))"
+
+	sAMAccountNameAttribute = "sAMAccountName"
+	// PwdLastSetAttribute is the date and time that the password for this account was last changed.
+	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-pwdlastset
+	PwdLastSetAttribute = "pwdLastSet"
+	// UserAccountControlAttribute represents a bitmap of user properties.
+	// https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties
+	UserAccountControlAttribute = "userAccountControl"
+	// UserAccountControlComputedAttribute represents a bitmap of user properties.
+	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-msds-user-account-control-computed
+	UserAccountControlComputedAttribute = "msDS-User-Account-Control-Computed"
+	// 0x0002 ACCOUNTDISABLE in userAccountControl bitmap.
+	accountDisabledBitmapValue = 2
+	// 0x0010 UF_LOCKOUT in msDS-User-Account-Control-Computed bitmap.
+	accountLockedBitmapValue = 16
 )
 
 type activeDirectoryUpstreamGenericLDAPImpl struct {
@@ -316,11 +335,16 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
 		Dialer:                       c.ldapDialer,
-		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": upstreamldap.MicrosoftUUIDFromBinary("objectGUID")},
+		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+			PwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(PwdLastSetAttribute),
+			UserAccountControlAttribute:         ValidUserAccountControl,
+			UserAccountControlComputedAttribute: ValidComputedUserAccountControl,
+		},
 	}
 
 	if spec.GroupSearch.Attributes.GroupName == "" {
-		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){defaultActiveDirectoryGroupNameAttributeName: upstreamldap.GroupSAMAccountNameWithDomainSuffix}
+		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){defaultActiveDirectoryGroupNameAttributeName: GroupSAMAccountNameWithDomainSuffix}
 	}
 
 	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
@@ -352,4 +376,85 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	if err != nil {
 		log.Error(err, "failed to update status")
 	}
+}
+
+func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
+	// validation has already been done so we can just get the attribute...
+	return func(entry *ldap.Entry) (string, error) {
+		binaryUUID := entry.GetRawAttributeValue(attributeName)
+		return microsoftUUIDFromBinary(binaryUUID)
+	}
+}
+
+func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
+	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
+	if err != nil {
+		return "", err
+	}
+	// then swap it because AD stores the first 3 fields little-endian rather than the expected
+	// big-endian.
+	uuidVal[0], uuidVal[1], uuidVal[2], uuidVal[3] = uuidVal[3], uuidVal[2], uuidVal[1], uuidVal[0]
+	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
+	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
+	return uuidVal.String(), nil
+}
+
+func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
+	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
+
+	if len(sAMAccountNameAttributeValues) != 1 {
+		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
+			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
+		)
+	}
+
+	sAMAccountName := sAMAccountNameAttributeValues[0]
+	if len(sAMAccountName) == 0 {
+		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
+			sAMAccountNameAttribute,
+		)
+	}
+
+	distinguishedName := entry.DN
+	domain, err := getDomainFromDistinguishedName(distinguishedName)
+	if err != nil {
+		return "", err
+	}
+	return sAMAccountName + "@" + domain, nil
+}
+
+var domainComponentsRegexp = regexp.MustCompile(",DC=|,dc=")
+
+func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
+	domainComponents := domainComponentsRegexp.Split(distinguishedName, -1)
+	if len(domainComponents) == 1 {
+		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
+	}
+	return strings.Join(domainComponents[1:], "."), nil
+}
+
+func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlAttribute))
+	if err != nil {
+		return err
+	}
+
+	deactivated := userAccountControl & accountDisabledBitmapValue // bitwise and.
+	if deactivated != 0 {
+		return fmt.Errorf("user has been deactivated")
+	}
+	return nil
+}
+
+func ValidComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlComputedAttribute))
+	if err != nil {
+		return err
+	}
+
+	locked := userAccountControl & accountLockedBitmapValue // bitwise and
+	if locked != 0 {
+		return fmt.Errorf("user has been locked")
+	}
+	return nil
 }

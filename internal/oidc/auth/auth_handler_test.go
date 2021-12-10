@@ -269,6 +269,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	happyLDAPUID := "some-ldap-uid"
 	happyLDAPUserDN := "cn=foo,dn=bar"
 	happyLDAPGroups := []string{"group1", "group2", "group3"}
+	happyLDAPExtraRefreshAttribute := "some-refresh-attribute"
+	happyLDAPExtraRefreshValue := "some-refresh-attribute-value"
 
 	parsedUpstreamLDAPURL, err := url.Parse(upstreamLDAPURL)
 	require.NoError(t, err)
@@ -285,6 +287,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					Groups: happyLDAPGroups,
 				},
 				DN: happyLDAPUserDN,
+				ExtraRefreshAttributes: map[string]string{
+					happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue,
+				},
 			}, true, nil
 		}
 		return nil, false, nil
@@ -442,7 +447,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		OIDC:         nil,
 		LDAP:         nil,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
 		},
 	}
 
@@ -452,7 +458,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderType: psession.ProviderTypeLDAP,
 		OIDC:         nil,
 		LDAP: &psession.LDAPSessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
 		},
 		ActiveDirectory: nil,
 	}

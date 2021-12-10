@@ -13,13 +13,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
@@ -39,7 +37,6 @@ const (
 	groupSearchPageSize                     = uint32(250)
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
-	sAMAccountNameAttribute                 = "sAMAccountName"
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -119,6 +116,9 @@ type ProviderConfig struct {
 	// GroupNameMappingOverrides are the mappings between an attribute name and a way to parse it as a group
 	// name when it comes out of LDAP.
 	GroupAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
+
+	// RefreshAttributeChecks are extra checks that attributes in a refresh response are as expected.
+	RefreshAttributeChecks map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -170,9 +170,11 @@ func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
+func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
+	userDN := storedRefreshAttributes.DN
+
 	searchResult, err := p.performRefresh(ctx, userDN)
 	if err != nil {
 		p.traceRefreshFailure(t, err)
@@ -196,9 +198,9 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername,
 	if err != nil {
 		return err
 	}
-	if newUsername != expectedUsername {
+	if newUsername != storedRefreshAttributes.Username {
 		return fmt.Errorf(`searching for user "%s" returned a different username than the previous value. expected: "%s", actual: "%s"`,
-			userDN, expectedUsername, newUsername,
+			userDN, storedRefreshAttributes.Username, newUsername,
 		)
 	}
 
@@ -207,10 +209,15 @@ func (p *Provider) PerformRefresh(ctx context.Context, userDN, expectedUsername,
 		return err
 	}
 	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
-	if newSubject != expectedSubject {
-		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, expectedSubject, newSubject)
+	if newSubject != storedRefreshAttributes.Subject {
+		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, storedRefreshAttributes.Subject, newSubject)
 	}
-
+	for attribute, validateFunc := range p.c.RefreshAttributeChecks {
+		err = validateFunc(userEntry, storedRefreshAttributes)
+		if err != nil {
+			return fmt.Errorf(`validation for attribute "%s" failed during upstream refresh: %w`, attribute, err)
+		}
+	}
 	// we checked that the user still exists and their information is the same, so just return.
 	return nil
 }
@@ -569,6 +576,15 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	}
 	sort.Strings(mappedGroupNames)
 
+	mappedRefreshAttributes := make(map[string]string)
+	for k := range p.c.RefreshAttributeChecks {
+		mappedVal, err := p.getSearchResultAttributeRawValueEncoded(k, userEntry, username)
+		if err != nil {
+			return nil, err
+		}
+		mappedRefreshAttributes[k] = mappedVal
+	}
+
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = bindFunc(conn, userEntry.DN)
 	if err != nil {
@@ -592,7 +608,8 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			UID:    mappedUID,
 			Groups: mappedGroupNames,
 		},
-		DN: userEntry.DN,
+		DN:                     userEntry.DN,
+		ExtraRefreshAttributes: mappedRefreshAttributes,
 	}
 
 	return response, nil
@@ -664,6 +681,9 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 	}
 	if p.c.UserSearch.UIDAttribute != distinguishedNameAttributeName {
 		attributes = append(attributes, p.c.UserSearch.UIDAttribute)
+	}
+	for k := range p.c.RefreshAttributeChecks {
+		attributes = append(attributes, k)
 	}
 	return attributes
 }
@@ -782,57 +802,18 @@ func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
 	)
 }
 
-func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
-	// validation has already been done so we can just get the attribute...
-	return func(entry *ldap.Entry) (string, error) {
-		binaryUUID := entry.GetRawAttributeValue(attributeName)
-		return microsoftUUIDFromBinary(binaryUUID)
+func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.StoredRefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes provider.StoredRefreshAttributes) error {
+		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
+		newValues := entry.GetAttributeValues(attribute)
+
+		if len(newValues) != 1 {
+			return fmt.Errorf(`expected to find 1 value for "%s" attribute, but found %d`, attribute, len(newValues))
+		}
+		encodedNewValue := base64.RawURLEncoding.EncodeToString(entry.GetRawAttributeValue(attribute))
+		if prevAttributeValue != encodedNewValue {
+			return fmt.Errorf(`value for attribute "%s" has changed since initial value at login`, attribute)
+		}
+		return nil
 	}
-}
-
-func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
-	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
-	if err != nil {
-		return "", err
-	}
-	// then swap it because AD stores the first 3 fields little-endian rather than the expected
-	// big-endian.
-	uuidVal[0], uuidVal[1], uuidVal[2], uuidVal[3] = uuidVal[3], uuidVal[2], uuidVal[1], uuidVal[0]
-	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
-	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
-	return uuidVal.String(), nil
-}
-
-func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
-	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
-
-	if len(sAMAccountNameAttributeValues) != 1 {
-		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
-			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
-		)
-	}
-
-	sAMAccountName := sAMAccountNameAttributeValues[0]
-	if len(sAMAccountName) == 0 {
-		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
-			sAMAccountNameAttribute,
-		)
-	}
-
-	distinguishedName := entry.DN
-	domain, err := getDomainFromDistinguishedName(distinguishedName)
-	if err != nil {
-		return "", err
-	}
-	return sAMAccountName + "@" + domain, nil
-}
-
-var domainComponentsRegexp = regexp.MustCompile(",DC=|,dc=")
-
-func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
-	domainComponents := domainComponentsRegexp.Split(distinguishedName, -1)
-	if len(domainComponents) == 1 {
-		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
-	}
-	return strings.Join(domainComponents[1:], "."), nil
 }

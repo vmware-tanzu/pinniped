@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/url"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
@@ -93,7 +94,15 @@ type UpstreamLDAPIdentityProviderI interface {
 	authenticators.UserAuthenticator
 
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
-	PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error
+	PerformRefresh(ctx context.Context, storedRefreshAttributes StoredRefreshAttributes) error
+}
+
+type StoredRefreshAttributes struct {
+	Username             string
+	Subject              string
+	DN                   string
+	AuthTime             time.Time
+	AdditionalAttributes map[string]string
 }
 
 type DynamicUpstreamIDPProvider interface {

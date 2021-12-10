@@ -66,12 +66,14 @@ type OIDCSessionData struct {
 
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.
 type LDAPSessionData struct {
-	UserDN string `json:"userDN"`
+	UserDN                 string            `json:"userDN"`
+	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
 }
 
 // ActiveDirectorySessionData is the additional data needed by Pinniped when the upstream IDP is an Active Directory provider.
 type ActiveDirectorySessionData struct {
-	UserDN string `json:"userDN"`
+	UserDN                 string            `json:"userDN"`
+	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
 }
 
 // NewPinnipedSession returns a new empty session.

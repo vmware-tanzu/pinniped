@@ -33,8 +33,7 @@ building and testing the code, submitting PRs, and other contributor topics.
 ## Community meetings
 
 Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great
-software to the community. Please join us during our online community meetings,
-occurring every first and third Thursday of the month at 9 AM PT / 12 PM ET.
+software to the community. Please join us during our online community meetings, occurring every first and third Thursday of the month at 9 AM PT / 12 PM ET. **Note:** These are currently paused until early 2022 as we wind down 2021!
 Use [this Zoom Link](https://go.pinniped.dev/community/zoom)
 to attend and add any agenda items you wish to discuss
 to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view).

@@ -910,22 +910,37 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("ExtractUpstreamSubjectFromDownstream", func(t *testing.T) {
+	t.Run("ExtractUpstreamSubjectAndIssuerFromDownstream", func(t *testing.T) {
 		tests := []struct {
 			name                string
 			downstreamSubject   string
 			wantUpstreamSubject string
+			wantUpstreamIssuer  string
 			wantErr             string
 		}{
 			{
 				name:                "happy path",
 				downstreamSubject:   "https://some-issuer?sub=some-subject",
 				wantUpstreamSubject: "some-subject",
+				wantUpstreamIssuer:  "https://some-issuer",
+			},
+			{
+				name:                "happy path but sub is empty string", // todo i think this should not be the responsibility of this function, even though it's undesirable behavior...
+				downstreamSubject:   "https://some-issuer?sub=",
+				wantUpstreamSubject: "",
+				wantUpstreamIssuer:  "https://some-issuer",
+			},
+			{
+				name:                "happy path but iss is empty string",
+				downstreamSubject:   "?sub=some-subject",
+				wantUpstreamSubject: "some-subject",
+				wantUpstreamIssuer:  "",
 			},
 			{
 				name:                "subject in a subject",
 				downstreamSubject:   "https://some-other-issuer?sub=https://some-issuer?sub=some-subject",
 				wantUpstreamSubject: "https://some-issuer?sub=some-subject",
+				wantUpstreamIssuer:  "https://some-other-issuer",
 			},
 			{
 				name:              "doesn't contain sub=",
@@ -936,17 +951,17 @@ func TestProviderConfig(t *testing.T) {
 		for _, tt := range tests {
 			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
-				actualUpstreamSubject, err := ExtractUpstreamSubjectFromDownstream(tt.downstreamSubject)
+				actualUpstreamIssuer, actualUpstreamSubject, err := ExtractUpstreamSubjectAndIssuerFromDownstream(tt.downstreamSubject)
 				if tt.wantErr != "" {
 					require.Error(t, err)
 					require.Equal(t, tt.wantErr, err.Error())
 				} else {
 					require.NoError(t, err)
 					require.Equal(t, tt.wantUpstreamSubject, actualUpstreamSubject)
+					require.Equal(t, tt.wantUpstreamIssuer, actualUpstreamIssuer)
 				}
 			})
 		}
-
 	})
 
 	t.Run("ExchangeAuthcodeAndValidateTokens", func(t *testing.T) {

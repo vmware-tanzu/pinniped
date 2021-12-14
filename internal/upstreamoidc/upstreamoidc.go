@@ -238,11 +238,12 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 	}
 }
 
-func ExtractUpstreamSubjectFromDownstream(downstreamSubject string) (string, error) {
+func ExtractUpstreamSubjectAndIssuerFromDownstream(downstreamSubject string) (string, string, error) {
 	if !strings.Contains(downstreamSubject, "?sub=") {
-		return "", errors.New("downstream subject did not contain original upstream subject")
+		return "", "", errors.New("downstream subject did not contain original upstream subject")
 	}
-	return strings.SplitN(downstreamSubject, "?sub=", 2)[1], nil
+	split := strings.SplitN(downstreamSubject, "?sub=", 2)
+	return split[0], split[1], nil
 }
 
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,

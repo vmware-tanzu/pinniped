@@ -141,7 +141,7 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	if len(validatedTokens.IDToken.Claims) != 0 {
 		newSub := claims["sub"]
 		oldDownstreamSubject := session.Fosite.Claims.Subject
-		oldSub, err := upstreamoidc.ExtractUpstreamSubjectFromDownstream(oldDownstreamSubject)
+		oldIss, oldSub, err := upstreamoidc.ExtractUpstreamSubjectAndIssuerFromDownstream(oldDownstreamSubject)
 		if err != nil {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf("Upstream refresh failed.").
 				WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
@@ -152,14 +152,17 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 		}
 		usernameClaim := p.GetUsernameClaim()
 		newUsername := claims[usernameClaim]
+		oldUsername := session.Fosite.Claims.Extra["username"]
 		// its possible this won't be returned.
 		// but if it is, verify that it hasn't changed.
-		if newUsername != nil {
-			oldUsername := session.Fosite.Claims.Extra["username"]
-			if oldUsername != newUsername {
-				return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-					"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-			}
+		if newUsername != nil && oldUsername != newUsername {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+				"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		}
+		newIssuer := claims["iss"]
+		if newIssuer != nil && oldIss != newIssuer {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+				"Upstream refresh failed.").WithWrap(errors.New("issuer in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
 	}
 

@@ -910,6 +910,45 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("ExtractUpstreamSubjectFromDownstream", func(t *testing.T) {
+		tests := []struct {
+			name                string
+			downstreamSubject   string
+			wantUpstreamSubject string
+			wantErr             string
+		}{
+			{
+				name:                "happy path",
+				downstreamSubject:   "https://some-issuer?sub=some-subject",
+				wantUpstreamSubject: "some-subject",
+			},
+			{
+				name:                "subject in a subject",
+				downstreamSubject:   "https://some-other-issuer?sub=https://some-issuer?sub=some-subject",
+				wantUpstreamSubject: "https://some-issuer?sub=some-subject",
+			},
+			{
+				name:              "doesn't contain sub=",
+				downstreamSubject: "something-invalid",
+				wantErr:           "downstream subject did not contain original upstream subject",
+			},
+		}
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				actualUpstreamSubject, err := ExtractUpstreamSubjectFromDownstream(tt.downstreamSubject)
+				if tt.wantErr != "" {
+					require.Error(t, err)
+					require.Equal(t, tt.wantErr, err.Error())
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tt.wantUpstreamSubject, actualUpstreamSubject)
+				}
+			})
+		}
+
+	})
+
 	t.Run("ExchangeAuthcodeAndValidateTokens", func(t *testing.T) {
 		tests := []struct {
 			name        string

@@ -242,7 +242,7 @@ func ExtractUpstreamSubjectFromDownstream(downstreamSubject string) (string, err
 	if !strings.Contains(downstreamSubject, "?sub=") {
 		return "", errors.New("downstream subject did not contain original upstream subject")
 	}
-	return strings.SplitN(downstreamSubject, "?sub=", 2)[1], nil // TODO test for ?sub= occurring twice (imagine if you ran the supervisor with another supervisor as the upstream idp...)
+	return strings.SplitN(downstreamSubject, "?sub=", 2)[1], nil
 }
 
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,

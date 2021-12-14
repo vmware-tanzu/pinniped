@@ -87,10 +87,8 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
-				customSessionData := pinnipedSession.Custom
-				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
-				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
-				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "wrong-subject"
 			},
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
@@ -124,10 +122,8 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
-				customSessionData := pinnipedSession.Custom
-				require.Equal(t, psession.ProviderTypeOIDC, customSessionData.ProviderType)
-				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
-				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
 			},
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },

@@ -6,6 +6,7 @@ package token
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/ory/fosite"
@@ -142,12 +143,23 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 		oldDownstreamSubject := session.Fosite.Claims.Subject
 		oldSub, err := upstreamoidc.ExtractUpstreamSubjectFromDownstream(oldDownstreamSubject)
 		if err != nil {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Could not verify upstream refresh subject against previous value").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+			return errorsx.WithStack(errUpstreamRefreshError.WithHintf("Upstream refresh failed.").
+				WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
 		if oldSub != newSub {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Subject in upstream refresh does not match previous value").WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+				"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		}
+		usernameClaim := p.GetUsernameClaim()
+		newUsername := claims[usernameClaim]
+		// its possible this won't be returned.
+		// but if it is, verify that it hasn't changed.
+		if newUsername != nil {
+			oldUsername := session.Fosite.Claims.Extra["username"]
+			if oldUsername != newUsername {
+				return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+					"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+			}
 		}
 	}
 

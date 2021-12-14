@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -113,7 +114,7 @@ func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.C
 	// There is no nonce to validate for a resource owner password credentials grant because it skips using
 	// the authorize endpoint and goes straight to the token endpoint.
 	const skipNonceValidation nonce.Nonce = ""
-	return p.ValidateToken(ctx, tok, skipNonceValidation)
+	return p.ValidateToken(ctx, tok, skipNonceValidation, true)
 }
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
@@ -127,10 +128,9 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 		return nil, err
 	}
 
-	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
+	return p.ValidateToken(ctx, tok, expectedIDTokenNonce, true)
 }
 
-// TODO this is reused between the client and the supervisor... don't change it.
 func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 	// Use the provided HTTP client to benefit from its CA, proxy, and other settings.
 	httpClientContext := coreosoidc.ClientContext(ctx, p.Client)
@@ -238,88 +238,54 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 	}
 }
 
-func (p *ProviderConfig) ValidateRefresh(ctx context.Context, tok *oauth2.Token, storedAttributes provider.StoredRefreshAttributes) error {
-	idTok, hasIDTok := tok.Extra("id_token").(string)
-	var validatedClaims = make(map[string]interface{})
-	if hasIDTok {
-		coreosConfig := &coreosoidc.Config{ClientID: p.GetClientID()}
-		coreosClientContext := coreosoidc.ClientContext(ctx, p.Client)
-		verifier := p.Provider.Verifier(coreosConfig)
-		validated, err := verifier.Verify(coreosClientContext, idTok)
-		if err != nil {
-			return httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-		}
-		if err := validated.Claims(&validatedClaims); err != nil {
-			return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
-		}
-		maybeLogClaims("claims from ID token", p.Name, validatedClaims)
-	}
-
-	originalUpstreamSubject, err := extractUpstreamSubjectFromDownstream(storedAttributes.Subject)
-	if err != nil {
-		return httperr.Wrap(http.StatusInternalServerError, "could not parse stored subject", err)
-	}
-
-	// it's okay to not have an id token. It's okay to have an id token with a subject.
-	// but if we have an id token without a subject that's a problem.
-	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
-	switch {
-	case len(idTokenSubject) > 0:
-		// TODO url escape
-		if url.QueryEscape(idTokenSubject) != originalUpstreamSubject {
-			return httperr.Newf(http.StatusInternalServerError, "subject from id token did not match previous stored value. New subject: %s. Old subject: %s", idTokenSubject, originalUpstreamSubject)
-		}
-	case len(validatedClaims) == 0:
-		validatedClaims[oidc.IDTokenSubjectClaim] = originalUpstreamSubject
-	default:
-		return httperr.New(http.StatusInternalServerError, "id token did not have a subject")
-	}
-
-	if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func extractUpstreamSubjectFromDownstream(downstreamSubject string) (string, error) {
+func ExtractUpstreamSubjectFromDownstream(downstreamSubject string) (string, error) {
 	if !strings.Contains(downstreamSubject, "?sub=") {
 		return "", errors.New("downstream subject did not contain original upstream subject")
 	}
-	return strings.Split(downstreamSubject, "?sub=")[1], nil
+	return strings.SplitN(downstreamSubject, "?sub=", 2)[1], nil // TODO test for ?sub= occurring twice (imagine if you ran the supervisor with another supervisor as the upstream idp...)
 }
 
 // ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,
 // if the provider offers the userinfo endpoint.
-func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+// TODO check:
+//  - whether the userinfo response must exist (maybe just based on whether there is a refresh token???
+//  - -> for the next story: userinfo has to exist but only if there isn't a refresh token.
+func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
+	var validatedClaims = make(map[string]interface{})
+
 	idTok, hasIDTok := tok.Extra("id_token").(string)
-	if !hasIDTok {
-		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
-	}
-	validated, err := p.Provider.Verifier(&coreosoidc.Config{ClientID: p.GetClientID()}).Verify(coreosoidc.ClientContext(ctx, p.Client), idTok)
-	if err != nil {
-		return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-	}
-	if validated.AccessTokenHash != "" {
-		if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
+	var idTokenExpiry time.Time
+	// if we require the id token, make sure we have it.
+	// also, if it exists but wasn't required, still make sure it passes these checks.
+	// nolint:nestif
+	if hasIDTok || requireIDToken {
+		if !hasIDTok {
+			return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
+		}
+		validated, err := p.Provider.Verifier(&coreosoidc.Config{ClientID: p.GetClientID()}).Verify(coreosoidc.ClientContext(ctx, p.Client), idTok)
+		if err != nil {
 			return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 		}
-	}
-	if expectedIDTokenNonce != "" {
-		if err := expectedIDTokenNonce.Validate(validated); err != nil {
-			return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+		if validated.AccessTokenHash != "" {
+			if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
+				return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+			}
 		}
+		if expectedIDTokenNonce != "" {
+			if err := expectedIDTokenNonce.Validate(validated); err != nil {
+				return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+			}
+		}
+		if err := validated.Claims(&validatedClaims); err != nil {
+			return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
+		}
+		maybeLogClaims("claims from ID token", p.Name, validatedClaims)
+		idTokenExpiry = validated.Expiry
 	}
-
-	var validatedClaims map[string]interface{}
-	if err := validated.Claims(&validatedClaims); err != nil {
-		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
-	}
-	maybeLogClaims("claims from ID token", p.Name, validatedClaims)
-
 	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
-	if len(idTokenSubject) > 0 {
-		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims); err != nil {
+
+	if len(idTokenSubject) > 0 || !requireIDToken {
+		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims, requireIDToken); err != nil {
 			return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 		}
 	}
@@ -335,18 +301,13 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 		},
 		IDToken: &oidctypes.IDToken{
 			Token:  idTok,
-			Expiry: metav1.NewTime(validated.Expiry),
+			Expiry: metav1.NewTime(idTokenExpiry),
 			Claims: validatedClaims,
 		},
 	}, nil
 }
 
-func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
-	// TODO separate this.
-	//  extract: fetching userinfo
-	//  - validate some userinfo? subject stuff: for refresh subjects must match but also match stored subject
-	//  - extract: merging claims
-	//  - deciding when to do each of those things
+func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}, requireIDToken bool) error {
 	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
 
 	userInfo, err := p.fetchUserInfo(ctx, tok)
@@ -357,8 +318,9 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 		return nil
 	}
 
-	// TODO if there is no idTokenSubject, defer to checking the stored claims.
 	// The sub (subject) Claim MUST always be returned in the UserInfo Response.
+	// However there may not be an id token. If there is an ID token, we must
+	// check it against the userinfo's subject.
 	//
 	// NOTE: Due to the possibility of token substitution attacks (see Section 16.11), the UserInfo Response is not
 	// guaranteed to be about the End-User identified by the sub (subject) element of the ID Token. The sub Claim in
@@ -366,13 +328,28 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	// the UserInfo Response values MUST NOT be used.
 	//
 	// http://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
-	if (len(idTokenSubject) > 0) && (len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject) {
+	checkIDToken := requireIDToken || len(idTokenSubject) > 0
+	if checkIDToken && (len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject) {
 		return httperr.Newf(http.StatusUnprocessableEntity, "userinfo 'sub' claim (%s) did not match id_token 'sub' claim (%s)", userInfo.Subject, idTokenSubject)
 	}
+
+	if !checkIDToken {
+		claims["sub"] = userInfo.Subject // do this so other validations can check this subject later
+	}
+
+	idTokenIssuer := claims["iss"]
 
 	// merge existing claims with user info claims
 	if err := userInfo.Claims(&claims); err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal user info claims", err)
+	}
+	//  The OIDC spec for user info response does not make any guarantees about the iss claim's existence or validity:
+	//  "If signed, the UserInfo Response SHOULD contain the Claims iss (issuer) and aud (audience) as members. The iss value SHOULD be the OP's Issuer Identifier URL."
+	//  See https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	//  So we just ignore it and use it the version from the id token, which has stronger guarantees.
+	delete(claims, "iss")
+	if idTokenIssuer != nil {
+		claims["iss"] = idTokenIssuer
 	}
 
 	maybeLogClaims("claims from ID token and userinfo", p.Name, claims)

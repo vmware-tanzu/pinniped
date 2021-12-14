@@ -16,6 +16,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/internal/upstreamoidc"
 )
 
 var (
@@ -88,7 +89,7 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, customSessionData, providerCache)
+		return upstreamOIDCRefresh(ctx, session, providerCache)
 	case psession.ProviderTypeLDAP:
 		return upstreamLDAPRefresh(ctx, providerCache, session)
 	case psession.ProviderTypeActiveDirectory:
@@ -98,7 +99,8 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	}
 }
 
-func upstreamOIDCRefresh(ctx context.Context, s *psession.CustomSessionData, providerCache oidc.UpstreamIdentityProvidersLister) error {
+func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister) error {
+	s := session.Custom
 	if s.OIDC == nil || s.OIDC.UpstreamRefreshToken == "" {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
@@ -122,17 +124,31 @@ func upstreamOIDCRefresh(ctx context.Context, s *psession.CustomSessionData, pro
 	// "the response body is the Token Response of Section 3.1.3.3 except that it might not contain an id_token."
 	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
 	_, hasIDTok := refreshedTokens.Extra("id_token").(string)
-	if hasIDTok {
-		// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
-		// least some providers do not include one, so we skip the nonce validation here (but not other validations).
-		_, err = p.ValidateToken(ctx, refreshedTokens, "")
+
+	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
+	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
+	validatedTokens, err := p.ValidateToken(ctx, refreshedTokens, "", hasIDTok)
+	if err != nil {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	}
+
+	claims := validatedTokens.IDToken.Claims
+	// if we have any claims at all, we better have a subject, and it better match the previous value.
+	// but it's possible that we don't because both returning a new refresh token on refresh and having a userinfo
+	// endpoint are optional.
+	if len(validatedTokens.IDToken.Claims) != 0 {
+		newSub := claims["sub"]
+		oldDownstreamSubject := session.Fosite.Claims.Subject
+		oldSub, err := upstreamoidc.ExtractUpstreamSubjectFromDownstream(oldDownstreamSubject)
 		if err != nil {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Upstream refresh returned an invalid ID token.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+				"Could not verify upstream refresh subject against previous value").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
-	} else {
-		plog.Debug("upstream refresh request did not return a new ID token",
-			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+		if oldSub != newSub {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+				"Subject in upstream refresh does not match previous value").WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		}
 	}
 
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in

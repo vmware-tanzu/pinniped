@@ -16,8 +16,6 @@ import (
 	"time"
 	"unsafe"
 
-	"go.pinniped.dev/internal/oidc/provider"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -591,82 +589,292 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("ValidateRefresh", func(t *testing.T) {
+	t.Run("ValidateToken", func(t *testing.T) {
+		expiryTime := time.Now().Add(42 * time.Second)
 		testTokenWithoutIDToken := &oauth2.Token{
 			AccessToken: "test-access-token",
 			// the library sets the original refresh token into the result, even though the server did not return that
 			RefreshToken: "test-initial-refresh-token",
 			TokenType:    "test-token-type",
-			Expiry:       time.Now().Add(42 * time.Second),
+			Expiry:       expiryTime,
 		}
+		// generated from jwt.io
+		// sub: some-subject
+		// iss: some-issuer
+		// nonce: some-nonce
+		goodIDToken := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJub25jZSI6InNvbWUtbm9uY2UiLCJpc3MiOiJzb21lLWlzc3VlciJ9.eGvzOihLUqzn3M4k6fHsToedgy7Fu89_Xu_u4mwMgRlIyRWZqmEMV76RVLnZd9Ihm9j_VpvrpirIkaj4JM9eRNfLX1n328cmBivBwnTKAzHuTm17dUKO5EvdTmQzmwnN0WZ8nWk4GfR7RzcvE1V8G9tIiWD8FkO3Dr-NR_zTun3N37onAazVLCmF0SDtATDfUH1ETqviHEp8xGx5HD5mv5T3HEjOuer5gxTEnfncef0LurBH3po-C0tXHKu74PD8x88CMJ1DLsRdCalnctwa850slKPkBSTP-ssh0JVg7cdMXoosVpwiXtKYaBkrhu8VS018aFP-cBbW0mYwsHmt3g" //nolint:gosec
 
 		tests := []struct {
 			name             string
-			token            *oauth2.Token
-			storedAttributes provider.StoredRefreshAttributes
+			tok              *oauth2.Token
+			nonce            nonce.Nonce
+			requireIDToken   bool
 			userInfo         *oidc.UserInfo
 			rawClaims        []byte
 			userInfoErr      error
 			wantErr          string
+			wantMergedTokens *oidctypes.Token
 		}{
 			{
-				name:             "id, access and refresh token returned from refresh",
-				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlzcyI6InNvbWUtaXNzdWVyIiwiaWF0IjoxNTE2MjM5MDIyfQ.qVMIsmrMLiMW7kJUNO4RpiBnkd6MYKdXXMMb6UWVXL0zXkalb1tP2DO3Yp73ZfWqCNdNEa1qqSJIR9F46cnAp04pZmOvVqTWCmaXaxvklRb_QzdlKi-3QNg7wEJ50a11vhUTJxLYrkH9pJpPILzd8Kx0yp43iEJbBG3nFVZFOSQOh7wCGUF4QkNLRMT9buq8DiypKPmjksVmObkF3AbvQ1IvaA_UPBmFvL-pun-TjUBR37xT7JI64wbczJJclThaqTcK6bQcbiBG4jonckYIIryoL8UUBSbxQGGz7lQK5_77Q4PTXAE3c5hrg-c6RK52YNBm-B5Gx7vAeBavrQJaPQ"}),
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
-				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
-				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+				name:           "token with id, access and refresh tokens, valid nonce, and no userinfo",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+						},
+					},
+				},
 			},
 			{
-				name:             "id token exists but has no subject",
-				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlhdCI6MTUxNjIzOTAyMn0.FmkkY7MCnhD98F5Aupq_YdW54pH90O60O9SwjxWHZb6_k6LoJcjZEMyxba1Fg5tlGLOSqH7BffZOfMUZ5YqVeA7ZIZ9fhAiudGdJqKz5nI394xzR-EejGqBI0fTAuxa_0VsLSC5mV0hTctK01kvemPwMLhIUn_HHr0-khugPFZH8zlYxAFmBpe9YxWK5w1JcTWuSMjRn6_b1RDSgxpff-LcmvVz6akcnlb2j8Od7S9JinsSqKjb7zBjQmcVGT6BGdN43tsBJMEOzil6xpvsH_KIToWlyqmvCQFp_udcKWuUNNLdypGW4eMXvPF5GINMDhki0GZDoKLkPnHVk_mZFXw"}),
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
-				userInfo:         &oidc.UserInfo{Subject: "some-subject"},
-				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
-				wantErr:          "id token did not have a subject",
+				name:           "id token not required but is provided",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: false,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
 			},
 			{
-				name:             "id token doesn't exist but userinfo does",
-				token:            testTokenWithoutIDToken,
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
-				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
-				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
+				name:           "token with id, access and refresh tokens, valid nonce, and userinfo with a value that doesn't exist in the id token",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
 			},
 			{
-				name:             "subject in id token doesn't match stored subject",
-				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlzcyI6InNvbWUtaXNzdWVyIiwiaWF0IjoxNTE2MjM5MDIyfQ.qVMIsmrMLiMW7kJUNO4RpiBnkd6MYKdXXMMb6UWVXL0zXkalb1tP2DO3Yp73ZfWqCNdNEa1qqSJIR9F46cnAp04pZmOvVqTWCmaXaxvklRb_QzdlKi-3QNg7wEJ50a11vhUTJxLYrkH9pJpPILzd8Kx0yp43iEJbBG3nFVZFOSQOh7wCGUF4QkNLRMT9buq8DiypKPmjksVmObkF3AbvQ1IvaA_UPBmFvL-pun-TjUBR37xT7JI64wbczJJclThaqTcK6bQcbiBG4jonckYIIryoL8UUBSbxQGGz7lQK5_77Q4PTXAE3c5hrg-c6RK52YNBm-B5Gx7vAeBavrQJaPQ"}),
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-other-subject"},
-				wantErr:          "subject from id token did not match previous stored value. New subject: some-subject. Old subject: some-other-subject",
+				name:           "claims from userinfo override id token claims",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA"}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA",
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer", // takes the issuer from the ID token, since the userinfo one is unreliable.
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
 			},
 			{
-				name:             "malformed stored subject",
-				token:            testTokenWithoutIDToken,
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "wrong-format"},
-				wantErr:          "could not parse stored subject: downstream subject did not contain original upstream subject",
+				name:           "token with id, access and refresh tokens and valid nonce, but userinfo has a different issuer",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer", // takes the issuer from the ID token, since the userinfo one is unreliable.
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
 			},
 			{
-				name:             "subject in user info doesn't match stored subject",
-				token:            testTokenWithoutIDToken,
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-other-subject"},
-				userInfo:         forceUserInfoWithClaims("some-subject", `{"foo": "bar"}`),
-				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
-				wantErr:          "userinfo 'sub' claim (some-subject) did not match id_token 'sub' claim (some-other-subject)", // TODO is this a good enough error message?...
+				name:           "token with no id token but valid userinfo",
+				tok:            testTokenWithoutIDToken,
+				nonce:          "",
+				requireIDToken: false,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: "",
+						Claims: map[string]interface{}{
+							"sub":  "some-subject",
+							"name": "Pinny TheSeal",
+						},
+					},
+				},
 			},
 			{
-				name:             "subject in id token doesn't match userinfo",
-				token:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiUGlubnkgVGhlU2VhbCIsImlhdCI6MTUxNjIzOTAyMn0.P_97A2ONBt-YV0JHM3DDugNhG-codkK8fLU4EOdlGHcVBmWVbbW1g7-U0jjB9gcvUt24TS5z0TxEnKNUG8LiqS-8FbHGjv8DN1gAz4huBxNqmMYwzGsFNKDBcUMpv9DNFT-oIrxSf3pPYFlg7N0YKzbMPRwVaL1iQmzeQDCQieV3mDCWXpxpdLa1Mfj_NRsEe4027xOZYJn14pn83h92rG0VcoV2e39LuuEir-tRtDniY4WFIMPudNJdC0NwoMoRIQuHStCIN5AkbHPuhGQivqoObWX6RgNU18qb6CcCi86WhG45uHO77gfz5TbGsyVhr5LRBEZP5HPqsq5D6853zQ"}),
-				storedAttributes: provider.StoredRefreshAttributes{Subject: "some-issuer?sub=some-subject"},
-				userInfo:         &oidc.UserInfo{Subject: "some-other-subject"},
-				rawClaims:        []byte(`{"userinfo_endpoint": "not-empty"}`),
-				wantErr:          "userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
+				name:           "token with neither id token nor userinfo",
+				tok:            testTokenWithoutIDToken,
+				nonce:          "",
+				requireIDToken: false,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{},
+					},
+				},
 			},
 			{
-				name:      "id token with format that isn't a jwt returned from refresh",
-				token:     testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "not-jwt-format"}),
-				userInfo:  &oidc.UserInfo{Subject: "test-user-2"},
-				rawClaims: []byte(`{"userinfo_endpoint": "not-empty"}`),
-				wantErr:   "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+				name:           "token with id, access and refresh tokens, valid nonce, and userinfo subject that doesn't match",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "could not fetch user info claims: userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
+			},
+			{
+				name:           "id token not required but is provided, and subjects don't match",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-nonce",
+				requireIDToken: false,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "could not fetch user info claims: userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
+			},
+			{
+				name:           "invalid id token",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "not-an-id-token"}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+			},
+			{
+				name:           "invalid nonce",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:          "some-other-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "received ID token with invalid nonce: invalid nonce (expected \"some-other-nonce\", got \"some-nonce\")",
+			},
+			{
+				name:           "expected to have id token, but doesn't",
+				tok:            testTokenWithoutIDToken,
+				nonce:          "some-other-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "received response missing ID token",
+			},
+			{
+				name:           "mismatched access token hash",
+				tok:            testTokenWithoutIDToken,
+				nonce:          "some-other-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantErr:        "received response missing ID token",
+			},
+			{
+				name:           "id token missing subject, skip userinfo check",
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.aIhrhikAnQ4Mb1g6RAT08qqflT2LLLi2yj4F2S4zud8nYad4tfEd2ITVJ4Njdjf70ubqyzZ6XxojtC4OqaWbDaQOcd95sd3PW58SYrf4NMvEStFkcMG0HMhJEZLVGnuJQstuq3G9h5Z5bFCkx4mFNo5ho_isBWyHpk-uF14duXXlIDB10SnyZ9dRbcmu-3mMOq0g4oCUPEDiHWkv-Rf70Mk0harL2xvcpxlSMLK4glDfiiki5gl6IReIo4rTVosXAqv3JmjLDeVLtJQRG6F8YcIlDCIfUEUfk0GeYacBVjoDIO570ywVJy1LGvyUuvgXNQUjq2JgzCfb8HWGp7iJdQ"}),
+				nonce:          "some-nonce",
+				requireIDToken: true,
+				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.aIhrhikAnQ4Mb1g6RAT08qqflT2LLLi2yj4F2S4zud8nYad4tfEd2ITVJ4Njdjf70ubqyzZ6XxojtC4OqaWbDaQOcd95sd3PW58SYrf4NMvEStFkcMG0HMhJEZLVGnuJQstuq3G9h5Z5bFCkx4mFNo5ho_isBWyHpk-uF14duXXlIDB10SnyZ9dRbcmu-3mMOq0g4oCUPEDiHWkv-Rf70Mk0harL2xvcpxlSMLK4glDfiiki5gl6IReIo4rTVosXAqv3JmjLDeVLtJQRG6F8YcIlDCIfUEUfk0GeYacBVjoDIO570ywVJy1LGvyUuvgXNQUjq2JgzCfb8HWGp7iJdQ",
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"name":  "John Doe",
+							"nonce": "some-nonce",
+						},
+					},
+				},
 			},
 		}
+
 		for _, tt := range tests {
 			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
@@ -690,13 +898,13 @@ func TestProviderConfig(t *testing.T) {
 						userInfoErr: tt.userInfoErr,
 					},
 				}
-
-				err := p.ValidateRefresh(context.Background(), tt.token, tt.storedAttributes)
+				gotTok, err := p.ValidateToken(context.Background(), tt.tok, tt.nonce, tt.requireIDToken)
 				if tt.wantErr != "" {
 					require.Error(t, err)
-					require.Equal(t, err.Error(), tt.wantErr)
+					require.Equal(t, tt.wantErr, err.Error())
 				} else {
 					require.NoError(t, err)
+					require.Equal(t, tt.wantMergedTokens, gotTok)
 				}
 			})
 		}

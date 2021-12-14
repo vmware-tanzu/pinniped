@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
+
 	"github.com/ory/fosite"
 	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
@@ -1046,7 +1048,13 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "some-subject",
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1062,7 +1070,11 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "happy path refresh grant without openid scope granted (no id token returned)",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
@@ -1089,7 +1101,11 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "happy path refresh grant when the upstream refresh does not return a new ID token",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1098,14 +1114,20 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
-					nil, // expect ValidateToken is *not* called
+					refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), // expect ValidateToken is called
 				),
 			},
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh does not return a new refresh token",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDTokenWithoutRefreshToken()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "some-subject",
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDTokenWithoutRefreshToken()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1121,7 +1143,13 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "when the refresh request adds a new scope to the list of requested scopes then it is ignored",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "some-subject",
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1140,7 +1168,13 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is granted anyway",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "some-subject",
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience") },
@@ -1170,7 +1204,13 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "when the refresh request does not include a scope param then it gets all the same scopes as the original authorization request",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
-				upstreamOIDCIdentityProviderBuilder().WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "some-subject",
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1545,7 +1585,39 @@ func TestRefreshGrant(t *testing.T) {
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
-							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token."
+							"error_description": "Error during upstream refresh. Upstream refresh returned an invalid ID token or UserInfo response."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh returns an ID token with a different subject than the original",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+				// This is the current format of the errors returned by the production code version of ValidateToken, see ValidateToken in upstreamoidc.go
+				WithValidatedTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": "something-different",
+						},
+					},
+				}).
+				Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens()),
+					wantStatus:                        http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Subject in upstream refresh does not match previous value"
 						}
 					`),
 				},

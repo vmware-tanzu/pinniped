@@ -74,7 +74,7 @@ type UpstreamOIDCIdentityProviderI interface {
 	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
 	// tokens, or an error.
-	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
+	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error)
 }
 
 type UpstreamLDAPIdentityProviderI interface {
@@ -101,13 +101,6 @@ type StoredRefreshAttributes struct {
 	Subject              string
 	DN                   string
 	AdditionalAttributes map[string]string
-}
-
-type StoredRefreshAttributes struct {
-	Username string
-	Subject  string
-	DN       string
-	AuthTime time.Time
 }
 
 type DynamicUpstreamIDPProvider interface {

@@ -8,8 +8,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
-	"reflect"
-	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -155,7 +153,7 @@ func createSecureKubeConfig(kubeConfig *restclient.Config) (*restclient.Config, 
 			}
 		}()
 
-		tlsConfig, err := netTLSClientConfig(rt)
+		tlsConfig, err := net.TLSClientConfig(rt)
 		if err != nil {
 			// this assumes none of our production code calls Wrap or messes with WrapTransport.
 			// this is a reasonable assumption because all such code should live in this package
@@ -205,7 +203,7 @@ func AssertSecureConfig(kubeConfig *restclient.Config) error {
 }
 
 func AssertSecureTransport(rt http.RoundTripper) error {
-	tlsConfig, err := netTLSClientConfig(rt)
+	tlsConfig, err := net.TLSClientConfig(rt)
 	if err != nil {
 		return fmt.Errorf("failed to get TLS config: %w", err)
 	}
@@ -222,33 +220,6 @@ func AssertSecureTransport(rt http.RoundTripper) error {
 	}
 
 	return nil
-}
-
-func netTLSClientConfig(rt http.RoundTripper) (*tls.Config, error) {
-	tlsConfig, err := net.TLSClientConfig(rt)
-	if err == nil {
-		return tlsConfig, nil
-	}
-
-	// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106014
-	if err.Error() == "unknown transport type: *exec.roundTripper" {
-		return net.TLSClientConfig(extractRTUnsafe(rt))
-	}
-
-	return nil, err
-}
-
-func extractRTUnsafe(rt http.RoundTripper) (out http.RoundTripper) {
-	for wrapper, ok := rt.(net.RoundTripperWrapper); ok; wrapper, ok = rt.(net.RoundTripperWrapper) {
-		// keep peeling the wrappers until we get to the exec.roundTripper
-		rt = wrapper.WrappedRoundTripper()
-	}
-
-	// this is some dark magic to read a private field
-	baseField := reflect.ValueOf(rt).Elem().FieldByName("base")
-	basePointer := (*http.RoundTripper)(unsafe.Pointer(baseField.UnsafeAddr()))
-
-	return *basePointer
 }
 
 func Secure(config *restclient.Config) (kubernetes.Interface, *restclient.Config, error) {

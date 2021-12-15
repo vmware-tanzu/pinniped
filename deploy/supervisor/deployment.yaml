@@ -2,8 +2,17 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
-#@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel")
+#@ load("@ytt:yaml", "yaml")
+#@ load("helpers.lib.yaml",
+#@   "defaultLabel",
+#@   "labels",
+#@   "deploymentPodLabel",
+#@   "namespace",
+#@   "defaultResourceName",
+#@   "defaultResourceNameWithSuffix",
+#@   "getPinnipedConfigMapData",
+#@   "hasUnixNetworkEndpoint",
+#@  )
 #@ load("@ytt:template", "template")
 
 #@ if not data.values.into_namespace:
@@ -30,14 +39,7 @@ metadata:
   labels: #@ labels()
 data:
   #@yaml/text-templated-strings
-  pinniped.yaml: |
-    apiGroupSuffix: (@= data.values.api_group_suffix @)
-    names:
-      defaultTLSCertificateSecret: (@= defaultResourceNameWithSuffix("default-tls-certificate") @)
-    labels: (@= json.encode(labels()).rstrip() @)
-    (@ if data.values.log_level: @)
-    logLevel: (@= getAndValidateLogLevel() @)
-    (@ end @)
+  pinniped.yaml: #@ yaml.encode(getPinnipedConfigMapData())
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1
@@ -107,6 +109,11 @@ spec:
             - name: podinfo
               mountPath: /etc/podinfo
               readOnly: true
+            #@ if hasUnixNetworkEndpoint():
+            - name: socket
+              mountPath: /pinniped_socket
+              readOnly: false  #! writable to allow for socket use
+            #@ end
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -124,8 +131,8 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8080
-              scheme: HTTP
+              port: 8443
+              scheme: HTTPS
             initialDelaySeconds: 2
             timeoutSeconds: 15
             periodSeconds: 10
@@ -133,8 +140,8 @@ spec:
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8080
-              scheme: HTTP
+              port: 8443
+              scheme: HTTPS
             initialDelaySeconds: 2
             timeoutSeconds: 3
             periodSeconds: 10
@@ -155,6 +162,10 @@ spec:
               - path: "name"
                 fieldRef:
                   fieldPath: metadata.name
+        #@ if hasUnixNetworkEndpoint():
+        - name: socket
+          emptyDir: {}
+        #@ end
       #! This will help make sure our multiple pods run on different nodes, making
       #! our deployment "more" "HA".
       affinity:

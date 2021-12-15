@@ -101,7 +101,7 @@ type Config struct {
 func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(c.APIGroupSuffix)
 
-	dref, deployment, err := deploymentref.New(c.ServerInstallationInfo)
+	dref, deployment, _, err := deploymentref.New(c.ServerInstallationInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}

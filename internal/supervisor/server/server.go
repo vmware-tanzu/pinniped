@@ -13,11 +13,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/joshlf/go-acl"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
@@ -61,7 +63,13 @@ const (
 )
 
 func startServer(ctx context.Context, shutdown *sync.WaitGroup, l net.Listener, handler http.Handler) {
-	server := http.Server{Handler: genericapifilters.WithWarningRecorder(handler)}
+	handler = genericapifilters.WithWarningRecorder(handler)
+	handler = withBootstrapPaths(handler, "/healthz") // only health checks are allowed for bootstrap connections
+
+	server := http.Server{
+		Handler:     handler,
+		ConnContext: withBootstrapConnCtx,
+	}
 
 	shutdown.Add(1)
 	go func() {
@@ -306,10 +314,11 @@ func startControllers(ctx context.Context, shutdown *sync.WaitGroup, buildContro
 	return nil
 }
 
+//nolint:funlen
 func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	serverInstallationNamespace := podInfo.Namespace
 
-	dref, supervisorDeployment, err := deploymentref.New(podInfo)
+	dref, supervisorDeployment, supervisorPod, err := deploymentref.New(podInfo)
 	if err != nil {
 		return fmt.Errorf("cannot create deployment ref: %w", err)
 	}
@@ -387,45 +396,112 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		return err
 	}
 
-	//nolint: gosec // Intentionally binding to all network interfaces.
-	httpListener, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return fmt.Errorf("cannot create listener: %w", err)
-	}
-	defer func() { _ = httpListener.Close() }()
-	startServer(ctx, shutdown, httpListener, oidProvidersManager)
+	if e := cfg.Endpoints.HTTP; e.Network != supervisor.NetworkDisabled {
+		finishSetupPerms := maybeSetupUnixPerms(e, supervisorPod)
 
-	c := ptls.Default(nil)
-	c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
-		defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
-		plog.Debug("GetCertificate called for port 8443",
-			"info.ServerName", info.ServerName,
-			"foundSNICert", cert != nil,
-			"foundDefaultCert", defaultCert != nil,
-		)
-		if cert == nil {
-			cert = defaultCert
+		httpListener, err := net.Listen(e.Network, e.Address)
+		if err != nil {
+			return fmt.Errorf("cannot create http listener with network %q and address %q: %w", e.Network, e.Address, err)
 		}
-		return cert, nil
-	}
-	//nolint: gosec // Intentionally binding to all network interfaces.
-	httpsListener, err := tls.Listen("tcp", ":8443", c)
-	if err != nil {
-		return fmt.Errorf("cannot create listener: %w", err)
-	}
-	defer func() { _ = httpsListener.Close() }()
-	startServer(ctx, shutdown, httpsListener, oidProvidersManager)
 
-	plog.Debug("supervisor is ready",
-		"httpAddress", httpListener.Addr().String(),
-		"httpsAddress", httpsListener.Addr().String(),
-	)
+		if err := finishSetupPerms(); err != nil {
+			return fmt.Errorf("cannot setup http listener permissions for network %q and address %q: %w", e.Network, e.Address, err)
+		}
+
+		defer func() { _ = httpListener.Close() }()
+		startServer(ctx, shutdown, httpListener, oidProvidersManager)
+		plog.Debug("supervisor http listener started", "address", httpListener.Addr().String())
+	}
+
+	if e := cfg.Endpoints.HTTPS; e.Network != supervisor.NetworkDisabled { //nolint:nestif
+		finishSetupPerms := maybeSetupUnixPerms(e, supervisorPod)
+
+		bootstrapCert, err := getBootstrapCert() // generate this in-memory once per process startup
+		if err != nil {
+			return fmt.Errorf("https listener bootstrap error: %w", err)
+		}
+
+		c := ptls.Default(nil)
+		c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+
+			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
+
+			if plog.Enabled(plog.LevelTrace) { // minor CPU optimization as this is generally just noise
+				host, port, _ := net.SplitHostPort(info.Conn.LocalAddr().String()) // error is safe to ignore here
+
+				plog.Trace("GetCertificate called",
+					"info.ServerName", info.ServerName,
+					"foundSNICert", cert != nil,
+					"foundDefaultCert", defaultCert != nil,
+					"host", host,
+					"port", port,
+				)
+			}
+
+			if cert == nil {
+				cert = defaultCert
+			}
+
+			if cert == nil {
+				setIsBootstrapConn(info.Context()) // make this connection only work for bootstrap requests
+				cert = bootstrapCert
+			}
+
+			return cert, nil
+		}
+
+		httpsListener, err := tls.Listen(e.Network, e.Address, c)
+		if err != nil {
+			return fmt.Errorf("cannot create https listener with network %q and address %q: %w", e.Network, e.Address, err)
+		}
+
+		if err := finishSetupPerms(); err != nil {
+			return fmt.Errorf("cannot setup https listener permissions for network %q and address %q: %w", e.Network, e.Address, err)
+		}
+
+		defer func() { _ = httpsListener.Close() }()
+		startServer(ctx, shutdown, httpsListener, oidProvidersManager)
+		plog.Debug("supervisor https listener started", "address", httpsListener.Addr().String())
+	}
+
+	plog.Debug("supervisor started")
 	defer plog.Debug("supervisor exiting")
 
 	shutdown.Wait()
 
 	return nil
+}
+
+func maybeSetupUnixPerms(endpoint *supervisor.Endpoint, pod *corev1.Pod) func() error {
+	if endpoint.Network != supervisor.NetworkUnix {
+		return func() error { return nil }
+	}
+
+	_ = os.Remove(endpoint.Address) // empty dir volumes persist across container crashes
+
+	return func() error {
+		selfUser := int64(os.Getuid())
+		var entries []acl.Entry
+		for _, container := range pod.Spec.Containers {
+			if container.SecurityContext == nil ||
+				container.SecurityContext.RunAsUser == nil ||
+				*container.SecurityContext.RunAsUser == selfUser {
+				continue
+			}
+
+			plog.Debug("adding write permission",
+				"address", endpoint.Address,
+				"uid", *container.SecurityContext.RunAsUser,
+			)
+			entries = append(entries, acl.Entry{
+				Tag:       acl.TagUser,
+				Qualifier: strconv.FormatInt(*container.SecurityContext.RunAsUser, 10),
+				Perms:     2, // write permission
+			})
+		}
+		return acl.Add(endpoint.Address, entries...) // allow all containers in the pod to write to the socket
+	}
 }
 
 func main() error { // return an error instead of klog.Fatal to allow defer statements to run

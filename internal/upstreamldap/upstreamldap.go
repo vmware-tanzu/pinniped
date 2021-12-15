@@ -184,14 +184,14 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 	// if any more or less than one entry, error.
 	// we don't need to worry about logging this because we know it's a dn.
 	if len(searchResult.Entries) != 1 {
-		return fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return fmt.Errorf(`searching for user %q resulted in %d search results, but expected 1 result`,
 			userDN, len(searchResult.Entries),
 		)
 	}
 
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return fmt.Errorf(`searching for user with original DN "%s" resulted in search result without DN`, userDN)
+		return fmt.Errorf(`searching for user with original DN %q resulted in search result without DN`, userDN)
 	}
 
 	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
@@ -199,7 +199,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		return err
 	}
 	if newUsername != storedRefreshAttributes.Username {
-		return fmt.Errorf(`searching for user "%s" returned a different username than the previous value. expected: "%s", actual: "%s"`,
+		return fmt.Errorf(`searching for user %q returned a different username than the previous value. expected: %q, actual: %q`,
 			userDN, storedRefreshAttributes.Username, newUsername,
 		)
 	}
@@ -210,12 +210,12 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 	}
 	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
 	if newSubject != storedRefreshAttributes.Subject {
-		return fmt.Errorf(`searching for user "%s" produced a different subject than the previous value. expected: "%s", actual: "%s"`, userDN, storedRefreshAttributes.Subject, newSubject)
+		return fmt.Errorf(`searching for user %q produced a different subject than the previous value. expected: %q, actual: %q`, userDN, storedRefreshAttributes.Subject, newSubject)
 	}
 	for attribute, validateFunc := range p.c.RefreshAttributeChecks {
 		err = validateFunc(userEntry, storedRefreshAttributes)
 		if err != nil {
-			return fmt.Errorf(`validation for attribute "%s" failed during upstream refresh: %w`, attribute, err)
+			return fmt.Errorf(`validation for attribute %q failed during upstream refresh: %w`, attribute, err)
 		}
 	}
 	// we checked that the user still exists and their information is the same, so just return.
@@ -227,19 +227,19 @@ func (p *Provider) performRefresh(ctx context.Context, userDN string) (*ldap.Sea
 
 	conn, err := p.dial(ctx)
 	if err != nil {
-		return nil, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+		return nil, fmt.Errorf(`error dialing host %q: %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
-		return nil, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+		return nil, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
 
 	searchResult, err := conn.Search(search)
 
 	if err != nil {
-		return nil, fmt.Errorf(`error searching for user "%s": %w`, userDN, err)
+		return nil, fmt.Errorf(`error searching for user %q: %w`, userDN, err)
 	}
 	return searchResult, nil
 }
@@ -369,13 +369,13 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 
 	conn, err := p.dial(ctx)
 	if err != nil {
-		return fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+		return fmt.Errorf(`error dialing host %q: %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
-		return fmt.Errorf(`error binding as "%s": %w`, p.c.BindUsername, err)
+		return fmt.Errorf(`error binding as %q: %w`, p.c.BindUsername, err)
 	}
 
 	return nil
@@ -420,14 +420,14 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 	conn, err := p.dial(ctx)
 	if err != nil {
 		p.traceAuthFailure(t, err)
-		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+		return nil, false, fmt.Errorf(`error dialing host %q: %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
 		p.traceAuthFailure(t, err)
-		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+		return nil, false, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
 
 	response, err := p.searchAndBindUser(conn, username, bindFunc)
@@ -455,7 +455,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 		groupAttributeName = distinguishedNameAttributeName
 	}
 
-	groups := []string{}
+	var groups []string
 entries:
 	for _, groupEntry := range searchResult.Entries {
 		if len(groupEntry.DN) == 0 {
@@ -495,14 +495,14 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	conn, err := p.dial(ctx)
 	if err != nil {
 		p.traceSearchBaseDiscoveryFailure(t, err)
-		return "", fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+		return "", fmt.Errorf(`error dialing host %q: %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
 		p.traceSearchBaseDiscoveryFailure(t, err)
-		return "", fmt.Errorf(`error binding as "%s" before querying for defaultNamingContext: %w`, p.c.BindUsername, err)
+		return "", fmt.Errorf(`error binding as %q before querying for defaultNamingContext: %w`, p.c.BindUsername, err)
 	}
 
 	searchResult, err := conn.Search(p.defaultNamingContextRequest())
@@ -546,13 +546,13 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	// At this point, we have matched at least one entry, so we can be confident that the username is not actually
 	// someone's password mistakenly entered into the username field, so we can log it without concern.
 	if len(searchResult.Entries) > 1 {
-		return nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return nil, fmt.Errorf(`searching for user %q resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+		return nil, fmt.Errorf(`searching for user %q resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
@@ -567,7 +567,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		return nil, err
 	}
 
-	mappedGroupNames := []string{}
+	var mappedGroupNames []string
 	if len(p.c.GroupSearch.Base) > 0 {
 		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
 		if err != nil {
@@ -594,7 +594,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
 			return nil, nil
 		}
-		return nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+		return nil, fmt.Errorf(`error binding for user %q using provided password against DN %q: %w`, username, userEntry.DN, err)
 	}
 
 	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
@@ -675,7 +675,7 @@ func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
 }
 
 func (p *Provider) userSearchRequestedAttributes() []string {
-	attributes := []string{}
+	attributes := make([]string, 0, len(p.c.RefreshAttributeChecks)+2)
 	if p.c.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
 		attributes = append(attributes, p.c.UserSearch.UsernameAttribute)
 	}
@@ -736,14 +736,14 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 	attributeValues := entry.GetRawAttributeValues(attributeName)
 
 	if len(attributeValues) != 1 {
-		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
+		return "", fmt.Errorf(`found %d values for attribute %q while searching for user %q, but expected 1 result`,
 			len(attributeValues), attributeName, username,
 		)
 	}
 
 	attributeValue := attributeValues[0]
 	if len(attributeValue) == 0 {
-		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
+		return "", fmt.Errorf(`found empty value for attribute %q while searching for user %q, but expected value to be non-empty`,
 			attributeName, username,
 		)
 	}
@@ -763,14 +763,14 @@ func (p *Provider) getSearchResultAttributeValue(attributeName string, entry *ld
 	attributeValues := entry.GetAttributeValues(attributeName)
 
 	if len(attributeValues) != 1 {
-		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
+		return "", fmt.Errorf(`found %d values for attribute %q while searching for user %q, but expected 1 result`,
 			len(attributeValues), attributeName, username,
 		)
 	}
 
 	attributeValue := attributeValues[0]
 	if len(attributeValue) == 0 {
-		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
+		return "", fmt.Errorf(`found empty value for attribute %q while searching for user %q, but expected value to be non-empty`,
 			attributeName, username,
 		)
 	}
@@ -805,14 +805,14 @@ func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
 func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.StoredRefreshAttributes) error {
 	return func(entry *ldap.Entry, storedAttributes provider.StoredRefreshAttributes) error {
 		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
-		newValues := entry.GetAttributeValues(attribute)
+		newValues := entry.GetRawAttributeValues(attribute)
 
 		if len(newValues) != 1 {
-			return fmt.Errorf(`expected to find 1 value for "%s" attribute, but found %d`, attribute, len(newValues))
+			return fmt.Errorf(`expected to find 1 value for %q attribute, but found %d`, attribute, len(newValues))
 		}
-		encodedNewValue := base64.RawURLEncoding.EncodeToString(entry.GetRawAttributeValue(attribute))
+		encodedNewValue := base64.RawURLEncoding.EncodeToString(newValues[0])
 		if prevAttributeValue != encodedNewValue {
-			return fmt.Errorf(`value for attribute "%s" has changed since initial value at login`, attribute)
+			return fmt.Errorf(`value for attribute %q has changed since initial value at login`, attribute)
 		}
 		return nil
 	}

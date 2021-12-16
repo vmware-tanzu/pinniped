@@ -2,6 +2,21 @@ module go.pinniped.dev
 
 go 1.17
 
+// Unfortuntely, having any indirect dependency on github.com/oleiade/reflections@v1.0.0
+// seems to cause Dependabot to stop scanning our dependencies due to a checksum error for the package.
+// The cause of the checksum error is described in https://github.com/oleiade/reflections/issues/14.
+//
+// According to `go mod graph`, this dependency is (currently) coming from:
+// go.pinniped.dev -> github.com/ory/x@v0.0.212 -> github.com/ory/analytics-go/v4@v4.0.0 -> github.com/ory/x@v0.0.110 -> github.com/ory/fosite@v0.29.0 -> github.com/oleiade/reflections@v1.0.0
+// So the issue is that older versions of ory/x had a direct dependency on an old version of Fosite.
+// Newer versions of ory/x do not depend on fosite anymore. We can use a replace directive until none
+// of our indirect dependencies pull in any old versions of ory/x anymore.
+//
+// Whenever we upgrade fosite and ory/x, we can try removing this replace directive and running
+// `go mod tidy` to see if github.com/oleiade/reflections@v1.0.0 still appears in our go.sum.
+// As long as it does, we probably need to keep this replace directive.
+replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.0.0
@@ -14,7 +29,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/google/gofuzz v1.2.0
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
@@ -34,6 +49,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20210402161424-2e8d93401602
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
+	golang.org/x/text v0.3.6
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver v0.22.2
@@ -63,13 +79,13 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/coreos/go-oidc v2.1.0+incompatible // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
-	github.com/dgraph-io/ristretto v0.0.3 // indirect
+	github.com/dgraph-io/ristretto v0.1.0 // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.11.0+incompatible // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
@@ -80,6 +96,7 @@ require (
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
@@ -102,7 +119,7 @@ require (
 	github.com/ory/go-acc v0.2.6 // indirect
 	github.com/ory/go-convenience v0.1.0 // indirect
 	github.com/ory/viper v1.7.5 // indirect
-	github.com/pborman/uuid v1.2.0 // indirect
+	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021 // indirect
@@ -134,7 +151,6 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
-	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	golang.org/x/tools v0.1.2 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect

@@ -176,8 +176,6 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	ValidateTokenFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 
-	ValidateRefreshFunc func(ctx context.Context, tok *oauth2.Token, storedAttributes provider.StoredRefreshAttributes) error
-
 	exchangeAuthcodeAndValidateTokensCallCount         int
 	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
 	passwordCredentialsGrantAndValidateTokensCallCount int
@@ -188,8 +186,6 @@ type TestUpstreamOIDCIdentityProvider struct {
 	revokeRefreshTokenArgs                             []*RevokeRefreshTokenArgs
 	validateTokenCallCount                             int
 	validateTokenArgs                                  []*ValidateTokenArgs
-	validateRefreshCallCount                           int
-	validateRefreshArgs                                []*ValidateRefreshArgs
 }
 
 var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
@@ -288,19 +284,6 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, r
 	return u.PerformRefreshFunc(ctx, refreshToken)
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateRefresh(ctx context.Context, tok *oauth2.Token, storedAttributes provider.StoredRefreshAttributes) error {
-	if u.validateRefreshArgs == nil {
-		u.validateRefreshArgs = make([]*ValidateRefreshArgs, 0)
-	}
-	u.validateRefreshCallCount++
-	u.validateRefreshArgs = append(u.validateRefreshArgs, &ValidateRefreshArgs{
-		Ctx:              ctx,
-		Tok:              tok,
-		StoredAttributes: storedAttributes,
-	})
-	return u.ValidateRefreshFunc(ctx, tok, storedAttributes)
-}
-
 func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
 	if u.revokeRefreshTokenArgs == nil {
 		u.revokeRefreshTokenArgs = make([]*RevokeRefreshTokenArgs, 0)
@@ -335,7 +318,7 @@ func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenArgs(call int) *Rev
 	return u.revokeRefreshTokenArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
 	if u.validateTokenArgs == nil {
 		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
 	}
@@ -556,10 +539,10 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
 		}
 	}
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to ValidateToken() by all OIDC upstreams",
+		"should have been exactly one call to ValidateTokenAndMergeWithUserInfo() by all OIDC upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"ValidateToken() was called on the wrong OIDC upstream",
+		"ValidateTokenAndMergeWithUserInfo() was called on the wrong OIDC upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
@@ -571,7 +554,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenCallCount
 	}
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to ValidateToken()",
+		"expected exactly zero calls to ValidateTokenAndMergeWithUserInfo()",
 	)
 }
 

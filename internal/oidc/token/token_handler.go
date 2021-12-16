@@ -128,7 +128,7 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
 	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
-	validatedTokens, err := p.ValidateToken(ctx, refreshedTokens, "", hasIDTok)
+	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, refreshedTokens, "", hasIDTok)
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))

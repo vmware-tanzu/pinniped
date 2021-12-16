@@ -97,7 +97,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 	if err != nil {
 		return "", "", err
 	}
-	subject := DownstreamSubjectFromUpstreamOIDC(upstreamIssuer, upstreamSubject)
+	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuer, upstreamSubject)
 
 	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaimName == "" {
@@ -176,7 +176,7 @@ func DownstreamLDAPSubject(uid string, ldapURL url.URL) string {
 	return ldapURL.String()
 }
 
-func DownstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
+func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
 }
 

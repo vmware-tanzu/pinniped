@@ -14,11 +14,12 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	oauth2 "golang.org/x/oauth2"
+	types "k8s.io/apimachinery/pkg/types"
+
 	nonce "go.pinniped.dev/pkg/oidcclient/nonce"
 	oidctypes "go.pinniped.dev/pkg/oidcclient/oidctypes"
 	pkce "go.pinniped.dev/pkg/oidcclient/pkce"
-	oauth2 "golang.org/x/oauth2"
-	types "k8s.io/apimachinery/pkg/types"
 )
 
 // MockUpstreamOIDCIdentityProviderI is a mock of UpstreamOIDCIdentityProviderI interface.
@@ -230,9 +231,9 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeRefreshToken(arg0
 }
 
 // ValidateToken mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) ValidateToken(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3 bool) (*oidctypes.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3 bool) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateToken", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -241,5 +242,5 @@ func (m *MockUpstreamOIDCIdentityProviderI) ValidateToken(arg0 context.Context, 
 // ValidateToken indicates an expected call of ValidateToken.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateToken(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateToken), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), arg0, arg1, arg2, arg3)
 }

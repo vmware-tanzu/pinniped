@@ -982,7 +982,6 @@ func TestRefreshGrant(t *testing.T) {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
 		// Should always try to perform an upstream refresh.
 		want.wantUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
-		// Should only try to ValidateToken when there was an id token returned by the upstream refresh.
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken)
 		}
@@ -1137,7 +1136,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
-					refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), // expect ValidateToken is called
+					refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), // expect ValidateTokenAndMergeWithUserInfo is called
 				),
 			},
 		},
@@ -1592,7 +1591,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "when the upstream refresh returns an invalid ID token during the refresh request",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
-				// This is the current format of the errors returned by the production code version of ValidateToken, see ValidateToken in upstreamoidc.go
+				// This is the current format of the errors returned by the production code version of ValidateTokenAndMergeWithUserInfo, see ValidateTokenAndMergeWithUserInfo in upstreamoidc.go
 				WithValidateTokenError(httperr.Wrap(http.StatusBadRequest, "some validate error", errors.New("some validate cause"))).
 				Build()),
 			authcodeExchange: authcodeExchangeInputs{
@@ -1618,7 +1617,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "when the upstream refresh returns an ID token with a different subject than the original",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
-				// This is the current format of the errors returned by the production code version of ValidateToken, see ValidateToken in upstreamoidc.go
+				// This is the current format of the errors returned by the production code version of ValidateTokenAndMergeWithUserInfo, see ValidateTokenAndMergeWithUserInfo in upstreamoidc.go
 				WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{

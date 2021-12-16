@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamoidc
@@ -589,7 +589,7 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("ValidateToken", func(t *testing.T) {
+	t.Run("ValidateTokenAndMergeWithUserInfo", func(t *testing.T) {
 		expiryTime := time.Now().Add(42 * time.Second)
 		testTokenWithoutIDToken := &oauth2.Token{
 			AccessToken: "test-access-token",
@@ -646,7 +646,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: false,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -673,7 +673,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -700,7 +700,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -727,7 +727,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer", "sub": "some-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -754,7 +754,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "",
 				requireIDToken: false,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "iss": "some-other-issuer", "sub": "some-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -799,7 +799,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal", "sub": "some-other-subject"}`),
 				wantErr:        "could not fetch user info claims: userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
 			},
 			{
@@ -808,7 +808,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: false,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal", "sub": "some-other-subject"}`),
 				wantErr:        "could not fetch user info claims: userinfo 'sub' claim (some-other-subject) did not match id_token 'sub' claim (some-subject)",
 			},
 			{
@@ -817,7 +817,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal", "sub": "some-other-subject"}`),
 				wantErr:        "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
 			},
 			{
@@ -826,7 +826,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-other-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal", "sub": "some-other-subject"}`),
 				wantErr:        "received ID token with invalid nonce: invalid nonce (expected \"some-other-nonce\", got \"some-nonce\")",
 			},
 			{
@@ -835,7 +835,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-other-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
 				wantErr:        "received response missing ID token",
 			},
 			{
@@ -844,7 +844,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-other-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
 				wantErr:        "received response missing ID token",
 			},
 			{
@@ -853,7 +853,7 @@ func TestProviderConfig(t *testing.T) {
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
-				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal"}`),
+				userInfo:       forceUserInfoWithClaims("some-other-subject", `{"name": "Pinny TheSeal", "sub": "some-other-subject"}`),
 				wantMergedTokens: &oidctypes.Token{
 					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
@@ -898,7 +898,7 @@ func TestProviderConfig(t *testing.T) {
 						userInfoErr: tt.userInfoErr,
 					},
 				}
-				gotTok, err := p.ValidateToken(context.Background(), tt.tok, tt.nonce, tt.requireIDToken)
+				gotTok, err := p.ValidateTokenAndMergeWithUserInfo(context.Background(), tt.tok, tt.nonce, tt.requireIDToken)
 				if tt.wantErr != "" {
 					require.Error(t, err)
 					require.Equal(t, tt.wantErr, err.Error())
@@ -925,22 +925,25 @@ func TestProviderConfig(t *testing.T) {
 				wantUpstreamIssuer:  "https://some-issuer",
 			},
 			{
-				name:                "happy path but sub is empty string", // todo i think this should not be the responsibility of this function, even though it's undesirable behavior...
-				downstreamSubject:   "https://some-issuer?sub=",
-				wantUpstreamSubject: "",
-				wantUpstreamIssuer:  "https://some-issuer",
-			},
-			{
-				name:                "happy path but iss is empty string",
-				downstreamSubject:   "?sub=some-subject",
-				wantUpstreamSubject: "some-subject",
-				wantUpstreamIssuer:  "",
-			},
-			{
 				name:                "subject in a subject",
 				downstreamSubject:   "https://some-other-issuer?sub=https://some-issuer?sub=some-subject",
 				wantUpstreamSubject: "https://some-issuer?sub=some-subject",
 				wantUpstreamIssuer:  "https://some-other-issuer",
+			},
+			{
+				name:              "sub is empty string",
+				downstreamSubject: "https://some-issuer?sub=",
+				wantErr:           "downstream subject was malformed",
+			},
+			{
+				name:              "iss is empty string",
+				downstreamSubject: "?sub=some-subject",
+				wantErr:           "downstream subject was malformed",
+			},
+			{
+				name:              "empty string",
+				downstreamSubject: "",
+				wantErr:           "downstream subject did not contain original upstream subject",
 			},
 			{
 				name:              "doesn't contain sub=",

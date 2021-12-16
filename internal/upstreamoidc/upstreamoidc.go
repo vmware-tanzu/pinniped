@@ -114,7 +114,7 @@ func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.C
 	// There is no nonce to validate for a resource owner password credentials grant because it skips using
 	// the authorize endpoint and goes straight to the token endpoint.
 	const skipNonceValidation nonce.Nonce = ""
-	return p.ValidateToken(ctx, tok, skipNonceValidation, true)
+	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, skipNonceValidation, true)
 }
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
@@ -128,7 +128,7 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 		return nil, err
 	}
 
-	return p.ValidateToken(ctx, tok, expectedIDTokenNonce, true)
+	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, expectedIDTokenNonce, true)
 }
 
 func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
@@ -243,15 +243,17 @@ func ExtractUpstreamSubjectAndIssuerFromDownstream(downstreamSubject string) (st
 		return "", "", errors.New("downstream subject did not contain original upstream subject")
 	}
 	split := strings.SplitN(downstreamSubject, "?sub=", 2)
+	iss := split[0]
+	sub := split[1]
+	if iss == "" || sub == "" {
+		return "", "", errors.New("downstream subject was malformed")
+	}
 	return split[0], split[1], nil
 }
 
-// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response,
+// ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response,
 // if the provider offers the userinfo endpoint.
-// TODO check:
-//  - whether the userinfo response must exist (maybe just based on whether there is a refresh token???
-//  - -> for the next story: userinfo has to exist but only if there isn't a refresh token.
-func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
+func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
 	var validatedClaims = make(map[string]interface{})
 
 	idTok, hasIDTok := tok.Extra("id_token").(string)
@@ -281,7 +283,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 			return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
 		}
 		maybeLogClaims("claims from ID token", p.Name, validatedClaims)
-		idTokenExpiry = validated.Expiry
+		idTokenExpiry = validated.Expiry // keep track of the id token expiry if we have an id token. Otherwise, it'll just be the zero value.
 	}
 	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
 
@@ -320,31 +322,27 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	}
 
 	// The sub (subject) Claim MUST always be returned in the UserInfo Response.
-	// However there may not be an id token. If there is an ID token, we must
-	// check it against the userinfo's subject.
-	//
 	// NOTE: Due to the possibility of token substitution attacks (see Section 16.11), the UserInfo Response is not
 	// guaranteed to be about the End-User identified by the sub (subject) element of the ID Token. The sub Claim in
 	// the UserInfo Response MUST be verified to exactly match the sub Claim in the ID Token; if they do not match,
 	// the UserInfo Response values MUST NOT be used.
 	//
 	// http://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	// If there is no ID token and it is not required, we must assume that the caller is performing other checks
+	// to ensure the subject is correct.
 	checkIDToken := requireIDToken || len(idTokenSubject) > 0
 	if checkIDToken && (len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject) {
 		return httperr.Newf(http.StatusUnprocessableEntity, "userinfo 'sub' claim (%s) did not match id_token 'sub' claim (%s)", userInfo.Subject, idTokenSubject)
 	}
 
-	if !checkIDToken {
-		claims["sub"] = userInfo.Subject // do this so other validations can check this subject later
-	}
-
+	// keep track of the issuer from the ID token
 	idTokenIssuer := claims["iss"]
 
 	// merge existing claims with user info claims
 	if err := userInfo.Claims(&claims); err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal user info claims", err)
 	}
-	//  The OIDC spec for user info response does not make any guarantees about the iss claim's existence or validity:
+	//  The OIDC spec for the UserInfo response does not make any guarantees about the iss claim's existence or validity:
 	//  "If signed, the UserInfo Response SHOULD contain the Claims iss (issuer) and aud (audience) as members. The iss value SHOULD be the OP's Issuer Identifier URL."
 	//  See https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
 	//  So we just ignore it and use it the version from the id token, which has stronger guarantees.

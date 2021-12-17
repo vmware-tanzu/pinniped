@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
+	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -712,8 +713,8 @@ func TestImpersonator(t *testing.T) {
 					http.NotFound(w, r)
 					return
 
-				case "/apis/flowcontrol.apiserver.k8s.io/v1beta1/prioritylevelconfigurations",
-					"/apis/flowcontrol.apiserver.k8s.io/v1beta1/flowschemas":
+				case "/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
+					"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas":
 					// ignore requests related to priority and fairness logic
 					require.Equal(t, http.MethodGet, r.Method)
 					http.NotFound(w, r)
@@ -1125,7 +1126,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					Groups: testGroups,
 					Extra:  testExtra,
 				}, nil, "")
-				ctx := request.WithAuditEvent(req.Context(), nil)
+				ctx := audit.WithAuditContext(req.Context(), nil)
 				req = req.WithContext(ctx)
 				return req
 			}(),
@@ -1880,7 +1881,7 @@ func newRequest(t *testing.T, h http.Header, userInfo user.Info, event *auditint
 	if event != nil {
 		ae = event
 	}
-	ctx = request.WithAuditEvent(ctx, ae)
+	ctx = audit.WithAuditContext(ctx, &audit.AuditContext{Event: ae})
 
 	reqInfo := &request.RequestInfo{
 		IsResourceRequest: false,

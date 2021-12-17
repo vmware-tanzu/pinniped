@@ -16,10 +16,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
@@ -199,5 +199,5 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, pkce.PKCERequestStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
-	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
+	return context.Background(), client, secrets, New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetime)
 }

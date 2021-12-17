@@ -10,6 +10,7 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/felixge/httpsnoop"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -89,7 +90,7 @@ func handleAuthRequestForLDAPUpstream(
 	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
 	idpType psession.ProviderType,
 ) error {
-	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
 	if !created {
 		return nil
 	}
@@ -106,7 +107,7 @@ func handleAuthRequestForLDAPUpstream(
 	}
 	if !authenticated {
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."))
+			fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."), true)
 	}
 
 	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
@@ -143,7 +144,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	oauthHelper fosite.OAuth2Provider,
 	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
 ) error {
-	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
 	if !created {
 		return nil
 	}
@@ -157,7 +158,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		// Return a user-friendly error for this case which is entirely within our control.
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHint(
-				"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."))
+				"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."), true)
 	}
 
 	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
@@ -170,7 +171,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
 		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithDebug(err.Error())) // WithDebug hides the error from the client
+			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
 	}
 
 	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
@@ -180,14 +181,14 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			"scopes", oidcUpstream.GetScopes())
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHint(
-				"Refresh token not returned by upstream provider during password grant."))
+				"Refresh token not returned by upstream provider during password grant."), true)
 	}
 
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()),
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 	}
 
@@ -214,7 +215,7 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) error {
-	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
 	if !created {
 		return nil
 	}
@@ -231,7 +232,7 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 		},
 	})
 	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
 	}
 
 	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
@@ -274,7 +275,7 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 
 	promptParam := r.Form.Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired)
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
 	}
 
 	for key, val := range oidcUpstream.GetAdditionalAuthcodeParams() {
@@ -295,13 +296,13 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 			encodedStateParamValue,
 			authCodeOptions...,
 		),
-		302,
+		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
 	)
 
 	return nil
 }
 
-func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error) error {
+func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) error {
 	if plog.Enabled(plog.LevelTrace) {
 		// When trace level logging is enabled, include the stack trace in the log message.
 		keysAndValues := oidc.FositeErrorForLog(err)
@@ -313,6 +314,9 @@ func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provide
 		plog.Trace("authorize response error", keysAndValues...)
 	} else {
 		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+	}
+	if isBrowserless {
+		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
 	}
 	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
@@ -333,12 +337,36 @@ func makeDownstreamSessionAndReturnAuthcodeRedirect(
 
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, true)
 	}
 
+	w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
 	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
 
 	return nil
+}
+
+func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) http.ResponseWriter {
+	// rewrite http.StatusSeeOther to http.StatusFound for backwards compatibility with old pinniped CLIs.
+	// we can drop this in a few releases once we feel enough time has passed for users to update.
+	//
+	// WriteAuthorizeResponse/WriteAuthorizeError calls used to result in http.StatusFound until
+	// https://github.com/ory/fosite/pull/636 changed it to http.StatusSeeOther to address
+	// https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
+	// Safari has the bad behavior in the case of http.StatusFound and not just http.StatusTemporaryRedirect.
+	//
+	// in the browserless flows, the OAuth client is the pinniped CLI and it already has access to the user's
+	// password.  Thus there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
+	return httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(delegate httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(code int) {
+				if code == http.StatusSeeOther {
+					code = http.StatusFound
+				}
+				delegate(code)
+			}
+		},
+	})
 }
 
 func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
@@ -346,16 +374,16 @@ func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseW
 	password := r.Header.Get(supervisoroidc.AuthorizePasswordHeaderName)
 	if username == "" || password == "" {
 		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
+			fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."), true)
 		return "", "", false
 	}
 	return username, password, true
 }
 
-func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider) (fosite.AuthorizeRequester, bool) {
+func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, isBrowserless bool) (fosite.AuthorizeRequester, bool) {
 	authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 	if err != nil {
-		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester, err)
+		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
 		return nil, false
 	}
 

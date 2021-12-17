@@ -20,11 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/cache"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/pointer"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -1027,17 +1027,14 @@ func TestAgentController(t *testing.T) {
 				tt.addKubeReactions(kubeClientset)
 			}
 
-			actualDeleteActionOpts := &[]metav1.DeleteOptions{}
-			trackDeleteKubeClient := testutil.NewDeleteOptionsRecorder(kubeClientset, actualDeleteActionOpts)
-
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.New(t)
+			log := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockExecutor := mocks.NewMockPodCommandExecutor(ctrl)
 			mockDynamicCert := mocks.NewMockDynamicCertPrivate(ctrl)
-			fakeClock := clock.NewFakeClock(now)
+			fakeClock := clocktesting.NewFakeClock(now)
 			execCache := cache.NewExpiringWithClock(fakeClock)
 			if tt.mocks != nil {
 				tt.mocks(t, mockExecutor.EXPECT(), mockDynamicCert.EXPECT(), execCache)
@@ -1059,7 +1056,7 @@ func TestAgentController(t *testing.T) {
 					},
 					DiscoveryURLOverride: tt.discoveryURLOverride,
 				},
-				&kubeclient.Client{Kubernetes: trackDeleteKubeClient, PinnipedConcierge: conciergeClientset},
+				&kubeclient.Client{Kubernetes: kubeClientset, PinnipedConcierge: conciergeClientset},
 				kubeInformers.Core().V1().Pods(),
 				kubeInformers.Apps().V1().Deployments(),
 				kubeInformers.Core().V1().Pods(),
@@ -1069,13 +1066,13 @@ func TestAgentController(t *testing.T) {
 				mockDynamicCert,
 				fakeClock,
 				execCache,
-				log,
+				log.Logger,
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			errorMessages := runControllerUntilQuiet(ctx, t, controller, hasDeploymentSynced(trackDeleteKubeClient, kubeInformers), kubeInformers, conciergeInformers)
+			errorMessages := runControllerUntilQuiet(ctx, t, controller, hasDeploymentSynced(kubeClientset, kubeInformers), kubeInformers, conciergeInformers)
 
 			actualErrors := deduplicate(errorMessages)
 			assert.Subsetf(t, actualErrors, tt.wantDistinctErrors, "required error(s) were not found in the actual errors")
@@ -1088,16 +1085,20 @@ func TestAgentController(t *testing.T) {
 
 			// Assert on all actions that happened to deployments.
 			var actualDeploymentActionVerbs []string
+			var actualDeleteActionOpts []metav1.DeleteOptions
 			for _, a := range kubeClientset.Actions() {
 				if a.GetResource().Resource == "deployments" && a.GetVerb() != "get" { // ignore gets caused by hasDeploymentSynced
 					actualDeploymentActionVerbs = append(actualDeploymentActionVerbs, a.GetVerb())
+					if deleteAction, ok := a.(coretesting.DeleteAction); ok {
+						actualDeleteActionOpts = append(actualDeleteActionOpts, deleteAction.GetDeleteOptions())
+					}
 				}
 			}
 			if tt.wantDeploymentActionVerbs != nil {
 				assert.Equal(t, tt.wantDeploymentActionVerbs, actualDeploymentActionVerbs)
 			}
 			if tt.wantDeploymentDeleteActionOpts != nil {
-				assert.Equal(t, tt.wantDeploymentDeleteActionOpts, *actualDeleteActionOpts)
+				assert.Equal(t, tt.wantDeploymentDeleteActionOpts, actualDeleteActionOpts)
 			}
 
 			// Assert that the agent deployment is in the expected final state.

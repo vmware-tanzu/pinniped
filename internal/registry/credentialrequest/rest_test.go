@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
@@ -71,11 +72,11 @@ func TestCreate(t *testing.T) {
 			r = require.New(t)
 			ctrl = gomock.NewController(t)
 			logger = testutil.NewTranscriptLogger(t)
-			klog.SetLogger(logger) // this is unfortunately a global logger, so can't run these tests in parallel :(
+			klog.SetLogger(logr.New(logger)) // this is unfortunately a global logger, so can't run these tests in parallel :(
 		})
 
 		it.After(func() {
-			klog.SetLogger(nil)
+			klog.ClearLogger()
 			ctrl.Finish()
 		})
 

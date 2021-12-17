@@ -58,12 +58,10 @@ func TestLegacyPodCleanerController(t *testing.T) {
 		wantDistinctErrors []string
 		wantDistinctLogs   []string
 		wantActions        []coretesting.Action
-		wantDeleteOptions  []metav1.DeleteOptions
 	}{
 		{
-			name:              "no pods",
-			wantActions:       []coretesting.Action{},
-			wantDeleteOptions: []metav1.DeleteOptions{},
+			name:        "no pods",
+			wantActions: []coretesting.Action{},
 		},
 		{
 			name: "mix of pods",
@@ -78,11 +76,8 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{ // the first delete triggers the informer again, but the second invocation triggers a Not Found
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-				coretesting.NewDeleteAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
+				coretesting.NewDeleteActionWithOptions(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name, testutil.NewPreconditions("3", "4")),
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-			},
-			wantDeleteOptions: []metav1.DeleteOptions{
-				testutil.NewPreconditions("3", "4"),
 			},
 		},
 		{
@@ -102,13 +97,9 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-				coretesting.NewDeleteAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
+				coretesting.NewDeleteActionWithOptions(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name, testutil.NewPreconditions("3", "4")),
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-				coretesting.NewDeleteAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-			},
-			wantDeleteOptions: []metav1.DeleteOptions{
-				testutil.NewPreconditions("3", "4"),
-				testutil.NewPreconditions("3", "4"),
+				coretesting.NewDeleteActionWithOptions(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name, testutil.NewPreconditions("3", "4")),
 			},
 		},
 		{
@@ -126,10 +117,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			wantDistinctErrors: []string{""},
 			wantActions: []coretesting.Action{
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-				coretesting.NewDeleteAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
-			},
-			wantDeleteOptions: []metav1.DeleteOptions{
-				testutil.NewPreconditions("3", "4"),
+				coretesting.NewDeleteActionWithOptions(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name, testutil.NewPreconditions("3", "4")),
 			},
 		},
 		{
@@ -148,7 +136,6 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			wantActions: []coretesting.Action{
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
 			},
-			wantDeleteOptions: []metav1.DeleteOptions{},
 		},
 	}
 	for _, tt := range tests {
@@ -161,19 +148,16 @@ func TestLegacyPodCleanerController(t *testing.T) {
 				tt.addKubeReactions(kubeClientset)
 			}
 
-			opts := &[]metav1.DeleteOptions{}
-			trackDeleteClient := testutil.NewDeleteOptionsRecorder(kubeClientset, opts)
-
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.New(t)
+			log := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
 			controller := NewLegacyPodCleanerController(
 				AgentConfig{
 					Namespace: "concierge",
 					Labels:    map[string]string{"extralabel": "labelvalue"},
 				},
-				&kubeclient.Client{Kubernetes: trackDeleteClient},
+				&kubeclient.Client{Kubernetes: kubeClientset},
 				kubeInformers.Core().V1().Pods(),
-				log,
+				log.Logger,
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -183,7 +167,6 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			assert.Equal(t, tt.wantDistinctErrors, deduplicate(errorMessages), "unexpected errors")
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
 			assert.Equal(t, tt.wantActions, kubeClientset.Actions()[2:], "unexpected actions")
-			assert.Equal(t, tt.wantDeleteOptions, *opts, "unexpected delete options")
 		})
 	}
 }

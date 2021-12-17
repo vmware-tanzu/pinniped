@@ -533,7 +533,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPath,
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), nil),
@@ -615,7 +615,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPath,
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, ""), nil),
 			wantUpstreamStateParamInLocationHeader: true,
@@ -633,7 +633,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   "/some/path",
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -722,7 +722,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -741,7 +741,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -760,7 +760,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none"}),
 			contentType:        "application/x-www-form-urlencoded",
 			body:               encodeQuery(happyGetRequestQueryMap),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeLoginRequiredErrorQuery),
 			wantBodyString:     "",
@@ -776,7 +776,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
-			wantStatus:      http.StatusFound,
+			wantStatus:      http.StatusSeeOther,
 			wantContentType: htmlContentType,
 			// Generated a new CSRF cookie and set it in the response.
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -796,7 +796,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
@@ -862,7 +862,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:               happyCookieEncoder,
 			method:                      http.MethodGet,
 			path:                        modifiedHappyGetRequestPath(map[string]string{"scope": "openid offline_access"}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
@@ -1170,7 +1170,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1217,7 +1217,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
 			wantBodyString:     "",
@@ -1268,7 +1268,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1349,7 +1349,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
 			wantBodyString:     "",
@@ -1391,7 +1391,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
 			wantBodyString:     "",
@@ -1433,7 +1433,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
@@ -1475,7 +1475,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
@@ -1519,7 +1519,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
 			wantBodyString:     "",
@@ -1566,7 +1566,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:        http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
 			path:                        modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(
@@ -2049,7 +2049,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
 			wantBodyString:     "",
@@ -2308,8 +2308,16 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		case test.wantBodyJSON != "":
 			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
 		case test.wantBodyStringWithLocationInHref:
-			anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
-			require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			switch code := rsp.Code; code {
+			case http.StatusFound:
+				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
+				require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			case http.StatusSeeOther:
+				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">See Other</a>.\n\n", html.EscapeString(actualLocation))
+				require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			default:
+				t.Errorf("unexpected response code: %v", code)
+			}
 		default:
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
 		}

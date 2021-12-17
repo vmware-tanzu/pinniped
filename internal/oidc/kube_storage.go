@@ -114,7 +114,7 @@ func (k KubeStorage) GetOpenIDConnectSession(ctx context.Context, fullAuthcode s
 }
 
 func (k KubeStorage) DeleteOpenIDConnectSession(ctx context.Context, fullAuthcode string) error {
-	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode)
+	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode) //nolint: staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
 }
 
 //

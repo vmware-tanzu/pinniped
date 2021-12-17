@@ -16,10 +16,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
@@ -100,7 +100,7 @@ func TestOpenIdConnectStorage(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, request, newRequest)
 
-	err = storage.DeleteOpenIDConnectSession(ctx, "fancy-code.fancy-signature")
+	err = storage.DeleteOpenIDConnectSession(ctx, "fancy-code.fancy-signature") //nolint: staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
 	require.NoError(t, err)
 
 	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
@@ -200,5 +200,5 @@ func TestAuthcodeHasNoDot(t *testing.T) {
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, openid.OpenIDConnectRequestStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
-	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
+	return context.Background(), client, secrets, New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetime)
 }

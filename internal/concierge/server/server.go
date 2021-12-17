@@ -35,7 +35,6 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
@@ -96,8 +95,6 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		"/etc/podinfo",
 		"path to Downward API volume mount",
 	)
-
-	plog.RemoveKlogGlobalFlags()
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.

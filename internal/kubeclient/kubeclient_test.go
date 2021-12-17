@@ -19,6 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/net"
 	clientauthenticationv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 	"k8s.io/client-go/rest"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -1109,7 +1110,7 @@ func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
 
-			tlsConfig, err := netTLSClientConfig(tt.rt)
+			tlsConfig, err := net.TLSClientConfig(tt.rt)
 			require.NoError(t, err)
 			require.NotNil(t, tlsConfig)
 

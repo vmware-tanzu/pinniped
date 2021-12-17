@@ -900,7 +900,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state": some error fetching authorize endpoint`,
 		},
 		{
-			name:     "ldap login when the OIDC provider authorization endpoint returns something other than a 302 redirect",
+			name:     "ldap login when the OIDC provider authorization endpoint returns something other than a redirect",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -1193,6 +1193,117 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 								}, req.URL.Query())
 								return &http.Response{
 									StatusCode: http.StatusFound,
+									Header: http.Header{"Location": []string{
+										fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+									}},
+								}, nil
+							default:
+								// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+								require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+								return nil, nil
+							}
+						}),
+					})(h))
+					return nil
+				}
+			},
+			issuer: successServer.URL,
+			wantLogs: []string{
+				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
+				"\"level\"=4 \"msg\"=\"Pinniped: Read username from environment variable\"  \"name\"=\"PINNIPED_USERNAME\"",
+				"\"level\"=4 \"msg\"=\"Pinniped: Read password from environment variable\"  \"name\"=\"PINNIPED_PASSWORD\"",
+			},
+			wantToken: &testToken,
+		},
+		{
+			name:     "successful ldap login with env vars for username and password, http.StatusSeeOther redirect",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					fakeAuthCode := "test-authcode-value"
+
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(
+								gomock.Any(), fakeAuthCode, pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), "http://127.0.0.1:0/callback").
+							Return(&testToken, nil)
+						return mock
+					}
+
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.getEnv = func(key string) string {
+						switch key {
+						case "PINNIPED_USERNAME":
+							return "some-upstream-username"
+						case "PINNIPED_PASSWORD":
+							return "some-upstream-password"
+						default:
+							return "" // all other env vars are treated as if they are unset
+						}
+					}
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
+						require.FailNow(t, fmt.Sprintf("saw unexpected prompt from the CLI: %q", promptLabel))
+						return "", nil
+					}
+					h.promptForSecret = func(promptLabel string) (string, error) {
+						require.FailNow(t, fmt.Sprintf("saw unexpected prompt from the CLI: %q", promptLabel))
+						return "", nil
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      successServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithCLISendingCredentials()(h))
+					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
+
+					discoveryRequestWasMade := false
+					authorizeRequestWasMade := false
+					t.Cleanup(func() {
+						require.True(t, discoveryRequestWasMade, "should have made an discovery request")
+						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
+					})
+
+					require.NoError(t, WithClient(&http.Client{
+						Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+							switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+							case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+								discoveryRequestWasMade = true
+								return defaultDiscoveryResponse(req)
+							case "http://" + successServer.Listener.Addr().String() + "/authorize":
+								authorizeRequestWasMade = true
+								require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+								require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+								require.Equal(t, url.Values{
+									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+									// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+									"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
+									"code_challenge_method": []string{"S256"},
+									"response_type":         []string{"code"},
+									"scope":                 []string{"test-scope"},
+									"nonce":                 []string{"test-nonce"},
+									"state":                 []string{"test-state"},
+									"access_type":           []string{"offline"},
+									"client_id":             []string{"test-client-id"},
+									"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+									"pinniped_idp_name":     []string{"some-upstream-name"},
+									"pinniped_idp_type":     []string{"ldap"},
+								}, req.URL.Query())
+								return &http.Response{
+									StatusCode: http.StatusSeeOther,
 									Header: http.Header{"Location": []string{
 										fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
 									}},

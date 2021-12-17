@@ -174,7 +174,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name:                              "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
+			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),

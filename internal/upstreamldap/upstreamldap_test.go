@@ -254,7 +254,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			},
 			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
 				info := r.User.(*user.DefaultInfo)
-				info.Groups = []string{}
+				info.Groups = nil
 			}),
 		},
 		{
@@ -1410,8 +1410,8 @@ func TestUpstreamRefresh(t *testing.T) {
 									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
 								},
 								{
-									Name:   pwdLastSetAttribute,
-									Values: []string{"132801740800000001"},
+									Name:       pwdLastSetAttribute,
+									ByteValues: [][]byte{[]byte("132801740800000001")},
 								},
 							},
 						},
@@ -1812,8 +1812,8 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 				DN: "some-dn",
 				Attributes: []*ldap.EntryAttribute{
 					{
-						Name:   attributeName,
-						Values: []string{"val1", "val2"},
+						Name:       attributeName,
+						ByteValues: [][]byte{[]byte("val1"), []byte("val2")},
 					},
 				},
 			},

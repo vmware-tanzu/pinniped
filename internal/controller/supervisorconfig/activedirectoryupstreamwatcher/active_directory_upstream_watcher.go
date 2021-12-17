@@ -58,15 +58,15 @@ const (
 	defaultActiveDirectoryGroupSearchFilter = "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))"
 
 	sAMAccountNameAttribute = "sAMAccountName"
-	// PwdLastSetAttribute is the date and time that the password for this account was last changed.
+	// pwdLastSetAttribute is the date and time that the password for this account was last changed.
 	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-pwdlastset
-	PwdLastSetAttribute = "pwdLastSet"
-	// UserAccountControlAttribute represents a bitmap of user properties.
+	pwdLastSetAttribute = "pwdLastSet"
+	// userAccountControlAttribute represents a bitmap of user properties.
 	// https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties
-	UserAccountControlAttribute = "userAccountControl"
-	// UserAccountControlComputedAttribute represents a bitmap of user properties.
+	userAccountControlAttribute = "userAccountControl"
+	// userAccountControlComputedAttribute represents a bitmap of user properties.
 	// https://docs.microsoft.com/en-us/windows/win32/adschema/a-msds-user-account-control-computed
-	UserAccountControlComputedAttribute = "msDS-User-Account-Control-Computed"
+	userAccountControlComputedAttribute = "msDS-User-Account-Control-Computed"
 	// 0x0002 ACCOUNTDISABLE in userAccountControl bitmap.
 	accountDisabledBitmapValue = 2
 	// 0x0010 UF_LOCKOUT in msDS-User-Account-Control-Computed bitmap.
@@ -334,17 +334,21 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
-		Dialer:                       c.ldapDialer,
-		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": MicrosoftUUIDFromBinary("objectGUID")},
+		Dialer: c.ldapDialer,
+		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){
+			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
+		},
 		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
-			PwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(PwdLastSetAttribute),
-			UserAccountControlAttribute:         ValidUserAccountControl,
-			UserAccountControlComputedAttribute: ValidComputedUserAccountControl,
+			pwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+			userAccountControlAttribute:         validUserAccountControl,
+			userAccountControlComputedAttribute: validComputedUserAccountControl,
 		},
 	}
 
 	if spec.GroupSearch.Attributes.GroupName == "" {
-		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){defaultActiveDirectoryGroupNameAttributeName: GroupSAMAccountNameWithDomainSuffix}
+		config.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){
+			defaultActiveDirectoryGroupNameAttributeName: groupSAMAccountNameWithDomainSuffix,
+		}
 	}
 
 	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
@@ -378,7 +382,7 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	}
 }
 
-func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
+func microsoftUUIDFromBinaryAttr(attributeName string) func(entry *ldap.Entry) (string, error) {
 	// validation has already been done so we can just get the attribute...
 	return func(entry *ldap.Entry) (string, error) {
 		binaryUUID := entry.GetRawAttributeValue(attributeName)
@@ -399,18 +403,18 @@ func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
 	return uuidVal.String(), nil
 }
 
-func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
+func groupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
 	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
 
 	if len(sAMAccountNameAttributeValues) != 1 {
-		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
+		return "", fmt.Errorf(`found %d values for attribute %q, but expected 1 result`,
 			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
 		)
 	}
 
 	sAMAccountName := sAMAccountNameAttributeValues[0]
 	if len(sAMAccountName) == 0 {
-		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
+		return "", fmt.Errorf(`found empty value for attribute %q, but expected value to be non-empty`,
 			sAMAccountNameAttribute,
 		)
 	}
@@ -433,8 +437,8 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 	return strings.Join(domainComponents[1:], "."), nil
 }
 
-func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
-	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlAttribute))
+func validUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
 	}
@@ -446,8 +450,8 @@ func ValidUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttribut
 	return nil
 }
 
-func ValidComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
-	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(UserAccountControlComputedAttribute))
+func validComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err
 	}

@@ -435,7 +435,9 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
 
 	// Don't follow redirects automatically because we want to handle redirects here.
+	var sawRedirect bool
 	h.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		sawRedirect = true
 		return http.ErrUseLastResponse
 	}
 
@@ -454,8 +456,8 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	}
 	_ = authRes.Body.Close() // don't need the response body, and okay if it fails to close
 
-	// A successful authorization always results in a 302.
-	if authRes.StatusCode != http.StatusFound {
+	// A successful authorization always results in a redirect (we are flexible on the exact status code).
+	if !sawRedirect {
 		return nil, fmt.Errorf(
 			"error getting authorization: expected to be redirected, but response status was %s", authRes.Status)
 	}

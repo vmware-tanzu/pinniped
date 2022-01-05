@@ -151,6 +151,17 @@ spec:
                     items:
                       type: string
                     type: array
+                  allowAccessTokenBasedRefresh:
+                    description: allowAccessTokenBasedRefresh, when true, will allow
+                      a user to refresh their tokens by checking their upstream access
+                      token against the user info endpoint, but skipping the refresh
+                      token flow. If it is possible to acquire a refresh token from
+                      your identity provider, you should do so. But if you can't,
+                      this option allows the refresh flow to work. We recommend updating
+                      the access token lifetime in your identity provider to at least
+                      an hour, or up to 9 hours long. Users session lengths will be
+                      tied to this access token lifetime.
+                    type: boolean
                   allowPasswordGrant:
                     description: allowPasswordGrant, when true, will allow the use
                       of OAuth 2.0's Resource Owner Password Credentials Grant (see

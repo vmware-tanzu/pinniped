@@ -174,7 +174,8 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
 	}
 
-	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
+	if token.RefreshToken == nil || token.RefreshToken.Token == "" && !oidcUpstream.AllowsAccessTokenBasedRefresh() {
+		// TODO change warning message
 		plog.Warning("refresh token not returned by upstream provider during password grant, "+
 			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
 			"upstreamName", oidcUpstream.GetName(),
@@ -215,6 +216,17 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			UpstreamIssuer:       upstreamIssuer,
 			UpstreamSubject:      upstreamSubject,
 		},
+	}
+
+	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
+		if token.AccessToken == nil || token.AccessToken.Token == "" {
+			return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+				fosite.ErrAccessDenied.WithHint(
+					"Access token not returned by upstream provider during password grant."), true)
+		}
+		customSessionData.OIDC = &psession.OIDCSessionData{
+			UpstreamAccessToken: token.AccessToken.Token,
+		}
 	}
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
 }

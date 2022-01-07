@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package psession
@@ -62,6 +62,8 @@ const (
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
 type OIDCSessionData struct {
 	UpstreamRefreshToken string `json:"upstreamRefreshToken"`
+	UpstreamSubject      string `json:"upstreamSubject"`
+	UpstreamIssuer       string `json:"upstreamIssuer"`
 }
 
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.

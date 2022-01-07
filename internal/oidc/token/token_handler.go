@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package token provides a handler for the OIDC token endpoint.
@@ -17,7 +17,6 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
-	"go.pinniped.dev/internal/upstreamoidc"
 )
 
 var (
@@ -138,29 +137,27 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	// if we have any claims at all, we better have a subject, and it better match the previous value.
 	// but it's possible that we don't because both returning a new refresh token on refresh and having a userinfo
 	// endpoint are optional.
-	if len(validatedTokens.IDToken.Claims) != 0 {
-		newSub := claims["sub"]
-		oldDownstreamSubject := session.Fosite.Claims.Subject
-		oldIss, oldSub, err := upstreamoidc.ExtractUpstreamSubjectAndIssuerFromDownstream(oldDownstreamSubject)
-		if err != nil {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf("Upstream refresh failed.").
-				WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	if len(validatedTokens.IDToken.Claims) != 0 { //nolint:nestif
+		newSub, hasSub := getString(claims, oidc.IDTokenSubjectClaim)
+		if !hasSub {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+				"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh not found")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
-		if oldSub != newSub {
+		if s.OIDC.UpstreamSubject != newSub {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 				"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
 		usernameClaim := p.GetUsernameClaim()
-		newUsername := claims[usernameClaim]
-		oldUsername := session.Fosite.Claims.Extra["username"]
+		newUsername, hasUsername := getString(claims, usernameClaim)
+		oldUsername := session.Fosite.Claims.Extra[oidc.DownstreamUsernameClaim]
 		// its possible this won't be returned.
 		// but if it is, verify that it hasn't changed.
-		if newUsername != nil && oldUsername != newUsername {
+		if hasUsername && oldUsername != newUsername {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 				"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
-		newIssuer := claims["iss"]
-		if newIssuer != nil && oldIss != newIssuer {
+		newIssuer, hasIssuer := getString(claims, oidc.IDTokenIssuerClaim)
+		if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 				"Upstream refresh failed.").WithWrap(errors.New("issuer in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 		}
@@ -176,6 +173,11 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	}
 
 	return nil
+}
+
+func getString(m map[string]interface{}, key string) (string, bool) {
+	val, ok := m[key].(string)
+	return val, ok
 }
 
 func findOIDCProviderByNameAndValidateUID(

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package auth
@@ -470,6 +470,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderType: psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamRefreshToken: oidcPasswordGrantUpstreamRefreshToken,
+			UpstreamSubject:      oidcUpstreamSubject,
+			UpstreamIssuer:       oidcUpstreamIssuer,
 		},
 	}
 

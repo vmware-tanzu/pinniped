@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package token
@@ -57,6 +57,7 @@ import (
 
 const (
 	goodIssuer           = "https://some-issuer.com"
+	goodUpstreamSubject  = "some-subject"
 	goodClient           = "pinniped-cli"
 	goodRedirectURI      = "http://127.0.0.1/callback"
 	goodPKCECodeVerifier = "some-pkce-verifier-that-must-be-at-least-43-characters-to-meet-entropy-requirements"
@@ -910,6 +911,8 @@ func TestRefreshGrant(t *testing.T) {
 			ProviderType: oidcUpstreamType,
 			OIDC: &psession.OIDCSessionData{
 				UpstreamRefreshToken: oidcUpstreamInitialRefreshToken,
+				UpstreamSubject:      goodUpstreamSubject,
+				UpstreamIssuer:       goodIssuer,
 			},
 		}
 	}
@@ -1049,7 +1052,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
-							"sub": "some-subject",
+							"sub": goodUpstreamSubject,
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
@@ -1072,7 +1075,7 @@ func TestRefreshGrant(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
 							"some-claim":     "some-value",
-							"sub":            "some-subject",
+							"sub":            goodUpstreamSubject,
 							"username-claim": goodUsername,
 						},
 					},
@@ -1146,7 +1149,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
-							"sub": "some-subject",
+							"sub": goodUpstreamSubject,
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDTokenWithoutRefreshToken()).Build()),
@@ -1168,7 +1171,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
-							"sub": "some-subject",
+							"sub": goodUpstreamSubject,
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
@@ -1193,7 +1196,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
-							"sub": "some-subject",
+							"sub": goodUpstreamSubject,
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
@@ -1229,7 +1232,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithValidatedTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
-							"sub": "some-subject",
+							"sub": goodUpstreamSubject,
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
@@ -1681,7 +1684,7 @@ func TestRefreshGrant(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
 							"some-claim":     "some-value",
-							"sub":            "some-subject",
+							"sub":            goodUpstreamSubject,
 							"username-claim": "some-changed-username",
 						},
 					},
@@ -1712,7 +1715,7 @@ func TestRefreshGrant(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
 							"some-claim": "some-value",
-							"sub":        "some-subject",
+							"sub":        goodUpstreamSubject,
 							"iss":        "some-changed-issuer",
 						},
 					},

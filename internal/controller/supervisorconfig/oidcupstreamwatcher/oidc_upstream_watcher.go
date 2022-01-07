@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcupstreamwatcher implements a controller which watches OIDCIdentityProviders.
@@ -499,7 +499,7 @@ func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *v1
 			Type:    typeOIDCDiscoverySucceeded,
 			Status:  v1alpha1.ConditionFalse,
 			Reason:  reason,
-			Message: fmt.Sprintf(`%s URL scheme must be "https", not %q`, endpointType, parsedURL.Scheme),
+			Message: fmt.Sprintf(`%s URL '%s' must have "https" scheme, not %q`, endpointType, maybeHTTPSURL, parsedURL.Scheme),
 		}
 	}
 	if len(parsedURL.Query()) != 0 || parsedURL.Fragment != "" {
@@ -507,7 +507,7 @@ func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *v1
 			Type:    typeOIDCDiscoverySucceeded,
 			Status:  v1alpha1.ConditionFalse,
 			Reason:  reason,
-			Message: fmt.Sprintf(`%s URL cannot contain query or fragment component`, endpointType),
+			Message: fmt.Sprintf(`%s URL '%s' cannot contain query or fragment component`, endpointType, maybeHTTPSURL),
 		}
 	}
 	return parsedURL, nil

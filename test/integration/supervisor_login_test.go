@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -87,8 +87,8 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
-				fositeSessionData := pinnipedSession.Fosite
-				fositeSessionData.Claims.Subject = "wrong-subject"
+				pinnipedSessionData := pinnipedSession.Custom
+				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
 			},
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",

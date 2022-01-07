@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package downstreamsession provides some shared helpers for creating downstream OIDC sessions.
@@ -89,11 +89,11 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamIssuer, err := ExtractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
-	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamSubject, err := ExtractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -128,7 +128,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 		}
 	}
 
-	username, err := extractStringClaimValue(usernameClaimName, upstreamIDPConfig.GetName(), idTokenClaims)
+	username, err := ExtractStringClaimValue(usernameClaimName, upstreamIDPConfig.GetName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -136,7 +136,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 	return subject, username, nil
 }
 
-func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenClaims map[string]interface{}) (string, error) {
+func ExtractStringClaimValue(claimName string, upstreamIDPName string, idTokenClaims map[string]interface{}) (string, error) {
 	value, ok := idTokenClaims[claimName]
 	if !ok {
 		plog.Warning(

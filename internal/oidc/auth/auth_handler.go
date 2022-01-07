@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides a handler for the OIDC authorization endpoint.
@@ -191,6 +191,20 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 	}
+	upstreamSubject, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenSubjectClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+	if err != nil {
+		// Return a user-friendly error for this case which is entirely within our control.
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
+		)
+	}
+	upstreamIssuer, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenIssuerClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+	if err != nil {
+		// Return a user-friendly error for this case which is entirely within our control.
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
+		)
+	}
 
 	customSessionData := &psession.CustomSessionData{
 		ProviderUID:  oidcUpstream.GetResourceUID(),
@@ -198,6 +212,8 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		ProviderType: psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamRefreshToken: token.RefreshToken.Token,
+			UpstreamIssuer:       upstreamIssuer,
+			UpstreamSubject:      upstreamSubject,
 		},
 	}
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)

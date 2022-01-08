@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package ldapupstreamwatcher implements a controller which watches LDAPIdentityProviders.
@@ -134,7 +134,7 @@ type UpstreamLDAPIdentityProviderICache interface {
 
 type ldapWatcherController struct {
 	cache                        UpstreamLDAPIdentityProviderICache
-	validatedSecretVersionsCache upstreamwatchers.SecretVersionCacheI
+	validatedSecretVersionsCache upstreamwatchers.ValidatedSettingsCacheI
 	ldapDialer                   upstreamldap.LDAPDialer
 	client                       pinnipedclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
@@ -151,8 +151,8 @@ func New(
 ) controllerlib.Controller {
 	return newInternal(
 		idpCache,
-		// start with an empty secretVersionCache
-		upstreamwatchers.NewSecretVersionCache(),
+		// start with an empty cache
+		upstreamwatchers.NewValidatedSettingsCache(),
 		// nil means to use a real production dialer when creating objects to add to the cache
 		nil,
 		client,
@@ -165,7 +165,7 @@ func New(
 // For test dependency injection purposes.
 func newInternal(
 	idpCache UpstreamLDAPIdentityProviderICache,
-	validatedSecretVersionsCache upstreamwatchers.SecretVersionCacheI,
+	validatedSecretVersionsCache upstreamwatchers.ValidatedSettingsCacheI,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,

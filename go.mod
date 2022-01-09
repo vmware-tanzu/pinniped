@@ -54,7 +54,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/ory/fosite v0.41.0
-	github.com/ory/x v0.0.330
+	github.com/ory/x v0.0.331
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible

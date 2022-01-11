@@ -35,17 +35,16 @@ func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Clie
 
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
 type ProviderConfig struct {
-	Name                         string
-	ResourceUID                  types.UID
-	UsernameClaim                string
-	GroupsClaim                  string
-	Config                       *oauth2.Config
-	Client                       *http.Client
-	AllowPasswordGrant           bool
-	AllowAccessTokenBasedRefresh bool
-	AdditionalAuthcodeParams     map[string]string
-	RevocationURL                *url.URL // will commonly be nil: many providers do not offer this
-	Provider                     interface {
+	Name                     string
+	ResourceUID              types.UID
+	UsernameClaim            string
+	GroupsClaim              string
+	Config                   *oauth2.Config
+	Client                   *http.Client
+	AllowPasswordGrant       bool
+	AdditionalAuthcodeParams map[string]string
+	RevocationURL            *url.URL // will commonly be nil: many providers do not offer this
+	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
 		Claims(v interface{}) error
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
@@ -93,10 +92,6 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 
 func (p *ProviderConfig) AllowsPasswordGrant() bool {
 	return p.AllowPasswordGrant
-}
-
-func (p *ProviderConfig) AllowsAccessTokenBasedRefresh() bool {
-	return p.AllowAccessTokenBasedRefresh
 }
 
 func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {

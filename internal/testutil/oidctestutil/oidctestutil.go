@@ -146,17 +146,16 @@ func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshArgs(call int) *Perform
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
-	Name                         string
-	ClientID                     string
-	ResourceUID                  types.UID
-	AuthorizationURL             url.URL
-	RevocationURL                *url.URL
-	UsernameClaim                string
-	GroupsClaim                  string
-	Scopes                       []string
-	AdditionalAuthcodeParams     map[string]string
-	AllowPasswordGrant           bool
-	AllowAccessTokenBasedRefresh bool
+	Name                     string
+	ClientID                 string
+	ResourceUID              types.UID
+	AuthorizationURL         url.URL
+	RevocationURL            *url.URL
+	UsernameClaim            string
+	GroupsClaim              string
+	Scopes                   []string
+	AdditionalAuthcodeParams map[string]string
+	AllowPasswordGrant       bool
 
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
@@ -229,10 +228,6 @@ func (u *TestUpstreamOIDCIdentityProvider) GetGroupsClaim() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) AllowsPasswordGrant() bool {
 	return u.AllowPasswordGrant
-}
-
-func (u *TestUpstreamOIDCIdentityProvider) AllowsAccessTokenBasedRefresh() bool {
-	return u.AllowAccessTokenBasedRefresh
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
@@ -605,26 +600,25 @@ func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 }
 
 type TestUpstreamOIDCIdentityProviderBuilder struct {
-	name                         string
-	resourceUID                  types.UID
-	clientID                     string
-	scopes                       []string
-	idToken                      map[string]interface{}
-	refreshToken                 *oidctypes.RefreshToken
-	accessToken                  *oidctypes.AccessToken
-	usernameClaim                string
-	groupsClaim                  string
-	refreshedTokens              *oauth2.Token
-	validatedTokens              *oidctypes.Token
-	authorizationURL             url.URL
-	additionalAuthcodeParams     map[string]string
-	allowPasswordGrant           bool
-	allowAccessTokenBasedRefresh bool
-	authcodeExchangeErr          error
-	passwordGrantErr             error
-	performRefreshErr            error
-	revokeRefreshTokenErr        error
-	validateTokenErr             error
+	name                     string
+	resourceUID              types.UID
+	clientID                 string
+	scopes                   []string
+	idToken                  map[string]interface{}
+	refreshToken             *oidctypes.RefreshToken
+	accessToken              *oidctypes.AccessToken
+	usernameClaim            string
+	groupsClaim              string
+	refreshedTokens          *oauth2.Token
+	validatedTokens          *oidctypes.Token
+	authorizationURL         url.URL
+	additionalAuthcodeParams map[string]string
+	allowPasswordGrant       bool
+	authcodeExchangeErr      error
+	passwordGrantErr         error
+	performRefreshErr        error
+	revokeRefreshTokenErr    error
+	validateTokenErr         error
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
@@ -649,11 +643,6 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAuthorizationURL(value url
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAllowPasswordGrant(value bool) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.allowPasswordGrant = value
-	return u
-}
-
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAllowAccessTokenBasedRefresh(value bool) *TestUpstreamOIDCIdentityProviderBuilder {
-	u.allowAccessTokenBasedRefresh = value
 	return u
 }
 
@@ -766,16 +755,15 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRevokeRefreshTokenError(er
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
 	return &TestUpstreamOIDCIdentityProvider{
-		Name:                         u.name,
-		ClientID:                     u.clientID,
-		ResourceUID:                  u.resourceUID,
-		UsernameClaim:                u.usernameClaim,
-		GroupsClaim:                  u.groupsClaim,
-		Scopes:                       u.scopes,
-		AllowPasswordGrant:           u.allowPasswordGrant,
-		AllowAccessTokenBasedRefresh: u.allowAccessTokenBasedRefresh,
-		AuthorizationURL:             u.authorizationURL,
-		AdditionalAuthcodeParams:     u.additionalAuthcodeParams,
+		Name:                     u.name,
+		ClientID:                 u.clientID,
+		ResourceUID:              u.resourceUID,
+		UsernameClaim:            u.usernameClaim,
+		GroupsClaim:              u.groupsClaim,
+		Scopes:                   u.scopes,
+		AllowPasswordGrant:       u.allowPasswordGrant,
+		AuthorizationURL:         u.authorizationURL,
+		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr

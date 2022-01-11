@@ -111,13 +111,6 @@ type OIDCAuthorizationConfig struct {
 	// allowPasswordGrant defaults to false.
 	// +optional
 	AllowPasswordGrant bool `json:"allowPasswordGrant,omitempty"`
-
-	// allowAccessTokenBasedRefresh, when true, will allow a user to refresh their tokens by checking their upstream access
-	// token against the user info endpoint, but skipping the refresh token flow. If it is possible to acquire a refresh token
-	// from your identity provider, you should do so. But if you can't, this option allows the refresh flow to work. We recommend
-	// updating the access token lifetime in your identity provider to at least an hour, or up to 9 hours long. Users session lengths
-	// will be tied to this access token lifetime.
-	AllowAccessTokenBasedRefresh bool `json:"allowAccessTokenBasedRefresh,omitempty"`
 }
 
 // Parameter is a key/value pair which represents a parameter in an HTTP request.

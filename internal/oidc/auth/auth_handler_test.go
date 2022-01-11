@@ -56,6 +56,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		oidcUpstreamUsernameClaim             = "the-user-claim"
 		oidcUpstreamGroupsClaim               = "the-groups-claim"
 		oidcPasswordGrantUpstreamRefreshToken = "some-opaque-token" //nolint: gosec
+		oidcUpstreamAccessToken               = "some-access-token"
 
 		downstreamIssuer                       = "https://my-downstream-issuer.com/some-path"
 		downstreamRedirectURI                  = "http://127.0.0.1/callback"
@@ -154,15 +155,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"state":             happyState,
 		}
 
-		fositeAccessDeniedWithMissingRefreshTokenErrorQuery = map[string]string{
-			"error":             "access_denied",
-			"error_description": "The resource owner or authorization server denied the request. Refresh token not returned by upstream provider during password grant.",
-			"state":             happyState,
-		}
-
 		fositeAccessDeniedWithMissingAccessTokenErrorQuery = map[string]string{
 			"error":             "access_denied",
-			"error_description": "The resource owner or authorization server denied the request. Access token not returned by upstream provider during password grant.",
+			"error_description": "The resource owner or authorization server denied the request. Neither access token nor refresh token returned by upstream provider during password grant.",
 			"state":             happyState,
 		}
 
@@ -486,7 +481,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderName: oidcPasswordGrantUpstreamName,
 		ProviderType: psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
-			UpstreamAccessToken: "some-access-token",
+			UpstreamAccessToken: oidcUpstreamAccessToken,
+			UpstreamSubject:     oidcUpstreamSubject,
+			UpstreamIssuer:      oidcUpstreamIssuer,
 		},
 	}
 
@@ -889,8 +886,30 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
-			name:                              "doesn't return an error if allowAccessTokenRefresh is set when upstream IDP did not return a refresh token",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithAllowAccessTokenBasedRefresh(true).WithEmptyRefreshToken().WithAccessToken("some-access-token").Build()),
+			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token but it did return an access token",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken,
+		},
+		{
+			name:                              "OIDC password grant happy path when upstream IDP did not return a refresh token but it did return an access token",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPath,
 			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
@@ -1052,34 +1071,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:                  "return an error when upstream IDP did not return a refresh token",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().Build()),
-			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
-			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
-			wantStatus:            http.StatusFound,
-			wantContentType:       "application/json; charset=utf-8",
-			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingRefreshTokenErrorQuery),
-			wantBodyString:        "",
-		},
-		{
-			name:                  "return an error when upstream IDP did not return a refresh token",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().Build()),
-			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
-			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
-			wantStatus:            http.StatusFound,
-			wantContentType:       "application/json; charset=utf-8",
-			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingRefreshTokenErrorQuery),
-			wantBodyString:        "",
-		},
-		{
-			name:                  "return an error when upstream IDP did not return an access or refresh token and allowAccessTokenBasedRefresh is true",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAllowAccessTokenBasedRefresh(true).WithEmptyAccessToken().Build()),
+			name:                  "return an error when upstream IDP returns empty refresh token and empty access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
@@ -1091,8 +1084,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:        "",
 		},
 		{
-			name:                  "return an error when upstream IDP did not return an access or refresh token and allowAccessTokenBasedRefresh is true",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAllowAccessTokenBasedRefresh(true).WithoutAccessToken().Build()),
+			name:                  "return an error when upstream IDP returns no refresh and no access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithoutAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "return an error when upstream IDP returns no refresh token and empty access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithEmptyAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "return an error when upstream IDP returns empty refresh token and no access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithoutAccessToken().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),

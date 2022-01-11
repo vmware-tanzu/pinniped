@@ -46,10 +46,6 @@ type UpstreamOIDCIdentityProviderI interface {
 	// flow with this upstream provider. When false, it should not be allowed.
 	AllowsPasswordGrant() bool
 
-	// AllowsAccessTokenBasedRefresh returns true if the supervisor should be allowed to refresh upstream
-	// users with an access token rather than a refresh token.
-	AllowsAccessTokenBasedRefresh() bool
-
 	// GetAdditionalAuthcodeParams returns additional params to be sent on authcode requests.
 	GetAdditionalAuthcodeParams() map[string]string
 

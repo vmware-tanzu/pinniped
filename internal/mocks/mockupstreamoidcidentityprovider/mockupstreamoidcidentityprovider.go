@@ -45,20 +45,6 @@ func (m *MockUpstreamOIDCIdentityProviderI) EXPECT() *MockUpstreamOIDCIdentityPr
 	return m.recorder
 }
 
-// AllowsAccessTokenBasedRefresh mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) AllowsAccessTokenBasedRefresh() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AllowsAccessTokenBasedRefresh")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// AllowsAccessTokenBasedRefresh indicates an expected call of AllowsAccessTokenBasedRefresh.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) AllowsAccessTokenBasedRefresh() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowsAccessTokenBasedRefresh", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).AllowsAccessTokenBasedRefresh))
-}
-
 // AllowsPasswordGrant mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) AllowsPasswordGrant() bool {
 	m.ctrl.T.Helper()

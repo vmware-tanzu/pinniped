@@ -210,12 +210,11 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		Config: &oauth2.Config{
 			Scopes: computeScopes(authorizationConfig.AdditionalScopes),
 		},
-		UsernameClaim:                upstream.Spec.Claims.Username,
-		GroupsClaim:                  upstream.Spec.Claims.Groups,
-		AllowPasswordGrant:           authorizationConfig.AllowPasswordGrant,
-		AllowAccessTokenBasedRefresh: authorizationConfig.AllowAccessTokenBasedRefresh,
-		AdditionalAuthcodeParams:     additionalAuthcodeAuthorizeParameters,
-		ResourceUID:                  upstream.UID,
+		UsernameClaim:            upstream.Spec.Claims.Username,
+		GroupsClaim:              upstream.Spec.Claims.Groups,
+		AllowPasswordGrant:       authorizationConfig.AllowPasswordGrant,
+		AdditionalAuthcodeParams: additionalAuthcodeAuthorizeParameters,
+		ResourceUID:              upstream.UID,
 	}
 
 	conditions := []*v1alpha1.Condition{

@@ -174,17 +174,6 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
 	}
 
-	if token.RefreshToken == nil || token.RefreshToken.Token == "" && !oidcUpstream.AllowsAccessTokenBasedRefresh() {
-		// TODO change warning message
-		plog.Warning("refresh token not returned by upstream provider during password grant, "+
-			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
-			"upstreamName", oidcUpstream.GetName(),
-			"scopes", oidcUpstream.GetScopes())
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHint(
-				"Refresh token not returned by upstream provider during password grant."), true)
-	}
-
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
@@ -212,22 +201,33 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		ProviderName: oidcUpstream.GetName(),
 		ProviderType: psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
-			UpstreamRefreshToken: token.RefreshToken.Token,
-			UpstreamIssuer:       upstreamIssuer,
-			UpstreamSubject:      upstreamSubject,
+			UpstreamIssuer:  upstreamIssuer,
+			UpstreamSubject: upstreamSubject,
 		},
 	}
 
-	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
-		if token.AccessToken == nil || token.AccessToken.Token == "" {
-			return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-				fosite.ErrAccessDenied.WithHint(
-					"Access token not returned by upstream provider during password grant."), true)
-		}
-		customSessionData.OIDC = &psession.OIDCSessionData{
-			UpstreamAccessToken: token.AccessToken.Token,
-		}
+	hasRefreshToken := token.RefreshToken != nil && token.RefreshToken.Token != ""
+	hasAccessToken := token.AccessToken != nil && token.AccessToken.Token != ""
+	switch {
+	case hasRefreshToken: // we prefer refresh tokens, so check for this first
+		customSessionData.OIDC.UpstreamRefreshToken = token.RefreshToken.Token
+	case hasAccessToken:
+		plog.Info("refresh token not returned by upstream provider during password grant, using access token instead. "+
+			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI "+
+			"and try to get a refresh token if possible",
+			"upstreamName", oidcUpstream.GetName(),
+			"scopes", oidcUpstream.GetScopes())
+		customSessionData.OIDC.UpstreamAccessToken = token.AccessToken.Token
+	default:
+		plog.Warning("refresh token and access token not returned by upstream provider during password grant, "+
+			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
+			"upstreamName", oidcUpstream.GetName(),
+			"scopes", oidcUpstream.GetScopes())
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHint(
+				"Neither access token nor refresh token returned by upstream provider during password grant."), true)
 	}
+
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
 }
 

@@ -74,9 +74,14 @@ type OIDCSessionData struct {
 	// non-empty, then this field should be empty, indicating that we should use the upstream refresh token during
 	// downstream refresh.
 	UpstreamAccessToken string `json:"upstreamAccessToken"`
-	// TODO describe these
+
+	// UpstreamSubject is the "sub" claim from the upstream identity provider from the user's initial login. We store this
+	// so that we can validate that it does not change upon refresh.
 	UpstreamSubject string `json:"upstreamSubject"`
-	UpstreamIssuer  string `json:"upstreamIssuer"`
+
+	// UpstreamIssuer is the "iss" claim from the upstream identity provider from the user's initial login. We store this
+	// so that we can validate that it does not change upon refresh.
+	UpstreamIssuer string `json:"upstreamIssuer"`
 }
 
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.

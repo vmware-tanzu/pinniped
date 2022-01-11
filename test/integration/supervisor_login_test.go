@@ -149,8 +149,7 @@ func TestSupervisorLogin(t *testing.T) {
 						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 					},
 					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-						AdditionalScopes:             []string{"email"}, // does not ask for offline_access.
-						AllowAccessTokenBasedRefresh: true,
+						AdditionalScopes: []string{"email"}, // does not ask for offline_access.
 					},
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name

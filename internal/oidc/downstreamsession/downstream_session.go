@@ -80,27 +80,32 @@ func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdent
 		},
 	}
 
+	const pleaseCheck = "please check configuration of OIDCIdentityProvider and the client in the " +
+		"upstream provider's API/UI and try to get a refresh token if possible"
+	logKV := []interface{}{
+		"upstreamName", oidcUpstream.GetName(),
+		"scopes", oidcUpstream.GetScopes(),
+		"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams(),
+	}
+
 	hasRefreshToken := token.RefreshToken != nil && token.RefreshToken.Token != ""
 	hasAccessToken := token.AccessToken != nil && token.AccessToken.Token != ""
 	switch {
 	case hasRefreshToken: // we prefer refresh tokens, so check for this first
 		customSessionData.OIDC.UpstreamRefreshToken = token.RefreshToken.Token
-	case hasAccessToken:
-		plog.Info("refresh token not returned by upstream provider during password grant, using access token instead. "+
-			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI "+
-			"and try to get a refresh token if possible",
-			"upstreamName", oidcUpstream.GetName(),
-			"scopes", oidcUpstream.GetScopes(),
-			"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams())
+	case hasAccessToken: // as a fallback, we can use the access token as long as there is a userinfo endpoint
+		if !oidcUpstream.HasUserInfoURL() {
+			plog.Warning("access token was returned by upstream provider during login without a refresh token "+
+				"and there was no userinfo endpoint available on the provider. "+pleaseCheck, logKV...)
+			return nil, errors.New("access token was returned by upstream provider but there was no userinfo endpoint")
+		}
+		plog.Info("refresh token not returned by upstream provider during login, using access token instead. "+pleaseCheck, logKV...)
 		customSessionData.OIDC.UpstreamAccessToken = token.AccessToken.Token
 	default:
-		plog.Warning("refresh token and access token not returned by upstream provider during password grant, "+
-			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
-			"upstreamName", oidcUpstream.GetName(),
-			"scopes", oidcUpstream.GetScopes(),
-			"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams())
+		plog.Warning("refresh token and access token not returned by upstream provider during login. "+pleaseCheck, logKV...)
 		return nil, errors.New("neither access token nor refresh token returned by upstream provider")
 	}
+
 	return customSessionData, nil
 }
 

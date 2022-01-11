@@ -31,6 +31,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
 
+	// HasUserInfoURL returns whether there is a non-empty value for userinfo_endpoint fetched from discovery.
+	HasUserInfoURL() bool
+
 	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
 	GetScopes() []string
 

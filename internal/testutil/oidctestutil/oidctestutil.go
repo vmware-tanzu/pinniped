@@ -150,6 +150,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	ClientID                 string
 	ResourceUID              types.UID
 	AuthorizationURL         url.URL
+	UserInfoURL              bool
 	RevocationURL            *url.URL
 	UsernameClaim            string
 	GroupsClaim              string
@@ -208,6 +209,10 @@ func (u *TestUpstreamOIDCIdentityProvider) GetClientID() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetAuthorizationURL() *url.URL {
 	return &u.AuthorizationURL
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) HasUserInfoURL() bool {
+	return u.UserInfoURL
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetRevocationURL() *url.URL {
@@ -612,6 +617,7 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	refreshedTokens          *oauth2.Token
 	validatedTokens          *oidctypes.Token
 	authorizationURL         url.URL
+	hasUserInfoURL           bool
 	additionalAuthcodeParams map[string]string
 	allowPasswordGrant       bool
 	authcodeExchangeErr      error
@@ -638,6 +644,16 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithClientID(value string) *Te
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAuthorizationURL(value url.URL) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.authorizationURL = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUserInfoURL() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.hasUserInfoURL = true
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutUserInfoURL() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.hasUserInfoURL = false
 	return u
 }
 
@@ -763,6 +779,7 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 		Scopes:                   u.scopes,
 		AllowPasswordGrant:       u.allowPasswordGrant,
 		AuthorizationURL:         u.authorizationURL,
+		UserInfoURL:              u.hasUserInfoURL,
 		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {

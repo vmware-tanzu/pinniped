@@ -61,6 +61,19 @@ func (p *ProviderConfig) GetRevocationURL() *url.URL {
 	return p.RevocationURL
 }
 
+func (p *ProviderConfig) HasUserInfoURL() bool {
+	providerJSON := &struct {
+		UserInfoURL string `json:"userinfo_endpoint"`
+	}{}
+	if err := p.Provider.Claims(providerJSON); err != nil {
+		// This should never happen in practice because we should have already successfully
+		// parsed these claims when p.Provider was created.
+		return false
+	}
+
+	return len(providerJSON.UserInfoURL) > 0
+}
+
 func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
 	return p.AdditionalAuthcodeParams
 }
@@ -356,16 +369,8 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 }
 
 func (p *ProviderConfig) maybeFetchUserInfo(ctx context.Context, tok *oauth2.Token) (*coreosoidc.UserInfo, error) {
-	providerJSON := &struct {
-		UserInfoURL string `json:"userinfo_endpoint"`
-	}{}
-	if err := p.Provider.Claims(providerJSON); err != nil {
-		// this should never happen because we should have already parsed these claims at an earlier stage
-		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal discovery JSON", err)
-	}
-
 	// implementing the user info endpoint is not required, skip this logic when it is absent
-	if len(providerJSON.UserInfoURL) == 0 {
+	if !p.HasUserInfoURL() {
 		return nil, nil
 	}
 

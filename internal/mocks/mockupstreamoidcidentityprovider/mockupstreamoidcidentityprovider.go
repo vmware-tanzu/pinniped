@@ -14,12 +14,11 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	oauth2 "golang.org/x/oauth2"
-	types "k8s.io/apimachinery/pkg/types"
-
 	nonce "go.pinniped.dev/pkg/oidcclient/nonce"
 	oidctypes "go.pinniped.dev/pkg/oidcclient/oidctypes"
 	pkce "go.pinniped.dev/pkg/oidcclient/pkce"
+	oauth2 "golang.org/x/oauth2"
+	types "k8s.io/apimachinery/pkg/types"
 )
 
 // MockUpstreamOIDCIdentityProviderI is a mock of UpstreamOIDCIdentityProviderI interface.
@@ -184,6 +183,20 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetUsernameClaim() string {
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetUsernameClaim() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsernameClaim", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetUsernameClaim))
+}
+
+// HasUserInfoURL mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) HasUserInfoURL() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasUserInfoURL")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasUserInfoURL indicates an expected call of HasUserInfoURL.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) HasUserInfoURL() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasUserInfoURL", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).HasUserInfoURL))
 }
 
 // PasswordCredentialsGrantAndValidateTokens mocks base method.

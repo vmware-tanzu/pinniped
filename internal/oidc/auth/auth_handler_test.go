@@ -157,7 +157,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 		fositeAccessDeniedWithMissingAccessTokenErrorQuery = map[string]string{
 			"error":             "access_denied",
-			"error_description": "The resource owner or authorization server denied the request. Neither access token nor refresh token returned by upstream provider during password grant.",
+			"error_description": "The resource owner or authorization server denied the request. Reason: neither access token nor refresh token returned by upstream provider.",
 			"state":             happyState,
 		}
 

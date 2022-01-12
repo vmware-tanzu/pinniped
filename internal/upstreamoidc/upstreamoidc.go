@@ -253,6 +253,8 @@ func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, 
 	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
 
 	if len(idTokenSubject) > 0 || !requireIDToken {
+		// only fetch userinfo if the ID token has a subject or if we are ignoring the id token completely.
+		// otherwise, defer to existing ID token validation
 		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims, requireIDToken); err != nil {
 			return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 		}

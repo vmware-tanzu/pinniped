@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -370,29 +370,33 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"providerName": "ŉ2ƋŢ觛ǂ焺nŐǛ",
 				"providerType": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
 				"oidc": {
-					"upstreamRefreshToken": "tC嵽痊w"
+					"upstreamRefreshToken": "tC嵽痊w",
+					"upstreamSubject": "a紽ǒ|鰽ŋ猊I",
+					"upstreamIssuer": "妬\u003e6鉢緋uƴŤȱʀ"
 				},
 				"ldap": {
-					"userDN": "Ź榨Q|ôɵt毇妬\u003e6鉢緋",
+					"userDN": "Â?墖\u003cƬb獭潜Ʃ饾k|鬌R蜚蠣",
 					"extraRefreshAttributes": {
-						"ď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ¡圔": "墀jMʥ",
-						"ƍ蛊ʚ£:設虝27": "b獭潜Ʃ饾k|鬌R蜚蠣麹概",
-						"藚ɏ¬Ê蒭堜]ȗ韚ʫ": "鷞aŚB碠k9帴ʘ赱"
+						"ȱ藚ɏ¬Ê蒭堜]ȗ韚ʫ": "鷞aŚB碠k9帴ʘ赱"
 					}
 				},
 				"activedirectory": {
-					"userDN": "0D餹sêĝɓ",
+					"userDN": "瑹xȢ~1Įx欼笝?úT妼",
 					"extraRefreshAttributes": {
-						"摱ì": "bEǎ儯惝Io"
+						"iYn": "麹Œ颛",
+						"İ\u003e×1飞O+î艔垎0OƉǢIȽ齤士": "ȐĨf跞@)¿,ɭS隑ip偶"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"Ł"
+			"應,Ɣ鬅X¤",
+			"¤.岵骘胲ƤkǦ"
 		],
 		"grantedAudience": [
-			"r"
+			"鸖I¶媁y衑拁Ȃ",
+			"社Vƅȭǝ*擦28ǅ 甍 ć",
+			"bņ抰蛖a³2ʫ承dʬ)ġ,TÀqy_"
 		]
 	},
 	"version": "2"

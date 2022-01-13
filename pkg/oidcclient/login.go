@@ -822,7 +822,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	return upstreamOIDCIdentityProvider.ValidateToken(ctx, refreshed, "")
+	return upstreamOIDCIdentityProvider.ValidateTokenAndMergeWithUserInfo(ctx, refreshed, "", true)
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {

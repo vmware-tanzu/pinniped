@@ -11,6 +11,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/x/errorsx"
+	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -101,7 +102,13 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 
 func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister) error {
 	s := session.Custom
-	if s.OIDC == nil || s.OIDC.UpstreamRefreshToken == "" {
+	if s.OIDC == nil {
+		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	accessTokenStored := s.OIDC.UpstreamAccessToken != ""
+	refreshTokenStored := s.OIDC.UpstreamRefreshToken != ""
+	refreshTokenOrAccessTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
+	if !refreshTokenOrAccessTokenStored {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 
@@ -113,21 +120,28 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	plog.Debug("attempting upstream refresh request",
 		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
 
-	refreshedTokens, err := p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
-	if err != nil {
-		return errorsx.WithStack(errUpstreamRefreshError.WithHint(
-			"Upstream refresh failed.",
-		).WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	var tokens *oauth2.Token
+	if refreshTokenStored {
+		tokens, err = p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		if err != nil {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHint(
+				"Upstream refresh failed.",
+			).WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		}
+	} else {
+		tokens = &oauth2.Token{
+			AccessToken: s.OIDC.UpstreamAccessToken,
+		}
 	}
 
 	// Upstream refresh may or may not return a new ID token. From the spec:
 	// "the response body is the Token Response of Section 3.1.3.3 except that it might not contain an id_token."
 	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
-	_, hasIDTok := refreshedTokens.Extra("id_token").(string)
+	_, hasIDTok := tokens.Extra("id_token").(string)
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
 	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
-	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, refreshedTokens, "", hasIDTok)
+	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, tokens, "", hasIDTok, accessTokenStored)
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
@@ -166,10 +180,10 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
 	// the user's session. If we did not get a new refresh token, then keep the old one in the session by avoiding
 	// overwriting the old one.
-	if refreshedTokens.RefreshToken != "" {
+	if tokens.RefreshToken != "" {
 		plog.Debug("upstream refresh request did not return a new refresh token",
 			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-		s.OIDC.UpstreamRefreshToken = refreshedTokens.RefreshToken
+		s.OIDC.UpstreamRefreshToken = tokens.RefreshToken
 	}
 
 	return nil

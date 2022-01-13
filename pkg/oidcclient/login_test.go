@@ -406,7 +406,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
-							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true).
+							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
 							Return(&testToken, nil)
 						mock.EXPECT().
 							PerformRefresh(gomock.Any(), testToken.RefreshToken.Token).
@@ -453,7 +453,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
-							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true).
+							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
 							Return(nil, fmt.Errorf("some validation error"))
 						mock.EXPECT().
 							PerformRefresh(gomock.Any(), "test-refresh-token-returning-invalid-id-token").
@@ -1648,7 +1648,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
-							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true).
+							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
 							Return(&testToken, nil)
 						mock.EXPECT().
 							PerformRefresh(gomock.Any(), testToken.RefreshToken.Token).

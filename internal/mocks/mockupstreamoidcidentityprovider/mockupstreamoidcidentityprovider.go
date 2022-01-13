@@ -244,16 +244,16 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeRefreshToken(arg0
 }
 
 // ValidateTokenAndMergeWithUserInfo mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3 bool) (*oidctypes.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3, arg4 bool) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ValidateTokenAndMergeWithUserInfo indicates an expected call of ValidateTokenAndMergeWithUserInfo.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateTokenAndMergeWithUserInfo(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateTokenAndMergeWithUserInfo(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), arg0, arg1, arg2, arg3, arg4)
 }

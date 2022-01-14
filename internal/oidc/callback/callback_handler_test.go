@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package callback
@@ -77,7 +77,11 @@ var (
 		ProviderUID:  happyUpstreamIDPResourceUID,
 		ProviderName: happyUpstreamIDPName,
 		ProviderType: psession.ProviderTypeOIDC,
-		OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamRefreshToken},
+		OIDC: &psession.OIDCSessionData{
+			UpstreamRefreshToken: oidcUpstreamRefreshToken,
+			UpstreamIssuer:       oidcUpstreamIssuer,
+			UpstreamSubject:      oidcUpstreamSubject,
+		},
 	}
 )
 

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package callback provides a handler for the OIDC callback endpoint.
@@ -83,12 +83,23 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
+		upstreamSubject, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), token.IDToken.Claims)
+		if err != nil {
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		}
+		upstreamIssuer, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), token.IDToken.Claims)
+		if err != nil {
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		}
+
 		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, &psession.CustomSessionData{
 			ProviderUID:  upstreamIDPConfig.GetResourceUID(),
 			ProviderName: upstreamIDPConfig.GetName(),
 			ProviderType: psession.ProviderTypeOIDC,
 			OIDC: &psession.OIDCSessionData{
 				UpstreamRefreshToken: token.RefreshToken.Token,
+				UpstreamSubject:      upstreamSubject,
+				UpstreamIssuer:       upstreamIssuer,
 			},
 		})
 

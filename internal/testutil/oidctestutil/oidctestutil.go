@@ -83,6 +83,12 @@ type ValidateTokenArgs struct {
 	ExpectedIDTokenNonce nonce.Nonce
 }
 
+type ValidateRefreshArgs struct {
+	Ctx              context.Context
+	Tok              *oauth2.Token
+	StoredAttributes provider.StoredRefreshAttributes
+}
+
 type TestUpstreamLDAPIdentityProvider struct {
 	Name                    string
 	ResourceUID             types.UID
@@ -312,7 +318,7 @@ func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenArgs(call int) *Rev
 	return u.revokeRefreshTokenArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
 	if u.validateTokenArgs == nil {
 		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
 	}
@@ -533,10 +539,10 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
 		}
 	}
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to ValidateToken() by all OIDC upstreams",
+		"should have been exactly one call to ValidateTokenAndMergeWithUserInfo() by all OIDC upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"ValidateToken() was called on the wrong OIDC upstream",
+		"ValidateTokenAndMergeWithUserInfo() was called on the wrong OIDC upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
@@ -548,7 +554,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenCallCount
 	}
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to ValidateToken()",
+		"expected exactly zero calls to ValidateTokenAndMergeWithUserInfo()",
 	)
 }
 

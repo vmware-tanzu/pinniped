@@ -40,6 +40,9 @@ func TestProviderConfig(t *testing.T) {
 				Endpoint: oauth2.Endpoint{AuthURL: "https://example.com"},
 				Scopes:   []string{"scope1", "scope2"},
 			},
+			Provider: &mockProvider{
+				rawClaims: []byte(`{"userinfo_endpoint": "https://example.com/userinfo"}`),
+			},
 		}
 		require.Equal(t, "test-name", p.GetName())
 		require.Equal(t, "test-client-id", p.GetClientID())
@@ -54,6 +57,16 @@ func TestProviderConfig(t *testing.T) {
 		require.True(t, p.AllowsPasswordGrant())
 		p.AllowPasswordGrant = false
 		require.False(t, p.AllowsPasswordGrant())
+
+		require.True(t, p.HasUserInfoURL())
+		p.Provider = &mockProvider{
+			rawClaims: []byte(`{"some_other_endpoint": "https://example.com/blah"}`),
+		}
+		require.False(t, p.HasUserInfoURL())
+		p.Provider = &mockProvider{
+			rawClaims: []byte(`{`),
+		}
+		require.False(t, p.HasUserInfoURL())
 	})
 
 	const (
@@ -609,6 +622,7 @@ func TestProviderConfig(t *testing.T) {
 			tok              *oauth2.Token
 			nonce            nonce.Nonce
 			requireIDToken   bool
+			requireUserInfo  bool
 			userInfo         *oidc.UserInfo
 			rawClaims        []byte
 			userInfoErr      error
@@ -695,6 +709,34 @@ func TestProviderConfig(t *testing.T) {
 				},
 			},
 			{
+				name:            "userinfo is required, token with id, access and refresh tokens, valid nonce, and userinfo with a value that doesn't exist in the id token",
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:           "some-nonce",
+				requireIDToken:  true,
+				requireUserInfo: true,
+				rawClaims:       []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:        forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
+			},
+			{
 				name:           "claims from userinfo override id token claims",
 				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA"}),
 				nonce:          "some-nonce",
@@ -744,6 +786,32 @@ func TestProviderConfig(t *testing.T) {
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
 							"name":  "Pinny TheSeal",
+						},
+					},
+				},
+			},
+			{
+				name:            "token with id, access and refresh tokens and valid nonce, but no userinfo endpoint from discovery and it's not required",
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:           "some-nonce",
+				requireIDToken:  true,
+				requireUserInfo: false,
+				rawClaims:       []byte(`{"not_the_userinfo_endpoint": "some-other-endpoint"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
 						},
 					},
 				},
@@ -839,6 +907,23 @@ func TestProviderConfig(t *testing.T) {
 				wantErr:        "received response missing ID token",
 			},
 			{
+				name:            "expected to have userinfo, but doesn't",
+				tok:             testTokenWithoutIDToken,
+				nonce:           "some-other-nonce",
+				requireUserInfo: true,
+				rawClaims:       []byte(`{}`),
+				wantErr:         "could not fetch user info claims: userinfo endpoint not found, but is required",
+			},
+			{
+				name:            "expected to have id token and userinfo, but doesn't have either",
+				tok:             testTokenWithoutIDToken,
+				nonce:           "some-other-nonce",
+				requireUserInfo: true,
+				requireIDToken:  true,
+				rawClaims:       []byte(`{}`),
+				wantErr:         "received response missing ID token",
+			},
+			{
 				name:           "mismatched access token hash",
 				tok:            testTokenWithoutIDToken,
 				nonce:          "some-other-nonce",
@@ -898,7 +983,7 @@ func TestProviderConfig(t *testing.T) {
 						userInfoErr: tt.userInfoErr,
 					},
 				}
-				gotTok, err := p.ValidateTokenAndMergeWithUserInfo(context.Background(), tt.tok, tt.nonce, tt.requireIDToken)
+				gotTok, err := p.ValidateTokenAndMergeWithUserInfo(context.Background(), tt.tok, tt.nonce, tt.requireIDToken, tt.requireUserInfo)
 				if tt.wantErr != "" {
 					require.Error(t, err)
 					require.Equal(t, tt.wantErr, err.Error())
@@ -983,6 +1068,36 @@ func TestProviderConfig(t *testing.T) {
 				wantUserInfoCalled: false,
 			},
 			{
+				name:        "valid but userinfo endpoint could not be found due to parse error",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.606768593e+09,
+							"jti": "test-jti",
+							"nbf": 1.606768593e+09,
+							"sub": "test-user",
+						},
+					},
+				},
+				// cannot be parsed as json, but note that in this case constructing a real provider would have failed
+				rawClaims:          []byte(`{`),
+				wantUserInfoCalled: false,
+			},
+			{
 				name:        "valid",
 				authCode:    "valid",
 				returnIDTok: validIDToken,
@@ -1010,13 +1125,6 @@ func TestProviderConfig(t *testing.T) {
 				},
 				rawClaims:          []byte(`{}`), // user info not supported
 				wantUserInfoCalled: false,
-			},
-			{
-				name:        "user info discovery parse error",
-				authCode:    "valid",
-				returnIDTok: validIDToken,
-				rawClaims:   []byte(`junk`), // user info discovery fails
-				wantErr:     "could not fetch user info claims: could not unmarshal discovery JSON: invalid character 'j' looking for beginning of value",
 			},
 			{
 				name:        "user info fetch error",

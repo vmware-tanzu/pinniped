@@ -31,6 +31,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
 
+	// HasUserInfoURL returns whether there is a non-empty value for userinfo_endpoint fetched from discovery.
+	HasUserInfoURL() bool
+
 	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
 	GetScopes() []string
 
@@ -74,7 +77,7 @@ type UpstreamOIDCIdentityProviderI interface {
 	// ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
 	// tokens, or an error.
-	ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error)
+	ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error)
 }
 
 type UpstreamLDAPIdentityProviderI interface {

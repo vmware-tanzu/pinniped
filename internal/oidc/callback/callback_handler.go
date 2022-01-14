@@ -19,7 +19,6 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/psession"
 )
 
 func NewHandler(
@@ -69,39 +68,17 @@ func NewHandler(
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		if token.RefreshToken == nil || token.RefreshToken.Token == "" {
-			plog.Warning("refresh token not returned by upstream provider during authcode exchange, "+
-				"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
-				"upstreamName", upstreamIDPConfig.GetName(),
-				"scopes", upstreamIDPConfig.GetScopes(),
-				"additionalParams", upstreamIDPConfig.GetAdditionalAuthcodeParams())
-			return httperr.New(http.StatusUnprocessableEntity, "refresh token not returned by upstream provider during authcode exchange")
-		}
-
 		subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		upstreamSubject, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), token.IDToken.Claims)
-		if err != nil {
-			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
-		}
-		upstreamIssuer, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), token.IDToken.Claims)
+		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, &psession.CustomSessionData{
-			ProviderUID:  upstreamIDPConfig.GetResourceUID(),
-			ProviderName: upstreamIDPConfig.GetName(),
-			ProviderType: psession.ProviderTypeOIDC,
-			OIDC: &psession.OIDCSessionData{
-				UpstreamRefreshToken: token.RefreshToken.Token,
-				UpstreamSubject:      upstreamSubject,
-				UpstreamIssuer:       upstreamIssuer,
-			},
-		})
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {

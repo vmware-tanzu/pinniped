@@ -11,12 +11,14 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/x/errorsx"
+	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 var (
@@ -101,7 +103,15 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 
 func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister) error {
 	s := session.Custom
-	if s.OIDC == nil || s.OIDC.UpstreamRefreshToken == "" {
+	if s.OIDC == nil {
+		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+
+	accessTokenStored := s.OIDC.UpstreamAccessToken != ""
+	refreshTokenStored := s.OIDC.UpstreamRefreshToken != ""
+
+	exactlyOneTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
+	if !exactlyOneTokenStored {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 
@@ -113,63 +123,88 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	plog.Debug("attempting upstream refresh request",
 		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
 
-	refreshedTokens, err := p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
-	if err != nil {
-		return errorsx.WithStack(errUpstreamRefreshError.WithHint(
-			"Upstream refresh failed.",
-		).WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	var tokens *oauth2.Token
+	if refreshTokenStored {
+		tokens, err = p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		if err != nil {
+			return errorsx.WithStack(errUpstreamRefreshError.WithHint(
+				"Upstream refresh failed.",
+			).WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		}
+	} else {
+		tokens = &oauth2.Token{AccessToken: s.OIDC.UpstreamAccessToken}
 	}
 
 	// Upstream refresh may or may not return a new ID token. From the spec:
 	// "the response body is the Token Response of Section 3.1.3.3 except that it might not contain an id_token."
 	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
-	_, hasIDTok := refreshedTokens.Extra("id_token").(string)
+	_, hasIDTok := tokens.Extra("id_token").(string)
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
 	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
-	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, refreshedTokens, "", hasIDTok)
+	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, tokens, "", hasIDTok, accessTokenStored)
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
 			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 
-	claims := validatedTokens.IDToken.Claims
-	// if we have any claims at all, we better have a subject, and it better match the previous value.
-	// but it's possible that we don't because both returning a new refresh token on refresh and having a userinfo
-	// endpoint are optional.
-	if len(validatedTokens.IDToken.Claims) != 0 { //nolint:nestif
-		newSub, hasSub := getString(claims, oidc.IDTokenSubjectClaim)
-		if !hasSub {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh not found")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-		}
-		if s.OIDC.UpstreamSubject != newSub {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-		}
-		usernameClaim := p.GetUsernameClaim()
-		newUsername, hasUsername := getString(claims, usernameClaim)
-		oldUsername := session.Fosite.Claims.Extra[oidc.DownstreamUsernameClaim]
-		// its possible this won't be returned.
-		// but if it is, verify that it hasn't changed.
-		if hasUsername && oldUsername != newUsername {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-		}
-		newIssuer, hasIssuer := getString(claims, oidc.IDTokenIssuerClaim)
-		if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
-			return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-				"Upstream refresh failed.").WithWrap(errors.New("issuer in upstream refresh does not match previous value")).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-		}
+	err = validateIdentityUnchangedSinceInitialLogin(validatedTokens, session, p.GetUsernameClaim())
+	if err != nil {
+		return err
 	}
 
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
 	// the user's session. If we did not get a new refresh token, then keep the old one in the session by avoiding
 	// overwriting the old one.
-	if refreshedTokens.RefreshToken != "" {
-		plog.Debug("upstream refresh request did not return a new refresh token",
+	if tokens.RefreshToken != "" {
+		plog.Debug("upstream refresh request returned a new refresh token",
 			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-		s.OIDC.UpstreamRefreshToken = refreshedTokens.RefreshToken
+		s.OIDC.UpstreamRefreshToken = tokens.RefreshToken
+	}
+
+	return nil
+}
+
+func validateIdentityUnchangedSinceInitialLogin(validatedTokens *oidctypes.Token, session *psession.PinnipedSession, usernameClaimName string) error {
+	s := session.Custom
+	mergedClaims := validatedTokens.IDToken.Claims
+
+	// If we have any claims at all, we better have a subject, and it better match the previous value.
+	// but it's possible that we don't because both returning a new id token on refresh and having a userinfo
+	// endpoint are optional.
+	if len(mergedClaims) == 0 {
+		return nil
+	}
+
+	newSub, hasSub := getString(mergedClaims, oidc.IDTokenSubjectClaim)
+	if !hasSub {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh not found")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	}
+	if s.OIDC.UpstreamSubject != newSub {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh failed.").WithWrap(errors.New("subject in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	}
+
+	newUsername, hasUsername := getString(mergedClaims, usernameClaimName)
+	oldUsername := session.Fosite.Claims.Extra[oidc.DownstreamUsernameClaim]
+	// It's possible that a username wasn't returned by the upstream provider during refresh,
+	// but if it is, verify that it hasn't changed.
+	if hasUsername && oldUsername != newUsername {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh failed.").WithWrap(errors.New("username in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+	}
+
+	newIssuer, hasIssuer := getString(mergedClaims, oidc.IDTokenIssuerClaim)
+	// It's possible that an issuer wasn't returned by the upstream provider during refresh,
+	// but if it is, verify that it hasn't changed.
+	if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh failed.").WithWrap(errors.New("issuer in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 
 	return nil

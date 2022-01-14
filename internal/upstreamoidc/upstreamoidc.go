@@ -61,6 +61,19 @@ func (p *ProviderConfig) GetRevocationURL() *url.URL {
 	return p.RevocationURL
 }
 
+func (p *ProviderConfig) HasUserInfoURL() bool {
+	providerJSON := &struct {
+		UserInfoURL string `json:"userinfo_endpoint"`
+	}{}
+	if err := p.Provider.Claims(providerJSON); err != nil {
+		// This should never happen in practice because we should have already successfully
+		// parsed these claims when p.Provider was created.
+		return false
+	}
+
+	return len(providerJSON.UserInfoURL) > 0
+}
+
 func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
 	return p.AdditionalAuthcodeParams
 }
@@ -113,7 +126,7 @@ func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.C
 	// There is no nonce to validate for a resource owner password credentials grant because it skips using
 	// the authorize endpoint and goes straight to the token endpoint.
 	const skipNonceValidation nonce.Nonce = ""
-	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, skipNonceValidation, true)
+	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, skipNonceValidation, true, false)
 }
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
@@ -127,7 +140,7 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 		return nil, err
 	}
 
-	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, expectedIDTokenNonce, true)
+	return p.ValidateTokenAndMergeWithUserInfo(ctx, tok, expectedIDTokenNonce, true, false)
 }
 
 func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
@@ -239,7 +252,7 @@ func (p *ProviderConfig) tryRevokeRefreshToken(
 
 // ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response,
 // if the provider offers the userinfo endpoint.
-func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error) {
+func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error) {
 	var validatedClaims = make(map[string]interface{})
 
 	var idTokenExpiry time.Time
@@ -255,7 +268,7 @@ func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, 
 	if len(idTokenSubject) > 0 || !requireIDToken {
 		// only fetch userinfo if the ID token has a subject or if we are ignoring the id token completely.
 		// otherwise, defer to existing ID token validation
-		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims, requireIDToken); err != nil {
+		if err := p.maybeFetchUserInfoAndMergeClaims(ctx, tok, validatedClaims, requireIDToken, requireUserInfo); err != nil {
 			return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 		}
 	}
@@ -309,10 +322,10 @@ func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token,
 	return idTokenExpiry, idTok, nil
 }
 
-func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}, requireIDToken bool) error {
+func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}, requireIDToken bool, requireUserInfo bool) error {
 	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
 
-	userInfo, err := p.maybeFetchUserInfo(ctx, tok)
+	userInfo, err := p.maybeFetchUserInfo(ctx, tok, requireUserInfo)
 	if err != nil {
 		return err
 	}
@@ -355,17 +368,13 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	return nil
 }
 
-func (p *ProviderConfig) maybeFetchUserInfo(ctx context.Context, tok *oauth2.Token) (*coreosoidc.UserInfo, error) {
-	providerJSON := &struct {
-		UserInfoURL string `json:"userinfo_endpoint"`
-	}{}
-	if err := p.Provider.Claims(providerJSON); err != nil {
-		// this should never happen because we should have already parsed these claims at an earlier stage
-		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal discovery JSON", err)
-	}
-
-	// implementing the user info endpoint is not required, skip this logic when it is absent
-	if len(providerJSON.UserInfoURL) == 0 {
+func (p *ProviderConfig) maybeFetchUserInfo(ctx context.Context, tok *oauth2.Token, requireUserInfo bool) (*coreosoidc.UserInfo, error) {
+	// implementing the user info endpoint is not required by the OIDC spec, but we may require it in certain situations.
+	if !p.HasUserInfoURL() {
+		if requireUserInfo {
+			// TODO should these all be http errors?
+			return nil, httperr.New(http.StatusInternalServerError, "userinfo endpoint not found, but is required")
+		}
 		return nil, nil
 	}
 

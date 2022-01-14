@@ -374,17 +374,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Both authcode session secrets are deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "inactiveOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "inactiveOIDCAuthcodeSession", testutil.NewPreconditions("uid-456", "rv-456")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-						testutil.NewPreconditions("uid-456", "rv-456"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -816,15 +809,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The authcode session secrets is still deleted because it is expired and the revocation error is not retryable.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "activeOIDCAuthcodeSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -1143,17 +1130,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Both session secrets are deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "offlineAccessGrantedOIDCAccessTokenSession"),
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "offlineAccessNotGrantedOIDCAccessTokenSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "offlineAccessGrantedOIDCAccessTokenSession", testutil.NewPreconditions("uid-123", "rv-123")),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "offlineAccessNotGrantedOIDCAccessTokenSession", testutil.NewPreconditions("uid-456", "rv-456")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-						testutil.NewPreconditions("uid-456", "rv-456"),
-					},
-					*deleteOptions,
 				)
 			})
 		})
@@ -1227,15 +1207,9 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// The secret is deleted.
 				r.ElementsMatch(
 					[]kubetesting.Action{
-						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "oidcRefreshSession"),
+						kubetesting.NewDeleteActionWithOptions(secretsGVR, installedInNamespace, "oidcRefreshSession", testutil.NewPreconditions("uid-123", "rv-123")),
 					},
 					kubeClient.Actions(),
-				)
-				r.ElementsMatch(
-					[]metav1.DeleteOptions{
-						testutil.NewPreconditions("uid-123", "rv-123"),
-					},
-					*deleteOptions,
 				)
 			})
 		})

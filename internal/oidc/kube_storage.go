@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -114,7 +114,7 @@ func (k KubeStorage) GetOpenIDConnectSession(ctx context.Context, fullAuthcode s
 }
 
 func (k KubeStorage) DeleteOpenIDConnectSession(ctx context.Context, fullAuthcode string) error {
-	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode)
+	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode) //nolint: staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
 }
 
 //

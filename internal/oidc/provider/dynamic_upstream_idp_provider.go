@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package provider
@@ -39,6 +39,9 @@ type UpstreamOIDCIdentityProviderI interface {
 
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
+
+	// HasUserInfoURL returns whether there is a non-empty value for userinfo_endpoint fetched from discovery.
+	HasUserInfoURL() bool
 
 	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
 	GetScopes() []string
@@ -83,10 +86,10 @@ type UpstreamOIDCIdentityProviderI interface {
 	// represent an error such that it is not worth retrying revocation later, even though revocation failed.
 	RevokeToken(ctx context.Context, token string, tokenType RevocableTokenType) error
 
-	// ValidateToken will validate the ID token. It will also merge the claims from the userinfo endpoint response
+	// ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
 	// tokens, or an error.
-	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
+	ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error)
 }
 
 type UpstreamLDAPIdentityProviderI interface {
@@ -105,7 +108,14 @@ type UpstreamLDAPIdentityProviderI interface {
 	authenticators.UserAuthenticator
 
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
-	PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error
+	PerformRefresh(ctx context.Context, storedRefreshAttributes StoredRefreshAttributes) error
+}
+
+type StoredRefreshAttributes struct {
+	Username             string
+	Subject              string
+	DN                   string
+	AdditionalAttributes map[string]string
 }
 
 type DynamicUpstreamIDPProvider interface {

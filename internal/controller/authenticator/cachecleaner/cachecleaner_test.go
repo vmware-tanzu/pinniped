@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cachecleaner
@@ -143,11 +143,11 @@ func TestController(t *testing.T) {
 			if tt.initialCache != nil {
 				tt.initialCache(t, cache)
 			}
-			testLog := testlogger.New(t)
+			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
 
 			webhooks := informers.Authentication().V1alpha1().WebhookAuthenticators()
 			jwtAuthenticators := informers.Authentication().V1alpha1().JWTAuthenticators()
-			controller := New(cache, webhooks, jwtAuthenticators, testLog)
+			controller := New(cache, webhooks, jwtAuthenticators, testLog.Logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

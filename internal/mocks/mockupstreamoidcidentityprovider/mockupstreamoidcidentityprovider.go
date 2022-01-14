@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -186,6 +186,20 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetUsernameClaim() *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsernameClaim", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetUsernameClaim))
 }
 
+// HasUserInfoURL mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) HasUserInfoURL() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasUserInfoURL")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasUserInfoURL indicates an expected call of HasUserInfoURL.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) HasUserInfoURL() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasUserInfoURL", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).HasUserInfoURL))
+}
+
 // PasswordCredentialsGrantAndValidateTokens mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) PasswordCredentialsGrantAndValidateTokens(arg0 context.Context, arg1, arg2 string) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
@@ -230,17 +244,17 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeToken(arg0, arg1,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).RevokeToken), arg0, arg1, arg2)
 }
 
-// ValidateToken mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) ValidateToken(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce) (*oidctypes.Token, error) {
+// ValidateTokenAndMergeWithUserInfo mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3, arg4 bool) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateToken", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ValidateToken indicates an expected call of ValidateToken.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateToken(arg0, arg1, arg2 interface{}) *gomock.Call {
+// ValidateTokenAndMergeWithUserInfo indicates an expected call of ValidateTokenAndMergeWithUserInfo.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateTokenAndMergeWithUserInfo(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateToken), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), arg0, arg1, arg2, arg3, arg4)
 }

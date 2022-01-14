@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -13,9 +13,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/strings/slices"
 
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -88,7 +89,7 @@ func GarbageCollectorController(
 
 func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 	// make sure we have a consistent, static meaning for the current time during the sync loop
-	frozenClock := clock.NewFakeClock(c.clock.Now())
+	frozenClock := clocktesting.NewFakeClock(c.clock.Now())
 
 	// The Sync method is triggered upon any change to any Secret, which would make this
 	// controller too chatty, so it rate limits itself to a more reasonable interval.

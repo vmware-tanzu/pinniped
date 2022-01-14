@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package auth
@@ -56,6 +56,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		oidcUpstreamUsernameClaim             = "the-user-claim"
 		oidcUpstreamGroupsClaim               = "the-groups-claim"
 		oidcPasswordGrantUpstreamRefreshToken = "some-opaque-token" //nolint: gosec
+		oidcUpstreamAccessToken               = "some-access-token"
 
 		downstreamIssuer                       = "https://my-downstream-issuer.com/some-path"
 		downstreamRedirectURI                  = "http://127.0.0.1/callback"
@@ -154,9 +155,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"state":             happyState,
 		}
 
-		fositeAccessDeniedWithMissingRefreshTokenErrorQuery = map[string]string{
+		fositeAccessDeniedWithMissingAccessTokenErrorQuery = map[string]string{
 			"error":             "access_denied",
-			"error_description": "The resource owner or authorization server denied the request. Refresh token not returned by upstream provider during password grant.",
+			"error_description": "The resource owner or authorization server denied the request. Reason: neither access token nor refresh token returned by upstream provider.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithMissingUserInfoEndpointErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: access token was returned by upstream provider but there was no userinfo endpoint.",
 			"state":             happyState,
 		}
 
@@ -269,6 +276,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	happyLDAPUID := "some-ldap-uid"
 	happyLDAPUserDN := "cn=foo,dn=bar"
 	happyLDAPGroups := []string{"group1", "group2", "group3"}
+	happyLDAPExtraRefreshAttribute := "some-refresh-attribute"
+	happyLDAPExtraRefreshValue := "some-refresh-attribute-value"
 
 	parsedUpstreamLDAPURL, err := url.Parse(upstreamLDAPURL)
 	require.NoError(t, err)
@@ -285,6 +294,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					Groups: happyLDAPGroups,
 				},
 				DN: happyLDAPUserDN,
+				ExtraRefreshAttributes: map[string]string{
+					happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue,
+				},
 			}, true, nil
 		}
 		return nil, false, nil
@@ -442,7 +454,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		OIDC:         nil,
 		LDAP:         nil,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
 		},
 	}
 
@@ -452,7 +465,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderType: psession.ProviderTypeLDAP,
 		OIDC:         nil,
 		LDAP: &psession.LDAPSessionData{
-			UserDN: happyLDAPUserDN,
+			UserDN:                 happyLDAPUserDN,
+			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
 		},
 		ActiveDirectory: nil,
 	}
@@ -463,6 +477,19 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		ProviderType: psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamRefreshToken: oidcPasswordGrantUpstreamRefreshToken,
+			UpstreamSubject:      oidcUpstreamSubject,
+			UpstreamIssuer:       oidcUpstreamIssuer,
+		},
+	}
+
+	expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken := &psession.CustomSessionData{
+		ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
+		ProviderName: oidcPasswordGrantUpstreamName,
+		ProviderType: psession.ProviderTypeOIDC,
+		OIDC: &psession.OIDCSessionData{
+			UpstreamAccessToken: oidcUpstreamAccessToken,
+			UpstreamSubject:     oidcUpstreamSubject,
+			UpstreamIssuer:      oidcUpstreamIssuer,
 		},
 	}
 
@@ -526,7 +553,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPath,
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), nil),
@@ -608,7 +635,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPath,
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, ""), nil),
 			wantUpstreamStateParamInLocationHeader: true,
@@ -626,7 +653,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   "/some/path",
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -715,7 +742,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -734,7 +761,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
 			contentType:                            "application/x-www-form-urlencoded",
 			body:                                   encodeQuery(happyGetRequestQueryMap),
-			wantStatus:                             http.StatusFound,
+			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -753,7 +780,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none"}),
 			contentType:        "application/x-www-form-urlencoded",
 			body:               encodeQuery(happyGetRequestQueryMap),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeLoginRequiredErrorQuery),
 			wantBodyString:     "",
@@ -769,7 +796,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
-			wantStatus:      http.StatusFound,
+			wantStatus:      http.StatusSeeOther,
 			wantContentType: htmlContentType,
 			// Generated a new CSRF cookie and set it in the response.
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -789,7 +816,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
@@ -855,7 +882,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:               happyCookieEncoder,
 			method:                      http.MethodGet,
 			path:                        modifiedHappyGetRequestPath(map[string]string{"scope": "openid offline_access"}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
@@ -863,6 +890,50 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			}, "", ""), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token but it did return an access token and has a userinfo endpoint",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithUserInfoURL().Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken,
+		},
+		{
+			name:                              "OIDC password grant happy path when upstream IDP did not return a refresh token but it did return an access token and has a userinfo endpoint",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithUserInfoURL().Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken,
 		},
 		{
 			name:                 "error during upstream LDAP authentication",
@@ -1006,8 +1077,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:                  "return an error when upstream IDP did not return a refresh token",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().Build()),
+			name:                  "password grant returns an error when upstream IDP returns no refresh token with an access token but has no userinfo endpoint",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
@@ -1015,12 +1086,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:            http.StatusFound,
 			wantContentType:       "application/json; charset=utf-8",
-			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingRefreshTokenErrorQuery),
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingUserInfoEndpointErrorQuery),
 			wantBodyString:        "",
 		},
 		{
-			name:                  "return an error when upstream IDP did not return a refresh token",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().Build()),
+			name:                  "password grant returns an error when upstream IDP returns empty refresh token with an access token but has no userinfo endpoint",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
@@ -1028,7 +1099,59 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:            http.StatusFound,
 			wantContentType:       "application/json; charset=utf-8",
-			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingRefreshTokenErrorQuery),
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingUserInfoEndpointErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "password grant returns an error when upstream IDP returns empty refresh token and empty access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "password grant returns an error when upstream IDP returns no refresh and no access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithoutAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "password grant returns an error when upstream IDP returns no refresh token and empty access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithEmptyAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name:                  "password grant returns an error when upstream IDP returns empty refresh token and no access token",
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithoutAccessToken().Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingAccessTokenErrorQuery),
 			wantBodyString:        "",
 		},
 		{
@@ -1163,7 +1286,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1210,7 +1333,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
 			wantBodyString:     "",
@@ -1261,7 +1384,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1342,7 +1465,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
 			wantBodyString:     "",
@@ -1384,7 +1507,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
 			wantBodyString:     "",
@@ -1426,7 +1549,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
@@ -1468,7 +1591,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
@@ -1512,7 +1635,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
 			wantBodyString:     "",
@@ -1559,7 +1682,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:        http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
 			path:                        modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
-			wantStatus:                  http.StatusFound,
+			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(
@@ -2042,7 +2165,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
 			wantBodyString:     "",
@@ -2301,8 +2424,16 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		case test.wantBodyJSON != "":
 			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
 		case test.wantBodyStringWithLocationInHref:
-			anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
-			require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			switch code := rsp.Code; code {
+			case http.StatusFound:
+				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
+				require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			case http.StatusSeeOther:
+				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">See Other</a>.\n\n", html.EscapeString(actualLocation))
+				require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
+			default:
+				t.Errorf("unexpected response code: %v", code)
+			}
 		default:
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
 		}

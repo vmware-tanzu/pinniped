@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidctestutil
@@ -76,12 +76,20 @@ type RevokeTokenArgs struct {
 	TokenType provider.RevocableTokenType
 }
 
-// ValidateTokenArgs is used to spy on calls to
-// TestUpstreamOIDCIdentityProvider.ValidateTokenFunc().
-type ValidateTokenArgs struct {
+// ValidateTokenAndMergeWithUserInfoArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.ValidateTokenAndMergeWithUserInfoFunc().
+type ValidateTokenAndMergeWithUserInfoArgs struct {
 	Ctx                  context.Context
 	Tok                  *oauth2.Token
 	ExpectedIDTokenNonce nonce.Nonce
+	RequireIDToken       bool
+	RequireUserInfo      bool
+}
+
+type ValidateRefreshArgs struct {
+	Ctx              context.Context
+	Tok              *oauth2.Token
+	StoredAttributes provider.StoredRefreshAttributes
 }
 
 type TestUpstreamLDAPIdentityProvider struct {
@@ -112,16 +120,16 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, userDN, expectedUsername, expectedSubject string) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
 	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
 		Ctx:              ctx,
-		DN:               userDN,
-		ExpectedUsername: expectedUsername,
-		ExpectedSubject:  expectedSubject,
+		DN:               storedRefreshAttributes.DN,
+		ExpectedUsername: storedRefreshAttributes.Username,
+		ExpectedSubject:  storedRefreshAttributes.Subject,
 	})
 	if u.PerformRefreshErr != nil {
 		return u.PerformRefreshErr
@@ -145,6 +153,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	ClientID                 string
 	ResourceUID              types.UID
 	AuthorizationURL         url.URL
+	UserInfoURL              bool
 	RevocationURL            *url.URL
 	UsernameClaim            string
 	GroupsClaim              string
@@ -169,7 +178,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	RevokeTokenFunc func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error
 
-	ValidateTokenFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
+	ValidateTokenAndMergeWithUserInfoFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 
 	exchangeAuthcodeAndValidateTokensCallCount         int
 	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
@@ -179,8 +188,8 @@ type TestUpstreamOIDCIdentityProvider struct {
 	performRefreshArgs                                 []*PerformRefreshArgs
 	revokeTokenCallCount                               int
 	revokeTokenArgs                                    []*RevokeTokenArgs
-	validateTokenCallCount                             int
-	validateTokenArgs                                  []*ValidateTokenArgs
+	validateTokenAndMergeWithUserInfoCallCount         int
+	validateTokenAndMergeWithUserInfoArgs              []*ValidateTokenAndMergeWithUserInfoArgs
 }
 
 var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
@@ -203,6 +212,10 @@ func (u *TestUpstreamOIDCIdentityProvider) GetClientID() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetAuthorizationURL() *url.URL {
 	return &u.AuthorizationURL
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) HasUserInfoURL() bool {
+	return u.UserInfoURL
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetRevocationURL() *url.URL {
@@ -314,28 +327,30 @@ func (u *TestUpstreamOIDCIdentityProvider) RevokeTokenArgs(call int) *RevokeToke
 	return u.revokeTokenArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
-	if u.validateTokenArgs == nil {
-		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error) {
+	if u.validateTokenAndMergeWithUserInfoArgs == nil {
+		u.validateTokenAndMergeWithUserInfoArgs = make([]*ValidateTokenAndMergeWithUserInfoArgs, 0)
 	}
-	u.validateTokenCallCount++
-	u.validateTokenArgs = append(u.validateTokenArgs, &ValidateTokenArgs{
+	u.validateTokenAndMergeWithUserInfoCallCount++
+	u.validateTokenAndMergeWithUserInfoArgs = append(u.validateTokenAndMergeWithUserInfoArgs, &ValidateTokenAndMergeWithUserInfoArgs{
 		Ctx:                  ctx,
 		Tok:                  tok,
 		ExpectedIDTokenNonce: expectedIDTokenNonce,
+		RequireIDToken:       requireIDToken,
+		RequireUserInfo:      requireUserInfo,
 	})
-	return u.ValidateTokenFunc(ctx, tok, expectedIDTokenNonce)
+	return u.ValidateTokenAndMergeWithUserInfoFunc(ctx, tok, expectedIDTokenNonce)
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenCallCount() int {
-	return u.validateTokenCallCount
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfoCallCount() int {
+	return u.validateTokenAndMergeWithUserInfoCallCount
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenArgs(call int) *ValidateTokenArgs {
-	if u.validateTokenArgs == nil {
-		u.validateTokenArgs = make([]*ValidateTokenArgs, 0)
+func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfoArgs(call int) *ValidateTokenAndMergeWithUserInfoArgs {
+	if u.validateTokenAndMergeWithUserInfoArgs == nil {
+		u.validateTokenAndMergeWithUserInfoArgs = make([]*ValidateTokenAndMergeWithUserInfoArgs, 0)
 	}
-	return u.validateTokenArgs[call]
+	return u.validateTokenAndMergeWithUserInfoArgs[call]
 }
 
 type UpstreamIDPListerBuilder struct {
@@ -520,25 +535,25 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *te
 func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
-	expectedArgs *ValidateTokenArgs,
+	expectedArgs *ValidateTokenAndMergeWithUserInfoArgs,
 ) {
 	t.Helper()
-	var actualArgs *ValidateTokenArgs
+	var actualArgs *ValidateTokenAndMergeWithUserInfoArgs
 	var actualNameOfUpstreamWhichMadeCall string
 	actualCallCountAcrossAllOIDCUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		callCountOnThisUpstream := upstreamOIDC.validateTokenCallCount
+		callCountOnThisUpstream := upstreamOIDC.validateTokenAndMergeWithUserInfoCallCount
 		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
 			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.validateTokenArgs[0]
+			actualArgs = upstreamOIDC.validateTokenAndMergeWithUserInfoArgs[0]
 		}
 	}
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to ValidateToken() by all OIDC upstreams",
+		"should have been exactly one call to ValidateTokenAndMergeWithUserInfo() by all OIDC upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"ValidateToken() was called on the wrong OIDC upstream",
+		"ValidateTokenAndMergeWithUserInfo() was called on the wrong OIDC upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
@@ -547,10 +562,10 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 	t.Helper()
 	actualCallCountAcrossAllOIDCUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenCallCount
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.validateTokenAndMergeWithUserInfoCallCount
 	}
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to ValidateToken()",
+		"expected exactly zero calls to ValidateTokenAndMergeWithUserInfo()",
 	)
 }
 
@@ -596,24 +611,26 @@ func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
 }
 
 type TestUpstreamOIDCIdentityProviderBuilder struct {
-	name                     string
-	resourceUID              types.UID
-	clientID                 string
-	scopes                   []string
-	idToken                  map[string]interface{}
-	refreshToken             *oidctypes.RefreshToken
-	usernameClaim            string
-	groupsClaim              string
-	refreshedTokens          *oauth2.Token
-	validatedTokens          *oidctypes.Token
-	authorizationURL         url.URL
-	additionalAuthcodeParams map[string]string
-	allowPasswordGrant       bool
-	authcodeExchangeErr      error
-	passwordGrantErr         error
-	performRefreshErr        error
-	revokeTokenErr           error
-	validateTokenErr         error
+	name                                 string
+	resourceUID                          types.UID
+	clientID                             string
+	scopes                               []string
+	idToken                              map[string]interface{}
+	refreshToken                         *oidctypes.RefreshToken
+	accessToken                          *oidctypes.AccessToken
+	usernameClaim                        string
+	groupsClaim                          string
+	refreshedTokens                      *oauth2.Token
+	validatedAndMergedWithUserInfoTokens *oidctypes.Token
+	authorizationURL                     url.URL
+	hasUserInfoURL                       bool
+	additionalAuthcodeParams             map[string]string
+	allowPasswordGrant                   bool
+	authcodeExchangeErr                  error
+	passwordGrantErr                     error
+	performRefreshErr                    error
+	revokeTokenErr                       error
+	validateTokenAndMergeWithUserInfoErr error
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
@@ -633,6 +650,16 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithClientID(value string) *Te
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAuthorizationURL(value url.URL) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.authorizationURL = value
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUserInfoURL() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.hasUserInfoURL = true
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutUserInfoURL() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.hasUserInfoURL = false
 	return u
 }
 
@@ -699,6 +726,20 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutRefreshToken() *TestUps
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAccessToken(token string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.accessToken = &oidctypes.AccessToken{Token: token}
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithEmptyAccessToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.accessToken = &oidctypes.AccessToken{Token: ""}
+	return u
+}
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutAccessToken() *TestUpstreamOIDCIdentityProviderBuilder {
+	u.accessToken = nil
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithUpstreamAuthcodeExchangeError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.authcodeExchangeErr = err
 	return u
@@ -719,13 +760,13 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithPerformRefreshError(err er
 	return u
 }
 
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidatedTokens(tokens *oidctypes.Token) *TestUpstreamOIDCIdentityProviderBuilder {
-	u.validatedTokens = tokens
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidatedAndMergedWithUserInfoTokens(tokens *oidctypes.Token) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validatedAndMergedWithUserInfoTokens = tokens
 	return u
 }
 
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
-	u.validateTokenErr = err
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenAndMergeWithUserInfoError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.validateTokenAndMergeWithUserInfoErr = err
 	return u
 }
 
@@ -744,18 +785,19 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 		Scopes:                   u.scopes,
 		AllowPasswordGrant:       u.allowPasswordGrant,
 		AuthorizationURL:         u.authorizationURL,
+		UserInfoURL:              u.hasUserInfoURL,
 		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken, AccessToken: u.accessToken}, nil
 		},
 		PasswordCredentialsGrantAndValidateTokensFunc: func(ctx context.Context, username, password string) (*oidctypes.Token, error) {
 			if u.passwordGrantErr != nil {
 				return nil, u.passwordGrantErr
 			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken}, nil
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}, RefreshToken: u.refreshToken, AccessToken: u.accessToken}, nil
 		},
 		PerformRefreshFunc: func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 			if u.performRefreshErr != nil {
@@ -766,11 +808,11 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 		RevokeTokenFunc: func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error {
 			return u.revokeTokenErr
 		},
-		ValidateTokenFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
-			if u.validateTokenErr != nil {
-				return nil, u.validateTokenErr
+		ValidateTokenAndMergeWithUserInfoFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+			if u.validateTokenAndMergeWithUserInfoErr != nil {
+				return nil, u.validateTokenAndMergeWithUserInfoErr
 			}
-			return u.validatedTokens, nil
+			return u.validatedAndMergedWithUserInfoTokens, nil
 		},
 	}
 }
@@ -1003,7 +1045,7 @@ func validateAuthcodeStorage(
 	require.Empty(t, actualClaims.CodeHash)
 	require.Empty(t, actualClaims.AccessTokenHash)
 	require.Empty(t, actualClaims.AuthenticationContextClassReference)
-	require.Empty(t, actualClaims.AuthenticationMethodsReference)
+	require.Empty(t, actualClaims.AuthenticationMethodsReferences)
 
 	// Check that the custom Pinniped session data matches.
 	require.Equal(t, wantCustomSessionData, storedSessionFromAuthcode.Custom)

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -121,7 +121,7 @@ func TestManager(t *testing.T) {
 			r.False(fallbackHandlerWasCalled)
 
 			// Minimal check to ensure that the right endpoint was called
-			r.Equal(http.StatusFound, recorder.Code)
+			r.Equal(http.StatusSeeOther, recorder.Code)
 			actualLocation := recorder.Header().Get("Location")
 			r.True(
 				strings.HasPrefix(actualLocation, expectedRedirectLocationPrefix),
@@ -160,7 +160,7 @@ func TestManager(t *testing.T) {
 
 			// Check just enough of the response to ensure that we wired up the callback endpoint correctly.
 			// The endpoint's own unit tests cover everything else.
-			r.Equal(http.StatusFound, recorder.Code)
+			r.Equal(http.StatusSeeOther, recorder.Code)
 			actualLocation := recorder.Header().Get("Location")
 			r.True(
 				strings.HasPrefix(actualLocation, downstreamRedirectURL),

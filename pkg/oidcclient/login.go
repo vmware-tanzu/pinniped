@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcclient implements a CLI OIDC login flow.
@@ -435,7 +435,9 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
 
 	// Don't follow redirects automatically because we want to handle redirects here.
+	var sawRedirect bool
 	h.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		sawRedirect = true
 		return http.ErrUseLastResponse
 	}
 
@@ -454,8 +456,8 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	}
 	_ = authRes.Body.Close() // don't need the response body, and okay if it fails to close
 
-	// A successful authorization always results in a 302.
-	if authRes.StatusCode != http.StatusFound {
+	// A successful authorization always results in a redirect (we are flexible on the exact status code).
+	if !sawRedirect {
 		return nil, fmt.Errorf(
 			"error getting authorization: expected to be redirected, but response status was %s", authRes.Status)
 	}
@@ -820,7 +822,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	return upstreamOIDCIdentityProvider.ValidateToken(ctx, refreshed, "")
+	return upstreamOIDCIdentityProvider.ValidateTokenAndMergeWithUserInfo(ctx, refreshed, "", true, false)
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {

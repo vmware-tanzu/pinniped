@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -18,9 +18,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 )
 
 func TestStorage(t *testing.T) {
@@ -62,7 +62,7 @@ func TestStorage(t *testing.T) {
 		name        string
 		resource    string
 		mocks       func(*testing.T, mocker)
-		run         func(*testing.T, Storage, *clock.FakeClock) error
+		run         func(*testing.T, Storage, *clocktesting.FakeClock) error
 		wantActions []coretesting.Action
 		wantSecrets []corev1.Secret
 		wantErr     string
@@ -71,7 +71,7 @@ func TestStorage(t *testing.T) {
 			name:     "get non-existent",
 			resource: "authcode",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				_, err := storage.Get(ctx, "not-exists", nil)
 				return err
 			},
@@ -85,7 +85,7 @@ func TestStorage(t *testing.T) {
 			name:     "delete non-existent",
 			resource: "tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				return storage.Delete(ctx, "not-a-token")
 			},
 			wantActions: []coretesting.Action{
@@ -98,7 +98,7 @@ func TestStorage(t *testing.T) {
 			name:     "delete non-existent by label",
 			resource: "tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -113,7 +113,7 @@ func TestStorage(t *testing.T) {
 			name:     "create and get",
 			resource: "access-tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -177,7 +177,7 @@ func TestStorage(t *testing.T) {
 			name:     "create multiple, each gets the correct lifetime timestamp",
 			resource: "access-tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				data := &testJSON{Data: "create1"}
 				rv1, err := storage.Create(ctx, "sig1", data, nil)
 				require.Empty(t, rv1) // fake client does not set this
@@ -272,7 +272,7 @@ func TestStorage(t *testing.T) {
 			name:     "create and get with additional labels",
 			resource: "access-tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -360,7 +360,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -429,7 +429,7 @@ func TestStorage(t *testing.T) {
 					return false, nil, nil // we mutated the secret in place but we do not "handle" it
 				})
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -521,7 +521,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -615,7 +615,7 @@ func TestStorage(t *testing.T) {
 					Type: "storage.pinniped.dev/walruses",
 				}))
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -696,7 +696,7 @@ func TestStorage(t *testing.T) {
 					return true, nil, fmt.Errorf("some delete error")
 				})
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -749,7 +749,7 @@ func TestStorage(t *testing.T) {
 					return true, nil, fmt.Errorf("some listing error")
 				})
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -783,7 +783,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -847,7 +847,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -911,7 +911,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -975,7 +975,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -1025,7 +1025,7 @@ func TestStorage(t *testing.T) {
 				tt.mocks(t, client)
 			}
 			secrets := client.CoreV1().Secrets(namespace)
-			fakeClock := clock.NewFakeClock(fakeNow)
+			fakeClock := clocktesting.NewFakeClock(fakeNow)
 			storage := New(tt.resource, secrets, fakeClock.Now, lifetime)
 
 			err := tt.run(t, storage, fakeClock)

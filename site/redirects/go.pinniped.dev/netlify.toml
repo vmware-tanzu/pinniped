@@ -12,7 +12,7 @@
 
 [[redirects]]
   from = "/community/agenda"
-  to = "https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view"
+  to = "https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ"
   status = 302
   force = true
 

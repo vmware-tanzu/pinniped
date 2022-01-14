@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -165,8 +165,8 @@ func TestLoginStaticCommand(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.New(t)
-			klog.SetLogger(testLogger)
+			testLogger := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			klog.SetLogger(testLogger.Logger)
 			cmd := staticLoginCommand(staticLoginDeps{
 				lookupEnv: func(s string) (string, bool) {
 					v, ok := tt.env[s]

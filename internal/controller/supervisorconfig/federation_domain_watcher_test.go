@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/clock"
 	coretesting "k8s.io/client-go/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
@@ -116,7 +116,7 @@ func TestSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewFederationDomainWatcherController(
 				providersSetter,
-				clock.NewFakeClock(frozenNow),
+				clocktesting.NewFakeClock(frozenNow),
 				pinnipedAPIClient,
 				federationDomainInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,

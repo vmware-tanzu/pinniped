@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package authenticators contains authenticator interfaces.
@@ -35,6 +35,7 @@ type UserAuthenticator interface {
 }
 
 type Response struct {
-	User user.Info
-	DN   string
+	User                   user.Info
+	DN                     string
+	ExtraRefreshAttributes map[string]string
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -2850,7 +2850,7 @@ func TestGetKubeconfig(t *testing.T) {
 			})
 			issuerEndpointPtr = &issuerEndpoint
 
-			testLog := testlogger.New(t)
+			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
 			cmd := kubeconfigCommand(kubeconfigDeps{
 				getPathToSelf: func() (string, error) {
 					if tt.getPathToSelfErr != nil {
@@ -2876,7 +2876,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return fake, nil
 				},
-				log: testLog,
+				log: testLog.Logger,
 			})
 			require.NotNil(t, cmd)
 

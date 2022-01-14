@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package psession
@@ -74,16 +74,26 @@ type OIDCSessionData struct {
 	// non-empty, then this field should be empty, indicating that we should use the upstream refresh token during
 	// downstream refresh.
 	UpstreamAccessToken string `json:"upstreamAccessToken"`
+
+	// UpstreamSubject is the "sub" claim from the upstream identity provider from the user's initial login. We store this
+	// so that we can validate that it does not change upon refresh.
+	UpstreamSubject string `json:"upstreamSubject"`
+
+	// UpstreamIssuer is the "iss" claim from the upstream identity provider from the user's initial login. We store this
+	// so that we can validate that it does not change upon refresh.
+	UpstreamIssuer string `json:"upstreamIssuer"`
 }
 
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.
 type LDAPSessionData struct {
-	UserDN string `json:"userDN"`
+	UserDN                 string            `json:"userDN"`
+	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
 }
 
 // ActiveDirectorySessionData is the additional data needed by Pinniped when the upstream IDP is an Active Directory provider.
 type ActiveDirectorySessionData struct {
-	UserDN string `json:"userDN"`
+	UserDN                 string            `json:"userDN"`
+	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
 }
 
 // NewPinnipedSession returns a new empty session.

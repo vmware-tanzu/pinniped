@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -196,32 +196,38 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 		"client": {
 			"id": ":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
 			"client_secret": "UQ==",
+			"rotated_secrets": [
+				"Bno=",
+				"0j8=",
+				"1c4="
+			],
 			"redirect_uris": [
-				"ǖ枭kʍ切厦ȳ箦;¥ʊXĝ奨誷傥祩d",
+				"ʊXĝ",
+				"Ƿ"
+			],
+			"grant_types": [
+				"祩d",
 				"zŇZ",
 				"優蒼ĊɌț訫ǄǽeʀO2ƚ\u0026N"
 			],
-			"grant_types": [
+			"response_types": [
 				"唐W6ɻ橩斚薛ɑƐ"
 			],
-			"response_types": [
+			"scopes": [
 				"w",
 				"ǔŭe[u@阽羂ŷ-Ĵ½輢OÅ濲喾H"
 			],
-			"scopes": [
+			"audience": [
 				"G螩歐湡ƙı唡ɸğƎ\u0026胢輢Ƈĵƚ"
 			],
-			"audience": [
-				"ě"
-			],
 			"public": false,
-			"jwks_uri": "o*泞羅ʘ Ⱦķ瀊垰7ã\")",
+			"jwks_uri": "潌țjA9;焋Ēƕ",
 			"jwks": {
 				"keys": [
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
-						"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
+						"x": "LHMZ29A64WecPQSLotS8hfZ2mae0SR17CtPdnMDP7ZI",
 						"x5u": {
 							"Scheme": "",
 							"Opaque": "",
@@ -238,7 +244,24 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
-						"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
+						"x": "1PwKrC4qDe8cabzGTdA0NjuMJhAZAw7Bu7Tj9z2Y4pE",
+						"x5u": {
+							"Scheme": "",
+							"Opaque": "",
+							"User": null,
+							"Host": "",
+							"Path": "",
+							"RawPath": "",
+							"ForceQuery": false,
+							"RawQuery": "",
+							"Fragment": "",
+							"RawFragment": ""
+						}
+					},
+					{
+						"kty": "OKP",
+						"crv": "Ed25519",
+						"x": "j4b-Vld5buh_2KIpjjaDRJ8OY7l7d6XAumvDtVTT9BI",
 						"x5u": {
 							"Scheme": "",
 							"Opaque": "",
@@ -254,117 +277,128 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					}
 				]
 			},
-			"token_endpoint_auth_method": "ƿʥǟȒ伉\u003cx¹T鼓c吏",
+			"token_endpoint_auth_method": "趀Ȁ;hYGe天蹗ĽǙ澅j翕q骽",
 			"request_uris": [
-				"Ć捘j]=谅ʑɑɮ$Ól4Ȟ",
-				",Q7钎漡臧n"
+				"Ǐ蛓ȿ,JwwƐ\u003c涵ØƉKĵ",
+				"Ȟú",
+				"Q7钎漡臧n栀,i"
 			],
-			"request_object_signing_alg": "3@¡廜+v,淬Ʋ4Dʧ呩锏緍场",
-			"token_endpoint_auth_signing_alg": "(ưƓǴ罷ǹ~]ea胠"
+			"request_object_signing_alg": "廜+v,淬Ʋ4Dʧ呩锏緍场脋",
+			"token_endpoint_auth_signing_alg": "ưƓǴ罷ǹ~]ea胠Ĺĩv絹b垇I"
 		},
 		"scopes": [
-			"ĩv絹b垇IŕĩǀŻQ'k頂箨J-a稆",
-			"啶#昏Q遐*\\髎bŸ"
+			"ĩǀŻQ'k頂箨J-a",
+			"ɓ啶#昏Q遐*\\髎bŸ1慂U"
 		],
 		"grantedScopes": [
-			"慂UFƼĮǡ鑻Z"
+			"ƼĮǡ鑻Z¥篚h°ʣ£ǖ%\"砬ʍ"
 		],
 		"form": {
-			"褾攚ŝlĆ厦駳骪l拁乖¡J¿Ƈ妔": [
-				"懧¥ɂĵ~Čyʊ恀c\"Ǌřðȿ/",
-				"裢?霃谥vƘ:ƿ/濔Aʉ\u003c",
-				"ȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀j¤"
+			"¡": [
+				"Ła卦牟懧¥ɂĵ",
+				"ɎǛƍdÚ慂+槰蚪i齥篗裢?霃谥vƘ:",
+				"/濔Aʉ\u003cS獾蔀OƭUǦ"
 			],
-			"诞": [
-				"狲N\u003cCq罉ZPſĝEK郊©l",
-				"餚Ǉ/ɷȑ潠[ĝU噤'pX ",
-				"Y妶ǵ!ȁu狍ɶȳsčɦƦ诱"
+			"民撲ʓeŘ嬀j¤囡莒汗狲N\u003cCq": [
+				"5ȏ樛ȧ.mĔ櫓Ǩ療騃Ǐ}ɟ",
+				"潠[ĝU噤'",
+				"ŁȗɉY妶ǵ!ȁ"
+			],
+			"褰ʎɰ癟VĎĢ婄磫绒u妔隤ʑƍš駎竪": [
+				"鱙翑ȲŻ麤ã桒嘞\\摗Ǘū稖咾鎅ǸÖ"
 			]
 		},
 		"session": {
 			"fosite": {
 				"Claims": {
-					"JTI": "u妔隤ʑƍš駎竪0ɔ闏À1",
-					"Issuer": "麤ã桒嘞\\摗Ǘū稖咾鎅ǸÖ绝TF",
-					"Subject": "巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢Û±",
+					"JTI": "褗6巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢",
+					"Issuer": "j¦鲶H股ƲLŋZ-{",
+					"Subject": "ehpƧ蓟",
 					"Audience": [
-						"H股ƲL",
-						"肟v\u0026đehpƧ",
-						"5^驜Ŗ~ů崧軒q腟u尿"
+						"驜Ŗ~ů崧軒q腟u尿宲!"
 					],
-					"Nonce": "ğ",
-					"ExpiresAt": "2016-11-22T21:33:58.460521133Z",
-					"IssuedAt": "1990-07-25T23:42:07.055978334Z",
-					"RequestedAt": "1971-01-30T00:23:36.377684025Z",
-					"AuthTime": "2088-11-09T12:09:14.051840239Z",
-					"AccessTokenHash": "蕖¤'+ʣȍ瓁U4鞀",
-					"AuthenticationContextClassReference": "ʏÑęN\u003c_z",
-					"AuthenticationMethodsReference": "ț髄A",
-					"CodeHash": "4磔_袻vÓG-壧丵礴鋈k蟵pAɂʅ",
+					"Nonce": "ǎ^嫯R忑隯ƗƋ*L\u0026",
+					"ExpiresAt": "1989-06-02T14:40:29.613836765Z",
+					"IssuedAt": "2052-03-26T02:39:27.882495556Z",
+					"RequestedAt": "2038-04-06T10:46:24.698586972Z",
+					"AuthTime": "2003-01-05T11:30:18.206004879Z",
+					"AccessTokenHash": "ğǫ\\aȊ4ț髄Al",
+					"AuthenticationContextClassReference": "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#",
+					"AuthenticationMethodsReferences": [
+						"装ƹýĸŴB岺Ð嫹Sx镯荫őł疂ư墫"
+					],
+					"CodeHash": "\u0026鶡",
 					"Extra": {
-						"#\u0026PƢ曰l騌蘙螤\\阏Đ镴Ƥm蔻ǭ\\鿞": 1677215584,
-						"Y\u0026鶡萷ɵ啜s攦Ɩïdnǔ": {
-							",t猟i\u0026\u0026Q@ǤǟǗǪ飘ȱF?Ƈ": {
-								"~劰û橸ɽ銐ƭ?}H": null,
-								"癑勦e骲v0H晦XŘO溪V蔓": {
-									"碼Ǫ": false
+						"rǓ\\BRë_g\"ʎ啴SƇMǃļū": {
+							"4撎胬龯,t猟i\u0026\u0026Q@ǤǟǗ": [
+								1239190737
+							],
+							"飘ȱF?Ƈ畋": {
+								"劰û橸ɽ銐ƭ?}HƟ玈鳚": null,
+								"骲v0H晦XŘO溪V蔓Ȍ+~ē埅Ȝ": {
+									"4Ǟ": false
 								}
-							},
-							"钻煐ɨəÅDČ{Ȩʦ4撎": [
-								3684968178
-							]
-						}
+							}
+						},
+						"鑳绪": 2738428764
 					}
 				},
 				"Headers": {
 					"Extra": {
-						"ĊdŘ鸨EJ毕懴řĬń戹": {
-							"诳DT=3骜Ǹ,": {
-								"\u003e": {
-									"ǰ": false
-								},
-								"ɁOƪ穋嶿鳈恱va": null
-							},
-							"豑觳翢砜Fȏl": [
-								927958776
-							]
-						},
-						"埅ȜʁɁ;Bd謺錳4帳Ņ": 388005986
+						"d謺錳4帳ŅǃĊ": 663773398,
+						"Ř鸨EJ": {
+							"Ǽǟ迍阊v\"豑觳翢砜": [
+								995342744
+							],
+							"ȏl鐉诳DT=3骜Ǹ": {
+								"厷ɁOƪ穋嶿鳈恱va|载ǰɱ汶C]ɲ": null,
+								"荤Ý呐ʣ®ǅȪǣǎǔ爣縗ɦü": {
+									"H :靥湤庤毩fɤȆʪ融ƆuŤn": true
+								}
+							}
+						}
 					}
 				},
 				"ExpiresAt": {
-					"C]ɲ'=ĸ闒NȢȰ.醋": "1970-07-19T18:03:29.902062193Z",
-					"fɤȆʪ融ƆuŤn": "2064-01-24T20:34:16.593152073Z",
-					"爣縗ɦüHêQ仏1ő": "2102-03-17T06:24:40.256846902Z"
+					"韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ": "1970-04-27T04:31:30.902468229Z"
 				},
-				"Username": "韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ",
-				"Subject": "闺髉龳ǽÙ龦O亾EW莛8嘶×"
+				"Username": "髉龳ǽÙ",
+				"Subject": "\u0026¥潝邎Ȗ莅ŝǔ盕戙鵮碡ʯiŬŽ"
 			},
 			"custom": {
-				"providerUID": "鵮碡ʯiŬŽ非Ĝ眧Ĭ葜SŦ餧Ĭ倏4",
-				"providerName": "nŐǛ3",
-				"providerType": "闣ʬ橳(ý綃ʃʚƟ覣k眐4Ĉt",
+				"providerUID": "Ĝ眧Ĭ",
+				"providerName": "ŉ2ƋŢ觛ǂ焺nŐǛ",
+				"providerType": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
 				"oidc": {
-					"upstreamRefreshToken": "嵽痊w©Ź榨Q|ôɵt毇妬",
-					"upstreamAccessToken": "巈環_ɑ"
+					"upstreamRefreshToken": "tC嵽痊w",
+					"upstreamAccessToken": "a紽ǒ|鰽ŋ猊I",
+					"upstreamSubject": "妬\u003e6鉢緋uƴŤȱʀ",
+					"upstreamIssuer": ":設虝27就伒犘c"
 				},
 				"ldap": {
-					"userDN": "ƍ蛊ʚ£:設虝27"
+					"userDN": "ɏȫ齁š%Op",
+					"extraRefreshAttributes": {
+						"T妼É4İ\u003e×1": "ʥ笿0D",
+						"÷驣7Ʀ澉1æɽ誮": "ʫ繕ȫ",
+						"ŚB碠k9": "i磊ůď逳鞪?3)藵睋邔\u0026Ű"
+					}
 				},
 				"activedirectory": {
-					"userDN": "伒犘c钡ɏȫ"
+					"userDN": "s",
+					"extraRefreshAttributes": {
+						"ƉǢIȽ齤士bEǎ儯惝IozŁ5rƖ螼": "偶宾儮猷V麹Œ颛Ė應,Ɣ鬅X¤"
+					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"š%OpKȱ藚ɏ¬Ê蒭堜",
-			"ɽ誮rʨ鷞aŚB碠k",
-			"Ċi磊ůď逳鞪?3)藵睋"
+			"tO灞浛a齙\\蹼偦歛ơ",
+			"皦pSǬŝ社Vƅȭǝ*"
 		],
 		"grantedAudience": [
-			"\u0026Ű惫蜀Ģ¡圔",
-			"墀jMʥ",
-			"+î艔垎0"
+			"ĝ\"zvưã置bņ抰蛖a³2ʫ",
+			"Ŷɽ蔒PR}Ųʓl{鼐jÃ轘屔挝",
+			"Œų崓ļ憽-蹐È_¸]fś"
 		]
 	},
 	"version": "2"

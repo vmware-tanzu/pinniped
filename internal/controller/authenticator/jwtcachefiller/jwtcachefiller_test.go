@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package jwtcachefiller
@@ -318,13 +318,13 @@ func TestController(t *testing.T) {
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.jwtAuthenticators...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
-			testLog := testlogger.New(t)
+			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
 
 			if tt.cache != nil {
 				tt.cache(t, cache, tt.wantClose)
 			}
 
-			controller := New(cache, informers.Authentication().V1alpha1().JWTAuthenticators(), testLog)
+			controller := New(cache, informers.Authentication().V1alpha1().JWTAuthenticators(), testLog.Logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

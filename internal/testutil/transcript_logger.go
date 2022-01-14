@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -17,7 +17,7 @@ type TranscriptLogger struct {
 	transcript []TranscriptLogMessage
 }
 
-var _ logr.Logger = &TranscriptLogger{}
+var _ logr.LogSink = &TranscriptLogger{}
 
 type TranscriptLogMessage struct {
 	Level   string
@@ -36,7 +36,7 @@ func (log *TranscriptLogger) Transcript() []TranscriptLogMessage {
 	return result
 }
 
-func (log *TranscriptLogger) Info(msg string, keysAndValues ...interface{}) {
+func (log *TranscriptLogger) Info(level int, msg string, keysAndValues ...interface{}) {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 	log.transcript = append(log.transcript, TranscriptLogMessage{
@@ -54,18 +54,20 @@ func (log *TranscriptLogger) Error(_ error, msg string, _ ...interface{}) {
 	})
 }
 
-func (*TranscriptLogger) Enabled() bool {
+func (log *TranscriptLogger) Enabled(level int) bool {
 	return true
 }
 
-func (log *TranscriptLogger) V(_ int) logr.Logger {
+func (log *TranscriptLogger) V(_ int) logr.LogSink {
 	return log
 }
 
-func (log *TranscriptLogger) WithName(_ string) logr.Logger {
+func (log *TranscriptLogger) WithName(_ string) logr.LogSink {
 	return log
 }
 
-func (log *TranscriptLogger) WithValues(_ ...interface{}) logr.Logger {
+func (log *TranscriptLogger) WithValues(_ ...interface{}) logr.LogSink {
 	return log
 }
+
+func (log *TranscriptLogger) Init(info logr.RuntimeInfo) {}

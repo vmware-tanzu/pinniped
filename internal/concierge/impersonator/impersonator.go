@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -31,6 +31,7 @@ import (
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
+	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/audit/policy"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
@@ -211,7 +212,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		}
 
 		// wire up a fake audit backend at the metadata level so we can preserve the original user during nested impersonation
-		serverConfig.AuditPolicyChecker = policy.FakeChecker(auditinternal.LevelMetadata, nil)
+		serverConfig.AuditPolicyRuleEvaluator = policy.NewFakePolicyRuleEvaluator(auditinternal.LevelMetadata, nil)
 		serverConfig.AuditBackend = &auditfake.Backend{}
 
 		// Probe the API server to figure out if anonymous auth is enabled.
@@ -511,7 +512,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			ae := request.AuditEventFrom(r.Context())
+			ae := audit.AuditEventFrom(r.Context())
 			if ae == nil {
 				plog.Warning("aggregated API server logic did not set audit event but it is always supposed to do so",
 					"url", r.URL.String(),

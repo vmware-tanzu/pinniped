@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package server is the command line entry point for pinniped-concierge.
@@ -35,7 +35,6 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
@@ -96,8 +95,6 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		"/etc/podinfo",
 		"path to Downward API volume mount",
 	)
-
-	plog.RemoveKlogGlobalFlags()
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.

@@ -286,7 +286,13 @@ func (g *GradatedConditions) Append(condition *v1alpha1.Condition, isFatal bool)
 	g.gradatedConditions = append(g.gradatedConditions, gradatedCondition{condition: condition, isFatal: isFatal})
 }
 
-func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, secretInformer corev1informers.SecretInformer, validatedSecretVersionsCache ValidatedSettingsCacheI, config *upstreamldap.ProviderConfig) GradatedConditions {
+func ValidateGenericLDAP(
+	ctx context.Context,
+	upstream UpstreamGenericLDAPIDP,
+	secretInformer corev1informers.SecretInformer,
+	validatedSettingsCache ValidatedSettingsCacheI,
+	config *upstreamldap.ProviderConfig,
+) GradatedConditions {
 	conditions := GradatedConditions{}
 
 	secretValidCondition, currentSecretVersion := ValidateSecret(secretInformer, upstream.Spec().BindSecretName(), upstream.Namespace(), config)
@@ -298,7 +304,7 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 	var ldapConnectionValidCondition, searchBaseFoundCondition *v1alpha1.Condition
 	// No point in trying to connect to the server if the config was already determined to be invalid.
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSecretVersionsCache, upstream, config, currentSecretVersion)
+		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSettingsCache, upstream, config, currentSecretVersion)
 		conditions.Append(ldapConnectionValidCondition, false)
 		if searchBaseFoundCondition != nil { // currently, only used for AD, so may be nil
 			conditions.Append(searchBaseFoundCondition, true)
@@ -307,8 +313,14 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 	return conditions
 }
 
-func validateAndSetLDAPServerConnectivityAndSearchBase(ctx context.Context, validatedSecretVersionsCache ValidatedSettingsCacheI, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) (*v1alpha1.Condition, *v1alpha1.Condition) {
-	validatedSettings, hasPreviousValidatedSettings := validatedSecretVersionsCache.Get(upstream.Name(), currentSecretVersion, upstream.Generation())
+func validateAndSetLDAPServerConnectivityAndSearchBase(
+	ctx context.Context,
+	validatedSettingsCache ValidatedSettingsCacheI,
+	upstream UpstreamGenericLDAPIDP,
+	config *upstreamldap.ProviderConfig,
+	currentSecretVersion string,
+) (*v1alpha1.Condition, *v1alpha1.Condition) {
+	validatedSettings, hasPreviousValidatedSettings := validatedSettingsCache.Get(upstream.Name(), currentSecretVersion, upstream.Generation())
 	var ldapConnectionValidCondition, searchBaseFoundCondition *v1alpha1.Condition
 
 	if hasPreviousValidatedSettings && validatedSettings.UserSearchBase != "" && validatedSettings.GroupSearchBase != "" {
@@ -329,13 +341,14 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(ctx context.Context, vali
 		searchBaseFoundCondition = upstream.Spec().DetectAndSetSearchBase(searchBaseTimeout, config)
 
 		// When there were no failures, write the newly validated settings to the cache.
-		// It's okay for the search base condition to be nil, but if it exists make sure it was not a failure.
+		// It's okay for the search base condition to be nil, since it's only used by Active Directory providers,
+		// but if it exists make sure it was not a failure.
 		if ldapConnectionValidCondition.Status == v1alpha1.ConditionTrue &&
 			(searchBaseFoundCondition == nil || (searchBaseFoundCondition.Status == v1alpha1.ConditionTrue)) {
 			// Remember (in-memory for this pod) that the controller has successfully validated the LDAP or AD provider
 			// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
 			// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
-			validatedSecretVersionsCache.Set(upstream.Name(), ValidatedSettings{
+			validatedSettingsCache.Set(upstream.Name(), ValidatedSettings{
 				IDPSpecGeneration:         upstream.Generation(),
 				BindSecretResourceVersion: currentSecretVersion,
 				LDAPConnectionProtocol:    config.ConnectionProtocol,

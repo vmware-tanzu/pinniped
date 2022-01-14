@@ -226,7 +226,7 @@ type UpstreamActiveDirectoryIdentityProviderICache interface {
 
 type activeDirectoryWatcherController struct {
 	cache                                   UpstreamActiveDirectoryIdentityProviderICache
-	validatedSecretVersionsCache            upstreamwatchers.ValidatedSettingsCacheI
+	validatedSettingsCache                  upstreamwatchers.ValidatedSettingsCacheI
 	ldapDialer                              upstreamldap.LDAPDialer
 	client                                  pinnipedclientset.Interface
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer
@@ -257,7 +257,7 @@ func New(
 // For test dependency injection purposes.
 func newInternal(
 	idpCache UpstreamActiveDirectoryIdentityProviderICache,
-	validatedSecretVersionsCache upstreamwatchers.ValidatedSettingsCacheI,
+	validatedSettingsCache upstreamwatchers.ValidatedSettingsCacheI,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer,
@@ -266,7 +266,7 @@ func newInternal(
 ) controllerlib.Controller {
 	c := activeDirectoryWatcherController{
 		cache:                                   idpCache,
-		validatedSecretVersionsCache:            validatedSecretVersionsCache,
+		validatedSettingsCache:                  validatedSettingsCache,
 		ldapDialer:                              ldapDialer,
 		client:                                  client,
 		activeDirectoryIdentityProviderInformer: activeDirectoryIdentityProviderInformer,
@@ -351,7 +351,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		}
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, adUpstreamImpl, c.secretInformer, c.validatedSettingsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

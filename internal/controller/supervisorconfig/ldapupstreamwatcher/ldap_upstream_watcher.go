@@ -134,7 +134,7 @@ type UpstreamLDAPIdentityProviderICache interface {
 
 type ldapWatcherController struct {
 	cache                        UpstreamLDAPIdentityProviderICache
-	validatedSecretVersionsCache upstreamwatchers.ValidatedSettingsCacheI
+	validatedSettingsCache       upstreamwatchers.ValidatedSettingsCacheI
 	ldapDialer                   upstreamldap.LDAPDialer
 	client                       pinnipedclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
@@ -165,7 +165,7 @@ func New(
 // For test dependency injection purposes.
 func newInternal(
 	idpCache UpstreamLDAPIdentityProviderICache,
-	validatedSecretVersionsCache upstreamwatchers.ValidatedSettingsCacheI,
+	validatedSettingsCache upstreamwatchers.ValidatedSettingsCacheI,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
@@ -174,7 +174,7 @@ func newInternal(
 ) controllerlib.Controller {
 	c := ldapWatcherController{
 		cache:                        idpCache,
-		validatedSecretVersionsCache: validatedSecretVersionsCache,
+		validatedSettingsCache:       validatedSettingsCache,
 		ldapDialer:                   ldapDialer,
 		client:                       client,
 		ldapIdentityProviderInformer: ldapIdentityProviderInformer,
@@ -243,7 +243,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 		Dialer: c.ldapDialer,
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.validatedSecretVersionsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.validatedSettingsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

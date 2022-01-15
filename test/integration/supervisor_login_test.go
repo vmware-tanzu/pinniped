@@ -130,6 +130,40 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
+			name: "oidc without refresh token",
+			maybeSkip: func(t *testing.T) {
+				// never need to skip this test
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: env.SupervisorUpstreamOIDC.Issuer,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+					},
+					Client: idpv1alpha1.OIDCClient{
+						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+					},
+					Claims: idpv1alpha1.OIDCClaims{
+						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+					},
+					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+						AdditionalScopes: []string{"email"}, // does not ask for offline_access.
+					},
+				}, idpv1alpha1.PhaseReady)
+				return oidcIDP.Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
+			},
+			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+		},
+		{
 			name: "oidc with CLI password flow",
 			maybeSkip: func(t *testing.T) {
 				// never need to skip this test

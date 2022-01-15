@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/mocks/mockkeyset"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -40,6 +41,9 @@ func TestProviderConfig(t *testing.T) {
 				Endpoint: oauth2.Endpoint{AuthURL: "https://example.com"},
 				Scopes:   []string{"scope1", "scope2"},
 			},
+			Provider: &mockProvider{
+				rawClaims: []byte(`{"userinfo_endpoint": "https://example.com/userinfo"}`),
+			},
 		}
 		require.Equal(t, "test-name", p.GetName())
 		require.Equal(t, "test-client-id", p.GetClientID())
@@ -54,6 +58,16 @@ func TestProviderConfig(t *testing.T) {
 		require.True(t, p.AllowsPasswordGrant())
 		p.AllowPasswordGrant = false
 		require.False(t, p.AllowsPasswordGrant())
+
+		require.True(t, p.HasUserInfoURL())
+		p.Provider = &mockProvider{
+			rawClaims: []byte(`{"some_other_endpoint": "https://example.com/blah"}`),
+		}
+		require.False(t, p.HasUserInfoURL())
+		p.Provider = &mockProvider{
+			rawClaims: []byte(`{`),
+		}
+		require.False(t, p.HasUserInfoURL())
 	})
 
 	const (
@@ -455,73 +469,171 @@ func TestProviderConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("RevokeRefreshToken", func(t *testing.T) {
+	t.Run("RevokeToken", func(t *testing.T) {
 		tests := []struct {
-			name             string
-			nilRevocationURL bool
-			statusCodes      []int
-			returnErrBodies  []string
-			wantErr          string
-			wantNumRequests  int
+			name                 string
+			tokenType            provider.RevocableTokenType
+			nilRevocationURL     bool
+			unreachableServer    bool
+			returnStatusCodes    []int
+			returnErrBodies      []string
+			wantErr              string
+			wantErrRegexp        string // use either wantErr or wantErrRegexp
+			wantRetryableErrType bool   // additionally assert error type when wantErr is non-empty
+			wantNumRequests      int
+			wantTokenTypeHint    string
 		}{
 			{
-				name:             "success without calling the server when there is no revocation URL set",
+				name:             "success without calling the server when there is no revocation URL set for refresh token",
+				tokenType:        provider.RefreshTokenType,
 				nilRevocationURL: true,
 				wantNumRequests:  0,
 			},
 			{
-				name:            "success when the server returns 200 OK on the first call",
-				statusCodes:     []int{http.StatusOK},
-				wantNumRequests: 1,
+				name:             "success without calling the server when there is no revocation URL set for access token",
+				tokenType:        provider.AccessTokenType,
+				nilRevocationURL: true,
+				wantNumRequests:  0,
 			},
 			{
-				name:        "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call",
-				statusCodes: []int{http.StatusBadRequest, http.StatusOK},
+				name:              "success when the server returns 200 OK on the first call for refresh token",
+				tokenType:         provider.RefreshTokenType,
+				returnStatusCodes: []int{http.StatusOK},
+				wantNumRequests:   1,
+				wantTokenTypeHint: "refresh_token",
+			},
+			{
+				name:              "success when the server returns 200 OK on the first call for access token",
+				tokenType:         provider.AccessTokenType,
+				returnStatusCodes: []int{http.StatusOK},
+				wantNumRequests:   1,
+				wantTokenTypeHint: "access_token",
+			},
+			{
+				name:              "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for refresh token",
+				tokenType:         provider.RefreshTokenType,
+				returnStatusCodes: []int{http.StatusBadRequest, http.StatusOK},
 				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
-				wantNumRequests: 2,
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
+				wantNumRequests:   2,
+				wantTokenTypeHint: "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
-				statusCodes:     []int{http.StatusBadRequest, http.StatusBadRequest},
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
-				wantErr:         `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
-				wantNumRequests: 2,
+				name:              "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for access token",
+				tokenType:         provider.AccessTokenType,
+				returnStatusCodes: []int{http.StatusBadRequest, http.StatusOK},
+				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
+				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
+				wantNumRequests:   2,
+				wantTokenTypeHint: "access_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request with bad JSON body on the first call",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{`invalid JSON body`},
-				wantErr:         `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
-				wantNumRequests: 1,
+				name:                 "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusBadRequest},
+				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
+				wantErr:              `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
+				wantRetryableErrType: false,
+				wantNumRequests:      2,
+				wantTokenTypeHint:    "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request with empty body",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{``},
-				wantErr:         `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
-				wantNumRequests: 1,
+				name:                 "error when the server returns 400 Bad Request with bad JSON body on the first call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest},
+				returnErrBodies:      []string{`invalid JSON body`},
+				wantErr:              `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
+				wantRetryableErrType: false,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
 			},
 			{
-				name:            "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
-				statusCodes:     []int{http.StatusBadRequest, http.StatusForbidden},
-				returnErrBodies: []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
-				wantErr:         "server responded with status 403",
-				wantNumRequests: 2,
+				name:                 "error when the server returns 400 Bad Request with empty body",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest},
+				returnErrBodies:      []string{``},
+				wantErr:              `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
+				wantRetryableErrType: false,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
 			},
 			{
-				name:            "error when server returns any other 400 error on first call",
-				statusCodes:     []int{http.StatusBadRequest},
-				returnErrBodies: []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
-				wantErr:         `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
-				wantNumRequests: 1,
+				name:                 "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusForbidden},
+				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
+				wantErr:              "server responded with status 403",
+				wantRetryableErrType: false,
+				wantNumRequests:      2,
+				wantTokenTypeHint:    "refresh_token",
 			},
 			{
-				name:            "error when server returns any other error aside from 400 on first call",
-				statusCodes:     []int{http.StatusForbidden},
-				returnErrBodies: []string{""},
-				wantErr:         "server responded with status 403",
-				wantNumRequests: 1,
+				name:                 "error when server returns any other 400 error on first call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest},
+				returnErrBodies:      []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
+				wantErr:              `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
+				wantRetryableErrType: false,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
+			},
+			{
+				name:                 "error when server returns any other error aside from 400 on first call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusForbidden},
+				returnErrBodies:      []string{""},
+				wantErr:              "server responded with status 403",
+				wantRetryableErrType: false,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
+			},
+			{
+				name:                 "retryable error when server returns 503 on first call",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusServiceUnavailable}, // 503
+				returnErrBodies:      []string{""},
+				wantErr:              "retryable revocation error: server responded with status 503",
+				wantRetryableErrType: true,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
+			},
+			{
+				name:                 "retryable error when the server returns 400 Bad Request on the first call due to client auth, then 503 on second call",
+				tokenType:            provider.AccessTokenType,
+				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusServiceUnavailable}, // 400, 503
+				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
+				wantErr:              "retryable revocation error: server responded with status 503",
+				wantRetryableErrType: true,
+				wantNumRequests:      2,
+				wantTokenTypeHint:    "access_token",
+			},
+			{
+				name:                 "retryable error when server returns any 5xx status on first call, testing lower bound of 5xx range",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{http.StatusInternalServerError}, // 500
+				returnErrBodies:      []string{""},
+				wantErr:              "retryable revocation error: server responded with status 500",
+				wantRetryableErrType: true,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
+			},
+			{
+				name:                 "retryable error when server returns any 5xx status on first call, testing upper bound of 5xx range",
+				tokenType:            provider.RefreshTokenType,
+				returnStatusCodes:    []int{599}, // not defined by an RFC, but sometimes considered Network Connect Timeout Error
+				returnErrBodies:      []string{""},
+				wantErr:              "retryable revocation error: server responded with status 599",
+				wantRetryableErrType: true,
+				wantNumRequests:      1,
+				wantTokenTypeHint:    "refresh_token",
+			},
+			{
+				name:                 "retryable error when the server cannot be reached",
+				tokenType:            provider.AccessTokenType,
+				unreachableServer:    true,
+				wantErrRegexp:        "^retryable revocation error: Post .*: dial tcp .*: connect: connection refused$",
+				wantRetryableErrType: true,
+				wantNumRequests:      0,
 			},
 		}
 		for _, tt := range tests {
@@ -536,23 +648,23 @@ func TestProviderConfig(t *testing.T) {
 					if numRequests == 1 {
 						// First request should use client_id/client_secret params.
 						require.Equal(t, 4, len(r.Form))
+						require.Equal(t, "test-upstream-token", r.Form.Get("token"))
+						require.Equal(t, tt.wantTokenTypeHint, r.Form.Get("token_type_hint"))
 						require.Equal(t, "test-client-id", r.Form.Get("client_id"))
 						require.Equal(t, "test-client-secret", r.Form.Get("client_secret"))
-						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
-						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
 					} else {
 						// Second request, if there is one, should use basic auth.
 						require.Equal(t, 2, len(r.Form))
-						require.Equal(t, "refresh_token", r.Form.Get("token_type_hint"))
-						require.Equal(t, "test-initial-refresh-token", r.Form.Get("token"))
+						require.Equal(t, "test-upstream-token", r.Form.Get("token"))
+						require.Equal(t, tt.wantTokenTypeHint, r.Form.Get("token_type_hint"))
 						username, password, hasBasicAuth := r.BasicAuth()
 						require.True(t, hasBasicAuth, "request should have had basic auth but did not")
 						require.Equal(t, "test-client-id", username)
 						require.Equal(t, "test-client-secret", password)
 					}
-					if tt.statusCodes[numRequests-1] != http.StatusOK {
+					if tt.returnStatusCodes[numRequests-1] != http.StatusOK {
 						w.Header().Set("content-type", "application/json")
-						http.Error(w, tt.returnErrBodies[numRequests-1], tt.statusCodes[numRequests-1])
+						http.Error(w, tt.returnErrBodies[numRequests-1], tt.returnStatusCodes[numRequests-1])
 					}
 					// Otherwise, responds with 200 OK and empty body by default.
 				}))
@@ -574,16 +686,35 @@ func TestProviderConfig(t *testing.T) {
 					p.RevocationURL = nil
 				}
 
-				err = p.RevokeRefreshToken(
+				if tt.unreachableServer {
+					tokenServer.Close() // make the sever unreachable by closing it before making any requests
+				}
+
+				err = p.RevokeToken(
 					context.Background(),
-					"test-initial-refresh-token",
+					"test-upstream-token",
+					tt.tokenType,
 				)
 
 				require.Equal(t, tt.wantNumRequests, numRequests,
 					"did not make expected number of requests to revocation endpoint")
 
-				if tt.wantErr != "" {
-					require.EqualError(t, err, tt.wantErr)
+				if tt.wantErr != "" || tt.wantErrRegexp != "" { // nolint:nestif
+					if tt.wantErr != "" {
+						require.EqualError(t, err, tt.wantErr)
+					} else {
+						require.Error(t, err)
+						require.Regexp(t, tt.wantErrRegexp, err.Error())
+					}
+
+					if tt.wantRetryableErrType {
+						require.ErrorAs(t, err, &provider.RetryableRevocationError{})
+					} else if errors.As(err, &provider.RetryableRevocationError{}) {
+						// There is no NotErrorAs() assertion available in the current version of testify, so do the equivalent.
+						require.Fail(t, "error should not be As RetryableRevocationError")
+					}
+				} else {
+					require.NoError(t, err)
 				}
 			})
 		}
@@ -609,6 +740,7 @@ func TestProviderConfig(t *testing.T) {
 			tok              *oauth2.Token
 			nonce            nonce.Nonce
 			requireIDToken   bool
+			requireUserInfo  bool
 			userInfo         *oidc.UserInfo
 			rawClaims        []byte
 			userInfoErr      error
@@ -695,6 +827,34 @@ func TestProviderConfig(t *testing.T) {
 				},
 			},
 			{
+				name:            "userinfo is required, token with id, access and refresh tokens, valid nonce, and userinfo with a value that doesn't exist in the id token",
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:           "some-nonce",
+				requireIDToken:  true,
+				requireUserInfo: true,
+				rawClaims:       []byte(`{"userinfo_endpoint": "not-empty"}`),
+				userInfo:        forceUserInfoWithClaims("some-subject", `{"name": "Pinny TheSeal", "sub": "some-subject"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
+							"name":  "Pinny TheSeal",
+						},
+					},
+				},
+			},
+			{
 				name:           "claims from userinfo override id token claims",
 				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA"}),
 				nonce:          "some-nonce",
@@ -744,6 +904,32 @@ func TestProviderConfig(t *testing.T) {
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
 							"name":  "Pinny TheSeal",
+						},
+					},
+				},
+			},
+			{
+				name:            "token with id, access and refresh tokens and valid nonce, but no userinfo endpoint from discovery and it's not required",
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				nonce:           "some-nonce",
+				requireIDToken:  true,
+				requireUserInfo: false,
+				rawClaims:       []byte(`{"not_the_userinfo_endpoint": "some-other-endpoint"}`),
+				wantMergedTokens: &oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Type:   "test-token-type",
+						Expiry: metav1.NewTime(expiryTime),
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-initial-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token: goodIDToken,
+						Claims: map[string]interface{}{
+							"iss":   "some-issuer",
+							"nonce": "some-nonce",
+							"sub":   "some-subject",
 						},
 					},
 				},
@@ -839,6 +1025,23 @@ func TestProviderConfig(t *testing.T) {
 				wantErr:        "received response missing ID token",
 			},
 			{
+				name:            "expected to have userinfo, but doesn't",
+				tok:             testTokenWithoutIDToken,
+				nonce:           "some-other-nonce",
+				requireUserInfo: true,
+				rawClaims:       []byte(`{}`),
+				wantErr:         "could not fetch user info claims: userinfo endpoint not found, but is required",
+			},
+			{
+				name:            "expected to have id token and userinfo, but doesn't have either",
+				tok:             testTokenWithoutIDToken,
+				nonce:           "some-other-nonce",
+				requireUserInfo: true,
+				requireIDToken:  true,
+				rawClaims:       []byte(`{}`),
+				wantErr:         "received response missing ID token",
+			},
+			{
 				name:           "mismatched access token hash",
 				tok:            testTokenWithoutIDToken,
 				nonce:          "some-other-nonce",
@@ -898,7 +1101,7 @@ func TestProviderConfig(t *testing.T) {
 						userInfoErr: tt.userInfoErr,
 					},
 				}
-				gotTok, err := p.ValidateTokenAndMergeWithUserInfo(context.Background(), tt.tok, tt.nonce, tt.requireIDToken)
+				gotTok, err := p.ValidateTokenAndMergeWithUserInfo(context.Background(), tt.tok, tt.nonce, tt.requireIDToken, tt.requireUserInfo)
 				if tt.wantErr != "" {
 					require.Error(t, err)
 					require.Equal(t, tt.wantErr, err.Error())
@@ -983,6 +1186,36 @@ func TestProviderConfig(t *testing.T) {
 				wantUserInfoCalled: false,
 			},
 			{
+				name:        "valid but userinfo endpoint could not be found due to parse error",
+				authCode:    "valid",
+				returnIDTok: validIDToken,
+				wantToken: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
+						Token:  "test-access-token",
+						Expiry: metav1.Time{},
+					},
+					RefreshToken: &oidctypes.RefreshToken{
+						Token: "test-refresh-token",
+					},
+					IDToken: &oidctypes.IDToken{
+						Token:  validIDToken,
+						Expiry: metav1.Time{},
+						Claims: map[string]interface{}{
+							"foo": "bar",
+							"bat": "baz",
+							"aud": "test-client-id",
+							"iat": 1.606768593e+09,
+							"jti": "test-jti",
+							"nbf": 1.606768593e+09,
+							"sub": "test-user",
+						},
+					},
+				},
+				// cannot be parsed as json, but note that in this case constructing a real provider would have failed
+				rawClaims:          []byte(`{`),
+				wantUserInfoCalled: false,
+			},
+			{
 				name:        "valid",
 				authCode:    "valid",
 				returnIDTok: validIDToken,
@@ -1010,13 +1243,6 @@ func TestProviderConfig(t *testing.T) {
 				},
 				rawClaims:          []byte(`{}`), // user info not supported
 				wantUserInfoCalled: false,
-			},
-			{
-				name:        "user info discovery parse error",
-				authCode:    "valid",
-				returnIDTok: validIDToken,
-				rawClaims:   []byte(`junk`), // user info discovery fails
-				wantErr:     "could not fetch user info claims: could not unmarshal discovery JSON: invalid character 'j' looking for beginning of value",
 			},
 			{
 				name:        "user info fetch error",

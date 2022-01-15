@@ -5,6 +5,7 @@
 package downstreamsession
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 const (
@@ -56,6 +58,55 @@ func MakeDownstreamSession(subject string, username string, groups []string, cus
 		oidc.DownstreamGroupsClaim:   groups,
 	}
 	return openIDSession
+}
+
+func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdentityProviderI, token *oidctypes.Token) (*psession.CustomSessionData, error) {
+	upstreamSubject, err := ExtractStringClaimValue(oidc.IDTokenSubjectClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+	if err != nil {
+		return nil, err
+	}
+	upstreamIssuer, err := ExtractStringClaimValue(oidc.IDTokenIssuerClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+	if err != nil {
+		return nil, err
+	}
+
+	customSessionData := &psession.CustomSessionData{
+		ProviderUID:  oidcUpstream.GetResourceUID(),
+		ProviderName: oidcUpstream.GetName(),
+		ProviderType: psession.ProviderTypeOIDC,
+		OIDC: &psession.OIDCSessionData{
+			UpstreamIssuer:  upstreamIssuer,
+			UpstreamSubject: upstreamSubject,
+		},
+	}
+
+	const pleaseCheck = "please check configuration of OIDCIdentityProvider and the client in the " +
+		"upstream provider's API/UI and try to get a refresh token if possible"
+	logKV := []interface{}{
+		"upstreamName", oidcUpstream.GetName(),
+		"scopes", oidcUpstream.GetScopes(),
+		"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams(),
+	}
+
+	hasRefreshToken := token.RefreshToken != nil && token.RefreshToken.Token != ""
+	hasAccessToken := token.AccessToken != nil && token.AccessToken.Token != ""
+	switch {
+	case hasRefreshToken: // we prefer refresh tokens, so check for this first
+		customSessionData.OIDC.UpstreamRefreshToken = token.RefreshToken.Token
+	case hasAccessToken: // as a fallback, we can use the access token as long as there is a userinfo endpoint
+		if !oidcUpstream.HasUserInfoURL() {
+			plog.Warning("access token was returned by upstream provider during login without a refresh token "+
+				"and there was no userinfo endpoint available on the provider. "+pleaseCheck, logKV...)
+			return nil, errors.New("access token was returned by upstream provider but there was no userinfo endpoint")
+		}
+		plog.Info("refresh token not returned by upstream provider during login, using access token instead. "+pleaseCheck, logKV...)
+		customSessionData.OIDC.UpstreamAccessToken = token.AccessToken.Token
+	default:
+		plog.Warning("refresh token and access token not returned by upstream provider during login. "+pleaseCheck, logKV...)
+		return nil, errors.New("neither access token nor refresh token returned by upstream provider")
+	}
+
+	return customSessionData, nil
 }
 
 // GrantScopesIfRequested auto-grants the scopes for which we do not require end-user approval, if they were requested.

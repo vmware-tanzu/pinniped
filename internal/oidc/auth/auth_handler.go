@@ -174,16 +174,6 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
 	}
 
-	if token.RefreshToken == nil || token.RefreshToken.Token == "" {
-		plog.Warning("refresh token not returned by upstream provider during password grant, "+
-			"please check configuration of OIDCIdentityProvider and the client in the upstream provider's API/UI",
-			"upstreamName", oidcUpstream.GetName(),
-			"scopes", oidcUpstream.GetScopes())
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHint(
-				"Refresh token not returned by upstream provider during password grant."), true)
-	}
-
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
@@ -191,31 +181,14 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 	}
-	upstreamSubject, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenSubjectClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+
+	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token)
 	if err != nil {
-		// Return a user-friendly error for this case which is entirely within our control.
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
-			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
-		)
-	}
-	upstreamIssuer, err := downstreamsession.ExtractStringClaimValue(oidc.IDTokenIssuerClaim, oidcUpstream.GetName(), token.IDToken.Claims)
-	if err != nil {
-		// Return a user-friendly error for this case which is entirely within our control.
 		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 	}
 
-	customSessionData := &psession.CustomSessionData{
-		ProviderUID:  oidcUpstream.GetResourceUID(),
-		ProviderName: oidcUpstream.GetName(),
-		ProviderType: psession.ProviderTypeOIDC,
-		OIDC: &psession.OIDCSessionData{
-			UpstreamRefreshToken: token.RefreshToken.Token,
-			UpstreamIssuer:       upstreamIssuer,
-			UpstreamSubject:      upstreamSubject,
-		},
-	}
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
 }
 

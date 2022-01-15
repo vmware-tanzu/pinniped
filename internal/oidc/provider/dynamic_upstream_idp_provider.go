@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"sync"
 
@@ -15,6 +16,14 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
+)
+
+type RevocableTokenType string
+
+// These strings correspond to the token types defined by https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+const (
+	RefreshTokenType RevocableTokenType = "refresh_token"
+	AccessTokenType  RevocableTokenType = "access_token"
 )
 
 type UpstreamOIDCIdentityProviderI interface {
@@ -30,6 +39,9 @@ type UpstreamOIDCIdentityProviderI interface {
 
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
+
+	// HasUserInfoURL returns whether there is a non-empty value for userinfo_endpoint fetched from discovery.
+	HasUserInfoURL() bool
 
 	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
 	GetScopes() []string
@@ -68,13 +80,16 @@ type UpstreamOIDCIdentityProviderI interface {
 	// validate the ID token.
 	PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
-	// RevokeRefreshToken will attempt to revoke the given token, if the provider has a revocation endpoint.
-	RevokeRefreshToken(ctx context.Context, refreshToken string) error
+	// RevokeToken will attempt to revoke the given token, if the provider has a revocation endpoint.
+	// It may return an error wrapped by a RetryableRevocationError, which is an error indicating that it may
+	// be worth trying to revoke the same token again later. Any other error returned should be assumed to
+	// represent an error such that it is not worth retrying revocation later, even though revocation failed.
+	RevokeToken(ctx context.Context, token string, tokenType RevocableTokenType) error
 
 	// ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response
 	// into the ID token's claims, if the provider offers the userinfo endpoint. It returns the validated/updated
 	// tokens, or an error.
-	ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool) (*oidctypes.Token, error)
+	ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error)
 }
 
 type UpstreamLDAPIdentityProviderI interface {
@@ -161,4 +176,20 @@ func (p *dynamicUpstreamIDPProvider) GetActiveDirectoryIdentityProviders() []Ups
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
 	return p.activeDirectoryUpstreams
+}
+
+type RetryableRevocationError struct {
+	wrapped error
+}
+
+func NewRetryableRevocationError(wrapped error) RetryableRevocationError {
+	return RetryableRevocationError{wrapped: wrapped}
+}
+
+func (e RetryableRevocationError) Error() string {
+	return fmt.Sprintf("retryable revocation error: %v", e.wrapped)
+}
+
+func (e RetryableRevocationError) Unwrap() error {
+	return e.wrapped
 }

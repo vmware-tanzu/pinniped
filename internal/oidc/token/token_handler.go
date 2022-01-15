@@ -15,10 +15,10 @@ import (
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
-	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 var (
@@ -140,17 +140,39 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
 	_, hasIDTok := tokens.Extra("id_token").(string)
 
+	// We may or may not have an ID token, and we may or may not have a userinfo endpoint to call for more claims.
+	// Use what we can (one, both, or neither) and return the union of their claims. If we stored an access token,
+	// then require that the userinfo endpoint exists and returns a successful response, or else we would have no
+	// way to check that the user's session was not revoked on the server.
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
 	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
 	validatedTokens, err := p.ValidateTokenAndMergeWithUserInfo(ctx, tokens, "", hasIDTok, accessTokenStored)
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
-			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+			"Upstream refresh returned an invalid ID token or UserInfo response.").WithWrap(err).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
+	mergedClaims := validatedTokens.IDToken.Claims
 
-	err = validateIdentityUnchangedSinceInitialLogin(validatedTokens, session, p.GetUsernameClaim())
+	// To the extent possible, check that the user's basic identity hasn't changed.
+	err = validateIdentityUnchangedSinceInitialLogin(mergedClaims, session, p.GetUsernameClaim())
 	if err != nil {
 		return err
+	}
+
+	// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
+	// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
+	// claim name. It could also be missing because the claim was originally found in the ID token during login, but
+	// now we might not have a refreshed ID token.
+	// If the claim is found, then use it to update the user's group membership in the session.
+	// If the claim is not found, then we have no new information about groups, so skip updating the group membership
+	// and let any old groups memberships in the session remain.
+	refreshedGroups, err := downstreamsession.GetGroupsFromUpstreamIDToken(p, mergedClaims)
+	if err != nil {
+		return err
+	}
+	if refreshedGroups != nil {
+		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups
 	}
 
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
@@ -165,9 +187,8 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	return nil
 }
 
-func validateIdentityUnchangedSinceInitialLogin(validatedTokens *oidctypes.Token, session *psession.PinnipedSession, usernameClaimName string) error {
+func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession, usernameClaimName string) error {
 	s := session.Custom
-	mergedClaims := validatedTokens.IDToken.Claims
 
 	// If we have any claims at all, we better have a subject, and it better match the previous value.
 	// but it's possible that we don't because both returning a new id token on refresh and having a userinfo
@@ -229,7 +250,8 @@ func findOIDCProviderByNameAndValidateUID(
 		}
 	}
 	return nil, errorsx.WithStack(errUpstreamRefreshError.
-		WithHint("Provider from upstream session data was not found.").WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		WithHint("Provider from upstream session data was not found.").
+		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 }
 
 func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentityProvidersLister, session *psession.PinnipedSession) error {
@@ -272,7 +294,8 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 	})
 	if err != nil {
 		return errorsx.WithStack(errUpstreamRefreshError.WithHint(
-			"Upstream refresh failed.").WithWrap(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+			"Upstream refresh failed.").WithWrap(err).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 
 	return nil
@@ -296,14 +319,16 @@ func findLDAPProviderByNameAndValidateUID(
 		if p.GetName() == s.ProviderName {
 			if p.GetResourceUID() != s.ProviderUID {
 				return nil, "", errorsx.WithStack(errUpstreamRefreshError.WithHint(
-					"Provider from upstream session data has changed its resource UID since authentication.").WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+					"Provider from upstream session data has changed its resource UID since authentication.").
+					WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 			}
 			return p, dn, nil
 		}
 	}
 
 	return nil, "", errorsx.WithStack(errUpstreamRefreshError.
-		WithHint("Provider from upstream session data was not found.").WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		WithHint("Provider from upstream session data was not found.").
+		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 }
 
 func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession) (string, error) {

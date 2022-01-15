@@ -126,7 +126,7 @@ func GetDownstreamIdentityFromUpstreamIDToken(
 		return "", "", nil, err
 	}
 
-	groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+	groups, err := GetGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -231,7 +231,10 @@ func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSu
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
 }
 
-func getGroupsFromUpstreamIDToken(
+// GetGroupsFromUpstreamIDToken returns mapped group names coerced into a slice of strings.
+// It returns nil when there is no configured groups claim name, or then when the configured claim name is not found
+// in the provided map of claims. It returns an error when the claim exists but its value cannot be parsed.
+func GetGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) ([]string, error) {

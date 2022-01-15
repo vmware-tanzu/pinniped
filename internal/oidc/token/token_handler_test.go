@@ -77,8 +77,7 @@ const (
 var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
-	goodGroups          = []string{"group1", "groups2"}
-	expectedGoodGroups  = []interface{}{"group1", "groups2"}
+	goodGroups          = []string{"group1", "groups2"} // the default groups set by the authorize endpoint for these tests
 
 	hmacSecretFunc = func() []byte {
 		return []byte(hmacSecret)
@@ -234,6 +233,7 @@ type tokenEndpointResponseExpectedValues struct {
 	wantErrorResponseBody             string
 	wantRequestedScopes               []string
 	wantGrantedScopes                 []string
+	wantGroups                        []string
 	wantUpstreamRefreshCall           *expectedUpstreamRefresh
 	wantUpstreamOIDCValidateTokenCall *expectedUpstreamValidateTokens
 	wantCustomSessionDataStored       *psession.CustomSessionData
@@ -252,7 +252,7 @@ type authcodeExchangeInputs struct {
 	want              tokenEndpointResponseExpectedValues
 }
 
-func TestTokenEndpoint(t *testing.T) {
+func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 	tests := []struct {
 		name             string
 		authcodeExchange authcodeExchangeInputs
@@ -266,6 +266,7 @@ func TestTokenEndpoint(t *testing.T) {
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
 					wantRequestedScopes:   []string{"openid", "profile", "email"},
 					wantGrantedScopes:     []string{"openid"},
+					wantGroups:            goodGroups,
 				},
 			},
 		},
@@ -278,6 +279,7 @@ func TestTokenEndpoint(t *testing.T) {
 					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in"}, // no id or refresh tokens
 					wantRequestedScopes:   []string{"profile", "email"},
 					wantGrantedScopes:     []string{},
+					wantGroups:            goodGroups,
 				},
 			},
 		},
@@ -290,6 +292,7 @@ func TestTokenEndpoint(t *testing.T) {
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in", "refresh_token"}, // all possible tokens
 					wantRequestedScopes:   []string{"openid", "offline_access"},
 					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantGroups:            goodGroups,
 				},
 			},
 		},
@@ -302,6 +305,7 @@ func TestTokenEndpoint(t *testing.T) {
 					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in", "refresh_token"}, // no id token
 					wantRequestedScopes:   []string{"offline_access"},
 					wantGrantedScopes:     []string{"offline_access"},
+					wantGroups:            goodGroups,
 				},
 			},
 		},
@@ -561,6 +565,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid", "offline_access", "profile", "email"},
 					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantGroups:            goodGroups,
 				},
 			},
 		},
@@ -601,7 +606,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// Note that customSessionData is only relevant to refresh grant, so we leave it as nil for this
 			// authcode exchange test, even though in practice it would actually be in the session.
 			requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore,
-				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes, nil)
+				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes, test.authcodeExchange.want.wantGroups, nil)
 
 			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -614,12 +619,13 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 	}
 }
 
-func TestTokenExchange(t *testing.T) {
+func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn:ietf:params:oauth:grant-type:token-exchange"
 	successfulAuthCodeExchange := tokenEndpointResponseExpectedValues{
 		wantStatus:            http.StatusOK,
 		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
 		wantRequestedScopes:   []string{"openid", "pinniped:request-audience"},
 		wantGrantedScopes:     []string{"openid", "pinniped:request-audience"},
+		wantGroups:            goodGroups,
 	}
 
 	doValidAuthCodeExchange := authcodeExchangeInputs{
@@ -726,6 +732,7 @@ func TestTokenExchange(t *testing.T) {
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid"},
 					wantGrantedScopes:     []string{"openid"},
+					wantGroups:            goodGroups,
 				},
 			},
 			requestedAudience:        "some-workload-cluster",
@@ -743,6 +750,7 @@ func TestTokenExchange(t *testing.T) {
 					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"pinniped:request-audience"},
 					wantGrantedScopes:     []string{"pinniped:request-audience"},
+					wantGroups:            goodGroups,
 				},
 			},
 			requestedAudience:        "some-workload-cluster",
@@ -805,7 +813,7 @@ func TestTokenExchange(t *testing.T) {
 				require.Contains(t, rsp.Body.String(), test.wantResponseBodyContains)
 			}
 
-			// The remaining assertions apply only the the happy path.
+			// The remaining assertions apply only to the happy path.
 			if rsp.Code != http.StatusOK {
 				return
 			}
@@ -844,7 +852,7 @@ func TestTokenExchange(t *testing.T) {
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
 			require.Equal(t, goodUsername, tokenClaims["username"])
-			require.Equal(t, expectedGoodGroups, tokenClaims["groups"])
+			require.Equal(t, toSliceOfInterface(test.authcodeExchange.want.wantGroups), tokenClaims["groups"])
 
 			// Also assert that some are the same as the original downstream ID token.
 			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
@@ -991,6 +999,7 @@ func TestRefreshGrant(t *testing.T) {
 			wantRequestedScopes:         []string{"openid", "offline_access"},
 			wantGrantedScopes:           []string{"openid", "offline_access"},
 			wantCustomSessionDataStored: wantCustomSessionDataStored,
+			wantGroups:                  goodGroups,
 		}
 		return want
 	}
@@ -1128,13 +1137,14 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: initialUpstreamOIDCAccessTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCAccessTokenCustomSessionData()),
-			}, // do not want upstreamRefreshRequest???
+			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"refresh_token", "id_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid", "offline_access"},
 					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantGroups:            goodGroups,
 					wantUpstreamOIDCValidateTokenCall: &expectedUpstreamValidateTokens{
 						oidcUpstreamName,
 						&oidctestutil.ValidateTokenAndMergeWithUserInfoArgs{
@@ -1199,8 +1209,96 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access"},
 					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        goodGroups,
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh returns new group memberships (as strings) from the merged ID token and userinfo results, it updates groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh returns new group memberships (as interface{} types) from the merged ID token and userinfo results, it updates groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []interface{}{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results, it keeps groups from initial login",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+							// "my-groups-claim" is omitted from the refreshed claims
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        goodGroups, // the same groups as from the initial login
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
 			},
@@ -1270,6 +1368,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "pinniped:request-audience"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGroups:                  goodGroups,
 					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				},
 			},
@@ -1282,6 +1381,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:             []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGroups:                        goodGroups,
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
@@ -2597,7 +2697,8 @@ func TestRefreshGrant(t *testing.T) {
 
 			requireTokenEndpointBehavior(t,
 				test.refreshRequest.want,
-				test.authcodeExchange.customSessionData,
+				test.authcodeExchange.want.wantGroups,   // the old groups from the initial login
+				test.authcodeExchange.customSessionData, // the old custom session data from the initial login
 				wantAtHashClaimInIDToken,
 				wantNonceValueInIDToken,
 				refreshResponse,
@@ -2724,7 +2825,8 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 
 	requireTokenEndpointBehavior(t,
 		test.want,
-		test.customSessionData,
+		goodGroups,             // the old groups from the initial login
+		test.customSessionData, // the old custom session data from the initial login
 		wantAtHashClaimInIDToken,
 		wantNonceValueInIDToken,
 		rsp,
@@ -2740,6 +2842,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 func requireTokenEndpointBehavior(
 	t *testing.T,
 	test tokenEndpointResponseExpectedValues,
+	oldGroups []string,
 	oldCustomSessionData *psession.CustomSessionData,
 	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
@@ -2763,10 +2866,10 @@ func requireTokenEndpointBehavior(
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
 		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
-		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantCustomSessionDataStored, secrets)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
-		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data from the initial login.
-		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, oldCustomSessionData)
+		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data and old groups from the initial login.
+		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, oldGroups, oldCustomSessionData)
 
 		expectedNumberOfRefreshTokenSessionsStored := 0
 		if wantRefreshToken {
@@ -2775,10 +2878,10 @@ func requireTokenEndpointBehavior(
 		expectedNumberOfIDSessionsStored := 0
 		if wantIDToken {
 			expectedNumberOfIDSessionsStored = 1
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, parsedResponseBody["access_token"].(string))
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, test.wantGroups, parsedResponseBody["access_token"].(string))
 		}
 		if wantRefreshToken {
-			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantCustomSessionDataStored, secrets)
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets)
 		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -3016,6 +3119,7 @@ func requireValidRefreshTokenStorage(
 	storage fositeoauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
 ) {
@@ -3038,6 +3142,7 @@ func requireValidRefreshTokenStorage(
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
+		wantGroups,
 		wantCustomSessionData,
 	)
 
@@ -3050,6 +3155,7 @@ func requireValidAccessTokenStorage(
 	storage fositeoauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
 ) {
@@ -3091,6 +3197,7 @@ func requireValidAccessTokenStorage(
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
+		wantGroups,
 		wantCustomSessionData,
 	)
 
@@ -3133,6 +3240,7 @@ func requireValidOIDCStorage(
 	storage openid.OpenIDConnectRequestStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
@@ -3156,6 +3264,7 @@ func requireValidOIDCStorage(
 			wantRequestedScopes,
 			wantGrantedScopes,
 			false,
+			wantGroups,
 			wantCustomSessionData,
 		)
 	} else {
@@ -3171,6 +3280,7 @@ func requireValidStoredRequest(
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantAccessTokenExpiresAt bool,
+	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 ) {
 	t.Helper()
@@ -3198,7 +3308,7 @@ func requireValidStoredRequest(
 		// Our custom claims from the authorize endpoint should still be set.
 		require.Equal(t, map[string]interface{}{
 			"username": goodUsername,
-			"groups":   expectedGoodGroups,
+			"groups":   toSliceOfInterface(wantGroups),
 		}, claims.Extra)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -3287,6 +3397,7 @@ func requireValidIDToken(
 	jwtSigningKey *ecdsa.PrivateKey,
 	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
+	wantGroupsInIDToken []string,
 	actualAccessToken string,
 ) {
 	t.Helper()
@@ -3335,7 +3446,7 @@ func requireValidIDToken(
 	require.NoError(t, err)
 	require.Equal(t, goodSubject, claims.Subject)
 	require.Equal(t, goodUsername, claims.Username)
-	require.Equal(t, goodGroups, claims.Groups)
+	require.Equal(t, wantGroupsInIDToken, claims.Groups)
 	require.Len(t, claims.Audience, 1)
 	require.Equal(t, goodClient, claims.Audience[0])
 	require.Equal(t, goodIssuer, claims.Issuer)
@@ -3387,4 +3498,12 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func toSliceOfInterface(s []string) []interface{} {
+	r := make([]interface{}, len(s))
+	for i := range s {
+		r[i] = s[i]
+	}
+	return r
 }

@@ -68,11 +68,12 @@ type PerformRefreshArgs struct {
 	ExpectedSubject  string
 }
 
-// RevokeRefreshTokenArgs is used to spy on calls to
-// TestUpstreamOIDCIdentityProvider.RevokeRefreshTokenArgsFunc().
-type RevokeRefreshTokenArgs struct {
-	Ctx          context.Context
-	RefreshToken string
+// RevokeTokenArgs is used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.RevokeTokenArgsFunc().
+type RevokeTokenArgs struct {
+	Ctx       context.Context
+	Token     string
+	TokenType provider.RevocableTokenType
 }
 
 // ValidateTokenAndMergeWithUserInfoArgs is used to spy on calls to
@@ -175,7 +176,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	PerformRefreshFunc func(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
-	RevokeRefreshTokenFunc func(ctx context.Context, refreshToken string) error
+	RevokeTokenFunc func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error
 
 	ValidateTokenAndMergeWithUserInfoFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 
@@ -185,8 +186,8 @@ type TestUpstreamOIDCIdentityProvider struct {
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
 	performRefreshCallCount                            int
 	performRefreshArgs                                 []*PerformRefreshArgs
-	revokeRefreshTokenCallCount                        int
-	revokeRefreshTokenArgs                             []*RevokeRefreshTokenArgs
+	revokeTokenCallCount                               int
+	revokeTokenArgs                                    []*RevokeTokenArgs
 	validateTokenAndMergeWithUserInfoCallCount         int
 	validateTokenAndMergeWithUserInfoArgs              []*ValidateTokenAndMergeWithUserInfoArgs
 }
@@ -291,16 +292,17 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, r
 	return u.PerformRefreshFunc(ctx, refreshToken)
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
-	if u.revokeRefreshTokenArgs == nil {
-		u.revokeRefreshTokenArgs = make([]*RevokeRefreshTokenArgs, 0)
+func (u *TestUpstreamOIDCIdentityProvider) RevokeToken(ctx context.Context, token string, tokenType provider.RevocableTokenType) error {
+	if u.revokeTokenArgs == nil {
+		u.revokeTokenArgs = make([]*RevokeTokenArgs, 0)
 	}
-	u.revokeRefreshTokenCallCount++
-	u.revokeRefreshTokenArgs = append(u.revokeRefreshTokenArgs, &RevokeRefreshTokenArgs{
-		Ctx:          ctx,
-		RefreshToken: refreshToken,
+	u.revokeTokenCallCount++
+	u.revokeTokenArgs = append(u.revokeTokenArgs, &RevokeTokenArgs{
+		Ctx:       ctx,
+		Token:     token,
+		TokenType: tokenType,
 	})
-	return u.RevokeRefreshTokenFunc(ctx, refreshToken)
+	return u.RevokeTokenFunc(ctx, token, tokenType)
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshCallCount() int {
@@ -314,15 +316,15 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *Perform
 	return u.performRefreshArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenCallCount() int {
+func (u *TestUpstreamOIDCIdentityProvider) RevokeTokenCallCount() int {
 	return u.performRefreshCallCount
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) RevokeRefreshTokenArgs(call int) *RevokeRefreshTokenArgs {
-	if u.revokeRefreshTokenArgs == nil {
-		u.revokeRefreshTokenArgs = make([]*RevokeRefreshTokenArgs, 0)
+func (u *TestUpstreamOIDCIdentityProvider) RevokeTokenArgs(call int) *RevokeTokenArgs {
+	if u.revokeTokenArgs == nil {
+		u.revokeTokenArgs = make([]*RevokeTokenArgs, 0)
 	}
-	return u.revokeRefreshTokenArgs[call]
+	return u.revokeTokenArgs[call]
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error) {
@@ -567,40 +569,40 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 	)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToRevokeRefreshToken(
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToRevokeToken(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
-	expectedArgs *RevokeRefreshTokenArgs,
+	expectedArgs *RevokeTokenArgs,
 ) {
 	t.Helper()
-	var actualArgs *RevokeRefreshTokenArgs
+	var actualArgs *RevokeTokenArgs
 	var actualNameOfUpstreamWhichMadeCall string
 	actualCallCountAcrossAllOIDCUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		callCountOnThisUpstream := upstreamOIDC.revokeRefreshTokenCallCount
+		callCountOnThisUpstream := upstreamOIDC.revokeTokenCallCount
 		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
 			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.revokeRefreshTokenArgs[0]
+			actualArgs = upstreamOIDC.revokeTokenArgs[0]
 		}
 	}
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to RevokeRefreshToken() by all OIDC upstreams",
+		"should have been exactly one call to RevokeToken() by all OIDC upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"RevokeRefreshToken() was called on the wrong OIDC upstream",
+		"RevokeToken() was called on the wrong OIDC upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToRevokeRefreshToken(t *testing.T) {
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToRevokeToken(t *testing.T) {
 	t.Helper()
 	actualCallCountAcrossAllOIDCUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.revokeRefreshTokenCallCount
+		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.revokeTokenCallCount
 	}
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to RevokeRefreshToken()",
+		"expected exactly zero calls to RevokeToken()",
 	)
 }
 
@@ -627,7 +629,7 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	authcodeExchangeErr                  error
 	passwordGrantErr                     error
 	performRefreshErr                    error
-	revokeRefreshTokenErr                error
+	revokeTokenErr                       error
 	validateTokenAndMergeWithUserInfoErr error
 }
 
@@ -768,8 +770,8 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithValidateTokenAndMergeWithU
 	return u
 }
 
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRevokeRefreshTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
-	u.revokeRefreshTokenErr = err
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRevokeTokenError(err error) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.revokeTokenErr = err
 	return u
 }
 
@@ -803,8 +805,8 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 			}
 			return u.refreshedTokens, nil
 		},
-		RevokeRefreshTokenFunc: func(ctx context.Context, refreshToken string) error {
-			return u.revokeRefreshTokenErr
+		RevokeTokenFunc: func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error {
+			return u.revokeTokenErr
 		},
 		ValidateTokenAndMergeWithUserInfoFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.validateTokenAndMergeWithUserInfoErr != nil {

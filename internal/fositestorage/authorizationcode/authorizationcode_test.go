@@ -393,7 +393,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// the fuzzed session and storage session should have identical JSON
 	require.JSONEq(t, authorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromStorage)
 
-	t.Log("actual value from fuzzing", authorizeCodeSessionJSONFromFuzzing) // can be useful when updating expected value
+	// t.Log("actual value from fuzzing", authorizeCodeSessionJSONFromFuzzing) // can be useful when updating expected value
 
 	// while the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
 	// if it adds a new field that can be fuzzed, this check will fail

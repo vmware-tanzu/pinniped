@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1.0-experimental
 
-# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 FROM golang:1.17.6 as build-env

@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	provider "go.pinniped.dev/internal/oidc/provider"
 	nonce "go.pinniped.dev/pkg/oidcclient/nonce"
 	oidctypes "go.pinniped.dev/pkg/oidcclient/oidctypes"
 	pkce "go.pinniped.dev/pkg/oidcclient/pkce"
@@ -229,18 +230,18 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PerformRefresh(arg0, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PerformRefresh", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PerformRefresh), arg0, arg1)
 }
 
-// RevokeRefreshToken mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) RevokeRefreshToken(arg0 context.Context, arg1 string) error {
+// RevokeToken mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) RevokeToken(arg0 context.Context, arg1 string, arg2 provider.RevocableTokenType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RevokeRefreshToken", arg0, arg1)
+	ret := m.ctrl.Call(m, "RevokeToken", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RevokeRefreshToken indicates an expected call of RevokeRefreshToken.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeRefreshToken(arg0, arg1 interface{}) *gomock.Call {
+// RevokeToken indicates an expected call of RevokeToken.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeToken(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeRefreshToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).RevokeRefreshToken), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).RevokeToken), arg0, arg1, arg2)
 }
 
 // ValidateTokenAndMergeWithUserInfo mocks base method.

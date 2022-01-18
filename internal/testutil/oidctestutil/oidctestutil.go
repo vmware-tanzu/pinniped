@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
@@ -726,8 +727,8 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutRefreshToken() *TestUps
 	return u
 }
 
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAccessToken(token string) *TestUpstreamOIDCIdentityProviderBuilder {
-	u.accessToken = &oidctypes.AccessToken{Token: token}
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAccessToken(token string, expiry metav1.Time) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.accessToken = &oidctypes.AccessToken{Token: token, Expiry: expiry}
 	return u
 }
 

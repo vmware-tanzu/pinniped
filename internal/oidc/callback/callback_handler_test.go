@@ -11,9 +11,11 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/securecookie"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/internal/oidc"
@@ -213,7 +215,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "GET with authcode exchange that returns an access token but no refresh token when there is a userinfo endpoint returns 303 to downstream client callback with its state and code",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithUserInfoURL().Build()),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -229,6 +231,39 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamAccessTokenCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:                              "GET with authcode exchange that returns an access token but no refresh token but has a short token lifetime which is stored as a warning in the session",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: &psession.CustomSessionData{
+				ProviderUID:  happyUpstreamIDPResourceUID,
+				ProviderName: happyUpstreamIDPName,
+				ProviderType: psession.ProviderTypeOIDC,
+				Warnings:     []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
+				OIDC: &psession.OIDCSessionData{
+					UpstreamAccessToken: oidcUpstreamAccessToken,
+					UpstreamIssuer:      oidcUpstreamIssuer,
+					UpstreamSubject:     oidcUpstreamSubject,
+				},
+			},
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -358,7 +393,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned no refresh token with an access token when there is no userinfo endpoint",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithoutUserInfoURL().Build()),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,

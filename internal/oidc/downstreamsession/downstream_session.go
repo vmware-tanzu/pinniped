@@ -14,6 +14,7 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc"
@@ -101,6 +102,13 @@ func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdent
 		}
 		plog.Info("refresh token not returned by upstream provider during login, using access token instead. "+pleaseCheck, logKV...)
 		customSessionData.OIDC.UpstreamAccessToken = token.AccessToken.Token
+		// When we are in a flow where we will be performing access token based refresh, issue a warning to the client if the access
+		// token lifetime is very short, since that would mean that the user's session is very short.
+		// The warnings are stored here and will be processed by the token handler.
+		threeHoursFromNow := metav1.NewTime(time.Now().Add(3 * time.Hour))
+		if !token.AccessToken.Expiry.IsZero() && token.AccessToken.Expiry.Before(&threeHoursFromNow) {
+			customSessionData.Warnings = append(customSessionData.Warnings, "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		}
 	default:
 		plog.Warning("refresh token and access token not returned by upstream provider during login. "+pleaseCheck, logKV...)
 		return nil, errors.New("neither access token nor refresh token returned by upstream provider")

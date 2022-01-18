@@ -14,11 +14,13 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -893,7 +895,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token but it did return an access token and has a userinfo endpoint",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithUserInfoURL().Build()),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPath,
 			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
@@ -914,8 +916,40 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken,
 		},
 		{
+			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token and an access token that has a short lifetime",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: &psession.CustomSessionData{
+				ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
+				ProviderName: oidcPasswordGrantUpstreamName,
+				ProviderType: psession.ProviderTypeOIDC,
+				Warnings:     []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
+				OIDC: &psession.OIDCSessionData{
+					UpstreamAccessToken: oidcUpstreamAccessToken,
+					UpstreamSubject:     oidcUpstreamSubject,
+					UpstreamIssuer:      oidcUpstreamIssuer,
+				},
+			},
+		},
+		{
 			name:                              "OIDC password grant happy path when upstream IDP did not return a refresh token but it did return an access token and has a userinfo endpoint",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithUserInfoURL().Build()),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPath,
 			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
@@ -1078,7 +1112,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                  "password grant returns an error when upstream IDP returns no refresh token with an access token but has no userinfo endpoint",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithoutUserInfoURL().Build()),
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
@@ -1091,7 +1125,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                  "password grant returns an error when upstream IDP returns empty refresh token with an access token but has no userinfo endpoint",
-			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken).WithoutUserInfoURL().Build()),
+			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPath,
 			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),

@@ -12,6 +12,7 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/x/errorsx"
 	"golang.org/x/oauth2"
+	"k8s.io/apiserver/pkg/warning"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -60,6 +61,14 @@ func NewHandler(
 				plog.Info("upstream refresh error", oidc.FositeErrorForLog(err)...)
 				oauthHelper.WriteAccessError(w, accessRequest, err)
 				return nil
+			}
+		}
+
+		// When we are in the authorization code flow, check if we have any warnings that previous handlers want us
+		// to send to the client to be printed on the CLI.
+		if accessRequest.GetGrantTypes().ExactOne("authorization_code") {
+			for _, warningText := range session.Custom.Warnings {
+				warning.AddWarning(r.Context(), "", warningText)
 			}
 		}
 

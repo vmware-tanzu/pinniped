@@ -9,12 +9,21 @@ menu:
     weight: 60
     parent: howtos
 ---
+
 This guide shows you how to install the Pinniped Supervisor, which allows seamless login across one or many Kubernetes clusters.
-You should have a supported Kubernetes cluster with working HTTPS ingress capabilities.
-<!-- TODO: link to support matrix -->
 
 In the examples below, you can replace *{{< latestversion >}}* with your preferred version number.
 You can find a list of Pinniped releases [on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
+
+## Prerequisites
+
+You should have a Kubernetes cluster with working HTTPS ingress or load balancer capabilities. Unlike the Concierge app, which can
+only run on [supported Kubernetes cluster types]({{< ref "supported-clusters" >}}), the Supervisor app can run on almost any Kubernetes cluster.
+
+The Supervisor app controls authentication to Kubernetes clusters, so access to its settings and internals should be protected carefully.
+Typically, the Supervisor is installed on a secure Kubernetes cluster which is only accessible by administrators,
+separate from the clusters for which it is providing authentication services which are accessible by application
+developers or devops teams.
 
 ## With default options
 

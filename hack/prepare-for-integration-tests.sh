@@ -289,6 +289,9 @@ ytt --file . \
   --data-value-yaml 'service_https_nodeport_nodeport=31243' \
   --data-value-yaml 'service_https_clusterip_port=443' \
   >"$manifest"
+  # example of how to disable the http endpoint
+  # this is left enabled for now because our integration tests still rely on it
+  # --data-value-yaml 'endpoints={"http": {"network": "disabled"}}' \
 
 kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.

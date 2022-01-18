@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -32,22 +33,55 @@ func TestSupervisorHealthz(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	requestHealthEndpoint, err := http.NewRequestWithContext(
+	httpClient := &http.Client{}
+
+	httpGet(ctx, t, httpClient, fmt.Sprintf("http://%s/healthz", env.SupervisorHTTPAddress), http.StatusOK, "ok")
+}
+
+// Never run this test in parallel since deleting all federation domains and the default TLS secret is disruptive, see main_test.go.
+func TestSupervisorHealthzBootstrap_Disruptive(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	pinnipedClient := testlib.NewSupervisorClientset(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
+
+	ns := env.SupervisorNamespace
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // there is no way for us to know the bootstrap CA
+		},
+	}
+
+	const badTLSConfigBody = "pinniped supervisor has invalid TLS serving certificate configuration\n"
+
+	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/healthz", env.SupervisorHTTPSAddress), http.StatusOK, "ok")
+	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
+	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/nothealthz", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
+	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/healthz/something", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
+}
+
+func httpGet(ctx context.Context, t *testing.T, client *http.Client, url string, expectedStatus int, expectedBody string) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("http://%s/healthz", env.SupervisorHTTPAddress),
+		url,
 		nil,
 	)
 	require.NoError(t, err)
 
-	httpClient := &http.Client{}
-	response, err := httpClient.Do(requestHealthEndpoint) //nolint:bodyclose
+	response, err := client.Do(req) //nolint:bodyclose
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, response.StatusCode)
+	require.Equal(t, expectedStatus, response.StatusCode)
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	require.NoError(t, err)
 	err = response.Body.Close()
 	require.NoError(t, err)
-	require.Equal(t, "ok", string(responseBody))
+	require.Equal(t, expectedBody, string(responseBody))
 }

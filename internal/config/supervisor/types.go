@@ -11,9 +11,20 @@ type Config struct {
 	Labels         map[string]string `json:"labels"`
 	NamesConfig    NamesConfigSpec   `json:"names"`
 	LogLevel       plog.LogLevel     `json:"logLevel"`
+	Endpoints      *Endpoints        `json:"endpoints"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.
 type NamesConfigSpec struct {
 	DefaultTLSCertificateSecret string `json:"defaultTLSCertificateSecret"`
+}
+
+type Endpoints struct {
+	HTTPS *Endpoint `json:"https,omitempty"`
+	HTTP  *Endpoint `json:"http,omitempty"`
+}
+
+type Endpoint struct {
+	Network string `json:"network"`
+	Address string `json:"address"`
 }

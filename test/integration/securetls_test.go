@@ -108,9 +108,6 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	// make sure the supervisor has a default TLS cert during this test so that it can handle a TLS connection
-	createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx, t)
-
 	startKubectlPortForward(ctx, t, "10447", "443", env.SupervisorAppName+"-nodeport", env.SupervisorNamespace)
 
 	stdout, stderr := runNmapSSLEnum(t, "127.0.0.1", 10447)

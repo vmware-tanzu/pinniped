@@ -32,6 +32,12 @@ func TestFromPath(t *testing.T) {
 				  myLabelKey2: myLabelValue2
 				names:
 				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: unix
+				    address: :1234
+				  http:
+				    network: disabled
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -41,6 +47,15 @@ func TestFromPath(t *testing.T) {
 				},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "unix",
+						Address: ":1234",
+					},
+					HTTP: &Endpoint{
+						Network: "disabled",
+					},
 				},
 			},
 		},
@@ -57,7 +72,96 @@ func TestFromPath(t *testing.T) {
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
 				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "tcp",
+						Address: ":8443",
+					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: ":8080",
+					},
+				},
 			},
+		},
+		{
+			name: "all endpoints disabled",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: disabled
+			`),
+			wantError: "validate endpoints: all endpoints are disabled",
+		},
+		{
+			name: "invalid https endpoint",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: foo
+				  http:
+				    network: disabled
+			`),
+			wantError: `validate https endpoint: unknown network "foo"`,
+		},
+		{
+			name: "invalid http endpoint",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: bar
+			`),
+			wantError: `validate http endpoint: unknown network "bar"`,
+		},
+		{
+			name: "endpoint disabled with non-empty address",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				    address: wee
+			`),
+			wantError: `validate https endpoint: address set to "wee" when disabled, should be empty`,
+		},
+		{
+			name: "endpoint tcp with empty address",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  http:
+				    network: tcp
+			`),
+			wantError: `validate http endpoint: address must be set with "tcp" network`,
+		},
+		{
+			name: "endpoint unix with empty address",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: unix
+			`),
+			wantError: `validate https endpoint: address must be set with "unix" network`,
 		},
 		{
 			name: "Missing defaultTLSCertificateSecret name",

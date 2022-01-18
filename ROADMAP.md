@@ -40,7 +40,9 @@ Last Updated: Sept 2021
 |Improving Security Posture|Supervisor token refresh fails when the upstream user is in an invalid state for LDAP/AD |Jan 2022|
 |Improving Security Posture|Set stricter default TLS versions and Ciphers |Jan 2022|
 |Improving Security Posture|Support FIPS compliant Boring crypto libraries |Feb 2022|
-|Improving Security Posture|Support Audit logging of security events related to Authentication |March 2022|
+|Multiple IDP support|Support multiple IDPs configured on a single Supervisor|March/April 2022|
+|Improving Security Posture|TLS hardening |March/April 2022|
+|Improving Security Posture|Support Audit logging of security events related to Authentication |April/May 2022|
 |Improving Security Posture|mTLS for Supervisor sessions |Exploring/Ongoing|
 |Improving Security Posture|Key management/rotation for Pinniped components with minimal downtime |Exploring/Ongoing|
 |Improving Security Posture|Support for Session Logout |Exploring/Ongoing|
@@ -52,7 +54,6 @@ Last Updated: Sept 2021
 |Improving Security Posture|Client side use of Secure Enclaves for Session data |Exploring/Ongoing|
 |Improving Security Posture|Enforce the use of HTTP Strict Transport (HSTS) |Exploring/Ongoing|
 |Improving Security Posture|Assert that Pinniped runs under the restricted PSP version2 levels  |Exploring/Ongoing|
-|Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
 |Wider Concierge cluster support|Support for OpenShift cluster types in the Concierge|Exploring/Ongoing|
 |Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|
 |CLI SSO|Support Kerberos based authentication on CLI |Exploring/Ongoing|

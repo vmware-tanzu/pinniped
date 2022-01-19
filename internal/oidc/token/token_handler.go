@@ -67,8 +67,12 @@ func NewHandler(
 		// When we are in the authorization code flow, check if we have any warnings that previous handlers want us
 		// to send to the client to be printed on the CLI.
 		if accessRequest.GetGrantTypes().ExactOne("authorization_code") {
-			for _, warningText := range session.Custom.Warnings {
-				warning.AddWarning(r.Context(), "", warningText)
+			storedSession := accessRequest.GetSession().(*psession.PinnipedSession)
+			customSessionData := storedSession.Custom
+			if customSessionData != nil {
+				for _, warningText := range customSessionData.Warnings {
+					warning.AddWarning(r.Context(), "", warningText)
+				}
 			}
 		}
 

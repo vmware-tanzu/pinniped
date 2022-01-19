@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -290,6 +290,20 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 			Resource: "namespaces",
 		})
 
+		var additionalScopes []string
+		// If we're using dex, we will test that we see a warning when the access token
+		// lifetime is too short (we have it set to 20 minutes) and it's using access token based refresh.
+		// To ensure that access token refresh happens rather than refresh token, don't ask for the offline_access scope.
+		// In other environments, test the refresh token based flow.
+		if len(env.ToolsNamespace) == 0 {
+			additionalScopes = env.SupervisorUpstreamOIDC.AdditionalScopes
+		} else {
+			for _, additionalScope := range env.SupervisorUpstreamOIDC.AdditionalScopes {
+				if additionalScope != "offline_access" {
+					additionalScopes = append(additionalScopes, additionalScope)
+				}
+			}
+		}
 		// Create upstream OIDC provider and wait for it to become ready.
 		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -297,7 +311,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
 			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-				AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				AdditionalScopes: additionalScopes,
 			},
 			Claims: idpv1alpha1.OIDCClaims{
 				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
@@ -369,6 +383,9 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+		if len(env.ToolsNamespace) > 0 {
+			require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		}
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 

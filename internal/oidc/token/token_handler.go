@@ -169,7 +169,9 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	// and let any old groups memberships in the session remain.
 	refreshedGroups, err := downstreamsession.GetGroupsFromUpstreamIDToken(p, mergedClaims)
 	if err != nil {
-		return err
+		return errorsx.WithStack(errUpstreamRefreshError.WithHintf(
+			"Upstream refresh error while extracting groups claim.").WithWrap(err).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 	if refreshedGroups != nil {
 		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups

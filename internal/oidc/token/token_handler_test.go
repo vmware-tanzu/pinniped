@@ -190,6 +190,13 @@ var (
 		}
 	`)
 
+	fositeUpstreamGroupClaimErrorBody = here.Doc(`
+		{
+			"error":             "error",
+			"error_description": "Error during upstream refresh. Upstream refresh error while extracting groups claim."
+		}
+	`)
+
 	happyAuthRequest = &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
@@ -1275,7 +1282,36 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
-			name: "happy path refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results, it keeps groups from initial login",
+			name: "happy path refresh grant when the upstream refresh returns new group memberships as an empty list from the merged ID token and userinfo results, it updates groups to be empty",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []string{}, // refreshed groups claims is updated to be an empty list
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        []string{}, // the user no longer belongs to any groups
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results by omitting claim, it keeps groups from initial login",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
@@ -1300,6 +1336,31 @@ func TestRefreshGrant(t *testing.T) {
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "error from refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results by returning group claim with illegal nil value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": nil,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusUnauthorized,
+					wantErrorResponseBody:             fositeUpstreamGroupClaimErrorBody,
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 				},
 			},
 		},

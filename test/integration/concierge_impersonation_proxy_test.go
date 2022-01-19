@@ -316,9 +316,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.NotEmpty(t, supervisorPods.Items, "could not find supervisor pods")
 		supervisorPod := supervisorPods.Items[0]
 
-		// make sure the supervisor has a default TLS cert during this test so that it can handle a TLS connection
-		createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx, t)
-
 		// Test that the user can perform basic actions through the client with their username and group membership
 		// influencing RBAC checks correctly.
 		t.Run(

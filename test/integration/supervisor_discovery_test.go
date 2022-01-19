@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -168,7 +169,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
-	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
+	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
 	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
@@ -189,7 +190,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	}))
 
 	// The the endpoints should fail with TLS errors again.
-	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
+	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
 	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
@@ -252,7 +253,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
-	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
+	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
 	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
@@ -318,22 +319,6 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	})
 
 	return ca
-}
-
-func createSupervisorDefaultTLSCertificateSecretIfNeeded(ctx context.Context, t *testing.T) {
-	env := testlib.IntegrationEnv(t)
-	adminClient := testlib.NewKubernetesClientset(t)
-
-	ns := env.SupervisorNamespace
-	name := defaultTLSCertSecretName(env)
-
-	_, err := adminClient.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
-
-	if k8serrors.IsNotFound(err) {
-		_ = createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", nil, name, adminClient)
-	} else {
-		require.NoError(t, err)
-	}
 }
 
 func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
@@ -425,9 +410,14 @@ func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 	}, 2*time.Minute, 200*time.Millisecond)
 }
 
-func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url string) {
+func requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url string) {
 	t.Helper()
-	httpClient := newHTTPClient(t, "", nil)
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // there is no way for us to know the bootstrap CA
+		},
+	}
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -437,11 +427,18 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 		requireEventually.NoError(err)
 
 		response, err := httpClient.Do(request)
-		if err == nil {
+		requireEventually.NoError(err)
+
+		t.Cleanup(func() {
 			_ = response.Body.Close()
-		}
-		requireEventually.Error(err)
-		requireEventually.EqualError(err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
+		})
+
+		requireEventually.Equal(http.StatusInternalServerError, response.StatusCode)
+
+		body, err := io.ReadAll(response.Body)
+		requireEventually.NoError(err)
+
+		requireEventually.Equal("pinniped supervisor has invalid TLS serving certificate configuration\n", string(body))
 	}, 2*time.Minute, 200*time.Millisecond)
 }
 

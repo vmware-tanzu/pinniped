@@ -44,3 +44,37 @@ _: #@ template.replace(data.values.custom_labels)
 #@   end
 #@   return log_level
 #@ end
+
+#@ def getPinnipedConfigMapData():
+#@   config = {
+#@     "apiGroupSuffix": data.values.api_group_suffix,
+#@     "names": {
+#@       "defaultTLSCertificateSecret": defaultResourceNameWithSuffix("default-tls-certificate"),
+#@     },
+#@     "labels": labels(),
+#@   }
+#@   if data.values.log_level:
+#@     config["logLevel"] = getAndValidateLogLevel()
+#@   end
+#@   if data.values.endpoints:
+#@     config["endpoints"] = data.values.endpoints
+#@   end
+#@   return config
+#@ end
+
+#@ def getattr_safe(val, *args):
+#@   out = None
+#@   for arg in args:
+#@     if not hasattr(val, arg):
+#@       return None
+#@     end
+#@     out = getattr(val, arg)
+#@     val = out
+#@   end
+#@   return out
+#@ end
+
+#@ def hasUnixNetworkEndpoint():
+#@   return getattr_safe(data.values.endpoints, "http",  "network") == "unix" or \
+#@          getattr_safe(data.values.endpoints, "https", "network") == "unix"
+#@ end

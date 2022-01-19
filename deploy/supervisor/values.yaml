@@ -73,3 +73,48 @@ api_group_suffix: pinniped.dev
 #! Optional.
 https_proxy: #! e.g. http://proxy.example.com
 no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
+
+#! Control the https and http listeners of the Supervisor.
+#!
+#! The schema of this config is as follows:
+#!
+#! endpoints:
+#!   https:
+#!     network: tcp | unix | disabled
+#!     address: interface:port when network=tcp or /pinniped_socket/socketfile.sock when network=unix
+#!   http:
+#!     network: same as above
+#!     address: same as above
+#!
+#! Setting network to disabled turns off that particular listener.
+#! See https://pkg.go.dev/net#Listen and https://pkg.go.dev/net#Dial for a description of what can be
+#! specified in the address parameter based on the given network parameter.  To aid in the use of unix
+#! domain sockets, a writable empty dir volume is mounted at /pinniped_socket when network is set to "unix."
+#!
+#! The current defaults are:
+#!
+#! endpoints:
+#!   https:
+#!     network: tcp
+#!     address: :8443
+#!   http:
+#!     network: tcp
+#!     address: :8080
+#!
+#! These defaults mean: bind to all interfaces using TCP.  Use port 8443 for https and 8080 for http.
+#! The defaults will change over time.  Users should explicitly set this value if they wish to avoid
+#! any changes on upgrade.
+#!
+#! A future version of the Supervisor app may include a breaking change to adjust the default
+#! behavior of the http listener to only listen on 127.0.0.1 (or perhaps even to be disabled).
+#!
+#! Binding the http listener to addresses other than 127.0.0.1 or ::1 is deprecated.
+#!
+#! Unix domain sockets are recommended for integrations with service meshes.  Ingresses that terminate
+#! TLS connections at the edge should re-encrypt the data and route traffic to the https listener.
+#!
+#! Changing the port numbers used must be accompanied with matching changes to the service and deployment
+#! manifests.  Changes to the https listener must be coordinated with the deployment health checks.
+#!
+#! Optional.
+endpoints:

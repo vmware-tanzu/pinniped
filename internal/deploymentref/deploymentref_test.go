@@ -31,6 +31,18 @@ func TestNew(t *testing.T) {
 			Name:      "some-name",
 		},
 	}
+	goodPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "some-namespace",
+			Name:      "some-name-rsname-podhash",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Controller: &troo,
+					Name:       "some-name-rsname",
+				},
+			},
+		},
+	}
 	tests := []struct {
 		name            string
 		apiObjects      []runtime.Object
@@ -38,6 +50,7 @@ func TestNew(t *testing.T) {
 		createClientErr error
 		podInfo         *downward.PodInfo
 		wantDeployment  *appsv1.Deployment
+		wantPod         *corev1.Pod
 		wantError       string
 	}{
 		{
@@ -56,24 +69,14 @@ func TestNew(t *testing.T) {
 						},
 					},
 				},
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "some-namespace",
-						Name:      "some-name-rsname-podhash",
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Controller: &troo,
-								Name:       "some-name-rsname",
-							},
-						},
-					},
-				},
+				goodPod,
 			},
 			podInfo: &downward.PodInfo{
 				Namespace: "some-namespace",
 				Name:      "some-name-rsname-podhash",
 			},
 			wantDeployment: goodDeployment,
+			wantPod:        goodPod,
 		},
 		{
 			name:            "failed to create client",
@@ -114,7 +117,7 @@ func TestNew(t *testing.T) {
 				return client, test.createClientErr
 			}
 
-			_, d, err := New(test.podInfo)
+			_, d, p, err := New(test.podInfo)
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
 				return
@@ -122,6 +125,7 @@ func TestNew(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.wantDeployment, d)
+			require.Equal(t, test.wantPod, p)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package refreshtoken
@@ -35,6 +35,7 @@ const (
 type RevocationStorage interface {
 	oauth2.RefreshTokenStorage
 	RevokeRefreshToken(ctx context.Context, requestID string) error
+	RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error
 }
 
 var _ RevocationStorage = &refreshTokenStorage{}
@@ -71,6 +72,11 @@ func ReadFromSecret(secret *v1.Secret) (*Session, error) {
 
 func (a *refreshTokenStorage) RevokeRefreshToken(ctx context.Context, requestID string) error {
 	return a.storage.DeleteByLabel(ctx, fositestorage.StorageRequestIDLabelName, requestID)
+}
+
+func (a *refreshTokenStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
+	// We don't support a grace period, so always call the regular RevokeRefreshToken().
+	return a.RevokeRefreshToken(ctx, requestID)
 }
 
 func (a *refreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, signature string, requester fosite.Requester) error {

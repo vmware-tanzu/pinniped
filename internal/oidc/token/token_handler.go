@@ -8,10 +8,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/x/errorsx"
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -40,6 +43,18 @@ func NewHandler(
 	idpLister oidc.UpstreamIdentityProvidersLister,
 	oauthHelper fosite.OAuth2Provider,
 ) http.Handler {
+	// Each retry of a failed upstream refresh will multiply the previous sleep duration by this factor.
+	// This only exists as a parameter so that unit tests can override it to avoid running slowly.
+	upstreamRefreshRetryOnErrorFactor := 4.0
+
+	return newHandler(idpLister, oauthHelper, upstreamRefreshRetryOnErrorFactor)
+}
+
+func newHandler(
+	idpLister oidc.UpstreamIdentityProvidersLister,
+	oauthHelper fosite.OAuth2Provider,
+	upstreamRefreshRetryOnErrorFactor float64,
+) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		session := psession.NewPinnipedSession()
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
@@ -55,7 +70,7 @@ func NewHandler(
 			// The session, requested scopes, and requested audience from the original authorize request was retrieved
 			// from the Kube storage layer and added to the accessRequest. Additionally, the audience and scopes may
 			// have already been granted on the accessRequest.
-			err = upstreamRefresh(r.Context(), accessRequest, idpLister)
+			err = upstreamRefresh(r.Context(), accessRequest, idpLister, upstreamRefreshRetryOnErrorFactor)
 			if err != nil {
 				plog.Info("upstream refresh error", oidc.FositeErrorForLog(err)...)
 				oauthHelper.WriteAccessError(w, accessRequest, err)
@@ -76,7 +91,12 @@ func NewHandler(
 	})
 }
 
-func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, providerCache oidc.UpstreamIdentityProvidersLister) error {
+func upstreamRefresh(
+	ctx context.Context,
+	accessRequest fosite.AccessRequester,
+	providerCache oidc.UpstreamIdentityProvidersLister,
+	retryOnErrorFactor float64,
+) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
 
 	customSessionData := session.Custom
@@ -91,7 +111,7 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, session, providerCache)
+		return upstreamOIDCRefresh(ctx, session, providerCache, retryOnErrorFactor)
 	case psession.ProviderTypeLDAP:
 		return upstreamLDAPRefresh(ctx, providerCache, session)
 	case psession.ProviderTypeActiveDirectory:
@@ -101,7 +121,12 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	}
 }
 
-func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister) error {
+func upstreamOIDCRefresh(
+	ctx context.Context,
+	session *psession.PinnipedSession,
+	providerCache oidc.UpstreamIdentityProvidersLister,
+	retryOnErrorFactor float64,
+) error {
 	s := session.Custom
 	if s.OIDC == nil {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
@@ -125,7 +150,7 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 
 	var tokens *oauth2.Token
 	if refreshTokenStored {
-		tokens, err = p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		tokens, err = performUpstreamOIDCRefreshWithRetriesOnError(ctx, p, s, retryOnErrorFactor)
 		if err != nil {
 			return errorsx.WithStack(errUpstreamRefreshError.WithHint(
 				"Upstream refresh failed.",
@@ -185,6 +210,44 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	}
 
 	return nil
+}
+
+func performUpstreamOIDCRefreshWithRetriesOnError(
+	ctx context.Context,
+	p provider.UpstreamOIDCIdentityProviderI,
+	s *psession.CustomSessionData,
+	retryOnErrorFactor float64,
+) (*oauth2.Token, error) {
+	var tokens *oauth2.Token
+
+	// For the default retryOnErrorFactor of 4.0 this backoff means...
+	// Try once, then retry upon error after sleeps of 50ms, 0.2s, 0.8s, 3.2s, and 12.8s.
+	// Give up after a total of 6 tries over ~17s if they all resulted in errors.
+	backoff := wait.Backoff{Steps: 6, Duration: 50 * time.Millisecond, Factor: retryOnErrorFactor}
+
+	isRetryableError := func(err error) bool {
+		plog.DebugErr("upstream refresh request failed in retry loop", err,
+			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+		if ctx.Err() != nil {
+			return false // Stop retrying if the context was closed (cancelled or timed out).
+		}
+		retrieveError := &oauth2.RetrieveError{}
+		if errors.As(err, &retrieveError) {
+			return retrieveError.Response.StatusCode >= 500 // 5xx statuses are inconclusive and might be worth retrying.
+		}
+		return true // Retry any other errors, e.g. connection errors.
+	}
+
+	performRefreshOnce := func() error {
+		var err error
+		tokens, err = p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		return err
+	}
+
+	err := retry.OnError(backoff, isRetryableError, performRefreshOnce)
+
+	// If all retries failed, then err will hold the error of the final failed retry.
+	return tokens, err
 }
 
 func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession, usernameClaimName string) error {

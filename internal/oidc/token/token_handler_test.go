@@ -218,6 +218,7 @@ var (
 )
 
 type expectedUpstreamRefresh struct {
+	numberOfRetryAttempts   int // number of expected retries, not including the original refresh attempt
 	performedByUpstreamName string
 	args                    *oidctestutil.PerformRefreshArgs
 }
@@ -1733,7 +1734,7 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
-			name: "when the upstream refresh fails during the refresh request",
+			name: "when the upstream refresh fails with a generic error during the refresh request it retries the upstream refresh",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithPerformRefreshError(errors.New("some upstream refresh error")).Build()),
 			authcodeExchange: authcodeExchangeInputs{
@@ -1743,7 +1744,65 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(),
+					wantUpstreamRefreshCall: &expectedUpstreamRefresh{
+						numberOfRetryAttempts:   5, // every attempt returns a generic error, so it should reach the maximum number of retries
+						performedByUpstreamName: oidcUpstreamName,
+						args: &oidctestutil.PerformRefreshArgs{
+							Ctx:          nil, // this will be filled in with the actual request context by the test below
+							RefreshToken: oidcUpstreamInitialRefreshToken,
+						},
+					},
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh fails with an http status 5xx error during the refresh request it retries the upstream refresh",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+				WithPerformRefreshError(&oauth2.RetrieveError{Response: &http.Response{StatusCode: http.StatusServiceUnavailable}}).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: &expectedUpstreamRefresh{
+						numberOfRetryAttempts:   5, // every attempt returns a 5xx error, so it should reach the maximum number of retries
+						performedByUpstreamName: oidcUpstreamName,
+						args: &oidctestutil.PerformRefreshArgs{
+							Ctx:          nil, // this will be filled in with the actual request context by the test below
+							RefreshToken: oidcUpstreamInitialRefreshToken,
+						},
+					},
+					wantStatus: http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh fails with an http status 4xx error during the refresh request it does not retry the upstream refresh",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+				WithPerformRefreshError(&oauth2.RetrieveError{Response: &http.Response{StatusCode: http.StatusForbidden}}).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(), // no retries should happen after the original request returns a 4xx status
 					wantStatus:              http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
@@ -2670,7 +2729,8 @@ func TestRefreshGrant(t *testing.T) {
 			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
 			if test.refreshRequest.want.wantUpstreamRefreshCall != nil {
 				test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
-				test.idps.RequireExactlyOneCallToPerformRefresh(t,
+				test.idps.RequireExactlyNCallsToPerformRefresh(t,
+					test.refreshRequest.want.wantUpstreamRefreshCall.numberOfRetryAttempts+1, // plus one for the original attempt
 					test.refreshRequest.want.wantUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantUpstreamRefreshCall.args,
 				)
@@ -2796,7 +2856,10 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 		test.modifyStorage(t, oauthStore, authCode)
 	}
 
-	subject = NewHandler(idps, oauthHelper)
+	// Use a faster factor for this test to avoid the runtime penalty of exponential backoff on errors.
+	upstreamRefreshRetryOnErrorFactor := 1.0
+
+	subject = newHandler(idps, oauthHelper, upstreamRefreshRetryOnErrorFactor)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
 	expectedNumberOfIDSessionsStored := 0

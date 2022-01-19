@@ -472,46 +472,44 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndV
 	)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
+func (b *UpstreamIDPListerBuilder) RequireExactlyNCallsToPerformRefresh(
 	t *testing.T,
+	expectedNumberOfCalls int,
 	expectedPerformedByUpstreamName string,
 	expectedArgs *PerformRefreshArgs,
 ) {
 	t.Helper()
-	var actualArgs *PerformRefreshArgs
-	var actualNameOfUpstreamWhichMadeCall string
+	actualArgsOfAllCalls := make([]*PerformRefreshArgs, 0)
+	actualNamesOfUpstreamWhichMadeCalls := make([]string, 0)
 	actualCallCountAcrossAllUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		callCountOnThisUpstream := upstreamOIDC.performRefreshCallCount
 		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.performRefreshArgs[0]
-		}
+		actualNamesOfUpstreamWhichMadeCalls = append(actualNamesOfUpstreamWhichMadeCalls, upstreamOIDC.Name)
+		actualArgsOfAllCalls = append(actualArgsOfAllCalls, upstreamOIDC.performRefreshArgs[0])
 	}
 	for _, upstreamLDAP := range b.upstreamLDAPIdentityProviders {
 		callCountOnThisUpstream := upstreamLDAP.performRefreshCallCount
 		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamLDAP.Name
-			actualArgs = upstreamLDAP.performRefreshArgs[0]
-		}
+		actualNamesOfUpstreamWhichMadeCalls = append(actualNamesOfUpstreamWhichMadeCalls, upstreamLDAP.Name)
+		actualArgsOfAllCalls = append(actualArgsOfAllCalls, upstreamLDAP.performRefreshArgs[0])
 	}
 	for _, upstreamAD := range b.upstreamActiveDirectoryIdentityProviders {
 		callCountOnThisUpstream := upstreamAD.performRefreshCallCount
 		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamAD.Name
-			actualArgs = upstreamAD.performRefreshArgs[0]
-		}
+		actualNamesOfUpstreamWhichMadeCalls = append(actualNamesOfUpstreamWhichMadeCalls, upstreamAD.Name)
+		actualArgsOfAllCalls = append(actualArgsOfAllCalls, upstreamAD.performRefreshArgs[0])
 	}
-	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
-		"should have been exactly one call to PerformRefresh() by all upstreams",
-	)
-	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"PerformRefresh() was called on the wrong upstream",
-	)
-	require.Equal(t, expectedArgs, actualArgs)
+	require.Equal(t, expectedNumberOfCalls, actualCallCountAcrossAllUpstreams,
+		"should have been exactly one call to PerformRefresh() by all upstreams")
+	for _, actualNameOfUpstreamWhichMadeCall := range actualNamesOfUpstreamWhichMadeCalls {
+		require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+			"PerformRefresh() was called on the wrong upstream at least once")
+	}
+	for _, actualArgs := range actualArgsOfAllCalls {
+		require.Equal(t, expectedArgs, actualArgs,
+			"PerformRefresh() was called with the wrong arguments at least once")
+	}
 }
 
 func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {

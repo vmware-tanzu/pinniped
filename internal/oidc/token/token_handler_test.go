@@ -950,7 +950,6 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: oidcUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
-				Ctx:          nil, // this will be filled in with the actual request context by the test below
 				RefreshToken: oidcUpstreamInitialRefreshToken,
 			},
 		}
@@ -960,7 +959,6 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: ldapUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
-				Ctx:              nil,
 				DN:               ldapUpstreamDN,
 				ExpectedSubject:  goodSubject,
 				ExpectedUsername: goodUsername,
@@ -972,7 +970,6 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamRefresh{
 			performedByUpstreamName: activeDirectoryUpstreamName,
 			args: &oidctestutil.PerformRefreshArgs{
-				Ctx:              nil,
 				DN:               activeDirectoryUpstreamDN,
 				ExpectedSubject:  goodSubject,
 				ExpectedUsername: goodUsername,
@@ -984,7 +981,6 @@ func TestRefreshGrant(t *testing.T) {
 		return &expectedUpstreamValidateTokens{
 			performedByUpstreamName: oidcUpstreamName,
 			args: &oidctestutil.ValidateTokenAndMergeWithUserInfoArgs{
-				Ctx:                  nil, // this will be filled in with the actual request context by the test below
 				Tok:                  expectedTokens,
 				ExpectedIDTokenNonce: "", // always expect empty string
 				RequireUserInfo:      false,
@@ -1149,7 +1145,6 @@ func TestRefreshGrant(t *testing.T) {
 					wantUpstreamOIDCValidateTokenCall: &expectedUpstreamValidateTokens{
 						oidcUpstreamName,
 						&oidctestutil.ValidateTokenAndMergeWithUserInfoArgs{
-							Ctx:                  nil,                                                 // this will be filled in with the actual request context by the test below
 							Tok:                  &oauth2.Token{AccessToken: oidcUpstreamAccessToken}, // only the old access token
 							ExpectedIDTokenNonce: "",                                                  // always expect empty string
 							RequireIDToken:       false,
@@ -1748,7 +1743,6 @@ func TestRefreshGrant(t *testing.T) {
 						numberOfRetryAttempts:   5, // every attempt returns a generic error, so it should reach the maximum number of retries
 						performedByUpstreamName: oidcUpstreamName,
 						args: &oidctestutil.PerformRefreshArgs{
-							Ctx:          nil, // this will be filled in with the actual request context by the test below
 							RefreshToken: oidcUpstreamInitialRefreshToken,
 						},
 					},
@@ -1777,7 +1771,6 @@ func TestRefreshGrant(t *testing.T) {
 						numberOfRetryAttempts:   5, // every attempt returns a 5xx error, so it should reach the maximum number of retries
 						performedByUpstreamName: oidcUpstreamName,
 						args: &oidctestutil.PerformRefreshArgs{
-							Ctx:          nil, // this will be filled in with the actual request context by the test below
 							RefreshToken: oidcUpstreamInitialRefreshToken,
 						},
 					},
@@ -2713,9 +2706,8 @@ func TestRefreshGrant(t *testing.T) {
 			if test.modifyRefreshTokenStorage != nil {
 				test.modifyRefreshTokenStorage(t, oauthStore, firstRefreshToken)
 			}
-			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
-				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).WithContext(reqContext)
+				happyRefreshRequestBody(firstRefreshToken).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			if test.refreshRequest.modifyTokenRequest != nil {
 				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
@@ -2728,7 +2720,6 @@ func TestRefreshGrant(t *testing.T) {
 
 			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
 			if test.refreshRequest.want.wantUpstreamRefreshCall != nil {
-				test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
 				test.idps.RequireExactlyNCallsToPerformRefresh(t,
 					test.refreshRequest.want.wantUpstreamRefreshCall.numberOfRetryAttempts+1, // plus one for the original attempt
 					test.refreshRequest.want.wantUpstreamRefreshCall.performedByUpstreamName,
@@ -2741,7 +2732,6 @@ func TestRefreshGrant(t *testing.T) {
 			// Test that we did or did not make a call to the upstream OIDC provider interface to validate the
 			// new ID token that was returned by the upstream refresh.
 			if test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall != nil {
-				test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args.Ctx = reqContext
 				test.idps.RequireExactlyOneCallToValidateToken(t,
 					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.performedByUpstreamName,
 					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args,

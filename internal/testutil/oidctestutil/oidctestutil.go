@@ -61,7 +61,6 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 // PerformRefreshArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.PerformRefreshFunc().
 type PerformRefreshArgs struct {
-	Ctx              context.Context
 	RefreshToken     string
 	DN               string
 	ExpectedUsername string
@@ -79,7 +78,6 @@ type RevokeTokenArgs struct {
 // ValidateTokenAndMergeWithUserInfoArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.ValidateTokenAndMergeWithUserInfoFunc().
 type ValidateTokenAndMergeWithUserInfoArgs struct {
-	Ctx                  context.Context
 	Tok                  *oauth2.Token
 	ExpectedIDTokenNonce nonce.Nonce
 	RequireIDToken       bool
@@ -120,13 +118,12 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(_ context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
 	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
-		Ctx:              ctx,
 		DN:               storedRefreshAttributes.DN,
 		ExpectedUsername: storedRefreshAttributes.Username,
 		ExpectedSubject:  storedRefreshAttributes.Subject,
@@ -286,7 +283,6 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, r
 	}
 	u.performRefreshCallCount++
 	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
-		Ctx:          ctx,
 		RefreshToken: refreshToken,
 	})
 	return u.PerformRefreshFunc(ctx, refreshToken)
@@ -333,7 +329,6 @@ func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfo(ctx
 	}
 	u.validateTokenAndMergeWithUserInfoCallCount++
 	u.validateTokenAndMergeWithUserInfoArgs = append(u.validateTokenAndMergeWithUserInfoArgs, &ValidateTokenAndMergeWithUserInfoArgs{
-		Ctx:                  ctx,
 		Tok:                  tok,
 		ExpectedIDTokenNonce: expectedIDTokenNonce,
 		RequireIDToken:       requireIDToken,

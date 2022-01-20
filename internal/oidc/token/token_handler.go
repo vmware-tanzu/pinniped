@@ -240,7 +240,10 @@ func performUpstreamOIDCRefreshWithRetriesOnError(
 
 	performRefreshOnce := func() error {
 		var err error
-		tokens, err = p.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		// Timeout to more likely have a chance to retry before a client gets tired of waiting and disconnects.
+		timeoutCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		tokens, err = p.PerformRefresh(timeoutCtx, s.OIDC.UpstreamRefreshToken)
 		return err
 	}
 

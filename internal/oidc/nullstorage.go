@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -22,6 +22,10 @@ type NullStorage struct {
 var _ fositestoragei.AllFositeStorage = &NullStorage{}
 
 func (NullStorage) RevokeRefreshToken(_ context.Context, _ string) error {
+	return errNullStorageNotImplemented
+}
+
+func (NullStorage) RevokeRefreshTokenMaybeGracePeriod(_ context.Context, _ string, _ string) error {
 	return errNullStorageNotImplemented
 }
 

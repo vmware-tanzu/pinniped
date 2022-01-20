@@ -180,6 +180,10 @@ func (k KubeStorage) RevokeRefreshToken(ctx context.Context, requestID string) e
 	return k.refreshTokenStorage.RevokeRefreshToken(ctx, requestID)
 }
 
+func (k KubeStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
+	return k.refreshTokenStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, requestID, signature)
+}
+
 //
 // OAuth client definitions:
 //

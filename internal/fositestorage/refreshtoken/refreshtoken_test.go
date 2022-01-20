@@ -162,6 +162,62 @@ func TestRefreshTokenStorageRevocation(t *testing.T) {
 	require.Equal(t, wantActions, client.Actions())
 }
 
+func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
+	wantActions := []coretesting.Action{
+		coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "pinniped-storage-refresh-token-pwu5zs7lekbhnln2w4",
+				ResourceVersion: "",
+				Labels: map[string]string{
+					"storage.pinniped.dev/type":       "refresh-token",
+					"storage.pinniped.dev/request-id": "abcd-1",
+				},
+				Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+				},
+			},
+			Data: map[string][]byte{
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"2"}`),
+				"pinniped-storage-version": []byte("1"),
+			},
+			Type: "storage.pinniped.dev/refresh-token",
+		}),
+		coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
+			LabelSelector: "storage.pinniped.dev/type=refresh-token,storage.pinniped.dev/request-id=abcd-1",
+		}),
+		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-refresh-token-pwu5zs7lekbhnln2w4"),
+	}
+
+	ctx, client, _, storage := makeTestSubject()
+
+	request := &fosite.Request{
+		ID:          "abcd-1",
+		RequestedAt: time.Time{},
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:     "pinny",
+					Public: true,
+				},
+				JSONWebKeysURI:          "where",
+				TokenEndpointAuthMethod: "something",
+			},
+		},
+		Form:    url.Values{"key": []string{"val"}},
+		Session: testutil.NewFakePinnipedSession(),
+	}
+	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", request)
+	require.NoError(t, err)
+
+	// Revoke the request ID of the session that we just created. We don't support grace periods, so this
+	// should work exactly like the regular RevokeRefreshToken() function.
+	err = storage.RevokeRefreshTokenMaybeGracePeriod(ctx, "abcd-1", "fancy-signature")
+	require.NoError(t, err)
+
+	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
+	require.Equal(t, wantActions, client.Actions())
+}
+
 func TestGetNotFound(t *testing.T) {
 	ctx, _, _, storage := makeTestSubject()
 

@@ -29,7 +29,7 @@ Supporting OIDC IDP refreshes  will require certain changes to the OIDCIdentityP
 
 #### When your OIDC IDP can return refresh tokens (Preferred approach)
 
-If your OIDC IDP can return refresh tokens, it is likely following the recommendations of the OIDC spec as it relates to using the offline_access scope for requesting refresh tokens. In this case, you must add the scope name to the list in the **additionalScopes** setting in the **OIDCIdentityProvider resource**, unless the new default value of that setting takes care of it for you.
+If your OIDC IDP can return refresh tokens, it is likely following the recommendations of the OIDC spec as it relates to using the "offline_access" scope for requesting refresh tokens. In this case, you must add the "offline_access" scope name to the list in the **additionalScopes** setting in the **OIDCIdentityProvider resource**, unless the new default value of that setting takes care of it for you.
 
 Note that before this release, the default value of additionalScopes was only "openid" whereas the new default value is to request all of the following scopes: "openid", "offline_access", "email", and "profile".  Explicitly setting the *additionalScopes* field will override the default value.
 

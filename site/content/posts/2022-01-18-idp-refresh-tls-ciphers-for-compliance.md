@@ -33,7 +33,7 @@ If your OIDC IDP can return refresh tokens, it is likely following the recommend
 
 Note that before this release, the default value of additionalScopes was only "openid" whereas the new default value is to request all of the following scopes: "openid", "offline_access", "email", and "profile".  Explicitly setting the *additionalScopes* field will override the default value.
 
-**If you are an Existing Pinniped OIDC user upgrading to this version,** you may need to update the additionalScopes and additionalAuthorizeParameters in your pre-existing installation of the Pinniped Supervisor **before upgrading to this version** so that there is seamless upgrade experience for your end users accessing the cluster. You may also need to update the settings on your OIDC client in the UI or API of your IDP to allow the client to perform *refresh grants*. Please see below for an example using Okta:
+**If you are an Existing Pinniped OIDC user upgrading to this version,** you may need to update the additionalScopes and additionalAuthorizeParameters in your pre-existing installation of the Pinniped Supervisor **before upgrading to this version** so that there is seamless upgrade experience for your end users accessing the cluster. You may also need to update the settings on your OIDC client in the UI or API of your IDP to allow the client to perform *refresh grants*. Please see below for an example using Okta.
 
 Example changes to Okta OIDCProvider CRD:
 

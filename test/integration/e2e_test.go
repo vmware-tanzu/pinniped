@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/pkg/oidcclient/oidctypes"
-
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
@@ -42,6 +40,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/test/testlib"
 	"go.pinniped.dev/test/testlib/browsertest"
 )
@@ -290,20 +289,125 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 			Resource: "namespaces",
 		})
 
-		var additionalScopes []string
-		// If we're using dex, we will test that we see a warning when the access token
-		// lifetime is too short (we have it set to 20 minutes) and it's using access token based refresh.
-		// To ensure that access token refresh happens rather than refresh token, don't ask for the offline_access scope.
-		// In other environments, test the refresh token based flow.
-		if len(env.ToolsNamespace) == 0 {
-			additionalScopes = env.SupervisorUpstreamOIDC.AdditionalScopes
-		} else {
-			for _, additionalScope := range env.SupervisorUpstreamOIDC.AdditionalScopes {
-				if additionalScope != "offline_access" {
-					additionalScopes = append(additionalScopes, additionalScope)
-				}
+		// Create upstream OIDC provider and wait for it to become ready.
+		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/oidc-test-sessions-manual.yaml"
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-skip-listen",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the login prompt.
+		t.Logf("waiting for CLI to output login URL and manual prompt")
+		output := readFromFileUntilStringIsSeen(t, ptyFile, "Optionally, paste your authorization code: ")
+		require.Contains(t, output, "Log in by visiting this link:")
+		require.Contains(t, output, "Optionally, paste your authorization code: ")
+
+		// Find the line with the login URL.
+		var loginURL string
+		for _, line := range strings.Split(output, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "https://") {
+				loginURL = trimmed
 			}
 		}
+		require.NotEmptyf(t, loginURL, "didn't find login URL in output: %s", output)
+
+		t.Logf("navigating to login page")
+		require.NoError(t, page.Navigate(loginURL))
+
+		// Expect to be redirected to the upstream provider and log in.
+		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
+		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+
+		// The response page should have failed to automatically post, and should now be showing the manual instructions.
+		authCode := formpostExpectManualState(t, page)
+
+		// Enter the auth code in the waiting prompt, followed by a newline.
+		t.Logf("'manually' pasting authorization code %q to waiting prompt", authCode)
+		_, err = ptyFile.WriteString(authCode + "\n")
+		require.NoError(t, err)
+
+		// Read all of the remaining output from the subprocess until EOF.
+		t.Logf("waiting for kubectl to output namespace list")
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+
+	t.Run("access token based refresh with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
+		expectedUsername := env.SupervisorUpstreamOIDC.Username
+		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		var additionalScopes []string
+		// To ensure that access token refresh happens rather than refresh token, don't ask for the offline_access scope.
+		for _, additionalScope := range env.SupervisorUpstreamOIDC.AdditionalScopes {
+			if additionalScope != "offline_access" {
+				additionalScopes = append(additionalScopes, additionalScope)
+			}
+		}
+
 		// Create upstream OIDC provider and wait for it to become ready.
 		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -383,9 +487,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
-		if len(env.ToolsNamespace) > 0 {
-			require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
-		}
+		require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 

@@ -25,7 +25,7 @@ A critical compliance use case that many organizations have to meet is to ensure
 
 ### OIDC Identity Provider triggered refreshes
 
-Supporting OIDC IDP refreshes  will require certain changes to the OIDCIdentityProvider resource on the cluster. These changes depend mostly on how your OIDC IDP handles refresh tokens. In general, your IDP will either honor sending refresh tokens or not. Let’s look at what changes are needed in the IDP configuration for when refresh tokens are supported and when they are not:
+Supporting OIDC IDP refreshes  will require certain changes to the OIDCIdentityProvider resource on the cluster. These changes depend mostly on how your OIDC IDP handles refresh tokens. In general, your IDP will either honor sending refresh tokens or not. Let’s look at what changes are needed in the IDP configuration for when refresh tokens are supported and when they are not supported.
 
 #### When your OIDC IDP can return refresh tokens (Preferred approach)
 

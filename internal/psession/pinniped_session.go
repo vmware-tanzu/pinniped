@@ -43,6 +43,10 @@ type CustomSessionData struct {
 	// Used during a downstream refresh to decide which upstream to refresh.
 	ProviderType ProviderType `json:"providerType"`
 
+	// Warnings that were encountered at some point during login that should be emitted to the client.
+	// These will be RFC 2616-formatted errors with error code 299.
+	Warnings []string `json:"warnings"`
+
 	// Only used when ProviderType == "oidc".
 	OIDC *OIDCSessionData `json:"oidc,omitempty"`
 

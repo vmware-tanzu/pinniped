@@ -369,36 +369,41 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"providerUID": "Ĝ眧Ĭ",
 				"providerName": "ŉ2ƋŢ觛ǂ焺nŐǛ",
 				"providerType": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
+				"warnings": [
+					"掘ʃƸ澺淗a紽ǒ|鰽ŋ猊",
+					"毇妬\u003e6鉢緋uƴŤȱʀļÂ?"
+				],
 				"oidc": {
-					"upstreamRefreshToken": "tC嵽痊w",
-					"upstreamAccessToken": "a紽ǒ|鰽ŋ猊I",
-					"upstreamSubject": "妬\u003e6鉢緋uƴŤȱʀ",
-					"upstreamIssuer": ":設虝27就伒犘c"
+					"upstreamRefreshToken": "\u003cƬb",
+					"upstreamAccessToken": "犘c钡ɏȫ",
+					"upstreamSubject": "鬌",
+					"upstreamIssuer": "%OpKȱ藚ɏ¬Ê蒭堜"
 				},
 				"ldap": {
-					"userDN": "ɏȫ齁š%Op",
+					"userDN": "ȗ韚ʫ繕ȫ碰+",
 					"extraRefreshAttributes": {
-						"T妼É4İ\u003e×1": "ʥ笿0D",
-						"÷驣7Ʀ澉1æɽ誮": "ʫ繕ȫ",
-						"ŚB碠k9": "i磊ůď逳鞪?3)藵睋邔\u0026Ű"
+						"+î艔垎0": "ĝ",
+						"4İ": "墀jMʥ",
+						"k9帴": "磊ůď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ"
 					}
 				},
 				"activedirectory": {
-					"userDN": "s",
+					"userDN": "%Ä摱ìÓȐĨf跞@)¿,ɭS隑i",
 					"extraRefreshAttributes": {
-						"ƉǢIȽ齤士bEǎ儯惝IozŁ5rƖ螼": "偶宾儮猷V麹Œ颛Ė應,Ɣ鬅X¤"
+						" 皦pSǬŝ社Vƅȭǝ*擦28ǅ": "vư",
+						"艱iYn面@yȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"tO灞浛a齙\\蹼偦歛ơ",
-			"皦pSǬŝ社Vƅȭǝ*"
+			"置b",
+			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
 		],
 		"grantedAudience": [
-			"ĝ\"zvưã置bņ抰蛖a³2ʫ",
-			"Ŷɽ蔒PR}Ųʓl{鼐jÃ轘屔挝",
-			"Œų崓ļ憽-蹐È_¸]fś"
+			"jÃ轘屔挝",
+			"Œų崓ļ憽-蹐È_¸]fś",
+			"ɵʮGɃɫ囤1+,Ȳ"
 		]
 	},
 	"version": "2"

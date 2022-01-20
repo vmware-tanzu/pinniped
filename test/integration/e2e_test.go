@@ -443,7 +443,8 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-
+		stdoutPipe, err := kubectlCmd.StdoutPipe()
+		require.NoError(t, err)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -485,9 +486,10 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
-		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
-		require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		kubectlStdOutOutputBytes, _ := ioutil.ReadAll(stdoutPipe)
+		kubectlStdErrOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
+		require.Contains(t, string(kubectlStdErrOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 

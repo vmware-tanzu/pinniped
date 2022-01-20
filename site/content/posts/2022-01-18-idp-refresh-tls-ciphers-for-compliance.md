@@ -79,7 +79,7 @@ LDAP does not have a concept of sessions or refresh tokens. Hence we run LDAP qu
 
 ## Secure TLS ciphers
 
-As part of our effort to harden Pinniped deployments, we have changed the TLS configuration for all Pinniped components. This will help meet the compliance standards for TLS ciphers in regulatory environments. *Note that this change does not offer any configuration options to the user* We have tested our TLS configurations with Qualys' [ssltest tool]( https://www.ssllabs.com/ssltest) as well as with [sslyze](https://github.com/nabla-c0d3/sslyze). Please do provide us with any feedback in case your scanning tools show Pinniped is using TLS ciphers of concern to you.
+As part of our effort to harden Pinniped deployments, we have changed the TLS configuration for all Pinniped components. This will help meet the compliance standards for TLS ciphers in regulatory environments. *Note that this change does not offer any configuration options to the user.* We have tested our TLS configurations with Qualys' [ssltest tool]( https://www.ssllabs.com/ssltest) as well as with [sslyze](https://github.com/nabla-c0d3/sslyze). Please do provide us with any feedback in case your scanning tools show Pinniped is using TLS ciphers of concern to you.
 
 What this means for each of the Pinniped components:
 

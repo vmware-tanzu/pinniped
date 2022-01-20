@@ -107,7 +107,7 @@ One of the features we brought to the release is the ability to configure TLS li
 The listen ports on the Supervisor’s containers default to 8080 for HTTP and 8443 for HTTPS for both IPv4 and IPv6 addresses. **Note that we do not recommend exposing HTTP port 8080 outside the pod as it is an insecure configuration and has been deprecated in this release. It will be removed in a future release**. Since the Supervisor is an external-facing endpoint with end user access, exposing port 8080 as the listen port is a security risk and should be avoided. With this release, we give you the option to change the HTTP and HTTPS ports.  We also allow these listeners to be disabled (for example, security conscious users may want to disable the HTTP listener altogether).
 It is unlikely that you would need to override the default port numbers for the Concierge and Supervisor containers. An example of when it might be useful to change the port numbers is deploying the Concierge or Supervisor to a cluster whose nodes are using host networking, and where the default port numbers would conflict with other deployed applications.
 
-More information can be found in the [Supervisor installation documentation](site/content/docs/howto/install-supervisor.md)
+More information can be found in the [Supervisor installation documentation]({{< ref "docs/howto/install-supervisor.md" >}}).
 
 The Concierge listen port now **defaults to port 10250** instead of the previous value of 8443. This change helps in deploying the Concierge in firewalled / private cluster environments where traffic to port 10250 is allowed by default (such as in private GKE clusters).
 

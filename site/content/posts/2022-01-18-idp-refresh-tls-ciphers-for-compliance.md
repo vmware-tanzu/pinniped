@@ -35,7 +35,7 @@ Note that before this release, the default value of additionalScopes was only "o
 
 **If you are an Existing Pinniped OIDC user upgrading to this version,** you may need to update the additionalScopes and additionalAuthorizeParameters in your pre-existing installation of the Pinniped Supervisor **before upgrading to this version** so that there is seamless upgrade experience for your end users accessing the cluster. You may also need to update the settings on your OIDC client in the UI or API of your IDP to allow the client to perform *refresh grants*. Please see below for an example using Okta.
 
-Example changes to Okta OIDCProvider CRD:
+Example Okta OIDCProvider CR with updated additionalScopes setting:
 
 ```yaml
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1

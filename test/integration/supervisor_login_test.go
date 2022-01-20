@@ -136,6 +136,17 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			createIDP: func(t *testing.T) string {
 				t.Helper()
+				var additionalScopes []string
+				// keep all the scopes except for offline access so we can test the access token based refresh flow.
+				if len(env.ToolsNamespace) == 0 {
+					additionalScopes = env.SupervisorUpstreamOIDC.AdditionalScopes
+				} else {
+					for _, additionalScope := range env.SupervisorUpstreamOIDC.AdditionalScopes {
+						if additionalScope != "offline_access" {
+							additionalScopes = append(additionalScopes, additionalScope)
+						}
+					}
+				}
 				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
@@ -149,7 +160,7 @@ func TestSupervisorLogin(t *testing.T) {
 						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 					},
 					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-						AdditionalScopes: []string{"email"}, // does not ask for offline_access.
+						AdditionalScopes: additionalScopes,
 					},
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name

@@ -147,13 +147,13 @@ to authenticate federated identities from the Supervisor.
    kubectl apply --context kind-pinniped-concierge \
      -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml
    kubectl apply --context kind-pinniped-concierge \
-     -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml
+     -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml
    ```
 
    The `install-pinniped-concierge-crds.yaml` file contains the Concierge CustomResourceDefinitions.
    These define the custom APIs that you use to configure and interact with the Concierge.
 
-   The `install-pinniped-concierge.yaml` file includes the rest of the Concierge resources with default deployment options.
+   The `install-pinniped-concierge-resources.yaml` file includes the rest of the Concierge resources with default deployment options.
    If you would prefer to customize the available options, please see the [Concierge installation guide]({{< ref "../howto/install-concierge" >}})
    for instructions on how to deploy using `ytt`.
 

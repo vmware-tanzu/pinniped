@@ -36,7 +36,7 @@ If you'd prefer to customize the annotations or load balancer IP address, see th
 
 1. Install the latest version of the Concierge into the `pinniped-concierge` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml`
+   - `kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml`
 
 ## With custom options
 

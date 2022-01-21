@@ -75,7 +75,7 @@ If your access tokens have a lifetime shorter than 3 hours, Pinniped will issue 
 
 ### What about LDAP / Active Directory IDP changes?
 
-LDAP does not have a concept of sessions or refresh tokens. Hence we run LDAP queries against the LDAP or AD IDP to approximate a refresh. For LDAP, we validate if the LDAP entry still exists with no changes to Pinniped UID and username fields. For AD, we validate the same LDAP checks and we also validate the user's password has not changed since the original login and their account is not locked or disabled.
+LDAP does not have a concept of sessions or refresh tokens. Hence we run LDAP queries against the LDAP or AD IDP to approximate a refresh. For LDAP, we validate if the LDAP entry still exists with no changes to Pinniped UID and username fields. For AD, we validate the same LDAP checks and we also validate that the user's password has not changed since the original login (note that we only store the time that the password was last changed, not the password itself) and their account is not locked or disabled.
 
 ## Secure TLS ciphers
 

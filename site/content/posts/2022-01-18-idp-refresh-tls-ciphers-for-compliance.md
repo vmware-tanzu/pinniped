@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.13.0: Security Hardened Pinniped"
 slug: secure-tls-idp-refresh
-date: 2022-01-18
+date: 2022-01-21
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1572880393162-0518ac760495?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1548&q=80
 excerpt: "With the release of v0.13.0, Pinniped only supports the use of secure TLS ciphers, configurable Pinniped Supervisor listener ports, and reflecting changes made by the identity provider on the user’s Kubernetes cluster access"

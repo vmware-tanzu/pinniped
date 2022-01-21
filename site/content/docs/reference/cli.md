@@ -12,10 +12,9 @@ menu:
 
 ## pinniped completion bash
 
-generate the autocompletion script for bash
+Generate the autocompletion script for bash
 
 ### Synopsis
-
 
 Generate the autocompletion script for the bash shell.
 
@@ -23,16 +22,21 @@ This script depends on the 'bash-completion' package.
 If it is not installed already, you can install it via your OS's package manager.
 
 To load completions in your current shell session:
-$ source <(pinniped completion bash)
+
+	source <(pinniped completion bash)
 
 To load completions for every new session, execute once:
-Linux:
-  $ pinniped completion bash > /etc/bash_completion.d/pinniped
-MacOS:
-  $ pinniped completion bash > /usr/local/etc/bash_completion.d/pinniped
+
+#### Linux:
+
+	pinniped completion bash > /etc/bash_completion.d/pinniped
+
+#### macOS:
+
+	pinniped completion bash > /usr/local/etc/bash_completion.d/pinniped
 
 You will need to start a new shell for this setup to take effect.
-  
+
 
 ```
 pinniped completion bash
@@ -47,22 +51,23 @@ pinniped completion bash
 
 ### SEE ALSO
 
-* [pinniped completion]()	 - generate the autocompletion script for the specified shell
+* [pinniped completion]()	 - Generate the autocompletion script for the specified shell
 
 ## pinniped completion fish
 
-generate the autocompletion script for fish
+Generate the autocompletion script for fish
 
 ### Synopsis
-
 
 Generate the autocompletion script for the fish shell.
 
 To load completions in your current shell session:
-$ pinniped completion fish | source
+
+	pinniped completion fish | source
 
 To load completions for every new session, execute once:
-$ pinniped completion fish > ~/.config/fish/completions/pinniped.fish
+
+	pinniped completion fish > ~/.config/fish/completions/pinniped.fish
 
 You will need to start a new shell for this setup to take effect.
 
@@ -80,19 +85,19 @@ pinniped completion fish [flags]
 
 ### SEE ALSO
 
-* [pinniped completion]()	 - generate the autocompletion script for the specified shell
+* [pinniped completion]()	 - Generate the autocompletion script for the specified shell
 
 ## pinniped completion powershell
 
-generate the autocompletion script for powershell
+Generate the autocompletion script for powershell
 
 ### Synopsis
-
 
 Generate the autocompletion script for powershell.
 
 To load completions in your current shell session:
-PS C:\> pinniped completion powershell | Out-String | Invoke-Expression
+
+	pinniped completion powershell | Out-String | Invoke-Expression
 
 To load completions for every new session, add the output of the above command
 to your powershell profile.
@@ -111,27 +116,30 @@ pinniped completion powershell [flags]
 
 ### SEE ALSO
 
-* [pinniped completion]()	 - generate the autocompletion script for the specified shell
+* [pinniped completion]()	 - Generate the autocompletion script for the specified shell
 
 ## pinniped completion zsh
 
-generate the autocompletion script for zsh
+Generate the autocompletion script for zsh
 
 ### Synopsis
-
 
 Generate the autocompletion script for the zsh shell.
 
 If shell completion is not already enabled in your environment you will need
 to enable it.  You can execute the following once:
 
-$ echo "autoload -U compinit; compinit" >> ~/.zshrc
+	echo "autoload -U compinit; compinit" >> ~/.zshrc
 
 To load completions for every new session, execute once:
-# Linux:
-$ pinniped completion zsh > "${fpath[1]}/_pinniped"
-# macOS:
-$ pinniped completion zsh > /usr/local/share/zsh/site-functions/_pinniped
+
+#### Linux:
+
+	pinniped completion zsh > "${fpath[1]}/_pinniped"
+
+#### macOS:
+
+	pinniped completion zsh > /usr/local/share/zsh/site-functions/_pinniped
 
 You will need to start a new shell for this setup to take effect.
 
@@ -149,7 +157,7 @@ pinniped completion zsh [flags]
 
 ### SEE ALSO
 
-* [pinniped completion]()	 - generate the autocompletion script for the specified shell
+* [pinniped completion]()	 - Generate the autocompletion script for the specified shell
 
 ## pinniped get kubeconfig
 
@@ -173,6 +181,7 @@ pinniped get kubeconfig [flags]
       --credential-cache string                  Path to cluster-specific credentials cache
       --generated-name-suffix string             Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
   -h, --help                                     help for kubeconfig
+      --install-hint string                      This text is shown to the user when the pinniped CLI is not installed. (default "The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli for more details")
       --kubeconfig string                        Path to kubeconfig file
       --kubeconfig-context string                Kubeconfig context name (default: current active context)
       --no-concierge                             Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly

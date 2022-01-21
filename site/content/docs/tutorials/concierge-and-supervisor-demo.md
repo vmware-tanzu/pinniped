@@ -135,7 +135,7 @@ to authenticate federated identities from the Supervisor.
      claims:
        username: email
      authorizationConfig:
-       additionalScopes: ['email']
+       additionalScopes: ['email', 'offline_access']
      client:
        secretName: my-oidc-identity-provider-client
    EOF

@@ -36,11 +36,10 @@ Lazy consensus does not apply to the process of:
 All substantive changes in Governance, including substantive changes to the proposal process, require a supermajority agreement by all maintainers.
 
 # Proposal Process
+The purpose of a proposal is to build consensus on a problem statement and solution design before starting work on the implementation.
 A proposal is a design document that describes a significant change to Pinniped.
 A proposal must be sponsored (or co-authored) by at least one maintainer.
 Proposals can be submitted and reviewed by anyone in the community.
-
-The purpose of a proposal is to build consensus on a problem statement and solution design before starting work on the implementation.
 
 ## When to Submit a Proposal
 If there is significant risk with a potential feature or track of work (such as complexity, cost to implement,
@@ -60,15 +59,14 @@ with a terse name (for example, `0001_my-feature-name/`) prefixed by a monotonic
 In that new subdirectory, create a `README.md` containing the core proposal.
 Include other files as necessary to help support understanding of the feature.
 
-To make your new proposal know to all other contributors, please send a link to your new proposal PR
+To make your new proposal known to all other contributors, please send a link to your new proposal PR
 on the Kubernetes Slack in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA)
 or via the [Pinniped mailing list](mailto:project-pinniped@googlegroups.com).
 
 Author(s) of proposals for major changes will give a time period of no less than five (5) working days
 for comment and remain cognizant of popular observed world holidays.
 
-A proposal must be sponsored (or co-authored) by at least one maintainer.
-If you need to find a maintainer to sponsor your proposal, then reach out via Slack or the mailing list
+If you don't already have a maintainer to sponsor your proposal, then reach out via Slack or the mailing list
 with a description of the problem statement. If one or more of the maintainers agrees that the problem
 statement is within the scope of the project (see [SCOPE.md](SCOPE.md)) and is appropriate to be addressed by a proposal,
 then a maintainer will be assigned as your proposal's sponsor. The sponsor can provide you with support during
@@ -77,8 +75,8 @@ problem statement, answering questions, giving feedback, etc.
 
 ### Proposal Template
 The below template is an example `README.md` for a new proposal.
-Other than the high-level details at the top of the template (title, status, author, and sponsor),
-please use whichever sections make the most sense for your proposal.
+Other than the high-level details at the top of the template (title, authors, status, sponsor, and approval_date)
+and the disclaimer at the top, please use whichever sections make the most sense for your proposal.
 
 ```md
 ---
@@ -86,7 +84,13 @@ title: "The Name of My Proposal"
 authors: [ "@margocrawf", "@enj" ]
 status: "draft"
 sponsor: [ "@cfryanr" ]
+approval_date: ""
 ---
+
+*Disclaimer*: Proposals are point-in-time designs and decisions.
+Once approved and implemented, they become historical documents.
+If you are reading an old proposal, please be aware that the
+features described herein might have continued to evolve since.
 
 # <Proposal Title>
 
@@ -118,6 +122,44 @@ A short list of what the goals of this proposal are and are not.
 Detailed explanation of the proposal's design. This will typically
 also detail how the specification supports the desired use cases.
 
+#### API Changes
+Describe how Pinniped's API will change. APIs include CLI commands,
+HTTP endpoints, aggregated API endpoints, CRDs, etc.
+Detail changes to their inputs, outputs, and behavior.
+
+#### Upgrades
+Describe how upgrading to a new version of Pinniped which includes
+these features would work. Are the new changes backwards compatible?
+Can new and old versions of the CLI and servers be mixed?
+Will it be possible to downgrade after upgrading?
+
+#### Tests
+What kind of integration tests could be used to test the new features?
+
+#### New Dependencies
+Would any significant new project dependencies be needed to support
+the implementation? Consider Golang libraries, CI infrastructure, etc.
+
+#### Performance Considerations
+Any concerns with scalability, performance, or reliability for the
+implementation?
+
+#### Observability Considerations
+Any new log statements or other considerations to make this feature
+observable and debuggable for admin users?
+
+#### Security Considerations
+How does the proposal consider security? What makes the new features
+secure?
+
+#### Usability Considerations
+How does the proposal consider usability for the end user (kubectl user)
+and for the admin user who installs and configures Pinniped?
+
+#### Documentation Considerations
+How will users discover the new features? Will docs changes be required
+during implementation?
+
 ### Other Approaches Considered
 Mention of other reasonable ways that the problem(s)
 could be addressed with rationale for why they were less
@@ -128,6 +170,17 @@ A list of questions that need to be answered.
 
 ## Answered Questions
 A list of questions that have been answered.
+
+## Implementation Plan
+Who will implement this proposal once it is finished and approved?
+Do you already have ideas for how you might approach the implementation
+in an iterative fashion?
+
+## Implementation PRs
+This section is a placeholder to list the PRs that implement this proposal.
+This section should be left empty until after the proposal is approved.
+After implementation, the proposal can be updated to list related
+implementation PRs.
 ```
 
 ## Proposal States
@@ -137,23 +190,28 @@ A list of questions that have been answered.
 | `in-review` | The proposal is being reviewed by the community and the project maintainers. |
 | `accepted` | The proposal has been accepted by the project maintainers. |
 | `rejected` | The proposal has been rejected by the project maintainers. |
+| `implemented` | The proposal was accepted and has since been implemented. |
 
 ## Lifecycle of a Proposal
 1. Author adds a proposal by creating a PR in draft mode. (Authors can save their work until ready.)
 2. When the author elaborates the proposal sufficiently to withstand critique they:
    1. change the status to `in-review` and
-   2. mark the PR as "Ready for Review"
+   2. mark the PR as "Ready for Review".
 3. The community critiques the proposal by adding PR reviews in order to mature/converge on the proposal.
 4. When the maintainers reach consensus or supermajority to accept a proposal, they:
    1. change the status to `accepted`,
    2. adjust the proposal number in the subdirectory's name if needed,
    3. record both majority and dissenting opinions,
-   4. merge the PR, thus adding the new proposal to the `main` branch, and
-   5. code implementation PR(s) are submitted separately to implement the solution.
-5. When the maintainers do not reach consensus or supermajority, then the proposal is rejected, and they:
+   4. merge the PR, thus adding the new proposal to the `main` branch,
+   5. code implementation PRs are submitted separately to implement the solution.
+5. During implementation of an accepted proposal:
+   1. if it is discovered that significant unanticipated changes are needed to the proposal, then the implementation work should
+      be paused and the proposal should be updated with the new details to be reviewed by the maintainers again before resuming implementation, and
+   2. when all implementation PRs are merged, the proposal doc should be updated to have status `implemented` and to list the related PRs.
+6. When the maintainers do not reach consensus or supermajority, then the proposal is rejected, and they:
    1. may mark the status `rejected`, and
    2. close the PR with a note explaining the rejection.
-6. Rejected proposal PRs may be reopened and moved back to `in-review` if there are material changes to the proposal which address the reasons for rejection.
+7. Rejected proposal PRs may be reopened and moved back to `in-review` if there are material changes to the proposal which address the reasons for rejection.
 
 ## Proposal Review
 Once a proposal PR marked as "Ready for Review", the community and all project maintainers will review the proposal.

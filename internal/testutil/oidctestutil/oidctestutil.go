@@ -101,6 +101,7 @@ type TestUpstreamLDAPIdentityProvider struct {
 	performRefreshCallCount int
 	performRefreshArgs      []*PerformRefreshArgs
 	PerformRefreshErr       error
+	PerformRefreshGroups    []string
 }
 
 var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
@@ -121,7 +122,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) ([]string, error) {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
@@ -133,9 +134,9 @@ func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, s
 		ExpectedSubject:  storedRefreshAttributes.Subject,
 	})
 	if u.PerformRefreshErr != nil {
-		return u.PerformRefreshErr
+		return nil, u.PerformRefreshErr
 	}
-	return nil
+	return u.PerformRefreshGroups, nil
 }
 
 func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshCallCount() int {

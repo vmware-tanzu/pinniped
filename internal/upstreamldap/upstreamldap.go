@@ -170,60 +170,10 @@ func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) error {
+func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) ([]string, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	userDN := storedRefreshAttributes.DN
-
-	searchResult, err := p.performRefresh(ctx, userDN)
-	if err != nil {
-		p.traceRefreshFailure(t, err)
-		return err
-	}
-
-	// if any more or less than one entry, error.
-	// we don't need to worry about logging this because we know it's a dn.
-	if len(searchResult.Entries) != 1 {
-		return fmt.Errorf(`searching for user %q resulted in %d search results, but expected 1 result`,
-			userDN, len(searchResult.Entries),
-		)
-	}
-
-	userEntry := searchResult.Entries[0]
-	if len(userEntry.DN) == 0 {
-		return fmt.Errorf(`searching for user with original DN %q resulted in search result without DN`, userDN)
-	}
-
-	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
-	if err != nil {
-		return err
-	}
-	if newUsername != storedRefreshAttributes.Username {
-		return fmt.Errorf(`searching for user %q returned a different username than the previous value. expected: %q, actual: %q`,
-			userDN, storedRefreshAttributes.Username, newUsername,
-		)
-	}
-
-	newUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, userDN)
-	if err != nil {
-		return err
-	}
-	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
-	if newSubject != storedRefreshAttributes.Subject {
-		return fmt.Errorf(`searching for user %q produced a different subject than the previous value. expected: %q, actual: %q`, userDN, storedRefreshAttributes.Subject, newSubject)
-	}
-	for attribute, validateFunc := range p.c.RefreshAttributeChecks {
-		err = validateFunc(userEntry, storedRefreshAttributes)
-		if err != nil {
-			return fmt.Errorf(`validation for attribute %q failed during upstream refresh: %w`, attribute, err)
-		}
-	}
-	// we checked that the user still exists and their information is the same, so just return.
-	return nil
-}
-
-func (p *Provider) performRefresh(ctx context.Context, userDN string) (*ldap.SearchResult, error) {
-	search := p.refreshUserSearchRequest(userDN)
 
 	conn, err := p.dial(ctx)
 	if err != nil {
@@ -235,6 +185,65 @@ func (p *Provider) performRefresh(ctx context.Context, userDN string) (*ldap.Sea
 	if err != nil {
 		return nil, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
+
+	searchResult, err := p.performUserRefresh(conn, userDN)
+	if err != nil {
+		p.traceRefreshFailure(t, err)
+		return nil, err
+	}
+
+	// if any more or less than one entry, error.
+	// we don't need to worry about logging this because we know it's a dn.
+	if len(searchResult.Entries) != 1 {
+		return nil, fmt.Errorf(`searching for user %q resulted in %d search results, but expected 1 result`,
+			userDN, len(searchResult.Entries),
+		)
+	}
+
+	userEntry := searchResult.Entries[0]
+	if len(userEntry.DN) == 0 {
+		return nil, fmt.Errorf(`searching for user with original DN %q resulted in search result without DN`, userDN)
+	}
+
+	newUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, userDN)
+	if err != nil {
+		return nil, err
+	}
+	if newUsername != storedRefreshAttributes.Username {
+		return nil, fmt.Errorf(`searching for user %q returned a different username than the previous value. expected: %q, actual: %q`,
+			userDN, storedRefreshAttributes.Username, newUsername,
+		)
+	}
+
+	newUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, userDN)
+	if err != nil {
+		return nil, err
+	}
+	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
+	if newSubject != storedRefreshAttributes.Subject {
+		return nil, fmt.Errorf(`searching for user %q produced a different subject than the previous value. expected: %q, actual: %q`, userDN, storedRefreshAttributes.Subject, newSubject)
+	}
+	for attribute, validateFunc := range p.c.RefreshAttributeChecks {
+		err = validateFunc(userEntry, storedRefreshAttributes)
+		if err != nil {
+			return nil, fmt.Errorf(`validation for attribute %q failed during upstream refresh: %w`, attribute, err)
+		}
+	}
+
+	// If we have group search configured, search for groups to update the value.
+	if len(p.c.GroupSearch.Base) > 0 {
+		mappedGroupNames, err := p.searchGroupsForUserDN(conn, userDN)
+		if err != nil {
+			return nil, err
+		}
+		sort.Strings(mappedGroupNames)
+		return mappedGroupNames, nil
+	}
+	return nil, nil
+}
+
+func (p *Provider) performUserRefresh(conn Conn, userDN string) (*ldap.SearchResult, error) {
+	search := p.refreshUserSearchRequest(userDN)
 
 	searchResult, err := conn.Search(search)
 
@@ -455,7 +464,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 		groupAttributeName = distinguishedNameAttributeName
 	}
 
-	var groups []string
+	groups := []string{}
 entries:
 	for _, groupEntry := range searchResult.Entries {
 		if len(groupEntry.DN) == 0 {

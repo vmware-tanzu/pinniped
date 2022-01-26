@@ -257,7 +257,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Base = "ou=users,dc=pinniped,dc=dev" // there are no groups under this part of the tree
 			})),
 			wantAuthResponse: &authenticators.Response{
-				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: nil},
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
 				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
 				ExtraRefreshAttributes: map[string]string{},
 			},
@@ -328,7 +328,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.GroupSearch.Filter = "foobar={}" // foobar is not a valid attribute name for this LDAP server's schema
 			})),
 			wantAuthResponse: &authenticators.Response{
-				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: nil},
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
 				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
 				ExtraRefreshAttributes: map[string]string{},
 			},

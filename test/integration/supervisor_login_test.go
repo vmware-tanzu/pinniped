@@ -66,6 +66,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// Either revoke the user's session on the upstream provider, or manipulate the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
 		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
+		// Edit the refresh session data between the initial login and the refresh, which is expected to
+		// succeed.
+		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession)
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
@@ -128,6 +131,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) {
+				// even if we update this group to the wrong thing, we expect that it will return to the correct
+				// value after we refresh.
+				// However if there are no expected groups then they will not update, so we should skip this.
+				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
+					sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				}
+			},
 		},
 		{
 			name: "oidc without refresh token",
@@ -271,6 +282,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					httpClient,
 					false,
 				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) {
+				// even if we update this group to the wrong thing, we expect that it will return to the correct
+				// value after we refresh.
+				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -1272,6 +1288,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			testSupervisorLogin(t,
 				tt.createIDP,
 				tt.requestAuthorization,
+				tt.editRefreshSessionDataWithoutBreaking,
 				tt.breakRefreshSessionData,
 				tt.createTestUser,
 				tt.deleteTestUser,
@@ -1405,8 +1422,9 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
-	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client),
-	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
+	requestAuthorization func(t *testing.T, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession),
+	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
 	wantDownstreamIDTokenSubjectToMatch string,
@@ -1565,6 +1583,28 @@ func testSupervisorLogin(
 		// token exchange on the original token
 		doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
 
+		if editRefreshSessionDataWithoutBreaking != nil {
+			latestRefreshToken := tokenResponse.RefreshToken
+			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+			kubeClient := testlib.NewKubernetesClientset(t)
+			supervisorSecretsClient := kubeClient.CoreV1().Secrets(env.SupervisorNamespace)
+			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, oidc.DefaultOIDCTimeoutsConfiguration())
+			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+			require.NoError(t, err)
+
+			// Next mutate the part of the session that is used during upstream refresh.
+			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+
+			editRefreshSessionDataWithoutBreaking(t, pinnipedSession)
+
+			// Then save the mutated Secret back to Kubernetes.
+			// There is no update function, so delete and create again at the same name.
+			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+		}
 		// Use the refresh token to get new tokens
 		refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
 		refreshedTokenResponse, err := refreshSource.Token()

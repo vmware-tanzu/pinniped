@@ -1340,6 +1340,60 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
+			name: "happy path refresh grant when the upstream refresh returns new group memberships from LDAP, it updates groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:                 ldapUpstreamName,
+				ResourceUID:          ldapUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access"},
+					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"},
+					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh returns empty list of group memberships from LDAP, it updates groups to an empty list",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:                 ldapUpstreamName,
+				ResourceUID:          ldapUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: []string{},
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+					happyLDAPCustomSessionData,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access"},
+					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantGroups:                  []string{},
+					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+				},
+			},
+		},
+		{
 			name: "error from refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results by returning group claim with illegal nil value",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
@@ -1967,9 +2021,10 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "upstream ldap refresh happy path",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
+				Name:                 ldapUpstreamName,
+				ResourceUID:          ldapUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: goodGroups,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
@@ -1987,9 +2042,10 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "upstream active directory refresh happy path",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        activeDirectoryUpstreamName,
-				ResourceUID: activeDirectoryUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
+				Name:                 activeDirectoryUpstreamName,
+				ResourceUID:          activeDirectoryUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: goodGroups,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },

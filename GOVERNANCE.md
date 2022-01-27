@@ -126,6 +126,7 @@ also detail how the specification supports the desired use cases.
 Describe how Pinniped's API will change. APIs include CLI commands,
 HTTP endpoints, aggregated API endpoints, CRDs, etc.
 Detail changes to their inputs, outputs, and behavior.
+What will the default values be for any new fields or parameters?
 
 #### Upgrades
 Describe how upgrading to a new version of Pinniped which includes
@@ -174,7 +175,8 @@ A list of questions that have been answered.
 ## Implementation Plan
 Who will implement this proposal once it is finished and approved?
 Do you already have ideas for how you might approach the implementation
-in an iterative fashion?
+in an iterative fashion? For a large proposal with an iterative plan,
+where might you draw the line to define a minimum viable version?
 
 ## Implementation PRs
 This section is a placeholder to list the PRs that implement this proposal.

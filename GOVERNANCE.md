@@ -121,6 +121,8 @@ A short list of what the goals of this proposal are and are not.
 ### Specification / How it Solves the Use Cases
 Detailed explanation of the proposal's design. This will typically
 also detail how the specification supports the desired use cases.
+If some use cases or parts of some use cases are being deferred
+to a future proposal, that might be mentioned here as well.
 
 #### API Changes
 Describe how Pinniped's API will change. APIs include CLI commands,

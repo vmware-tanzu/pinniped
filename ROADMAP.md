@@ -33,7 +33,7 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: Sept 2021
+Last Updated: Jan 2022
 |Theme|Description|Timeline|
 |--|--|--|
 |Improving Security Posture|Supervisor token refresh fails when the upstream refresh token no longer works for OIDC |Jan 2022|

@@ -111,6 +111,14 @@ spec:
                       an entry, so "dn={}" cannot be used. Optional. When not specified,
                       the default will act as if the Filter were specified as "member={}".
                     type: string
+                  skipGroupRefresh:
+                    description: SkipGroupRefresh skips the group refresh operation
+                      that occurs with each refresh (every 5 minutes). This can be
+                      done if group search is very slow or resource intensive for
+                      the LDAP server.
+                    type: boolean
+                required:
+                - skipGroupRefresh
                 type: object
               host:
                 description: 'Host is the hostname of this LDAP identity provider,

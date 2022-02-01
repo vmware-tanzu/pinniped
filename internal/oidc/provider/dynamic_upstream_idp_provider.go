@@ -115,6 +115,7 @@ type StoredRefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
+	Groups               []string
 	AdditionalAttributes map[string]string
 }
 

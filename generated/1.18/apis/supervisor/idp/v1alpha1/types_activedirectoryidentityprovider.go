@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -131,6 +131,11 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// the result of the group search.
 	// +optional
 	Attributes ActiveDirectoryIdentityProviderGroupSearchAttributes `json:"attributes,omitempty"`
+
+	// SkipGroupRefresh skips the group refresh operation that occurs with each refresh
+	// (every 5 minutes). This can be done if group search is very slow or resource intensive for the AD
+	// server.
+	SkipGroupRefresh bool `json:"skipGroupRefresh"`
 }
 
 // Spec for configuring an ActiveDirectory identity provider.

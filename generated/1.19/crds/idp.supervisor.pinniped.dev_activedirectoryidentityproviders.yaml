@@ -119,6 +119,14 @@ spec:
                       search can be slow for some Active Directory servers. To disable
                       it, you can set the filter to "(&(objectClass=group)(member={})"
                     type: string
+                  skipGroupRefresh:
+                    description: SkipGroupRefresh skips the group refresh operation
+                      that occurs with each refresh (every 5 minutes). This can be
+                      done if group search is very slow or resource intensive for
+                      the AD server.
+                    type: boolean
+                required:
+                - skipGroupRefresh
                 type: object
               host:
                 description: 'Host is the hostname of this Active Directory identity

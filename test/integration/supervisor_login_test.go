@@ -51,25 +51,24 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	tests := []struct {
-		name                                    string
-		maybeSkip                               func(t *testing.T)
-		createTestUser                          func(t *testing.T) (string, string)
-		deleteTestUser                          func(t *testing.T, username string)
-		requestAuthorization                    func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
-		createIDP                               func(t *testing.T) string
-		wantDownstreamIDTokenSubjectToMatch     string
-		wantDownstreamIDTokenUsernameToMatch    func(username string) string
-		wantDownstreamIDTokenGroups             []string
-		wantDownstreamIDTokenGroupsAfterRefresh []string
-		wantErrorDescription                    string
-		wantErrorType                           string
+		name                                 string
+		maybeSkip                            func(t *testing.T)
+		createTestUser                       func(t *testing.T) (string, string)
+		deleteTestUser                       func(t *testing.T, username string)
+		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
+		createIDP                            func(t *testing.T) string
+		wantDownstreamIDTokenSubjectToMatch  string
+		wantDownstreamIDTokenUsernameToMatch func(username string) string
+		wantDownstreamIDTokenGroups          []string
+		wantErrorDescription                 string
+		wantErrorType                        string
 
 		// Either revoke the user's session on the upstream provider, or manipulate the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
 		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
 		// Edit the refresh session data between the initial login and the refresh, which is expected to
 		// succeed.
-		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
+		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
@@ -132,13 +131,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
 				// even if we update this group to the wrong thing, we expect that it will return to the correct
 				// value after we refresh.
 				// However if there are no expected groups then they will not update, so we should skip this.
 				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
 					sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
 				}
+				return env.SupervisorUpstreamOIDC.ExpectedGroups
 			},
 		},
 		{
@@ -284,10 +284,95 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
 				// even if we update this group to the wrong thing, we expect that it will return to the correct
 				// value after we refresh.
 				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name: "ldap skip group refresh",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+						SkipGroupRefresh: true,
+					},
+				}, idpv1alpha1.LDAPPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// update the list of groups to the wrong thing and see that they do not get updated because
+				// skip group refresh is set
+				wrongGroups := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Fosite.Claims.Extra["groups"] = wrongGroups
+				return wrongGroups
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -372,10 +457,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
 				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value after we refresh.
+				// value (no groups) after we refresh.
 				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				return []string{}
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -1420,7 +1506,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, _ string) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, _ string) []string {
 				// get the idp, update the config.
 				client := testlib.NewSupervisorClientset(t)
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -1434,6 +1520,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				_, err = upstreams.Update(ctx, ldapIDP, metav1.UpdateOptions{})
 				require.NoError(t, err)
 				time.Sleep(10 * time.Second) // wait for controllers to pick up the change
+				return []string{}
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -1445,8 +1532,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
-			wantDownstreamIDTokenGroups:             env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
-			wantDownstreamIDTokenGroupsAfterRefresh: []string{},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 	}
 	for _, test := range tests {
@@ -1464,7 +1550,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
-				tt.wantDownstreamIDTokenGroupsAfterRefresh,
 				tt.wantErrorDescription,
 				tt.wantErrorType,
 			)
@@ -1593,14 +1678,13 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
-	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
-	wantDownstreamIDTokenGroupsAfterRefresh []string,
 	wantErrorDescription string,
 	wantErrorType string,
 ) {
@@ -1754,6 +1838,7 @@ func testSupervisorLogin(
 		// token exchange on the original token
 		doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
 
+		refreshedGroups := wantDownstreamIDTokenGroups
 		if editRefreshSessionDataWithoutBreaking != nil {
 			latestRefreshToken := tokenResponse.RefreshToken
 			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
@@ -1769,7 +1854,7 @@ func testSupervisorLogin(
 			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
 
-			editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
+			refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
 
 			// Then save the mutated Secret back to Kubernetes.
 			// There is no update function, so delete and create again at the same name.
@@ -1783,12 +1868,9 @@ func testSupervisorLogin(
 
 		// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
 		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
-		if wantDownstreamIDTokenGroupsAfterRefresh == nil {
-			wantDownstreamIDTokenGroupsAfterRefresh = wantDownstreamIDTokenGroups
-		}
 		verifyTokenResponse(t,
 			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroupsAfterRefresh)
+			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
 
 		require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 		require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)

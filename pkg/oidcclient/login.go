@@ -864,10 +864,12 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 		// Return HTTP 405 for anything that's not a POST.
 		if r.Method != http.MethodPost {
-			return httperr.Newf(http.StatusMethodNotAllowed, "wanted POST but got %s", r.Method)
+			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return nil // keep listening for more requests
 		}
 
-		// Parse and pull the response parameters from a application/x-www-form-urlencoded request body.
+		// Parse and pull the response parameters from an application/x-www-form-urlencoded request body.
 		if err := r.ParseForm(); err != nil {
 			return httperr.Wrap(http.StatusBadRequest, "invalid form", err)
 		}
@@ -875,7 +877,9 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	} else {
 		// Return HTTP 405 for anything that's not a GET.
 		if r.Method != http.MethodGet {
-			return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET but got %s", r.Method)
+			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return nil // keep listening for more requests
 		}
 
 		// Pull response parameters from the URL query string.

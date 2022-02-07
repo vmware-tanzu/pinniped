@@ -1753,19 +1753,19 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 		wantHeaders     http.Header
 	}{
 		{
-			name:           "wrong method",
-			method:         http.MethodPost,
-			query:          "",
-			wantErr:        "wanted GET but got POST",
-			wantHTTPStatus: http.StatusMethodNotAllowed,
+			name:            "wrong method returns an error but keeps listening",
+			method:          http.MethodPost,
+			query:           "",
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusMethodNotAllowed,
 		},
 		{
-			name:           "wrong method for form_post",
-			method:         http.MethodGet,
-			query:          "",
-			opt:            withFormPostMode,
-			wantErr:        "wanted POST but got GET",
-			wantHTTPStatus: http.StatusMethodNotAllowed,
+			name:            "wrong method for form_post returns an error but keeps listening",
+			method:          http.MethodGet,
+			query:           "",
+			opt:             withFormPostMode,
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusMethodNotAllowed,
 		},
 		{
 			name:           "invalid form for form_post",
@@ -1970,6 +1970,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				require.Equal(t, tt.wantHeaders, resp.Header())
 			}
 
+			gotCallback := false
 			select {
 			case <-time.After(1 * time.Second):
 				if !tt.wantNoCallbacks {
@@ -1983,7 +1984,9 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				require.NoError(t, result.err)
 				require.NotNil(t, result.token)
 				require.Equal(t, result.token.IDToken.Token, "test-id-token")
+				gotCallback = true
 			}
+			require.Equal(t, tt.wantNoCallbacks, !gotCallback)
 		})
 	}
 }

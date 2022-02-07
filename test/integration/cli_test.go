@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -292,7 +292,7 @@ func runPinnipedLoginOIDC(
 	})
 
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-	loginURLChan := make(chan string)
+	loginURLChan := make(chan string, 1)
 	spawnTestGoroutine(t, func() (err error) {
 		t.Helper()
 		defer func() {
@@ -311,7 +311,7 @@ func runPinnipedLoginOIDC(
 		for scanner.Scan() {
 			loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
 			if err == nil && loginURL.Scheme == "https" {
-				loginURLChan <- loginURL.String()
+				loginURLChan <- loginURL.String() // this channel is buffered so this will not block
 				return nil
 			}
 		}
@@ -320,7 +320,7 @@ func runPinnipedLoginOIDC(
 	})
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
-	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential)
+	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential, 1)
 	spawnTestGoroutine(t, func() (err error) {
 		defer func() {
 			closeErr := stdout.Close()
@@ -336,7 +336,7 @@ func runPinnipedLoginOIDC(
 		if err := json.NewDecoder(reader).Decode(&out); err != nil {
 			return fmt.Errorf("could not read ExecCredential from stdout: %w", err)
 		}
-		credOutputChan <- out
+		credOutputChan <- out // this channel is buffered so this will not block
 		return readAndExpectEmpty(reader)
 	})
 
@@ -391,6 +391,7 @@ func readAndExpectEmpty(r io.Reader) (err error) {
 	return nil
 }
 
+// Note: Callers should ensure that f eventually returns, otherwise this helper will hang forever in t.Cleanup.
 func spawnTestGoroutine(t *testing.T, f func() error) {
 	t.Helper()
 	var eg errgroup.Group

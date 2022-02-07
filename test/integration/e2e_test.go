@@ -181,7 +181,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-		loginURLChan := make(chan string)
+		loginURLChan := make(chan string, 1)
 		spawnTestGoroutine(t, func() (err error) {
 			defer func() {
 				closeErr := stderrPipe.Close()
@@ -198,7 +198,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 			for scanner.Scan() {
 				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
 				if err == nil && loginURL.Scheme == "https" {
-					loginURLChan <- loginURL.String()
+					loginURLChan <- loginURL.String() // this channel is buffered so this will not block
 					return nil
 				}
 			}
@@ -206,7 +206,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.
-		kubectlOutputChan := make(chan string)
+		kubectlOutputChan := make(chan string, 1)
 		spawnTestGoroutine(t, func() (err error) {
 			defer func() {
 				closeErr := stdoutPipe.Close()
@@ -222,7 +222,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 				return err
 			}
 			t.Logf("kubectl output:\n%s\n", output)
-			kubectlOutputChan <- string(output)
+			kubectlOutputChan <- string(output) // this channel is buffered so this will not block
 			return nil
 		})
 

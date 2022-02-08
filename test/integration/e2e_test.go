@@ -51,7 +51,7 @@ import (
 func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.

@@ -47,7 +47,7 @@ import (
 )
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
-func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
+func TestE2EFullIntegration(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)

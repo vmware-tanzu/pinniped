@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -293,25 +292,14 @@ func runPinnipedLoginOIDC(
 	t.Logf("starting CLI subprocess")
 	require.NoError(t, cmd.Start())
 	t.Cleanup(func() {
-		err := cmd.Wait()
+		err := cmd.Wait() // handles closing of file descriptors
 		t.Logf("CLI subprocess exited with code %d", cmd.ProcessState.ExitCode())
 		require.NoErrorf(t, err, "CLI process did not exit cleanly")
 	})
 
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 	loginURLChan := make(chan string, 1)
-	spawnTestGoroutine(t, func() (err error) {
-		t.Helper()
-		defer func() {
-			closeErr := stderr.Close()
-			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-				return
-			}
-			if err == nil {
-				err = fmt.Errorf("stderr stream closed with error: %w", closeErr)
-			}
-		}()
-
+	spawnTestGoroutine(ctx, t, func() error {
 		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderr))
 
 		scanner := bufio.NewScanner(reader)
@@ -328,16 +316,7 @@ func runPinnipedLoginOIDC(
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
 	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential, 1)
-	spawnTestGoroutine(t, func() (err error) {
-		defer func() {
-			closeErr := stdout.Close()
-			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-				return
-			}
-			if err == nil {
-				err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
-			}
-		}()
+	spawnTestGoroutine(ctx, t, func() error {
 		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stdout", stdout))
 		var out clientauthenticationv1beta1.ExecCredential
 		if err := json.NewDecoder(reader).Decode(&out); err != nil {
@@ -398,12 +377,33 @@ func readAndExpectEmpty(r io.Reader) (err error) {
 	return nil
 }
 
-// Note: Callers should ensure that f eventually returns, otherwise this helper will hang forever in t.Cleanup.
-func spawnTestGoroutine(t *testing.T, f func() error) {
+// Note: Callers should ensure that f eventually returns, otherwise this helper will leak a go routine.
+func spawnTestGoroutine(ctx context.Context, t *testing.T, f func() error) {
 	t.Helper()
+
 	var eg errgroup.Group
 	t.Cleanup(func() {
-		require.NoError(t, eg.Wait(), "background goroutine failed")
+		egCh := make(chan error, 1) // do not block the go routine from exiting even after the select has completed
+		go func() {
+			egCh <- eg.Wait()
+		}()
+
+		leewayCh := make(chan struct{})
+		go func() {
+			<-ctx.Done()
+			// give f up to 30 seconds after the context is canceled to return
+			// this prevents "race" conditions where f is orchestrated via the same context
+			time.Sleep(30 * time.Second)
+			close(leewayCh)
+		}()
+
+		select {
+		case <-leewayCh:
+			t.Errorf("background goroutine hung: %v", ctx.Err())
+
+		case err := <-egCh:
+			require.NoError(t, err, "background goroutine failed")
+		}
 	})
 	eg.Go(f)
 }

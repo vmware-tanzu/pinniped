@@ -1825,6 +1825,8 @@ func TestHandlePasteCallback(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			h := &handlerState{
 				callbacks: make(chan callbackResult, 1),
 				state:     state.State("test-state"),
@@ -1866,35 +1868,38 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 		}
 	}
 	tests := []struct {
-		name           string
-		method         string
-		query          string
-		body           []byte
-		contentType    string
-		opt            func(t *testing.T) Option
-		wantErr        string
-		wantHTTPStatus int
+		name    string
+		method  string
+		query   string
+		body    []byte
+		headers http.Header
+		opt     func(t *testing.T) Option
+
+		wantErr         string
+		wantHTTPStatus  int
+		wantNoCallbacks bool
+		wantHeaders     http.Header
 	}{
 		{
-			name:           "wrong method",
-			method:         "POST",
-			query:          "",
-			wantErr:        "wanted GET",
-			wantHTTPStatus: http.StatusMethodNotAllowed,
+			name:            "wrong method returns an error but keeps listening",
+			method:          http.MethodPost,
+			query:           "",
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusMethodNotAllowed,
 		},
 		{
-			name:           "wrong method for form_post",
-			method:         "GET",
-			query:          "",
-			opt:            withFormPostMode,
-			wantErr:        "wanted POST",
-			wantHTTPStatus: http.StatusMethodNotAllowed,
+			name:            "wrong method for form_post returns an error but keeps listening",
+			method:          http.MethodGet,
+			query:           "",
+			opt:             withFormPostMode,
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusMethodNotAllowed,
 		},
 		{
 			name:           "invalid form for form_post",
-			method:         "POST",
+			method:         http.MethodPost,
 			query:          "",
-			contentType:    "application/x-www-form-urlencoded",
+			headers:        map[string][]string{"Content-Type": {"application/x-www-form-urlencoded"}},
 			body:           []byte(`%`),
 			opt:            withFormPostMode,
 			wantErr:        `invalid form: invalid URL escape "%"`,
@@ -1919,6 +1924,75 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
+			name:           "in form post mode, invalid issuer url config during CORS preflight request returns an error",
+			method:         http.MethodOptions,
+			query:          "",
+			headers:        map[string][]string{"Origin": {"https://some-origin.com"}},
+			wantErr:        `invalid issuer url: parse "://bad-url": missing protocol scheme`,
+			wantHTTPStatus: http.StatusInternalServerError,
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.useFormPost = true
+					h.issuer = "://bad-url"
+					return nil
+				}
+			},
+		},
+		{
+			name:            "in form post mode, options request is missing origin header results in 400 and keeps listener running",
+			method:          http.MethodOptions,
+			query:           "",
+			opt:             withFormPostMode,
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusBadRequest,
+		},
+		{
+			name:            "in form post mode, valid CORS request responds with 402 and CORS headers and keeps listener running",
+			method:          http.MethodOptions,
+			query:           "",
+			headers:         map[string][]string{"Origin": {"https://some-origin.com"}},
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusNoContent,
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Credentials":     {"false"},
+				"Access-Control-Allow-Methods":         {"POST, OPTIONS"},
+				"Access-Control-Allow-Origin":          {"https://valid-issuer.com"},
+				"Access-Control-Allow-Private-Network": {"true"},
+			},
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.useFormPost = true
+					h.issuer = "https://valid-issuer.com/with/some/path"
+					return nil
+				}
+			},
+		},
+		{
+			name:   "in form post mode, valid CORS request with Access-Control-Request-Headers responds with 402 and CORS headers including Access-Control-Allow-Headers and keeps listener running",
+			method: http.MethodOptions,
+			query:  "",
+			headers: map[string][]string{
+				"Origin":                         {"https://some-origin.com"},
+				"Access-Control-Request-Headers": {"header1, header2, header3"},
+			},
+			wantNoCallbacks: true,
+			wantHTTPStatus:  http.StatusNoContent,
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Credentials":     {"false"},
+				"Access-Control-Allow-Methods":         {"POST, OPTIONS"},
+				"Access-Control-Allow-Origin":          {"https://valid-issuer.com"},
+				"Access-Control-Allow-Private-Network": {"true"},
+				"Access-Control-Allow-Headers":         {"header1, header2, header3"},
+			},
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.useFormPost = true
+					h.issuer = "https://valid-issuer.com/with/some/path"
+					return nil
+				}
+			},
+		},
+		{
 			name:           "invalid code",
 			query:          "state=test-state&code=invalid",
 			wantErr:        "could not complete code exchange: some exchange error",
@@ -1938,8 +2012,9 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			},
 		},
 		{
-			name:  "valid",
-			query: "state=test-state&code=valid",
+			name:           "valid",
+			query:          "state=test-state&code=valid",
+			wantHTTPStatus: http.StatusOK,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
@@ -1955,10 +2030,11 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			},
 		},
 		{
-			name:        "valid form_post",
-			method:      http.MethodPost,
-			contentType: "application/x-www-form-urlencoded",
-			body:        []byte(`state=test-state&code=valid`),
+			name:           "valid form_post",
+			method:         http.MethodPost,
+			headers:        map[string][]string{"Content-Type": {"application/x-www-form-urlencoded"}},
+			body:           []byte(`state=test-state&code=valid`),
+			wantHTTPStatus: http.StatusOK,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.useFormPost = true
@@ -1978,11 +2054,14 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			h := &handlerState{
 				callbacks: make(chan callbackResult, 1),
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
+				logger:    testlogger.New(t).Logger,
 			}
 			if tt.opt != nil {
 				require.NoError(t, tt.opt(t)(h))
@@ -1998,8 +2077,8 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			if tt.method != "" {
 				req.Method = tt.method
 			}
-			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+			if tt.headers != nil {
+				req.Header = tt.headers
 			}
 
 			err = h.handleAuthCodeCallback(resp, req)
@@ -2012,11 +2091,19 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err)
+				require.Equal(t, tt.wantHTTPStatus, resp.Code)
 			}
 
+			if tt.wantHeaders != nil {
+				require.Equal(t, tt.wantHeaders, resp.Header())
+			}
+
+			gotCallback := false
 			select {
 			case <-time.After(1 * time.Second):
-				require.Fail(t, "timed out waiting to receive from callbacks channel")
+				if !tt.wantNoCallbacks {
+					require.Fail(t, "timed out waiting to receive from callbacks channel")
+				}
 			case result := <-h.callbacks:
 				if tt.wantErr != "" {
 					require.EqualError(t, result.err, tt.wantErr)
@@ -2025,7 +2112,9 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				require.NoError(t, result.err)
 				require.NotNil(t, result.token)
 				require.Equal(t, result.token.IDToken.Token, "test-id-token")
+				gotCallback = true
 			}
+			require.Equal(t, tt.wantNoCallbacks, !gotCallback)
 		})
 	}
 }

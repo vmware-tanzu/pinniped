@@ -834,13 +834,46 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	}()
 
 	var params url.Values
-	if h.useFormPost {
-		// Return HTTP 405 for anything that's not a POST.
-		if r.Method != http.MethodPost {
-			return httperr.Newf(http.StatusMethodNotAllowed, "wanted POST")
+	if h.useFormPost { // nolint:nestif
+		if r.Method == http.MethodOptions {
+			// Google Chrome decided that it should do CORS preflight checks for this Javascript form submission POST request.
+			// See https://developer.chrome.com/blog/private-network-access-preflight/
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// The CORS preflight request should have an origin.
+				h.logger.V(debugLogLevel).Info("Pinniped: Got OPTIONS request without origin header")
+				w.WriteHeader(http.StatusBadRequest)
+				return nil // keep listening for more requests
+			}
+			h.logger.V(debugLogLevel).Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
+			issuerURL, parseErr := url.Parse(h.issuer)
+			if parseErr != nil {
+				return httperr.Wrap(http.StatusInternalServerError, "invalid issuer url", parseErr)
+			}
+			// To tell the browser that it is okay to make the real POST request, return the following response.
+			w.Header().Set("Access-Control-Allow-Origin", issuerURL.Scheme+"://"+issuerURL.Host)
+			w.Header().Set("Access-Control-Allow-Credentials", "false")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Private-Network", "true")
+			// If the browser would like to send some headers on the real request, allow them. Chrome doesn't
+			// currently send this header at the moment. This is in case some browser in the future decides to
+			// request to be allowed to send specific headers by using Access-Control-Request-Headers.
+			requestedHeaders := r.Header.Get("Access-Control-Request-Headers")
+			if requestedHeaders != "" {
+				w.Header().Set("Access-Control-Allow-Headers", requestedHeaders)
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return nil // keep listening for more requests
 		}
 
-		// Parse and pull the response parameters from a application/x-www-form-urlencoded request body.
+		// Return HTTP 405 for anything that's not a POST.
+		if r.Method != http.MethodPost {
+			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return nil // keep listening for more requests
+		}
+
+		// Parse and pull the response parameters from an application/x-www-form-urlencoded request body.
 		if err := r.ParseForm(); err != nil {
 			return httperr.Wrap(http.StatusBadRequest, "invalid form", err)
 		}
@@ -848,7 +881,9 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	} else {
 		// Return HTTP 405 for anything that's not a GET.
 		if r.Method != http.MethodGet {
-			return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET")
+			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return nil // keep listening for more requests
 		}
 
 		// Pull response parameters from the URL query string.

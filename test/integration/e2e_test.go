@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ import (
 func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.
@@ -108,6 +109,9 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		t.Cleanup(cancel)
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -159,7 +163,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
@@ -176,8 +180,8 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, kubectlCmd.Start())
 		t.Cleanup(func() {
 			// Consume readers so that the tee buffers will contain all the output so far.
-			_, stdoutReadAllErr := ioutil.ReadAll(stdoutPipe)
-			_, stderrReadAllErr := ioutil.ReadAll(stderrPipe)
+			_, stdoutReadAllErr := readAllCtx(testCtx, stdoutPipe)
+			_, stderrReadAllErr := readAllCtx(testCtx, stderrPipe)
 
 			// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
 			waitErr := kubectlCmd.Wait()
@@ -195,7 +199,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 		loginURLChan := make(chan string, 1)
-		spawnTestGoroutine(t, func() error {
+		spawnTestGoroutine(testCtx, t, func() error {
 			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
 			scanner := bufio.NewScanner(reader)
 			for scanner.Scan() {
@@ -210,8 +214,8 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.
 		kubectlOutputChan := make(chan string, 1)
-		spawnTestGoroutine(t, func() error {
-			output, err := ioutil.ReadAll(stdoutPipe)
+		spawnTestGoroutine(testCtx, t, func() error {
+			output, err := readAllCtx(testCtx, stdoutPipe)
 			if err != nil {
 				return err
 			}
@@ -228,7 +232,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 			require.Fail(t, "timed out waiting for login URL")
 		case loginURL = <-loginURLChan:
 		}
-		t.Logf("navigating to login page")
+		t.Logf("navigating to login page: %q", loginURL)
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
@@ -254,7 +258,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -1048,4 +1052,43 @@ func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string
 	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
 	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
+}
+
+func readAllCtx(ctx context.Context, r io.Reader) ([]byte, error) {
+	errCh := make(chan error, 1)
+	data := &atomic.Value{}
+	go func() { // copied from io.ReadAll and modified to use the atomic.Value above
+		b := make([]byte, 0, 512)
+		data.Store(string(b)) // cast to string to make a copy of the byte slice
+		for {
+			if len(b) == cap(b) {
+				// Add more capacity (let append pick how much).
+				b = append(b, 0)[:len(b)]
+				data.Store(string(b)) // cast to string to make a copy of the byte slice
+			}
+			n, err := r.Read(b[len(b):cap(b)])
+			b = b[:len(b)+n]
+			data.Store(string(b)) // cast to string to make a copy of the byte slice
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				errCh <- err
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		b, _ := data.Load().(string)
+		return nil, fmt.Errorf("failed to complete read all: %w, data read so far:\n%q", ctx.Err(), b)
+
+	case err := <-errCh:
+		b, _ := data.Load().(string)
+		if len(b) == 0 {
+			return nil, err
+		}
+		return []byte(b), err
+	}
 }

@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -159,40 +160,41 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-		stderrPipe, err := kubectlCmd.StderrPipe()
+
+		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
+		// in-memory buffer, so we can have the full output available to us at the end.
+		originalStderrPipe, err := kubectlCmd.StderrPipe()
 		require.NoError(t, err)
-		stdoutPipe, err := kubectlCmd.StdoutPipe()
+		originalStdoutPipe, err := kubectlCmd.StdoutPipe()
 		require.NoError(t, err)
+		var stderrPipeBuf, stdoutPipeBuf bytes.Buffer
+		stderrPipe := io.TeeReader(originalStderrPipe, &stderrPipeBuf)
+		stdoutPipe := io.TeeReader(originalStdoutPipe, &stdoutPipeBuf)
 
 		t.Logf("starting kubectl subprocess")
 		require.NoError(t, kubectlCmd.Start())
 		t.Cleanup(func() {
-			err := kubectlCmd.Wait()
+			// Consume readers so that the tee buffers will contain all the output so far.
+			_, stdoutReadAllErr := ioutil.ReadAll(stdoutPipe)
+			_, stderrReadAllErr := ioutil.ReadAll(stderrPipe)
+
+			// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
+			waitErr := kubectlCmd.Wait()
 			t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
-			stdout, stdoutErr := ioutil.ReadAll(stdoutPipe)
-			if stdoutErr != nil {
-				stdout = []byte("<error reading stdout: " + stdoutErr.Error() + ">")
+
+			// Upon failure, print the full output so far of the kubectl command.
+			var testAlreadyFailedErr error
+			if t.Failed() {
+				testAlreadyFailedErr = errors.New("test failed prior to clean up function")
 			}
-			stderr, stderrErr := ioutil.ReadAll(stderrPipe)
-			if stderrErr != nil {
-				stderr = []byte("<error reading stderr: " + stderrErr.Error() + ">")
-			}
-			require.NoErrorf(t, err, "kubectl process did not exit cleanly, stdout/stderr: %q/%q", string(stdout), string(stderr))
+			cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
+			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed\nstdout: %q\nstderr: %q",
+				stdoutPipeBuf.String(), stderrPipeBuf.String())
 		})
 
 		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 		loginURLChan := make(chan string, 1)
-		spawnTestGoroutine(t, func() (err error) {
-			defer func() {
-				closeErr := stderrPipe.Close()
-				if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-					return
-				}
-				if err == nil {
-					err = fmt.Errorf("stderr stream closed with error: %w", closeErr)
-				}
-			}()
-
+		spawnTestGoroutine(t, func() error {
 			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
 			scanner := bufio.NewScanner(reader)
 			for scanner.Scan() {
@@ -207,16 +209,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.
 		kubectlOutputChan := make(chan string, 1)
-		spawnTestGoroutine(t, func() (err error) {
-			defer func() {
-				closeErr := stdoutPipe.Close()
-				if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-					return
-				}
-				if err == nil {
-					err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
-				}
-			}()
+		spawnTestGoroutine(t, func() error {
 			output, err := ioutil.ReadAll(stdoutPipe)
 			if err != nil {
 				return err

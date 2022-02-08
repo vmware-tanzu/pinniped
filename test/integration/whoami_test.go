@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/util/keyutil"
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -281,28 +282,53 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	useCertificatesV1API := testutil.KubeServerSupportsCertificatesV1API(t, kubeClient.Discovery())
+
 	t.Cleanup(func() {
-		require.NoError(t, kubeClient.CertificatesV1beta1().CertificateSigningRequests().
-			Delete(context.Background(), csrName, metav1.DeleteOptions{}))
+		if useCertificatesV1API {
+			require.NoError(t, kubeClient.CertificatesV1().CertificateSigningRequests().
+				Delete(context.Background(), csrName, metav1.DeleteOptions{}))
+		} else {
+			// On old clusters use v1beta1
+			require.NoError(t, kubeClient.CertificatesV1beta1().CertificateSigningRequests().
+				Delete(context.Background(), csrName, metav1.DeleteOptions{}))
+		}
 	})
 
-	// this is a blind update with no resource version checks, which is only safe during tests
-	// use the beta CSR API to support older clusters
-	_, err = kubeClient.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(ctx, &certificatesv1beta1.CertificateSigningRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: csrName,
-		},
-		Status: certificatesv1beta1.CertificateSigningRequestStatus{
-			Conditions: []certificatesv1beta1.CertificateSigningRequestCondition{
-				{
-					Type:   certificatesv1beta1.CertificateApproved,
-					Status: corev1.ConditionTrue,
-					Reason: "WhoAmICSRTest",
+	if useCertificatesV1API {
+		_, err = kubeClient.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrName, &certificatesv1.CertificateSigningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: csrName,
+			},
+			Status: certificatesv1.CertificateSigningRequestStatus{
+				Conditions: []certificatesv1.CertificateSigningRequestCondition{
+					{
+						Type:   certificatesv1.CertificateApproved,
+						Status: corev1.ConditionTrue,
+						Reason: "WhoAmICSRTest",
+					},
 				},
 			},
-		},
-	}, metav1.UpdateOptions{})
-	require.NoError(t, err)
+		}, metav1.UpdateOptions{})
+		require.NoError(t, err)
+	} else {
+		// On old Kubernetes clusters use CertificatesV1beta1
+		_, err = kubeClient.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(ctx, &certificatesv1beta1.CertificateSigningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: csrName,
+			},
+			Status: certificatesv1beta1.CertificateSigningRequestStatus{
+				Conditions: []certificatesv1beta1.CertificateSigningRequestCondition{
+					{
+						Type:   certificatesv1beta1.CertificateApproved,
+						Status: corev1.ConditionTrue,
+						Reason: "WhoAmICSRTest",
+					},
+				},
+			},
+		}, metav1.UpdateOptions{})
+		require.NoError(t, err)
+	}
 
 	crtPEM, err := csr.WaitForCertificate(ctx, kubeClient, csrName, csrUID)
 	require.NoError(t, err)

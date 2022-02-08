@@ -162,7 +162,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
@@ -192,8 +192,17 @@ func TestE2EFullIntegration(t *testing.T) {
 				testAlreadyFailedErr = errors.New("test failed prior to clean up function")
 			}
 			cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
-			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed\nstdout: %q\nstderr: %q",
-				stdoutPipeBuf.String(), stderrPipeBuf.String())
+
+			if cleanupErrs != nil {
+				t.Logf("kubectl stdout was:\n----start of stdout\n%s\n----end of stdout", stdoutPipeBuf.String())
+				t.Logf("kubectl stderr was:\n----start of stderr\n%s\n----end of stderr", stderrPipeBuf.String())
+			}
+			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed. "+
+				"Note: if kubectl's first call to the Pinniped CLI results in the Pinniped CLI returning an error, "+
+				"then kubectl may call the Pinniped CLI again, which may hang because it will wait for the user "+
+				"to finish the login. This test will kill the kubectl process after a timeout. In this case, the "+
+				" kubectl output printed above will include multiple prompts for the user to enter their authcode.",
+			)
 		})
 
 		// Start a background goroutine to read stderr from the CLI and parse out the login URL.

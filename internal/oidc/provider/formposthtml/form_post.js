@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 window.onload = () => {
@@ -48,7 +48,14 @@ window.onload = () => {
             headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
             body: responseParams['encoded_params'].value,
         })
-        .then(() => clearTimeout(timeout))
-        .then(() => transitionToState('success'))
+        .then(response => {
+            clearTimeout(timeout);
+            if (response.ok) {
+                transitionToState('success');
+            } else {
+                // Got non-2XX http response status.
+                transitionToState('manual');
+            }
+        })
         .catch(() => transitionToState('manual'));
 };

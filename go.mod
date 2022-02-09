@@ -63,7 +63,7 @@ require (
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	github.com/tdewolff/minify/v2 v2.9.29
+	github.com/tdewolff/minify/v2 v2.10.0
 	go.uber.org/atomic v1.9.0
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
 	golang.org/x/net v0.0.0-20220114011407-0dd24b26b47d

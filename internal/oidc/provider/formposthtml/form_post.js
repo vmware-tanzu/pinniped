@@ -44,18 +44,22 @@ window.onload = () => {
         responseParams['redirect_uri'].value,
         {
             method: 'POST',
-            mode: 'no-cors',
+            mode: 'no-cors', // in the future, we could change this to "cors" (see comment below)
             headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
             body: responseParams['encoded_params'].value,
         })
         .then(response => {
             clearTimeout(timeout);
-            if (response.ok) {
-                transitionToState('success');
-            } else {
-                // Got non-2XX http response status.
-                transitionToState('manual');
-            }
+            // Requests made using "no-cors" mode will hide the real response.status by making it 0
+            // and the real response.ok by making it false.
+            // If the real response was success, then we would like to show the success state.
+            // If the real response was an error, then we wish we could show the manual
+            // state, but we have no way to know that, as long as we are making "no-cors" requests.
+            // For now, show the success status for all responses.
+            // In the future, we could make this request in "cors" mode once old versions of our CLI
+            // which did not handle CORS are upgraded out by our users. That would allow us to use
+            // a conditional statement based on response.ok here to decide which state to transition into.
+            transitionToState('success');
         })
         .catch(() => transitionToState('manual'));
 };

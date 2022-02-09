@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcclient implements a CLI OIDC login flow.
@@ -831,6 +831,20 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	var params url.Values
 	if h.useFormPost { // nolint:nestif
+		// Return HTTP 405 for anything that's not a POST or an OPTIONS request.
+		if r.Method != http.MethodPost && r.Method != http.MethodOptions {
+			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return nil // keep listening for more requests
+		}
+
+		// For POST and OPTIONS requests, calculate the allowed origin for CORS.
+		issuerURL, parseErr := url.Parse(h.issuer)
+		if parseErr != nil {
+			return httperr.Wrap(http.StatusInternalServerError, "invalid issuer url", parseErr)
+		}
+		allowOrigin := issuerURL.Scheme + "://" + issuerURL.Host
+
 		if r.Method == http.MethodOptions {
 			// Google Chrome decided that it should do CORS preflight checks for this Javascript form submission POST request.
 			// See https://developer.chrome.com/blog/private-network-access-preflight/
@@ -842,12 +856,9 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 				return nil // keep listening for more requests
 			}
 			h.logger.V(debugLogLevel).Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
-			issuerURL, parseErr := url.Parse(h.issuer)
-			if parseErr != nil {
-				return httperr.Wrap(http.StatusInternalServerError, "invalid issuer url", parseErr)
-			}
 			// To tell the browser that it is okay to make the real POST request, return the following response.
-			w.Header().Set("Access-Control-Allow-Origin", issuerURL.Scheme+"://"+issuerURL.Host)
+			w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+			w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
 			w.Header().Set("Access-Control-Allow-Credentials", "false")
 			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Private-Network", "true")
@@ -860,20 +871,21 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 			}
 			w.WriteHeader(http.StatusNoContent)
 			return nil // keep listening for more requests
-		}
-
-		// Return HTTP 405 for anything that's not a POST.
-		if r.Method != http.MethodPost {
-			h.logger.V(debugLogLevel).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return nil // keep listening for more requests
-		}
+		} // Otherwise, this is a POST request...
 
 		// Parse and pull the response parameters from an application/x-www-form-urlencoded request body.
 		if err := r.ParseForm(); err != nil {
 			return httperr.Wrap(http.StatusBadRequest, "invalid form", err)
 		}
 		params = r.Form
+
+		// Allow CORS requests for POST so in the future our Javascript code can be updated to use the fetch API's
+		// mode "cors", and still be compatible with older CLI versions starting with those that have this code
+		// for CORS headers. Updating to use CORS would allow our Javascript code (form_post.js) to see the true
+		// http response status from this endpoint. Note that the POST response does not need to set as many CORS
+		// headers as the OPTIONS preflight response.
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
 	} else {
 		// Return HTTP 405 for anything that's not a GET.
 		if r.Method != http.MethodGet {

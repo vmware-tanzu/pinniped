@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -60,6 +60,10 @@ func TestFormPostHTML_Parallel(t *testing.T) {
 		//
 		// This case is fairly unlikely in practice, and if the CLI encounters
 		// an error it can also expose it via stderr anyway.
+		//
+		// In the future, we could change the Javascript code to use mode 'cors'
+		// because we have upgraded our CLI callback endpoint to handle CORS,
+		// and then we could change this to formpostExpectManualState().
 		formpostExpectSuccessState(t, page)
 	})
 
@@ -108,6 +112,19 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 	results := make(chan url.Values)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 404 for any other requests aside from POSTs. We do not need to support CORS preflight OPTIONS
+		// requests for this test because both the web page and the callback are on 127.0.0.1 (same origin).
+		if r.Method != http.MethodPost {
+			t.Logf("test callback server got unexpeted request method")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// Allow CORS requests. This will be needed for this test in the future if we change
+		// the Javascript code from using mode 'no-cors' to instead use mode 'cors'. At the
+		// moment it should be ignored by the browser.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		assert.NoError(t, r.ParseForm())
 
 		// Extract only the POST parameters (r.Form also contains URL query parameters).

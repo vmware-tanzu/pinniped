@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -49,7 +49,7 @@ import (
 )
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
-func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
+func TestE2EFullIntegration(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)

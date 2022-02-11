@@ -238,6 +238,33 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(nil),
 		},
 		{
+			name:     "when the group search has an override func",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){testGroupSearchGroupNameAttribute: func(entry *ldap.Entry) (string, error) {
+					return "something-else", nil
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				r.User = &user.DefaultInfo{
+					Name:   testUserSearchResultUsernameAttributeValue,
+					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
+					Groups: []string{"something-else", "something-else"},
+				}
+			}),
+		},
+		{
 			name:     "when the group search base is empty then skip the group search entirely",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
@@ -957,6 +984,24 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when the group search has an override func that errors",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){testGroupSearchGroupNameAttribute: func(entry *ldap.Entry) (string, error) {
+					return "", errors.New("some error")
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf("error finding groups for user %s: some error", testUserSearchResultDNValue),
 		},
 		{
 			name:           "when binding as the found user returns an error",

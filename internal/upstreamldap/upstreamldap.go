@@ -464,6 +464,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 	}
 
 	groups := []string{}
+entries:
 	for _, groupEntry := range searchResult.Entries {
 		if len(groupEntry.DN) == 0 {
 			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
@@ -474,6 +475,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 				return nil, fmt.Errorf("error finding groups for user %s: %w", userDN, err)
 			}
 			groups = append(groups, overrideGroupName)
+			continue entries
 		}
 		// if none of the overrides matched, use the default behavior (no mapping)
 		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)

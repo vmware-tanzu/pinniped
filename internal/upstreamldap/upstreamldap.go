@@ -186,7 +186,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		return nil, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
 
-	searchResult, err := p.performUserRefresh(conn, userDN)
+	searchResult, err := p.performUserRefreshSearch(conn, userDN)
 	if err != nil {
 		p.traceRefreshFailure(t, err)
 		return nil, err
@@ -236,13 +236,12 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		if err != nil {
 			return nil, err
 		}
-		sort.Strings(mappedGroupNames)
 		return mappedGroupNames, nil
 	}
 	return nil, nil
 }
 
-func (p *Provider) performUserRefresh(conn Conn, userDN string) (*ldap.SearchResult, error) {
+func (p *Provider) performUserRefreshSearch(conn Conn, userDN string) (*ldap.SearchResult, error) {
 	search := p.refreshUserSearchRequest(userDN)
 
 	searchResult, err := conn.Search(search)
@@ -483,7 +482,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 		}
 		groups = append(groups, mappedGroupName)
 	}
-
+	sort.Strings(groups)
 	return groups, nil
 }
 
@@ -581,7 +580,6 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			return nil, err
 		}
 	}
-	sort.Strings(mappedGroupNames)
 
 	mappedRefreshAttributes := make(map[string]string)
 	for k := range p.c.RefreshAttributeChecks {

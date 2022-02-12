@@ -13,6 +13,10 @@ As a Kubernetes cluster administrator or user, you can learn how Pinniped works,
 
 Have a question, comment, or idea? Please reach out via [GitHub Discussions](https://github.com/vmware-tanzu/pinniped/discussions) or [join the Pinniped community meetings]({{< ref "/community" >}}).
 
+## New to Pinniped?
+
+- ⚠️ **Start here:** [Learn to use Pinniped for federated authentication to Kubernetes clusters]({{< ref "tutorials/concierge-and-supervisor-demo" >}})
+
 ## Background
 
 {{< docsmenu "background" >}}

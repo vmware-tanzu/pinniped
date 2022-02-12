@@ -18,7 +18,7 @@ This how-to guide assumes that you have already configured the following Pinnipe
    then you have already:
      1. [Installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress.
      1. [Configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
-     1. Configured an `OIDCIdentityProvider` or an `LDAPIdentityProvider` for the Supervisor as the source of your user's identities.
+     1. Configured an `OIDCIdentityProvider`, `LDAPIdentityProvider`, or `ActiveDirectoryIdentityProvider` for the Supervisor as the source of your user's identities.
         Various examples of configuring these resources can be found in these guides.
 1. In each cluster for which you would like to use Pinniped for authentication, you have [installed the Concierge]({{< ref "install-concierge" >}}).
 1. In each cluster's Concierge, you have configured an authenticator. For example, if you are using the Pinniped Supervisor,
@@ -35,18 +35,19 @@ You should have also already [installed the `pinniped` command-line]({{< ref "in
 
 Although you can choose to use Pinniped without using the Pinniped Supervisor, there are several key advantages of choosing to use the Pinniped Supervisor to manage identity across fleets of Kubernetes clusters.
 
+1. The Supervisor makes it easy to **bring your own OIDC, LDAP, or Active Directory identity provider to act as the source of user identities**.
+   It also allows you to configure how identities and group memberships in the identity provider map to identities
+   and group memberships in the Kubernetes clusters.
+
 1. A generated kubeconfig for a cluster will be specific for that cluster, however **it will not contain any specific user identity or credentials. 
-   This kubeconfig file can be safely shared with all cluster users.** When the user runs `kubectl` commands using this kubeconfig, they will be interactively prompted to log in using their own unique identity from the OIDC or LDAP identity provider configured in the Supervisor.
+   This kubeconfig file can be safely shared with all cluster users.** When the user runs `kubectl` commands using this kubeconfig,
+   they will be interactively prompted to log in using their own unique identity from the identity provider configured in the Supervisor.
 
 1. The Supervisor will provide a federated identity across all clusters that use the same `FederationDomain`. 
    The user will be **prompted by `kubectl`  to interactively authenticate once per day**, and then will be able to use all clusters 
    from the same `FederationDomain` for the rest of the day without being asked to authenticate again. 
    This federated identity is secure because behind the scenes the Supervisor is issuing very short-lived credentials
    that are uniquely scoped to each cluster.
-
-1. The Supervisor makes it easy to **bring your own OIDC or LDAP identity provider to act as the source of user identities**. 
-   It also allows you to configure how identities and group memberships in the OIDC or LDAP identity provider map to identities 
-   and group memberships in the Kubernetes clusters.
 
 ## Generate a Pinniped-compatible kubeconfig file
 

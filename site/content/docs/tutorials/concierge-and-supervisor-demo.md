@@ -121,6 +121,8 @@ had to make some choices. The choices made for this tutorial were:
 The details of the steps shown in this tutorial would be different if any of the above choices were made differently,
 however the general concepts at each step would still apply.
 
+## Ready? Let's go!
+
 ### Install the Pinniped CLI
 
 If you have not already done so, [install the Pinniped command-line tool]({{< ref "../howto/install-cli" >}}).

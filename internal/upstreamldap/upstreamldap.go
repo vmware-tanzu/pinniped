@@ -13,12 +13,12 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/utils/trace"
 
@@ -230,15 +230,11 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		}
 	}
 
-	// If we have group search configured, search for groups to update the value.
-	if len(p.c.GroupSearch.Base) > 0 {
-		mappedGroupNames, err := p.searchGroupsForUserDN(conn, userDN)
-		if err != nil {
-			return nil, err
-		}
-		return mappedGroupNames, nil
+	mappedGroupNames, err := p.searchGroupsForUserDN(conn, userDN)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	return mappedGroupNames, nil
 }
 
 func (p *Provider) performUserRefreshSearch(conn Conn, userDN string) (*ldap.SearchResult, error) {
@@ -453,6 +449,11 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 }
 
 func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, error) {
+	// If we do not have group search configured, skip this search.
+	if len(p.c.GroupSearch.Base) == 0 {
+		return []string{}, nil
+	}
+
 	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN), groupSearchPageSize)
 	if err != nil {
 		return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
@@ -484,8 +485,9 @@ entries:
 		}
 		groups = append(groups, mappedGroupName)
 	}
-	sort.Strings(groups)
-	return groups, nil
+	// de-duplicate the list of groups by turning it into a set,
+	// then turn it back into a sorted list.
+	return sets.NewString(groups...).List(), nil
 }
 
 func (p *Provider) validateConfig() error {
@@ -575,12 +577,9 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		return nil, err
 	}
 
-	var mappedGroupNames []string
-	if len(p.c.GroupSearch.Base) > 0 {
-		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
-		if err != nil {
-			return nil, err
-		}
+	mappedGroupNames, err := p.searchGroupsForUserDN(conn, userEntry.DN)
+	if err != nil {
+		return nil, err
 	}
 
 	mappedRefreshAttributes := make(map[string]string)

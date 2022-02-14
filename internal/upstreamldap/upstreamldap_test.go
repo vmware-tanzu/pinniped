@@ -243,7 +243,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){testGroupSearchGroupNameAttribute: func(entry *ldap.Entry) (string, error) {
-					return "something-else", nil
+					return "something-else-" + entry.DN, nil
 				}}
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -260,7 +260,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				r.User = &user.DefaultInfo{
 					Name:   testUserSearchResultUsernameAttributeValue,
 					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
-					Groups: []string{"something-else", "something-else"},
+					Groups: []string{"something-else-some-upstream-group-dn1", "something-else-some-upstream-group-dn2"},
 				}
 			}),
 		},
@@ -281,7 +281,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			},
 			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
 				info := r.User.(*user.DefaultInfo)
-				info.Groups = nil
+				info.Groups = []string{}
 			}),
 		},
 		{
@@ -1213,6 +1213,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
+			wantGroups: []string{},
 		},
 		{
 			name: "happy path where group search returns groups",

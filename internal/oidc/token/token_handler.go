@@ -313,9 +313,7 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 	// If we got groups back, then replace the old value with the new value.
-	if groups != nil {
-		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
-	}
+	session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 
 	return nil
 }

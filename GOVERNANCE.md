@@ -78,7 +78,7 @@ The below template is an example `README.md` for a new proposal.
 Other than the high-level details at the top of the template (title, authors, status, sponsor, and approval_date)
 and the disclaimer at the top, please use whichever sections make the most sense for your proposal.
 
-```md
+```markdown
 ---
 title: "The Name of My Proposal"
 authors: [ "@margocrawf", "@enj" ]

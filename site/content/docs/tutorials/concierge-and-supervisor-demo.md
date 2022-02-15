@@ -68,9 +68,9 @@ A single Pinniped Supervisor can provide authentication for any number of Kubern
 
 - A single Supervisor is deployed on a special cluster where app developers and devops users have no access.
   App developers and devops users should have no access at least to the resources in the Supervisor's namespace,
-  but usually have no access to the whole cluster. For this tutorial, let's call this cluster the "supervisor cluster".
+  but usually have no access to the whole cluster. For this tutorial, let's call this cluster the *"supervisor cluster"*.
 - App developers and devops users can then use their identities provided by the Supervisor to log in to many
-  clusters where they can manage their apps. For this tutorial, let's call these clusters the "workload clusters".
+  clusters where they can manage their apps. For this tutorial, let's call these clusters the *"workload clusters"*.
   The Pinniped Concierge component is installed into each workload cluster and is configured to trust the single Supervisor.
   The Concierge acts as an in-cluster agent to provide authentication services.
 
@@ -181,23 +181,27 @@ KUBECONFIG="workload2-admin.yaml" gcloud container clusters get-credentials \
 ### Decide which hostname and domain or subdomain will be used for the Supervisor
 
 The Pinniped maintainers own the pinniped.dev domain and have already set it up for use with Google Cloud DNS,
-so for this tutorial we will call our Supervisor server demo-supervisor.pinniped.dev.
+so for this tutorial we will call our Supervisor server `demo-supervisor.pinniped.dev`.
 
 ### Install the Pinniped Supervisor on the supervisor cluster
 
 There are several installation options described in the
 [howto guide for installing the Supervisor]({{< ref "../howto/install-supervisor" >}}).
-For this tutorial, we will install the latest version using the `kapp` CLI.
+For this tutorial, we will install the latest version using the `kubectl` CLI.
 
 ```sh
-kapp deploy --app pinniped-supervisor \
-  --file https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-supervisor.yaml \
-  --yes --kubeconfig supervisor-admin.yaml
+kubectl apply \
+  -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-supervisor.yaml \
+  --kubeconfig supervisor-admin.yaml
 ```
 
 ### Create a LoadBalancer Service for the Supervisor
 
-Create a LoadBalancer to expose the Supervisor service to the public, being careful to only
+There are several options for exposing the Supervisor's endpoints outside the cluster, which are described in the
+[howto guide for configuring the Supervisor]({{< ref "../howto/configure-supervisor" >}}). For this tutorial,
+we will use a public LoadBalancer.
+
+Create a LoadBalancer to expose the Supervisor's endpoints to the public, being careful to only
 expose the HTTPS endpoint (not the HTTP endpoint).
 
 ```sh
@@ -218,13 +222,14 @@ spec:
 EOF
 ```
 
-It may take a little time for the LoadBalancer to be assigned a public IP.
-Check for an `EXTERNAL-IP` using the following command. The value of the
-`EXTERNAL-IP` is the public IP of you LoadBalancer, which will be used
-in the steps below.
+Check for an IP using the following command. The value returned
+is the public IP of you LoadBalancer, which will be used
+in the steps below. It may take a little time for the LoadBalancer to be assigned a public IP, and this
+command will have empty output until then.
 
 ```sh
 kubectl get service pinniped-supervisor-loadbalancer \
+  -o jsonpath='{.status.loadBalancer.ingress[*].ip}' \
   --namespace pinniped-supervisor --kubeconfig supervisor-admin.yaml
 ```
 
@@ -251,6 +256,7 @@ gcloud projects add-iam-policy-binding "$PROJECT" \
 ```
 
 Create and download a key for the new service account, and then put it into a Secret on the cluster.
+Be careful with this key as it allows full control over the DNS of your Cloud DNS zones.
 
 ```sh
 gcloud iam service-accounts keys create demo-dns-solver-key.json \
@@ -346,7 +352,7 @@ spec:
 EOF
 ```
 
-Wait for the Secret to get created. Use the following command to see if it exists.
+Wait for the Secret to get created. This may take a few minutes. Use the following command to see if it exists.
 
 ```sh
 kubectl get secret supervisor-tls-cert \
@@ -458,12 +464,26 @@ kubectl get OIDCIdentityProvider okta \
 
 There are several installation options described in the
 [howto guide for installing the Concierge]({{< ref "../howto/install-concierge" >}}).
-For this tutorial, we will install the latest version using the `kapp` CLI.
+For this tutorial, we will install the latest version using the `kubectl` CLI.
 
 ```sh
-kapp deploy --app pinniped-concierge \
-  --file https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml \
-  --yes --kubeconfig workload1-admin.yaml
+# Install onto the first workload cluster.
+kubectl apply -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml" \
+  --kubeconfig workload1-admin.yaml
+
+kubectl apply -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml" \
+  --kubeconfig workload1-admin.yaml
+
+# Install onto the second workload cluster.
+kubectl apply -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml" \
+  --kubeconfig workload2-admin.yaml
+
+kubectl apply -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml" \
+  --kubeconfig workload2-admin.yaml
 ```
 
 Configure the Concierge on the first workload cluster to trust the Supervisor's
@@ -507,19 +527,39 @@ EOF
 
 ### Configure RBAC rules for the developer and devops users
 
-For this tutorial, we will keep the Kubernetes RBAC configuration simple. For example,
-if one of your Okta users has the email address `walrus@example.com`,
+For this tutorial, we will keep the Kubernetes RBAC configuration simple.
+We'll use a contrived example of RBAC policies to avoid getting into RBAC policy design discussions.
+
+If one of your Okta users has the email address `walrus@example.com`,
 then you could allow that user to [edit](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles)
-most things in one workload cluster,
+things in a new namespace in one workload cluster,
 and [view](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles)
 most things in the other workload cluster, with the following commands.
 
 ```sh
-kubectl create clusterrolebinding developer-can-edit \
-  --clusterrole edit \
-  --user walrus@example.com \
+# Create a namespace in the first workload cluster.
+kubectl create namespace "dev" \
   --kubeconfig workload1-admin.yaml
 
+# Allow the developer to edit everything in the new namespace.
+cat <<EOF | kubectl create --kubeconfig workload1-admin.yaml -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-can-edit-dev-ns
+  namespace: dev
+subjects:
+- kind: User
+  name: walrus@example.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+EOF
+
+# In the second workload cluster, allow the developer
+# to view everything in all namespaces.
 kubectl create clusterrolebinding developer-can-view \
   --clusterrole view \
   --user walrus@example.com \
@@ -535,16 +575,17 @@ used by the developer and devops users. These commands should be run using the a
 kubeconfigs of the workload clusters, and they will output the new Pinniped-compatible
 kubeconfigs for the workload clusters.
 
-```sh
-# The optional `--kubeconfig-context` parameter names the context
-# in the resulting kubeconfig file.
+The `--kubeconfig` and `--kubeconfig-context` options, along with the `KUBECONFIG` environment variable,
+can help you specify how the command should find the admin kubeconfig for the cluster.
 
+The new Pinniped-compatible kubeconfig will be printed to stdout, so in these examples we will redirect
+that to a file.
+
+```sh
 pinniped get kubeconfig \
-  --kubeconfig-context workload1-cluster \
   --kubeconfig workload1-admin.yaml > workload1-developer.yaml
 
 pinniped get kubeconfig \
-  --kubeconfig-context workload2-cluster \
   --kubeconfig workload2-admin.yaml > workload2-developer.yaml
 ```
 
@@ -556,6 +597,22 @@ Save the admin kubeconfig files somewhere private and secure for your own future
 
 See the [full documentation for the `pinniped get kubeconfig` command]({{< ref "../reference/cli" >}})
 for other available optional parameters.
+
+### Optional: Merge the developer kubeconfig files to distribute them as one file
+
+The `kubectl` CLI [can merge kubeconfig files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#merging-kubeconfig-files).
+If you wanted to distribute one kubeconfig file instead of one per cluster,
+you could choose to merge the Pinniped-compatible kubeconfig files.
+
+```sh
+# For this command, KUBECONFIG is treated as a list of input files.
+KUBECONFIG="workload1-developer.yaml:workload2-developer.yaml" kubectl \
+  config view --flatten -o yaml > all-workload-clusters-developer.yaml
+```
+
+The developer who uses the combined kubeconfig file will need to use the standard `kubectl` methods to choose their current context.
+
+For clarity, the steps shown below will continue to use the separate kubeconfig files.
 
 ### As a developer or devops user, access the workload clusters by using regular kubectl commands
 
@@ -576,11 +633,24 @@ kubectl get namespaces --kubeconfig workload1-developer.yaml
 
 The first time this command is run, it will open their default web browser and redirect them to Okta for login.
 After successfully logging in to Okta, for example as the user `walrus@example.com`, the kubectl command will
-continue and will list the namespaces.
+continue and will try to list the namespaces.
 The user's identity in Kubernetes (username and group memberships) came from Okta, through Pinniped.
 
+Oops! This results in an RBAC error similar to
+`Error from server (Forbidden): namespaces is forbidden: User "walrus@example.com" cannot list resource "namespaces" in API group "" at the cluster scope`.
+Recall that in the first workload cluster, the user only has RBAC permissions in the `dev` namespace.
+Let's try again, but this time we will list something in the `dev` namespace.
+
+```sh
+kubectl get serviceaccounts --namespace dev \
+  --kubeconfig workload1-developer.yaml
+```
+
+This will successfully list the default service account in the `dev` namespace.
+
 That same developer user can access all other workload clusters in a similar fashion. For example,
-let's run a command against the second workload cluster.
+let's run a command against the second workload cluster. Recall that the developer is allowed
+to read everthing in the second workload cluster.
 
 ```sh
 kubectl get namespaces --kubeconfig workload2-developer.yaml
@@ -594,15 +664,33 @@ Behind the scenes, Pinniped is performing token refreshes and token exchanges
 on behalf of the user to create a short-lived, cluster-scoped token to access
 this new workload cluster using the same identity from Okta.
 
-If the user did not have RBAC permissions to perform the requested action, then they would see an error
-from kubectl similar to
-`Error from server (Forbidden): namespaces is forbidden: User "walrus@example.com" cannot list resource "namespaces" in API group "" `.
-
 Note that users can use any of kubectl's supported means of providing kubeconfig information to kubectl.
 They are not limited to only using the `--kubeconfig` flag. For example, they could set the `KUBECONFIG`
 environment variable instead.
 
 For more information about logging in to workload clusters, see the [howto doc about login]({{< ref "../howto/login" >}}).
+
+### Whoami
+
+Not sure what identity you're using on the cluster? Pinniped has a convenient feature to help out with that.
+
+```sh
+pinniped whoami --kubeconfig workload2-developer.yaml
+```
+
+The output will include your username and group names, and will look similar to the following output.
+
+```
+Current cluster info:
+
+Name: gke_your_project_us-central1-c_demo-workload-cluster2-pinniped
+URL: https://1.2.3.4
+
+Current user info:
+
+Username: walrus@example.com
+Groups: Everyone, developers, system:authenticated
+```
 
 ## What we've learned
 
@@ -618,13 +706,33 @@ This tutorial showed:
 If you would like to delete the resources created in this tutorial, you can use the following commands.
 
 ```sh
-# To uninstall the Pinniped Supervisor app and all related configuration:
-kapp delete --app pinniped-supervisor --yes --kubeconfig supervisor-admin.yaml
+# To uninstall the Pinniped Supervisor app and all related configuration
+# (including the GCP load balancer):
+kubectl delete \
+  -f "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-supervisor.yaml" \
+  --kubeconfig supervisor-admin.yaml
+
+# To uninstall cert-manager (assuming you already ran the above command):
+kubectl delete -f \
+  "https://github.com/jetstack/cert-manager/releases/download/v1.5.3/cert-manager.yaml" \
+  --kubeconfig supervisor-admin.yaml
 
 # To uninstall the Pinniped Concierge apps and all related configuration:
-kapp delete --app pinniped-concierge --yes --kubeconfig workload1-admin.yaml
+kubectl delete -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml" \
+  --kubeconfig workload1-admin.yaml
 
-kapp delete --app pinniped-concierge --yes --kubeconfig workload2-admin.yaml
+kubectl delete -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml" \
+  --kubeconfig workload1-admin.yaml
+
+kubectl delete -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-resources.yaml" \
+  --kubeconfig workload2-admin.yaml
+
+kubectl delete -f \
+  "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml" \
+  --kubeconfig workload2-admin.yaml
 
 # To delete the GKE clusters entirely:
 gcloud container clusters delete "demo-supervisor-cluster" \
@@ -647,7 +755,11 @@ gcloud dns record-sets transaction remove "$PUBLIC_IP" \
 gcloud dns record-sets transaction execute \
   --zone="$DNS_ZONE" --project "$PROJECT"
 
-# To delete the service account created above for cert-manager:
+# To delete the service account we created for cert-manager:
+gcloud projects remove-iam-policy-binding "$PROJECT" \
+  --member "serviceAccount:demo-dns-solver@$PROJECT.iam.gserviceaccount.com" \
+  --role roles/dns.admin --condition=None
+
 gcloud iam service-accounts delete \
   "demo-dns-solver@$PROJECT.iam.gserviceaccount.com" \
   --project "$PROJECT" --quiet

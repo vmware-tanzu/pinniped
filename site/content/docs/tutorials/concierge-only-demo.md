@@ -27,9 +27,12 @@ for a more specific example of installing onto a local kind cluster, including t
    [JWT]({{< ref "../howto/configure-concierge-jwt" >}}) or
    [webhook]({{< ref "../howto/configure-concierge-webhook" >}}) authenticator.
 1. Generate a kubeconfig using the Pinniped command-line tool (run `pinniped get kubeconfig --help` for more information).
-1. Run `kubectl` commands using the generated kubeconfig.
+1. Run `kubectl` commands using the generated kubeconfig. The Pinniped Concierge will automatically be used for authentication during those commands.
 
-   The Pinniped Concierge is automatically be used for authentication during those commands.
+Please be aware that using the Concierge without the Supervisor is an advanced use case, not the typical use case.
+For example, the Supervisor issues cluster-scoped credentials that cannot be replayed against other clusters,
+so using the Concierge without the Supervisor removes that protection. You might have designed another system to provide
+that protection, but if not then please carefully consider the security implications.
 
 ## Prerequisites
 

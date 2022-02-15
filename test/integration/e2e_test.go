@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -449,6 +450,13 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		var kubectlStdoutPipe io.ReadCloser
+		if runtime.GOOS != "darwin" {
+			// For some unknown reason this breaks the pty library on some MacOS machines.
+			// The problem doesn't reproduce for everyone, so this is just a workaround.
+			kubectlStdoutPipe, err = kubectlCmd.StdoutPipe()
+			require.NoError(t, err)
+		}
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -490,10 +498,19 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
-		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
-		// This warning should be on stderr, but with pty on MacOS it's hard to assert that specifically.
-		require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		if kubectlStdoutPipe != nil {
+			// On non-MacOS check that stdout of the CLI contains the expected output.
+			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
+		} else {
+			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes))
+		}
+		// Due to the GOOS check in the code above, on MacOS the pty will include stdout, and other platforms it will not.
+		// This warning message is supposed to be printed by the CLI on stderr.
+		require.Contains(t, string(kubectlPtyOutputBytes),
+			"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -420,6 +420,7 @@ EOF
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
+log_note "    ulimit -n 512"
 log_note '    source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration'
 log_note
 log_note "Using GoLand? Paste the result of this command into GoLand's run configuration \"Environment\"."

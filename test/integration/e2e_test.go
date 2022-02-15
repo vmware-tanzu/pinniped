@@ -449,8 +449,6 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-		stdoutPipe, err := kubectlCmd.StdoutPipe()
-		require.NoError(t, err)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -492,10 +490,10 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlStdOutOutputBytes, _ := ioutil.ReadAll(stdoutPipe)
-		kubectlStdErrOutputBytes, _ := ioutil.ReadAll(ptyFile)
-		requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
-		require.Contains(t, string(kubectlStdErrOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+		// This warning should be on stderr, but with pty on MacOS it's hard to assert that specifically.
+		require.Contains(t, string(kubectlOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
@@ -1013,7 +1011,7 @@ func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) strin
 			return true, nil // found it! finished.
 		}
 		if foundEOF {
-			return false, fmt.Errorf("reached EOF of subcommand's output without seeing expected string %q", until)
+			return false, fmt.Errorf("reached EOF of subcommand's output without seeing expected string %q. Output read so far was:\n%s", until, readFromFile)
 		}
 		return false, nil // keep waiting and reading
 	}, 1*time.Minute, 1*time.Second)

@@ -72,7 +72,7 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 ## CLA
 
-We welcome contributions from everyone but we can only accept them if you sign
+We welcome contributions from everyone but, we can only accept them if you sign
 our Contributor License Agreement (CLA). If you would like to contribute and you
 have not signed it, our CLA-bot will walk you through the process when you open
 a Pull Request. For questions about the CLA process, see the
@@ -82,11 +82,19 @@ tracker.
 ## Building
 
 The [Dockerfile](Dockerfile) at the root of the repo can be used to build and
-package the code. After making a change to the code, rebuild the docker image with the following command.
+package the server-side code. After making a change to the code, rebuild the
+docker image with the following command.
 
 ```bash
 # From the root directory of the repo...
 docker build .
+```
+
+The Pinniped CLI client can be built for local use with the following command.
+
+```bash
+# From the root directory of the repo...
+go build -o pinniped ./cmd/pinniped
 ```
 
 ## Testing
@@ -122,7 +130,7 @@ docker build .
    brew install kind k14s/tap/ytt k14s/tap/kapp kubectl chromedriver nmap && brew cask install docker
    ```
 
-1. Create a kind cluster, compile, create container images, and install Pinniped and supporting dependencies using:
+1. Create a kind cluster, compile, create container images, and install Pinniped and supporting test dependencies using:
 
    ```bash
    ./hack/prepare-for-integration-tests.sh

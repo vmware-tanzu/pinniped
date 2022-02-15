@@ -26,7 +26,7 @@ If you would rather not use the Supervisor, you may want to [configure the Conci
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
-It also assumes that you have configured an `OIDCIdentityProvider` or an `LDAPIdentityProvider` for the Supervisor as the source of your user's identities.
+It also assumes that you have configured an `OIDCIdentityProvider`, `LDAPIdentityProvider`, or `ActiveDirectoryIdentityProvider` for the Supervisor as the source of your user's identities.
 Various examples of configuring these resources can be found in these guides.
 
 It also assumes that you have already [installed the Pinniped Concierge]({{< ref "install-concierge" >}})

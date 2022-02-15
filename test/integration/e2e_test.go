@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -49,7 +51,7 @@ import (
 func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.
@@ -106,6 +108,9 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		t.Cleanup(cancel)
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -157,48 +162,58 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-		stderrPipe, err := kubectlCmd.StderrPipe()
+
+		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
+		// in-memory buffer, so we can have the full output available to us at the end.
+		originalStderrPipe, err := kubectlCmd.StderrPipe()
 		require.NoError(t, err)
-		stdoutPipe, err := kubectlCmd.StdoutPipe()
+		originalStdoutPipe, err := kubectlCmd.StdoutPipe()
 		require.NoError(t, err)
+		var stderrPipeBuf, stdoutPipeBuf bytes.Buffer
+		stderrPipe := io.TeeReader(originalStderrPipe, &stderrPipeBuf)
+		stdoutPipe := io.TeeReader(originalStdoutPipe, &stdoutPipeBuf)
 
 		t.Logf("starting kubectl subprocess")
 		require.NoError(t, kubectlCmd.Start())
 		t.Cleanup(func() {
-			err := kubectlCmd.Wait()
+			// Consume readers so that the tee buffers will contain all the output so far.
+			_, stdoutReadAllErr := readAllCtx(testCtx, stdoutPipe)
+			_, stderrReadAllErr := readAllCtx(testCtx, stderrPipe)
+
+			// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
+			waitErr := kubectlCmd.Wait()
 			t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
-			stdout, stdoutErr := ioutil.ReadAll(stdoutPipe)
-			if stdoutErr != nil {
-				stdout = []byte("<error reading stdout: " + stdoutErr.Error() + ">")
+
+			// Upon failure, print the full output so far of the kubectl command.
+			var testAlreadyFailedErr error
+			if t.Failed() {
+				testAlreadyFailedErr = errors.New("test failed prior to clean up function")
 			}
-			stderr, stderrErr := ioutil.ReadAll(stderrPipe)
-			if stderrErr != nil {
-				stderr = []byte("<error reading stderr: " + stderrErr.Error() + ">")
+			cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
+
+			if cleanupErrs != nil {
+				t.Logf("kubectl stdout was:\n----start of stdout\n%s\n----end of stdout", stdoutPipeBuf.String())
+				t.Logf("kubectl stderr was:\n----start of stderr\n%s\n----end of stderr", stderrPipeBuf.String())
 			}
-			require.NoErrorf(t, err, "kubectl process did not exit cleanly, stdout/stderr: %q/%q", string(stdout), string(stderr))
+			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed. "+
+				"Note: if kubectl's first call to the Pinniped CLI results in the Pinniped CLI returning an error, "+
+				"then kubectl may call the Pinniped CLI again, which may hang because it will wait for the user "+
+				"to finish the login. This test will kill the kubectl process after a timeout. In this case, the "+
+				" kubectl output printed above will include multiple prompts for the user to enter their authcode.",
+			)
 		})
 
 		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-		loginURLChan := make(chan string)
-		spawnTestGoroutine(t, func() (err error) {
-			defer func() {
-				closeErr := stderrPipe.Close()
-				if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-					return
-				}
-				if err == nil {
-					err = fmt.Errorf("stderr stream closed with error: %w", closeErr)
-				}
-			}()
-
+		loginURLChan := make(chan string, 1)
+		spawnTestGoroutine(testCtx, t, func() error {
 			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
 			scanner := bufio.NewScanner(reader)
 			for scanner.Scan() {
 				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
 				if err == nil && loginURL.Scheme == "https" {
-					loginURLChan <- loginURL.String()
+					loginURLChan <- loginURL.String() // this channel is buffered so this will not block
 					return nil
 				}
 			}
@@ -206,23 +221,14 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.
-		kubectlOutputChan := make(chan string)
-		spawnTestGoroutine(t, func() (err error) {
-			defer func() {
-				closeErr := stdoutPipe.Close()
-				if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
-					return
-				}
-				if err == nil {
-					err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
-				}
-			}()
-			output, err := ioutil.ReadAll(stdoutPipe)
+		kubectlOutputChan := make(chan string, 1)
+		spawnTestGoroutine(testCtx, t, func() error {
+			output, err := readAllCtx(testCtx, stdoutPipe)
 			if err != nil {
 				return err
 			}
 			t.Logf("kubectl output:\n%s\n", output)
-			kubectlOutputChan <- string(output)
+			kubectlOutputChan <- string(output) // this channel is buffered so this will not block
 			return nil
 		})
 
@@ -234,7 +240,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 			require.Fail(t, "timed out waiting for login URL")
 		case loginURL = <-loginURLChan:
 		}
-		t.Logf("navigating to login page")
+		t.Logf("navigating to login page: %q", loginURL)
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
@@ -260,7 +266,7 @@ func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -1176,4 +1182,43 @@ func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string
 	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
 	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
+}
+
+func readAllCtx(ctx context.Context, r io.Reader) ([]byte, error) {
+	errCh := make(chan error, 1)
+	data := &atomic.Value{}
+	go func() { // copied from io.ReadAll and modified to use the atomic.Value above
+		b := make([]byte, 0, 512)
+		data.Store(string(b)) // cast to string to make a copy of the byte slice
+		for {
+			if len(b) == cap(b) {
+				// Add more capacity (let append pick how much).
+				b = append(b, 0)[:len(b)]
+				data.Store(string(b)) // cast to string to make a copy of the byte slice
+			}
+			n, err := r.Read(b[len(b):cap(b)])
+			b = b[:len(b)+n]
+			data.Store(string(b)) // cast to string to make a copy of the byte slice
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				errCh <- err
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		b, _ := data.Load().(string)
+		return nil, fmt.Errorf("failed to complete read all: %w, data read so far:\n%q", ctx.Err(), b)
+
+	case err := <-errCh:
+		b, _ := data.Load().(string)
+		if len(b) == 0 {
+			return nil, err
+		}
+		return []byte(b), err
+	}
 }

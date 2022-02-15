@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package browsertest provides integration test helpers for our browser-based tests.
@@ -119,7 +119,7 @@ func LoginToUpstream(t *testing.T, page *agouti.Page, upstream testlib.TestOIDCU
 		{
 			Name:                "Okta",
 			IssuerPattern:       regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttps://.+\.okta\.com/.*\z`),
 			UsernameSelector:    "input#okta-signin-username",
 			PasswordSelector:    "input#okta-signin-password",
 			LoginButtonSelector: "input#okta-signin-submit",

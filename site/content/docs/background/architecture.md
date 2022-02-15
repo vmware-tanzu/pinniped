@@ -45,6 +45,8 @@ Pinniped supports the following IDPs.
 
 1. Any [LDAP](https://ldap.com) identity provider.
 
+1. Any Active Directory identity provider (via LDAP).
+
 The
 [`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped

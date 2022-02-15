@@ -710,7 +710,8 @@ If you would like to delete the resources created in this tutorial, you can use 
 # (including the GCP load balancer):
 kubectl delete \
   -f "https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-supervisor.yaml" \
-  --kubeconfig supervisor-admin.yaml
+  --kubeconfig supervisor-admin.yaml \
+  --ignore-not-found
 
 # To uninstall cert-manager (assuming you already ran the above command):
 kubectl delete -f \

@@ -312,7 +312,7 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 			"Upstream refresh failed.").WithWrap(err).
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
-	// If we got groups back, then replace the old value with the new value.
+	// Replace the old value with the new value.
 	session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 
 	return nil

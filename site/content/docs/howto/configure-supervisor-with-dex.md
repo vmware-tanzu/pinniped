@@ -95,8 +95,7 @@ spec:
 
     # If you would also like to allow your end users to authenticate using
     # a password grant, then change this to true.
-    # Password grants with Dex will only work in Dex versions that include
-    # this bug fix: https://github.com/dexidp/dex/pull/2234
+    # Password grant requires Dex v2.31.0 or later
     allowPasswordGrant: false
 
   # Specify how Dex claims are mapped to Kubernetes identities.

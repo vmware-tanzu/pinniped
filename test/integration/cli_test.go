@@ -170,7 +170,7 @@ func deserializeWhoAmIRequest(t *testing.T, data string, apiGroupSuffix string) 
 	return obj.(*identityv1alpha1.WhoAmIRequest)
 }
 
-func TestCLILoginOIDC(t *testing.T) {
+func TestCLILoginOIDC_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

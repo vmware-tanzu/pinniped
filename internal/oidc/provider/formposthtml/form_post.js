@@ -53,8 +53,8 @@ window.onload = () => {
             // Requests made using "no-cors" mode will hide the real response.status by making it 0
             // and the real response.ok by making it false.
             // If the real response was success, then we would like to show the success state.
-            // If the real response was an error, then we wish we could show the manual
-            // state, but we have no way to know that, as long as we are making "no-cors" requests.
+            // If the real response was an error, then we wish we could do something else (maybe show the error?),
+            // but we have no way to know the real response as long as we are making "no-cors" requests.
             // For now, show the success status for all responses.
             // In the future, we could make this request in "cors" mode once old versions of our CLI
             // which did not handle CORS are upgraded out by our users. That would allow us to use

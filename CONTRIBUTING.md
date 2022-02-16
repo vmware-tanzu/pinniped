@@ -72,7 +72,7 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 ## CLA
 
-We welcome contributions from everyone but, we can only accept them if you sign
+We welcome contributions from everyone, but we can only accept them if you sign
 our Contributor License Agreement (CLA). If you would like to contribute and you
 have not signed it, our CLA-bot will walk you through the process when you open
 a Pull Request. For questions about the CLA process, see the

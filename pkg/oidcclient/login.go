@@ -704,6 +704,11 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return nil
 	}
 
+	// Validate that the issuer URL uses https, or else we cannot trust its discovery endpoint to get the other URLs.
+	if err := validateURLUsesHTTPS(h.issuer, "issuer"); err != nil {
+		return err
+	}
+
 	h.logger.V(debugLogLevel).Info("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
 	var err error
 	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
@@ -718,6 +723,18 @@ func (h *handlerState) initOIDCDiscovery() error {
 		Scopes:   h.scopes,
 	}
 
+	// Validate that the discovered auth and token URLs use https. The OIDC spec for the authcode flow says:
+	// "Communication with the Authorization Endpoint MUST utilize TLS"
+	// (see https://openid.net/specs/openid-connect-core-1_0.html#AuthorizationEndpoint), and
+	// "Communication with the Token Endpoint MUST utilize TLS"
+	// (see https://openid.net/specs/openid-connect-core-1_0.html#TokenEndpoint).
+	if err := validateURLUsesHTTPS(h.provider.Endpoint().AuthURL, "discovered authorize URL from issuer"); err != nil {
+		return err
+	}
+	if err := validateURLUsesHTTPS(h.provider.Endpoint().TokenURL, "discovered token URL from issuer"); err != nil {
+		return err
+	}
+
 	// Use response_mode=form_post if the provider supports it.
 	var discoveryClaims struct {
 		ResponseModesSupported []string `json:"response_modes_supported"`
@@ -726,6 +743,17 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return fmt.Errorf("could not decode response_modes_supported in OIDC discovery from %q: %w", h.issuer, err)
 	}
 	h.useFormPost = stringSliceContains(discoveryClaims.ResponseModesSupported, "form_post")
+	return nil
+}
+
+func validateURLUsesHTTPS(uri string, uriName string) error {
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		return fmt.Errorf("%s is not a valid URL: %w", uriName, err)
+	}
+	if parsed.Scheme != "https" {
+		return fmt.Errorf("%s must be an https URL, but had scheme %q instead", uriName, parsed.Scheme)
+	}
 	return nil
 }
 

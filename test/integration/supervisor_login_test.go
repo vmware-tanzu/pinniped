@@ -47,7 +47,7 @@ import (
 )
 
 // nolint:gocyclo
-func TestSupervisorLogin(t *testing.T) {
+func TestSupervisorLogin_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	tests := []struct {

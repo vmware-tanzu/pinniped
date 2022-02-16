@@ -47,8 +47,8 @@ import (
 	"go.pinniped.dev/test/testlib/browsertest"
 )
 
-// TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
-func TestE2EFullIntegration(t *testing.T) { // nolint:gocyclo
+// TestE2EFullIntegration_Browser tests a full integration scenario that combines the supervisor, concierge, and CLI.
+func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)

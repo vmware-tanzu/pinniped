@@ -6,6 +6,7 @@ package browsertest
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,10 +21,16 @@ const (
 	operationPollingInterval = 100 * time.Millisecond
 )
 
-// Open a webdriver-driven browser and returns an *agouti.Page to control it. The browser  will be automatically
+// Open a webdriver-driven browser and returns an *agouti.Page to control it. The browser will be automatically
 // closed at the end of the current test. It is configured for test purposes with the correct HTTP proxy and
 // in a mode that ignore certificate errors.
 func Open(t *testing.T) *agouti.Page {
+	t.Helper()
+
+	// make it trivial to run all browser based tests via:
+	// go test -v -race -count 1 -timeout 0 ./test/integration -run '/_Browser'
+	require.Contains(t, rootTestName(t), "_Browser", "browser based tests must contain the string _Browser in their name")
+
 	t.Logf("opening browser driver")
 	env := testlib.IntegrationEnv(t)
 	caps := agouti.NewCapabilities()
@@ -56,6 +63,25 @@ func Open(t *testing.T) *agouti.Page {
 	require.NoError(t, err)
 	require.NoError(t, page.Reset())
 	return page
+}
+
+func rootTestName(t *testing.T) string {
+	switch names := strings.SplitN(t.Name(), "/", 3); len(names) {
+	case 0:
+		panic("impossible")
+
+	case 1:
+		return names[0]
+
+	case 2, 3:
+		if strings.HasPrefix(names[0], "TestIntegration") {
+			return names[1]
+		}
+		return names[0]
+
+	default:
+		panic("impossible")
+	}
 }
 
 // WaitForVisibleElements expects the page to contain all the the elements specified by the selectors. It waits for this

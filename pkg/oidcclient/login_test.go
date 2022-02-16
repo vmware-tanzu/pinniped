@@ -6,6 +6,7 @@ package oidcclient
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,10 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"go.pinniped.dev/internal/net/phttp"
+
+	"go.pinniped.dev/internal/testutil/tlsserver"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang/mock/gomock"
@@ -61,6 +66,13 @@ func (m *mockSessionCache) PutToken(key SessionCacheKey, token *oidctypes.Token)
 	m.sawPutTokens = append(m.sawPutTokens, token)
 }
 
+func newClientForServer(server *httptest.Server) *http.Client {
+	pool := x509.NewCertPool()
+	caPEMData := tlsserver.TLSTestServerCA(server)
+	pool.AppendCertsFromPEM(caPEMData)
+	return phttp.Default(pool)
+}
+
 func TestLogin(t *testing.T) { // nolint:gocyclo
 	time1 := time.Date(2035, 10, 12, 13, 14, 15, 16, time.UTC)
 	time1Unix := int64(2075807775)
@@ -76,31 +88,33 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		IDToken: &oidctypes.IDToken{Token: "test-id-token-with-requested-audience", Expiry: metav1.NewTime(time1.Add(3 * time.Minute))},
 	}
 
-	// Start a test server that returns 500 errors
-	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Start a test server that returns 500 errors.
+	errorServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "some discovery error", http.StatusInternalServerError)
-	}))
-	t.Cleanup(errorServer.Close)
+	}), nil)
 
 	// Start a test server that returns discovery data with a broken response_modes_supported value.
 	brokenResponseModeMux := http.NewServeMux()
-	brokenResponseModeServer := httptest.NewServer(brokenResponseModeMux)
+	brokenResponseModeServer := tlsserver.TLSTestServer(t, brokenResponseModeMux, nil)
 	brokenResponseModeMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
 			Issuer                 string `json:"issuer"`
+			AuthURL                string `json:"authorization_endpoint"`
+			TokenURL               string `json:"token_endpoint"`
 			ResponseModesSupported string `json:"response_modes_supported"` // Wrong type (should be []string).
 		}
 		_ = json.NewEncoder(w).Encode(&providerJSON{
 			Issuer:                 brokenResponseModeServer.URL,
+			AuthURL:                brokenResponseModeServer.URL + "/authorize",
+			TokenURL:               brokenResponseModeServer.URL + "/token",
 			ResponseModesSupported: "invalid",
 		})
 	})
-	t.Cleanup(brokenResponseModeServer.Close)
 
-	// Start a test server that returns discovery data with a broken token URL
+	// Start a test server that returns discovery data with a broken token URL.
 	brokenTokenURLMux := http.NewServeMux()
-	brokenTokenURLServer := httptest.NewServer(brokenTokenURLMux)
+	brokenTokenURLServer := tlsserver.TLSTestServer(t, brokenTokenURLMux, nil)
 	brokenTokenURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -116,7 +130,63 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			JWKSURL:  brokenTokenURLServer.URL + "/keys",
 		})
 	})
-	t.Cleanup(brokenTokenURLServer.Close)
+
+	// Start a test server that returns discovery data with an insecure token URL.
+	insecureTokenURLMux := http.NewServeMux()
+	insecureTokenURLServer := tlsserver.TLSTestServer(t, insecureTokenURLMux, nil)
+	insecureTokenURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		type providerJSON struct {
+			Issuer   string `json:"issuer"`
+			AuthURL  string `json:"authorization_endpoint"`
+			TokenURL string `json:"token_endpoint"`
+			JWKSURL  string `json:"jwks_uri"`
+		}
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:   insecureTokenURLServer.URL,
+			AuthURL:  insecureTokenURLServer.URL + "/authorize",
+			TokenURL: "http://insecure-issuer.com",
+			JWKSURL:  insecureTokenURLServer.URL + "/keys",
+		})
+	})
+
+	// Start a test server that returns discovery data with a broken authorize URL.
+	brokenAuthURLMux := http.NewServeMux()
+	brokenAuthURLServer := tlsserver.TLSTestServer(t, brokenAuthURLMux, nil)
+	brokenAuthURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		type providerJSON struct {
+			Issuer   string `json:"issuer"`
+			AuthURL  string `json:"authorization_endpoint"`
+			TokenURL string `json:"token_endpoint"`
+			JWKSURL  string `json:"jwks_uri"`
+		}
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:   brokenAuthURLServer.URL,
+			AuthURL:  `%`,
+			TokenURL: brokenAuthURLServer.URL + "/token",
+			JWKSURL:  brokenAuthURLServer.URL + "/keys",
+		})
+	})
+
+	// Start a test server that returns discovery data with an insecure authorize URL.
+	insecureAuthURLMux := http.NewServeMux()
+	insecureAuthURLServer := tlsserver.TLSTestServer(t, insecureAuthURLMux, nil)
+	insecureAuthURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		type providerJSON struct {
+			Issuer   string `json:"issuer"`
+			AuthURL  string `json:"authorization_endpoint"`
+			TokenURL string `json:"token_endpoint"`
+			JWKSURL  string `json:"jwks_uri"`
+		}
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:   insecureAuthURLServer.URL,
+			AuthURL:  "http://insecure-issuer.com",
+			TokenURL: insecureAuthURLServer.URL + "/token",
+			JWKSURL:  insecureAuthURLServer.URL + "/keys",
+		})
+	})
 
 	discoveryHandler := func(server *httptest.Server, responseModes []string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -225,15 +295,13 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 
 	// Start a test server that returns a real discovery document and answers refresh requests.
 	providerMux := http.NewServeMux()
-	successServer := httptest.NewServer(providerMux)
-	t.Cleanup(successServer.Close)
+	successServer := tlsserver.TLSTestServer(t, providerMux, nil)
 	providerMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(successServer, nil))
 	providerMux.HandleFunc("/token", tokenHandler)
 
 	// Start a test server that returns a real discovery document and answers refresh requests, _and_ supports form_mode=post.
 	formPostProviderMux := http.NewServeMux()
-	formPostSuccessServer := httptest.NewServer(formPostProviderMux)
-	t.Cleanup(formPostSuccessServer.Close)
+	formPostSuccessServer := tlsserver.TLSTestServer(t, formPostProviderMux, nil)
 	formPostProviderMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(formPostSuccessServer, []string{"query", "form_post"}))
 	formPostProviderMux.HandleFunc("/token", tokenHandler)
 
@@ -265,13 +333,14 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, WithSessionCache(cache)(h))
 		require.NoError(t, WithCLISendingCredentials()(h))
 		require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
+		require.NoError(t, WithClient(newClientForServer(successServer))(h))
 
 		require.NoError(t, WithClient(&http.Client{
 			Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 				switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
-				case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+				case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
 					return defaultDiscoveryResponse(req)
-				case "http://" + successServer.Listener.Addr().String() + "/authorize":
+				case "https://" + successServer.Listener.Addr().String() + "/authorize":
 					return authResponse, authError
 				default:
 					require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
@@ -331,11 +400,36 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantErr: "some error generating PKCE",
 		},
 		{
-			name:     "session cache hit but token expired",
-			issuer:   "test-issuer",
+			name:     "issuer is not https",
+			issuer:   "http://insecure-issuer.com",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					return nil
+				}
+			},
+			wantLogs: nil,
+			wantErr:  `issuer must be an https URL, but had scheme "http" instead`,
+		},
+		{
+			name:     "issuer is not a valid URL",
+			issuer:   "%",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					return nil
+				}
+			},
+			wantLogs: nil,
+			wantErr:  `issuer is not a valid URL: parse "%": invalid URL escape "%"`,
+		},
+		{
+			name:     "session cache hit but token expired",
+			issuer:   errorServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
 							Token:  "test-id-token",
@@ -344,7 +438,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					}}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{{
-							Issuer:      "test-issuer",
+							Issuer:      errorServer.URL,
 							ClientID:    "test-client-id",
 							Scopes:      []string{"test-scope"},
 							RedirectURI: "http://localhost:0/callback",
@@ -354,8 +448,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					return WithSessionCache(cache)(h)
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"test-issuer\""},
-			wantErr:  `could not perform OIDC discovery for "test-issuer": Get "test-issuer/.well-known/openid-configuration": unsupported protocol scheme ""`,
+			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
+			wantErr:  "could not perform OIDC discovery for \"" + errorServer.URL + "\": 500 Internal Server Error: some discovery error\n",
 		},
 		{
 			name:     "session cache hit with valid token",
@@ -382,7 +476,10 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		{
 			name: "discovery failure due to 500 error",
 			opt: func(t *testing.T) Option {
-				return func(h *handlerState) error { return nil }
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
+					return nil
+				}
 			},
 			issuer:   errorServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
@@ -391,7 +488,10 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		{
 			name: "discovery failure due to invalid response_modes_supported",
 			opt: func(t *testing.T) Option {
-				return func(h *handlerState) error { return nil }
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(brokenResponseModeServer))(h))
+					return nil
+				}
 			},
 			issuer:   brokenResponseModeServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenResponseModeServer.URL + "\""},
@@ -403,6 +503,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
@@ -450,6 +552,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
@@ -490,6 +594,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "not-the-test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
 							Token:  "expired-test-id-token",
@@ -518,9 +624,58 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantErr: "login failed: must have either a localhost listener or stdin must be a TTY",
 		},
 		{
+			name: "issuer has invalid token URL",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(brokenTokenURLServer))(h))
+					return nil
+				}
+			},
+			issuer:   brokenTokenURLServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + brokenTokenURLServer.URL + `"`},
+			wantErr:  `discovered token URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
+		},
+		{
+			name: "issuer has insecure token URL",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(insecureTokenURLServer))(h))
+					return nil
+				}
+			},
+			issuer:   insecureTokenURLServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + insecureTokenURLServer.URL + `"`},
+			wantErr:  `discovered token URL from issuer must be an https URL, but had scheme "http" instead`,
+		},
+		{
+			name: "issuer has invalid authorize URL",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(brokenAuthURLServer))(h))
+					return nil
+				}
+			},
+			issuer:   brokenAuthURLServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + brokenAuthURLServer.URL + `"`},
+			wantErr:  `discovered authorize URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
+		},
+		{
+			name: "issuer has insecure authorize URL",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(insecureAuthURLServer))(h))
+					return nil
+				}
+			},
+			issuer:   insecureAuthURLServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + insecureAuthURLServer.URL + `"`},
+			wantErr:  `discovered authorize URL from issuer must be an https URL, but had scheme "http" instead`,
+		},
+		{
 			name: "listen failure and non-tty stdin",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					h.listen = func(net string, addr string) (net.Listener, error) {
 						assert.Equal(t, "tcp", net)
 						assert.Equal(t, "localhost:0", addr)
@@ -544,6 +699,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			name: "listening disabled and manual prompt fails",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					require.NoError(t, WithSkipListen()(h))
 					h.isTTY = func(fd int) bool { return true }
 					h.openURL = func(authorizeURL string) error {
@@ -570,6 +726,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			name: "listen success and manual prompt succeeds",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
 					h.isTTY = func(fd int) bool { return true }
 					h.openURL = func(authorizeURL string) error {
@@ -596,6 +753,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			name: "timeout waiting for callback",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+
 					ctx, cancel := context.WithCancel(h.ctx)
 					h.ctx = ctx
 
@@ -614,6 +773,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			name: "callback returns error",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					h.openURL = func(_ string) error {
 						go func() {
 							h.callbacks <- callbackResult{err: fmt.Errorf("some callback error")}
@@ -649,7 +809,10 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
+
+					client := newClientForServer(successServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
 
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
@@ -710,7 +873,10 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
+
+					client := newClientForServer(formPostSuccessServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
 
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
@@ -772,8 +938,11 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
 					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "oidc")(h))
+
+					client := newClientForServer(successServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
 
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
@@ -851,40 +1020,42 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					require.NoError(t, WithClient(&http.Client{
-						Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
-							switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
-							case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
-								type providerJSON struct {
-									Issuer   string `json:"issuer"`
-									AuthURL  string `json:"authorization_endpoint"`
-									TokenURL string `json:"token_endpoint"`
-									JWKSURL  string `json:"jwks_uri"`
-								}
-								jsonResponseBody, err := json.Marshal(&providerJSON{
-									Issuer:   successServer.URL,
-									AuthURL:  "%", // this is not a legal URL!
-									TokenURL: successServer.URL + "/token",
-									JWKSURL:  successServer.URL + "/keys",
-								})
-								require.NoError(t, err)
-								return &http.Response{
-									StatusCode: http.StatusOK,
-									Header:     http.Header{"content-type": []string{"application/json"}},
-									Body:       ioutil.NopCloser(strings.NewReader(string(jsonResponseBody))),
-								}, nil
-							default:
-								require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
-								return nil, nil
+
+					client := newClientForServer(successServer)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							type providerJSON struct {
+								Issuer   string `json:"issuer"`
+								AuthURL  string `json:"authorization_endpoint"`
+								TokenURL string `json:"token_endpoint"`
+								JWKSURL  string `json:"jwks_uri"`
 							}
-						}),
-					})(h))
+							jsonResponseBody, err := json.Marshal(&providerJSON{
+								Issuer:   successServer.URL,
+								AuthURL:  "%", // this is not a legal URL!
+								TokenURL: successServer.URL + "/token",
+								JWKSURL:  successServer.URL + "/keys",
+							})
+							require.NoError(t, err)
+							return &http.Response{
+								StatusCode: http.StatusOK,
+								Header:     http.Header{"content-type": []string{"application/json"}},
+								Body:       ioutil.NopCloser(strings.NewReader(string(jsonResponseBody))),
+							}, nil
+						default:
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
+
 					return nil
 				}
 			},
 			issuer:   successServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `could not build authorize request: parse "%?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state": invalid URL escape "%"`,
+			wantErr:  `discovered authorize URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
 		},
 		{
 			name:     "ldap login when there is an error calling the authorization endpoint",
@@ -896,7 +1067,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			},
 			issuer:   successServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr: `authorization response error: Get "http://` + successServer.Listener.Addr().String() +
+			wantErr: `authorization response error: Get "https://` + successServer.Listener.Addr().String() +
 				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state": some error fetching authorize endpoint`,
 		},
 		{
@@ -1058,45 +1229,45 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					require.NoError(t, WithClient(&http.Client{
-						Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
-							switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
-							case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
-								discoveryRequestWasMade = true
-								return defaultDiscoveryResponse(req)
-							case "http://" + successServer.Listener.Addr().String() + "/authorize":
-								authorizeRequestWasMade = true
-								require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
-								require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
-								require.Equal(t, url.Values{
-									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
-									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
-									// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
-									"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
-									"code_challenge_method": []string{"S256"},
-									"response_type":         []string{"code"},
-									"scope":                 []string{"test-scope"},
-									"nonce":                 []string{"test-nonce"},
-									"state":                 []string{"test-state"},
-									"access_type":           []string{"offline"},
-									"client_id":             []string{"test-client-id"},
-									"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-									"pinniped_idp_name":     []string{"some-upstream-name"},
-									"pinniped_idp_type":     []string{"ldap"},
-								}, req.URL.Query())
-								return &http.Response{
-									StatusCode: http.StatusFound,
-									Header: http.Header{"Location": []string{
-										fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
-									}},
-								}, nil
-							default:
-								// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
-								require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
-								return nil, nil
-							}
-						}),
-					})(h))
+					client := newClientForServer(successServer)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + "/authorize":
+							authorizeRequestWasMade = true
+							require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+							require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+							require.Equal(t, url.Values{
+								// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+								// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+								// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+								"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
+								"code_challenge_method": []string{"S256"},
+								"response_type":         []string{"code"},
+								"scope":                 []string{"test-scope"},
+								"nonce":                 []string{"test-nonce"},
+								"state":                 []string{"test-state"},
+								"access_type":           []string{"offline"},
+								"client_id":             []string{"test-client-id"},
+								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+								"pinniped_idp_name":     []string{"some-upstream-name"},
+								"pinniped_idp_type":     []string{"ldap"},
+							}, req.URL.Query())
+							return &http.Response{
+								StatusCode: http.StatusFound,
+								Header: http.Header{"Location": []string{
+									fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+								}},
+							}, nil
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
 					return nil
 				}
 			},
@@ -1165,45 +1336,45 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					require.NoError(t, WithClient(&http.Client{
-						Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
-							switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
-							case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
-								discoveryRequestWasMade = true
-								return defaultDiscoveryResponse(req)
-							case "http://" + successServer.Listener.Addr().String() + "/authorize":
-								authorizeRequestWasMade = true
-								require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
-								require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
-								require.Equal(t, url.Values{
-									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
-									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
-									// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
-									"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
-									"code_challenge_method": []string{"S256"},
-									"response_type":         []string{"code"},
-									"scope":                 []string{"test-scope"},
-									"nonce":                 []string{"test-nonce"},
-									"state":                 []string{"test-state"},
-									"access_type":           []string{"offline"},
-									"client_id":             []string{"test-client-id"},
-									"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-									"pinniped_idp_name":     []string{"some-upstream-name"},
-									"pinniped_idp_type":     []string{"ldap"},
-								}, req.URL.Query())
-								return &http.Response{
-									StatusCode: http.StatusFound,
-									Header: http.Header{"Location": []string{
-										fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
-									}},
-								}, nil
-							default:
-								// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
-								require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
-								return nil, nil
-							}
-						}),
-					})(h))
+					client := newClientForServer(successServer)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + "/authorize":
+							authorizeRequestWasMade = true
+							require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+							require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+							require.Equal(t, url.Values{
+								// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+								// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+								// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+								"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
+								"code_challenge_method": []string{"S256"},
+								"response_type":         []string{"code"},
+								"scope":                 []string{"test-scope"},
+								"nonce":                 []string{"test-nonce"},
+								"state":                 []string{"test-state"},
+								"access_type":           []string{"offline"},
+								"client_id":             []string{"test-client-id"},
+								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+								"pinniped_idp_name":     []string{"some-upstream-name"},
+								"pinniped_idp_type":     []string{"ldap"},
+							}, req.URL.Query())
+							return &http.Response{
+								StatusCode: http.StatusFound,
+								Header: http.Header{"Location": []string{
+									fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+								}},
+							}, nil
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
 					return nil
 				}
 			},
@@ -1276,45 +1447,45 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					require.NoError(t, WithClient(&http.Client{
-						Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
-							switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
-							case "http://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
-								discoveryRequestWasMade = true
-								return defaultDiscoveryResponse(req)
-							case "http://" + successServer.Listener.Addr().String() + "/authorize":
-								authorizeRequestWasMade = true
-								require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
-								require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
-								require.Equal(t, url.Values{
-									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
-									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
-									// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
-									"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
-									"code_challenge_method": []string{"S256"},
-									"response_type":         []string{"code"},
-									"scope":                 []string{"test-scope"},
-									"nonce":                 []string{"test-nonce"},
-									"state":                 []string{"test-state"},
-									"access_type":           []string{"offline"},
-									"client_id":             []string{"test-client-id"},
-									"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-									"pinniped_idp_name":     []string{"some-upstream-name"},
-									"pinniped_idp_type":     []string{"ldap"},
-								}, req.URL.Query())
-								return &http.Response{
-									StatusCode: http.StatusSeeOther,
-									Header: http.Header{"Location": []string{
-										fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
-									}},
-								}, nil
-							default:
-								// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
-								require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
-								return nil, nil
-							}
-						}),
-					})(h))
+					client := newClientForServer(successServer)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + "/authorize":
+							authorizeRequestWasMade = true
+							require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+							require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+							require.Equal(t, url.Values{
+								// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+								// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+								// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+								"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
+								"code_challenge_method": []string{"S256"},
+								"response_type":         []string{"code"},
+								"scope":                 []string{"test-scope"},
+								"nonce":                 []string{"test-nonce"},
+								"state":                 []string{"test-state"},
+								"access_type":           []string{"offline"},
+								"client_id":             []string{"test-client-id"},
+								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+								"pinniped_idp_name":     []string{"some-upstream-name"},
+								"pinniped_idp_type":     []string{"ldap"},
+							}, req.URL.Query())
+							return &http.Response{
+								StatusCode: http.StatusSeeOther,
+								Header: http.Header{"Location": []string{
+									fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+								}},
+							}, nil
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
 					return nil
 				}
 			},
@@ -1342,6 +1513,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("cluster-1234")(h))
 					return nil
@@ -1351,6 +1523,33 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
 			wantErr: fmt.Sprintf("failed to exchange token: could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token URL is insecure",
+			issuer:   insecureTokenURLServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      insecureTokenURLServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithClient(newClientForServer(insecureTokenURLServer))(h))
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("cluster-1234")(h))
+					return nil
+				}
+			},
+			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
+				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
+				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + insecureTokenURLServer.URL + "\""},
+			wantErr: `failed to exchange token: discovered token URL from issuer must be an https URL, but had scheme "http" instead`,
 		},
 		{
 			name:     "with requested audience, session cache hit with valid token, but token URL is invalid",
@@ -1368,6 +1567,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(brokenTokenURLServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("cluster-1234")(h))
 					return nil
@@ -1376,7 +1576,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenTokenURLServer.URL + "\""},
-			wantErr: `failed to exchange token: could not build RFC8693 request: parse "%": invalid URL escape "%"`,
+			wantErr: `failed to exchange token: discovered token URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
 		},
 		{
 			name:     "with requested audience, session cache hit with valid token, but token exchange request fails",
@@ -1394,6 +1594,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-http-response")(h))
 					return nil
@@ -1420,6 +1621,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-http-400")(h))
 					return nil
@@ -1446,6 +1648,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-content-type")(h))
 					return nil
@@ -1472,6 +1675,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-wrong-content-type")(h))
 					return nil
@@ -1498,6 +1702,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-json")(h))
 					return nil
@@ -1524,6 +1729,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-tokentype")(h))
 					return nil
@@ -1550,6 +1756,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-issuedtokentype")(h))
 					return nil
@@ -1576,6 +1783,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-jwt")(h))
 					return nil
@@ -1602,6 +1810,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience")(h))
 
@@ -1624,6 +1833,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
 							Token:  "expired-test-id-token",

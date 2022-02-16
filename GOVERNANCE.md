@@ -31,7 +31,7 @@ A supermajority is defined as two-thirds of members in the group. A supermajorit
 Ideally, all project decisions are resolved by consensus. If impossible, any maintainer may call a vote. Unless otherwise specified in this document, any vote will be decided by a supermajority of maintainers.
 
 ---
-# Proposal Process 
+# Proposal Process
 The proposal process is currently being worked on. No formal process is available at this time. You may reach out to the maintainers in the Kubernetes Slack Workspace within the [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) channel or on the [Pinniped mailing list](project-pinniped@googlegroups.com) with any questions you may have or to send us your proposals.
 
 ---

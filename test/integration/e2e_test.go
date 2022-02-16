@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -449,8 +450,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-		stdoutPipe, err := kubectlCmd.StdoutPipe()
-		require.NoError(t, err)
+		var kubectlStdoutPipe io.ReadCloser
+		if runtime.GOOS != "darwin" {
+			// For some unknown reason this breaks the pty library on some MacOS machines.
+			// The problem doesn't reproduce for everyone, so this is just a workaround.
+			kubectlStdoutPipe, err = kubectlCmd.StdoutPipe()
+			require.NoError(t, err)
+		}
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -492,10 +498,19 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlStdOutOutputBytes, _ := ioutil.ReadAll(stdoutPipe)
-		kubectlStdErrOutputBytes, _ := ioutil.ReadAll(ptyFile)
-		requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
-		require.Contains(t, string(kubectlStdErrOutputBytes), "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		if kubectlStdoutPipe != nil {
+			// On non-MacOS check that stdout of the CLI contains the expected output.
+			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
+		} else {
+			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes))
+		}
+		// Due to the GOOS check in the code above, on MacOS the pty will include stdout, and other platforms it will not.
+		// This warning message is supposed to be printed by the CLI on stderr.
+		require.Contains(t, string(kubectlPtyOutputBytes),
+			"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
@@ -1013,7 +1028,7 @@ func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) strin
 			return true, nil // found it! finished.
 		}
 		if foundEOF {
-			return false, fmt.Errorf("reached EOF of subcommand's output without seeing expected string %q", until)
+			return false, fmt.Errorf("reached EOF of subcommand's output without seeing expected string %q. Output read so far was:\n%s", until, readFromFile)
 		}
 		return false, nil // keep waiting and reading
 	}, 1*time.Minute, 1*time.Second)

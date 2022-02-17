@@ -186,10 +186,9 @@ implementation PRs.
 5. The community critiques the proposal by adding PR reviews in order to mature/converge on the proposal.
 6. When the maintainers reach consensus or supermajority to accept a proposal, they:
    1. change the status to `accepted`,
-   2. adjust the proposal number in the subdirectory's name if needed,
-   3. record both majority and dissenting opinions,
-   4. merge the PR, thus adding the new proposal to the `main` branch,
-   5. code implementation PRs are submitted separately to implement the solution.
+   2. record both majority and dissenting opinions,
+   3. merge the PR, thus adding the new proposal to the `main` branch,
+   4. code implementation PRs are submitted separately to implement the solution.
 7. During implementation of an accepted proposal:
    1. if it is discovered that significant unanticipated changes are needed to the proposal, then the implementation
       work should be paused and the proposal should be updated with the new details to be reviewed by the maintainers

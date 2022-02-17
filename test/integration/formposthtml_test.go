@@ -25,7 +25,7 @@ import (
 )
 
 // safe to run in parallel with serial tests since it only interacts with a test local server, see main_test.go.
-func TestFormPostHTML_Parallel(t *testing.T) {
+func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	// Run a mock callback handler, simulating the one running in the CLI.

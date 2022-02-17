@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -45,10 +45,10 @@ func TestUnsuccessfulCredentialRequest_Parallel(t *testing.T) {
 	require.Equal(t, "authentication failed", *response.Status.Message)
 }
 
-// TestSuccessfulCredentialRequest cannot run in parallel because runPinnipedLoginOIDC uses a fixed port
+// TestSuccessfulCredentialRequest_Browser cannot run in parallel because runPinnipedLoginOIDC uses a fixed port
 // for its localhost listener via --listen-port=env.CLIUpstreamOIDC.CallbackURL.Port() per oidcLoginCommand.
 // Since ports are global to the process, tests using oidcLoginCommand must be run serially.
-func TestSuccessfulCredentialRequest(t *testing.T) {
+func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)

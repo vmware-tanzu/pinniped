@@ -301,7 +301,7 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 	// run PerformRefresh
-	err = p.PerformRefresh(ctx, provider.StoredRefreshAttributes{
+	groups, err := p.PerformRefresh(ctx, provider.StoredRefreshAttributes{
 		Username:             username,
 		Subject:              subject,
 		DN:                   dn,
@@ -312,6 +312,8 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 			"Upstream refresh failed.").WithWrap(err).
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
+	// Replace the old value with the new value.
+	session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 
 	return nil
 }

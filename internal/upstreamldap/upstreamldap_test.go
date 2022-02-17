@@ -238,6 +238,33 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(nil),
 		},
 		{
+			name:     "when the group search has an override func",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){testGroupSearchGroupNameAttribute: func(entry *ldap.Entry) (string, error) {
+					return "something-else-" + entry.DN, nil
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				r.User = &user.DefaultInfo{
+					Name:   testUserSearchResultUsernameAttributeValue,
+					UID:    base64.RawURLEncoding.EncodeToString([]byte(testUserSearchResultUIDAttributeValue)),
+					Groups: []string{"something-else-some-upstream-group-dn1", "something-else-some-upstream-group-dn2"},
+				}
+			}),
+		},
+		{
 			name:     "when the group search base is empty then skip the group search entirely",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
@@ -254,7 +281,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			},
 			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
 				info := r.User.(*user.DefaultInfo)
-				info.Groups = nil
+				info.Groups = []string{}
 			}),
 		},
 		{
@@ -959,6 +986,24 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
+			name:     "when the group search has an override func that errors",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupAttributeParsingOverrides = map[string]func(*ldap.Entry) (string, error){testGroupSearchGroupNameAttribute: func(entry *ldap.Entry) (string, error) {
+					return "", errors.New("some error")
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf("error finding groups for user %s: some error", testUserSearchResultDNValue),
+		},
+		{
 			name:           "when binding as the found user returns an error",
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
@@ -1100,6 +1145,18 @@ func TestUpstreamRefresh(t *testing.T) {
 		Controls:     nil, // don't need paging because we set the SizeLimit so small
 	}
 
+	expectedGroupSearch := &ldap.SearchRequest{
+		BaseDN:       testGroupSearchBase,
+		Scope:        ldap.ScopeWholeSubtree,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    0, // unlimited size because we will search with paging
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       testGroupSearchFilterInterpolated,
+		Attributes:   []string{testGroupSearchGroupNameAttribute},
+		Controls:     nil, // nil because ldap.SearchWithPaging() will set the appropriate controls for us
+	}
+
 	happyPathUserSearchResult := &ldap.SearchResult{
 		Entries: []*ldap.Entry{
 			{
@@ -1146,6 +1203,7 @@ func TestUpstreamRefresh(t *testing.T) {
 		setupMocks     func(conn *mockldapconn.MockConn)
 		dialError      error
 		wantErr        string
+		wantGroups     []string
 	}{
 		{
 			name:           "happy path where searching the dn returns a single entry",
@@ -1155,6 +1213,90 @@ func TestUpstreamRefresh(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
+			wantGroups: []string{},
+		},
+		{
+			name: "happy path where group search returns groups",
+			providerConfig: &ProviderConfig{
+				Name:               "some-provider-name",
+				Host:               testHost,
+				CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+				ConnectionProtocol: TLS,
+				BindUsername:       testBindUsername,
+				BindPassword:       testBindPassword,
+				UserSearch: UserSearchConfig{
+					Base:              testUserSearchBase,
+					UIDAttribute:      testUserSearchUIDAttribute,
+					UsernameAttribute: testUserSearchUsernameAttribute,
+				},
+				GroupSearch: GroupSearchConfig{
+					Base:               testGroupSearchBase,
+					Filter:             testGroupSearchFilter,
+					GroupNameAttribute: testGroupSearchGroupNameAttribute,
+				},
+				RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+					pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+				},
+			},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch, expectedGroupSearchPageSize).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testGroupSearchResultDNValue1,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testGroupSearchGroupNameAttribute, []string{testGroupSearchResultGroupNameAttributeValue1}),
+							},
+						},
+						{
+							DN: testGroupSearchResultDNValue2,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testGroupSearchGroupNameAttribute, []string{testGroupSearchResultGroupNameAttributeValue2}),
+							},
+						},
+					},
+					Referrals: []string{}, // note that we are not following referrals at this time
+					Controls:  []ldap.Control{},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
+		},
+		{
+			name: "happy path where group search returns no groups",
+			providerConfig: &ProviderConfig{
+				Name:               "some-provider-name",
+				Host:               testHost,
+				CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+				ConnectionProtocol: TLS,
+				BindUsername:       testBindUsername,
+				BindPassword:       testBindPassword,
+				UserSearch: UserSearchConfig{
+					Base:              testUserSearchBase,
+					UIDAttribute:      testUserSearchUIDAttribute,
+					UsernameAttribute: testUserSearchUsernameAttribute,
+				},
+				GroupSearch: GroupSearchConfig{
+					Base:               testGroupSearchBase,
+					Filter:             testGroupSearchFilter,
+					GroupNameAttribute: testGroupSearchGroupNameAttribute,
+				},
+				RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+					pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+				},
+			},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch, expectedGroupSearchPageSize).Return(&ldap.SearchResult{
+					Entries:   []*ldap.Entry{},
+					Referrals: []string{}, // note that we are not following referrals at this time
+					Controls:  []ldap.Control{},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: []string{},
 		},
 		{
 			name:           "error where dial fails",
@@ -1421,6 +1563,37 @@ func TestUpstreamRefresh(t *testing.T) {
 			},
 			wantErr: "validation for attribute \"pwdLastSet\" failed during upstream refresh: value for attribute \"pwdLastSet\" has changed since initial value at login",
 		},
+		{
+			name: "group search returns an error",
+			providerConfig: &ProviderConfig{
+				Name:               "some-provider-name",
+				Host:               testHost,
+				CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+				ConnectionProtocol: TLS,
+				BindUsername:       testBindUsername,
+				BindPassword:       testBindPassword,
+				UserSearch: UserSearchConfig{
+					Base:              testUserSearchBase,
+					UIDAttribute:      testUserSearchUIDAttribute,
+					UsernameAttribute: testUserSearchUsernameAttribute,
+				},
+				GroupSearch: GroupSearchConfig{
+					Base:               testGroupSearchBase,
+					Filter:             testGroupSearchFilter,
+					GroupNameAttribute: testGroupSearchGroupNameAttribute,
+				},
+				RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+					pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+				},
+			},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch, expectedGroupSearchPageSize).Return(nil, errors.New("some search error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "error searching for group memberships for user with DN \"some-upstream-user-dn\": some search error",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1435,9 +1608,9 @@ func TestUpstreamRefresh(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
 				dialWasAttempted = true
-				require.Equal(t, providerConfig.Host, addr.Endpoint())
+				require.Equal(t, tt.providerConfig.Host, addr.Endpoint())
 				if tt.dialError != nil {
 					return nil, tt.dialError
 				}
@@ -1446,9 +1619,9 @@ func TestUpstreamRefresh(t *testing.T) {
 			})
 
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
-			ldapProvider := New(*providerConfig)
+			ldapProvider := New(*tt.providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
-			err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
+			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   testUserSearchResultDNValue,
@@ -1461,6 +1634,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.Equal(t, true, dialWasAttempted)
+			require.Equal(t, tt.wantGroups, groups)
 		})
 	}
 }

@@ -193,7 +193,7 @@ implementation PRs.
    1. if it is discovered that significant unanticipated changes are needed to the proposal, then the implementation
       work should be paused and the proposal should be updated with the new details to be reviewed by the maintainers
       again before resuming implementation,
-   2. as each implementation PR is created, the tracking issue should be updated to link to the new implantation PR, and
+   2. as each implementation PR is created, the tracking issue should be updated to link to the new implementation PR, and
    3. when all implementation PRs are merged, the proposal doc should be updated to have status `implemented` and to
       list the related PRs, and the tracking issue should be closed.
 8. When the maintainers do not reach consensus or supermajority, then the proposal is rejected, and they:

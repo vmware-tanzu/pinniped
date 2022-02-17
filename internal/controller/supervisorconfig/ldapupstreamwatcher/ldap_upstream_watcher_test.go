@@ -196,6 +196,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Attributes: v1alpha1.LDAPIdentityProviderGroupSearchAttributes{
 					GroupName: testGroupNameAttrName,
 				},
+				SkipGroupRefresh: false,
 			},
 		},
 	}
@@ -1053,6 +1054,67 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}}},
+		{
+			name: "skipping group refresh is valid",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.GroupSearch.SkipGroupRefresh = true
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					ResourceUID:        testResourceUID,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+						SkipGroupRefresh:   true,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						ldapConnectionValidTrueCondition(1234, "4242"),
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
+		},
 	}
 
 	for _, tt := range tests {

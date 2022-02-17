@@ -239,6 +239,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 			Base:               spec.GroupSearch.Base,
 			Filter:             spec.GroupSearch.Filter,
 			GroupNameAttribute: spec.GroupSearch.Attributes.GroupName,
+			SkipGroupRefresh:   spec.GroupSearch.SkipGroupRefresh,
 		},
 		Dialer: c.ldapDialer,
 	}

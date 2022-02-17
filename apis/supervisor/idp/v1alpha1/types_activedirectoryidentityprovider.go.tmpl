@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -131,6 +131,31 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// the result of the group search.
 	// +optional
 	Attributes ActiveDirectoryIdentityProviderGroupSearchAttributes `json:"attributes,omitempty"`
+
+	// The user's group membership is refreshed as they interact with the supervisor
+	// to obtain new credentials (as their old credentials expire).  This allows group
+	// membership changes to be quickly reflected into Kubernetes clusters.  Since
+	// group membership is often used to bind authorization policies, it is important
+	// to keep the groups observed in Kubernetes clusters in-sync with the identity
+	// provider.
+	//
+	// In some environments, frequent group membership queries may result in a
+	// significant performance impact on the identity provider and/or the supervisor.
+	// The best approach to handle performance impacts is to tweak the group query
+	// to be more performant, for example by disabling nested group search or by
+	// using a more targeted group search base.
+	//
+	// If the group search query cannot be made performant and you are willing to
+	// have group memberships remain static for approximately a day, then set
+	// skipGroupRefresh to true.  This is an insecure configuration as authorization
+	// policies that are bound to group membership will not notice if a user has
+	// been removed from a particular group until their next login.
+	//
+	// This is an experimental feature that may be removed or significantly altered
+	// in the future.  Consumers of this configuration should carefully read all
+	// release notes before upgrading to ensure that the meaning of this field has
+	// not changed.
+	SkipGroupRefresh bool `json:"skipGroupRefresh,omitempty"`
 }
 
 // Spec for configuring an ActiveDirectory identity provider.

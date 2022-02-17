@@ -275,6 +275,10 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return err
 	}
 	subject := session.Fosite.Claims.Subject
+	oldGroups, err := getDownstreamGroupsFromPinnipedSession(session)
+	if err != nil {
+		return err
+	}
 
 	s := session.Custom
 
@@ -305,6 +309,7 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		Username:             username,
 		Subject:              subject,
 		DN:                   dn,
+		Groups:               oldGroups,
 		AdditionalAttributes: additionalAttributes,
 	})
 	if err != nil {
@@ -353,7 +358,7 @@ func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession)
 	if extra == nil {
 		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
-	downstreamUsernameInterface := extra["username"]
+	downstreamUsernameInterface := extra[oidc.DownstreamUsernameClaim]
 	if downstreamUsernameInterface == nil {
 		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
@@ -362,4 +367,29 @@ func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession)
 		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError)
 	}
 	return downstreamUsername, nil
+}
+
+func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) ([]string, error) {
+	extra := session.Fosite.Claims.Extra
+	if extra == nil {
+		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamGroupsInterface := extra[oidc.DownstreamGroupsClaim]
+	if downstreamGroupsInterface == nil {
+		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]interface{})
+	if !ok {
+		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError)
+	}
+
+	downstreamGroups := make([]string, 0, len(downstreamGroupsInterfaceList))
+	for _, downstreamGroupInterface := range downstreamGroupsInterfaceList {
+		downstreamGroup, ok := downstreamGroupInterface.(string)
+		if !ok || len(downstreamGroup) == 0 {
+			return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError)
+		}
+		downstreamGroups = append(downstreamGroups, downstreamGroup)
+	}
+	return downstreamGroups, nil
 }

@@ -150,6 +150,11 @@ type GroupSearchConfig struct {
 	// GroupNameAttribute is the attribute in the LDAP group entry from which the group name should be
 	// retrieved. Empty means to use 'cn'.
 	GroupNameAttribute string
+
+	// SkipGroupRefresh skips the group refresh operation that occurs with each refresh
+	// (every 5 minutes). This can be done if group search is very slow or resource intensive for the LDAP
+	// server.
+	SkipGroupRefresh bool
 }
 
 type Provider struct {
@@ -228,6 +233,10 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		if err != nil {
 			return nil, fmt.Errorf(`validation for attribute %q failed during upstream refresh: %w`, attribute, err)
 		}
+	}
+
+	if p.c.GroupSearch.SkipGroupRefresh {
+		return storedRefreshAttributes.Groups, nil
 	}
 
 	mappedGroupNames, err := p.searchGroupsForUserDN(conn, userDN)

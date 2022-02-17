@@ -192,6 +192,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				Attributes: v1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{
 					GroupName: testGroupNameAttrName,
 				},
+				SkipGroupRefresh: false,
 			},
 		},
 	}
@@ -1906,6 +1907,75 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					ConnectionValidCondition: condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 					SearchBaseFoundCondition: condPtr(withoutTime(searchBaseFoundInRootDSECondition(0))),
 				}},
+		},
+		{
+			name: "skipping group refresh is valid",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.GroupSearch.SkipGroupRefresh = true
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					ResourceUID:        testResourceUID,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+						SkipGroupRefresh:   true,
+					},
+					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+						"pwdLastSet":                         upstreamldap.AttributeUnchangedSinceLogin("pwdLastSet"),
+						"userAccountControl":                 validUserAccountControl,
+						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInConfigCondition(1234),
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
 		},
 	}
 

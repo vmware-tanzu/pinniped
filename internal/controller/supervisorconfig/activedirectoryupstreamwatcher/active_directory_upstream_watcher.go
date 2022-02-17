@@ -333,6 +333,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			Base:               spec.GroupSearch.Base,
 			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
+			SkipGroupRefresh:   spec.GroupSearch.SkipGroupRefresh,
 		},
 		Dialer: c.ldapDialer,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){

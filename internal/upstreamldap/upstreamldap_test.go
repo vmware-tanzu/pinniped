@@ -1299,6 +1299,37 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantGroups: []string{},
 		},
 		{
+			name: "happy path where group search is configured but skipGroupRefresh is set",
+			providerConfig: &ProviderConfig{
+				Name:               "some-provider-name",
+				Host:               testHost,
+				CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+				ConnectionProtocol: TLS,
+				BindUsername:       testBindUsername,
+				BindPassword:       testBindPassword,
+				UserSearch: UserSearchConfig{
+					Base:              testUserSearchBase,
+					UIDAttribute:      testUserSearchUIDAttribute,
+					UsernameAttribute: testUserSearchUsernameAttribute,
+				},
+				GroupSearch: GroupSearchConfig{
+					Base:               testGroupSearchBase,
+					Filter:             testGroupSearchFilter,
+					GroupNameAttribute: testGroupSearchGroupNameAttribute,
+					SkipGroupRefresh:   true,
+				},
+				RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+					pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+				},
+			},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch).Return(happyPathUserSearchResult, nil).Times(1) // note that group search is not expected
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: nil, // do not update groups
+		},
+		{
 			name:           "error where dial fails",
 			providerConfig: providerConfig,
 			dialError:      errors.New("some dial error"),

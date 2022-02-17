@@ -27,8 +27,12 @@ standard GitHub issue instead of using the proposal process.
 
 ## How to Submit a Proposal
 
+Before submitting a proposal, please create a tracking issue. Open a new GitHub issue in this repo and choose the
+"Proposal tracking" issue template. After creating the issue, note the issue's number. This tracking PR can be used
+as a place for conversations beyond/between the proposal PR and implementation PRs.
+
 To create a proposal, submit a PR to this repo introducing a new subdirectory under the `proposals` directory with a
-terse name (for example, `0001_my-feature-name/`) prefixed by a monotonically incrementing proposal number. In that new
+terse name (for example, `0001_my-feature-name/`) prefixed by the tracking issue's number. In that new
 subdirectory, create a `README.md` containing the core proposal. Include other files as necessary to help support
 understanding of the feature.
 
@@ -173,28 +177,32 @@ implementation PRs.
 
 ## Lifecycle of a Proposal
 
-1. Author adds a proposal by creating a PR in draft mode. (Authors can save their work until ready.)
-2. When the author elaborates the proposal sufficiently to withstand critique they:
+1. Author creates a tracking issue.
+2. Author adds a proposal by creating a PR in draft mode. (Authors can save their work until ready.)
+3. Author updates the tracking issue to have a link to the PR.
+4. When the author elaborates the proposal sufficiently to withstand critique they:
    1. change the status to `in-review` and
    2. mark the PR as "Ready for Review".
-3. The community critiques the proposal by adding PR reviews in order to mature/converge on the proposal.
-4. When the maintainers reach consensus or supermajority to accept a proposal, they:
+5. The community critiques the proposal by adding PR reviews in order to mature/converge on the proposal.
+6. When the maintainers reach consensus or supermajority to accept a proposal, they:
    1. change the status to `accepted`,
    2. adjust the proposal number in the subdirectory's name if needed,
    3. record both majority and dissenting opinions,
    4. merge the PR, thus adding the new proposal to the `main` branch,
    5. code implementation PRs are submitted separately to implement the solution.
-5. During implementation of an accepted proposal:
+7. During implementation of an accepted proposal:
    1. if it is discovered that significant unanticipated changes are needed to the proposal, then the implementation
       work should be paused and the proposal should be updated with the new details to be reviewed by the maintainers
-      again before resuming implementation, and
-   2. when all implementation PRs are merged, the proposal doc should be updated to have status `implemented` and to
-      list the related PRs.
-6. When the maintainers do not reach consensus or supermajority, then the proposal is rejected, and they:
+      again before resuming implementation,
+   2. as each implementation PR is created, the tracking issue should be updated to link to the new implantation PR, and
+   3. when all implementation PRs are merged, the proposal doc should be updated to have status `implemented` and to
+      list the related PRs, and the tracking issue should be closed.
+8. When the maintainers do not reach consensus or supermajority, then the proposal is rejected, and they:
    1. may mark the status `rejected`, and
-   2. close the PR with a note explaining the rejection.
-7. Rejected proposal PRs may be reopened and moved back to `in-review` if there are material changes to the proposal
-   which address the reasons for rejection.
+   2. close the PR with a note explaining the rejection, and
+   3. close the related tracking issue.
+9. Rejected proposal PRs (and the corresponding tracking issue) may be reopened and moved back to `in-review` if
+   there are material changes to the proposal which address the reasons for rejection.
 
 ## Proposal Review
 

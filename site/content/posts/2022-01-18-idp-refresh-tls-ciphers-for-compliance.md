@@ -4,7 +4,7 @@ slug: secure-tls-idp-refresh
 date: 2022-01-21
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1572880393162-0518ac760495?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1548&q=80
-excerpt: "With the release of v0.13.0, Pinniped only supports the use of secure TLS ciphers, configurable Pinniped Supervisor listener ports, and reflecting changes made by the identity provider on the user’s Kubernetes cluster access"
+excerpt: "With the release of v0.13.0, Pinniped only supports the use of secure TLS ciphers, configurable Pinniped Supervisor listener ports, and reflecting changes made by the identity provider on the user’s Kubernetes cluster access. Additionally, With v0.15.0 released in March 2022, we added LDAP Group refresh capabilities"
 tags: ['Margo Crawford','Ryan Richard', 'Mo Khan', 'Anjali Telang', 'release']
 ---
 
@@ -76,6 +76,21 @@ If your access tokens have a lifetime shorter than 3 hours, Pinniped will issue 
 ### What about LDAP / Active Directory IDP changes?
 
 LDAP does not have a concept of sessions or refresh tokens. Hence we run LDAP queries against the LDAP or AD IDP to approximate a refresh. For LDAP, we validate if the LDAP entry still exists with no changes to Pinniped UID and username fields. For AD, we validate the same LDAP checks and we also validate that the user's password has not changed since the original login (note that we only store the time that the password was last changed, not the password itself) and their account is not locked or disabled.
+
+#### LDAP / Active Directory Group Refresh
+
+With the release of Pinniped [v0.15.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.15.0) we added support for refreshing LDAP and Active Directory groups. A user's group membership is refreshed as they interact with the supervisor to obtain new credentials. This allows group membership changes to be quickly reflected into Kubernetes clusters.
+
+In some environments, frequent group membership queries may result in a significant performance impact on the identity provider and/or the supervisor. The best approach to handle performance impacts is to tweak the group query to be more performant, for example by disabling nested group search or by using a more targeted group search base. If the group search query cannot be made performant, and you are willing to have group memberships remain static for approximately a day, then set **skipGroupRefresh** to true.  Please be aware that this is an insecure configuration as authorization policies that are bound to group membership will not notice if a user has been removed from a particular group until their next login. Also, the skipGroupRefresh flag is an experimental feature that may be removed or significantly altered in the future. Consumers of this configuration should carefully read all release notes before upgrading to ensure that the meaning of this field has not changed. See example below for how to configure this in an ActiveDirectoryIdentityProvider custom resource.
+
+```yaml
+  groupSearch:
+     base: "ou=Groups,DC=activedirectory,DC=example,DC=com"
+     filter: "&(objectClass=group)(member={})"
+     attributes:
+       groupName: "dn"
+     skipGroupRefresh: true
+ ```
 
 ## Secure TLS ciphers
 

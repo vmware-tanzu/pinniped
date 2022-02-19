@@ -51,6 +51,7 @@ clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 skip_chromedriver_check=no
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
+alternate_deploy="undefined"
 
 while (("$#")); do
   case "$1" in
@@ -90,6 +91,15 @@ while (("$#")); do
     get_active_directory_vars=$1
     shift
     ;;
+  --alternate-deploy)
+    shift
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--alternate-deploy requires a script path to be specified"
+      exit 1
+    fi
+    alternate_deploy=$1
+    shift
+    ;;
   -*)
     log_error "Unsupported flag $1" >&2
     if [[ "$1" == *"active-directory"* ]]; then
@@ -103,6 +113,8 @@ while (("$#")); do
     ;;
   esac
 done
+
+log_note "alternate_deploy = $alternate_deploy"
 
 if [[ "$help" == "yes" ]]; then
   me="$(basename "${BASH_SOURCE[0]}")"
@@ -190,6 +202,7 @@ registry="pinniped.local"
 repo="test/build"
 registry_repo="$registry/$repo"
 tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+log_note "Tag being used for Pinniped image is $tag"
 
 if [[ "$skip_build" == "yes" ]]; then
   most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
@@ -217,26 +230,39 @@ fi
 log_note "Loading the app's container image into the kind cluster..."
 kind load docker-image "$registry_repo_tag" --name pinniped
 
-manifest=/tmp/manifest.yaml
-
 #
 # Deploy local-user-authenticator
 #
 pushd deploy/local-user-authenticator >/dev/null
 
-log_note "Deploying the local-user-authenticator app to the cluster..."
-ytt --file . \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" >"$manifest"
+manifest=/tmp/pinniped-local-user-authenticator.yaml
+image_repo="$registry_repo"
+image_tag="$tag"
 
-kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+log_note "Values for the local-user-authenticator..."
+log_note "image_repo=$image_repo"
+log_note "image_tag=$image_tag"
+
+log_note "$alternate_deploy"
+if [ "$alternate_deploy" != "undefined" ]; then
+  log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
+  $alternate_deploy local-user-authenticator $tag
+else
+  log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
+  ytt --file . \
+    --data-value "image_repo=$image_repo" \
+    --data-value "image_tag=$image_tag" >"$manifest"
+
+  kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
+  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+fi
 
 popd >/dev/null
 
 #
 # Deploy Tools
 #
+manifest=/tmp/pinniped-tools.yaml
 dex_test_password="$(openssl rand -hex 16)"
 ldap_test_password="$(openssl rand -hex 16)"
 pushd test/deploy/tools >/dev/null
@@ -268,39 +294,73 @@ kubectl create secret generic "$test_username" \
 #
 # Deploy the Pinniped Supervisor
 #
+manifest=/tmp/pinniped-supervisor.yaml
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
 supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
 
 pushd deploy/supervisor >/dev/null
 
-log_note "Deploying the Pinniped Supervisor app to the cluster..."
-ytt --file . \
-  --data-value "app_name=$supervisor_app_name" \
-  --data-value "namespace=$supervisor_namespace" \
-  --data-value "api_group_suffix=$api_group_suffix" \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" \
-  --data-value "log_level=debug" \
-  --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-  --data-value-yaml 'service_http_nodeport_port=80' \
-  --data-value-yaml 'service_http_nodeport_nodeport=31234' \
-  --data-value-yaml 'service_https_nodeport_port=443' \
-  --data-value-yaml 'service_https_nodeport_nodeport=31243' \
-  --data-value-yaml 'service_https_clusterip_port=443' \
-  >"$manifest"
-  # example of how to disable the http endpoint
-  # this is left enabled for now because our integration tests still rely on it
-  # --data-value-yaml 'endpoints={"http": {"network": "disabled"}}' \
+app_name="$supervisor_app_name"
+namespace="$supervisor_namespace"
+api_group_suffix="$api_group_suffix"
+image_repo="$registry_repo"
+image_tag="$tag"
+log_level="debug"
+custom_labels="$supervisor_custom_labels"
+service_http_nodeport_port="80"
+service_http_nodeport_nodeport="31234"
+service_https_nodeport_port="443"
+service_https_nodeport_nodeport="31243"
+service_https_clusterip_port="443"
 
-kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+log_note "Values for the Pinniped Supervisor..."
+log_note "app_name=$app_name"
+log_note "namespace=$namespace"
+log_note "api_group_suffix=$api_group_suffix"
+log_note "image_repo=$image_repo"
+log_note "image_tag=$image_tag"
+log_note "log_level=$log_level"
+log_note "custom_labels=$custom_labels"
+log_note "service_http_nodeport_port=$service_http_nodeport_port"
+log_note "service_http_nodeport_nodeport=$service_http_nodeport_nodeport"
+log_note "service_https_nodeport_port=$service_https_nodeport_port"
+log_note "service_https_nodeport_nodeport=$service_https_nodeport_nodeport"
+log_note "service_https_clusterip_port=$service_https_clusterip_port"
+
+if [ "$alternate_deploy" != "undefined" ]; then
+  log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
+  $alternate_deploy pinniped-supervisor $tag
+else
+  log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
+  ytt --file . \
+    --data-value "app_name=$app_name" \
+    --data-value "namespace=$namespace" \
+    --data-value "api_group_suffix=$api_group_suffix" \
+    --data-value "image_repo=$image_repo" \
+    --data-value "image_tag=$image_tag" \
+    --data-value "log_level=$log_level" \
+    --data-value-yaml "custom_labels=$custom_labels" \
+    --data-value-yaml "service_http_nodeport_port=$service_http_nodeport_port" \
+    --data-value-yaml "service_http_nodeport_nodeport=$service_http_nodeport_nodeport" \
+    --data-value-yaml "service_https_nodeport_port=$service_https_nodeport_port" \
+    --data-value-yaml "service_https_nodeport_nodeport=$service_https_nodeport_nodeport" \
+    --data-value-yaml "service_https_clusterip_port=$service_https_clusterip_port" \
+    >"$manifest"
+    # example of how to disable the http endpoint
+    # this is left enabled for now because our integration tests still rely on it
+    # --data-value-yaml 'endpoints={"http": {"network": "disabled"}}' \
+
+  kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
+  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+fi
 
 popd >/dev/null
 
 #
 # Deploy the Pinniped Concierge
 #
+manifest=/tmp/pinniped-concierge.yaml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
@@ -310,19 +370,43 @@ concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValu
 
 pushd deploy/concierge >/dev/null
 
-log_note "Deploying the Pinniped Concierge app to the cluster..."
-ytt --file . \
-  --data-value "app_name=$concierge_app_name" \
-  --data-value "namespace=$concierge_namespace" \
-  --data-value "api_group_suffix=$api_group_suffix" \
-  --data-value "log_level=debug" \
-  --data-value-yaml "custom_labels=$concierge_custom_labels" \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" \
-  --data-value "discovery_url=$discovery_url" >"$manifest"
+app_name="$concierge_app_name"
+namespace="$concierge_namespace"
+api_group_suffix="$api_group_suffix"
+log_level="debug"
+custom_labels="$concierge_custom_labels"
+image_repo="$registry_repo"
+image_tag="$tag"
+discovery_url="$discovery_url"
 
-kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+log_note "Values for the Pinniped Concierge..."
+log_note "app_name=$app_name"
+log_note "namespace=$namespace"
+log_note "api_group_suffix=$api_group_suffix"
+log_note "log_level=$log_level"
+log_note "custom_labels=$custom_labels"
+log_note "image_repo=$image_repo"
+log_note "image_tag=$image_tag"
+log_note "discovery_url=$discovery_url"
+
+if [ "$alternate_deploy" != "undefined" ]; then
+  log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
+  $alternate_deploy pinniped-concierge $tag
+else
+  log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
+  ytt --file . \
+    --data-value "app_name=$app_name" \
+    --data-value "namespace=$namespace" \
+    --data-value "api_group_suffix=$api_group_suffix" \
+    --data-value "log_level=$log_level" \
+    --data-value-yaml "custom_labels=$custom_labels" \
+    --data-value "image_repo=$image_repo" \
+    --data-value "image_tag=$image_tag" \
+    --data-value "discovery_url=$discovery_url" >"$manifest"
+
+  kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
+  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+fi
 
 popd >/dev/null
 

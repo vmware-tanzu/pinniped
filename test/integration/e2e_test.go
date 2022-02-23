@@ -109,7 +109,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
-		testCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		testCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		t.Cleanup(cancel)
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.

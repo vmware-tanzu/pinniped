@@ -234,8 +234,6 @@ kind load docker-image "$registry_repo_tag" --name pinniped
 pushd deploy/local-user-authenticator >/dev/null
 
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-image_repo="$registry_repo"
-image_tag="$tag"
 
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
@@ -243,8 +241,8 @@ if [ "$alternate_deploy" != "undefined" ]; then
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   ytt --file . \
-    --data-value "image_repo=$image_repo" \
-    --data-value "image_tag=$image_tag" >"$manifest"
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" >"$manifest"
 
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
@@ -291,21 +289,14 @@ manifest=/tmp/pinniped-supervisor.yaml
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
 supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
-
-pushd deploy/supervisor >/dev/null
-
-app_name="$supervisor_app_name"
-namespace="$supervisor_namespace"
-api_group_suffix="$api_group_suffix"
-image_repo="$registry_repo"
-image_tag="$tag"
 log_level="debug"
-custom_labels="$supervisor_custom_labels"
 service_http_nodeport_port="80"
 service_http_nodeport_nodeport="31234"
 service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
+
+pushd deploy/supervisor >/dev/null
 
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
@@ -313,13 +304,13 @@ if [ "$alternate_deploy" != "undefined" ]; then
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
   ytt --file . \
-    --data-value "app_name=$app_name" \
-    --data-value "namespace=$namespace" \
+    --data-value "app_name=$supervisor_app_name" \
+    --data-value "namespace=$supervisor_namespace" \
     --data-value "api_group_suffix=$api_group_suffix" \
-    --data-value "image_repo=$image_repo" \
-    --data-value "image_tag=$image_tag" \
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" \
     --data-value "log_level=$log_level" \
-    --data-value-yaml "custom_labels=$custom_labels" \
+    --data-value-yaml "custom_labels=$supervisor_custom_labels" \
     --data-value-yaml "service_http_nodeport_port=$service_http_nodeport_port" \
     --data-value-yaml "service_http_nodeport_nodeport=$service_http_nodeport_nodeport" \
     --data-value-yaml "service_https_nodeport_port=$service_https_nodeport_port" \
@@ -346,17 +337,9 @@ webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authe
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
+log_level="debug"
 
 pushd deploy/concierge >/dev/null
-
-app_name="$concierge_app_name"
-namespace="$concierge_namespace"
-api_group_suffix="$api_group_suffix"
-log_level="debug"
-custom_labels="$concierge_custom_labels"
-image_repo="$registry_repo"
-image_tag="$tag"
-discovery_url="$discovery_url"
 
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
@@ -364,13 +347,13 @@ if [ "$alternate_deploy" != "undefined" ]; then
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
   ytt --file . \
-    --data-value "app_name=$app_name" \
-    --data-value "namespace=$namespace" \
+    --data-value "app_name=$concierge_app_name" \
+    --data-value "namespace=$concierge_namespace" \
     --data-value "api_group_suffix=$api_group_suffix" \
     --data-value "log_level=$log_level" \
-    --data-value-yaml "custom_labels=$custom_labels" \
+    --data-value-yaml "custom_labels=$concierge_custom_labels" \
     --data-value "image_repo=$image_repo" \
-    --data-value "image_tag=$image_tag" \
+    --data-value "image_tag=$tag" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
 
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"

@@ -114,8 +114,6 @@ while (("$#")); do
   esac
 done
 
-log_note "alternate_deploy = $alternate_deploy"
-
 if [[ "$help" == "yes" ]]; then
   me="$(basename "${BASH_SOURCE[0]}")"
   log_note "Usage:"
@@ -203,7 +201,6 @@ registry="pinniped.local"
 repo="test/build"
 registry_repo="$registry/$repo"
 tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
-log_note "Tag being used for Pinniped image is $tag"
 
 if [[ "$skip_build" == "yes" ]]; then
   most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
@@ -240,11 +237,6 @@ manifest=/tmp/pinniped-local-user-authenticator.yaml
 image_repo="$registry_repo"
 image_tag="$tag"
 
-log_note "Values for the local-user-authenticator..."
-log_note "image_repo=$image_repo"
-log_note "image_tag=$image_tag"
-
-log_note "$alternate_deploy"
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
   $alternate_deploy local-user-authenticator $tag
@@ -315,20 +307,6 @@ service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
 
-log_note "Values for the Pinniped Supervisor..."
-log_note "app_name=$app_name"
-log_note "namespace=$namespace"
-log_note "api_group_suffix=$api_group_suffix"
-log_note "image_repo=$image_repo"
-log_note "image_tag=$image_tag"
-log_note "log_level=$log_level"
-log_note "custom_labels=$custom_labels"
-log_note "service_http_nodeport_port=$service_http_nodeport_port"
-log_note "service_http_nodeport_nodeport=$service_http_nodeport_nodeport"
-log_note "service_https_nodeport_port=$service_https_nodeport_port"
-log_note "service_https_nodeport_nodeport=$service_https_nodeport_nodeport"
-log_note "service_https_clusterip_port=$service_https_clusterip_port"
-
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
   $alternate_deploy pinniped-supervisor $tag
@@ -379,16 +357,6 @@ custom_labels="$concierge_custom_labels"
 image_repo="$registry_repo"
 image_tag="$tag"
 discovery_url="$discovery_url"
-
-log_note "Values for the Pinniped Concierge..."
-log_note "app_name=$app_name"
-log_note "namespace=$namespace"
-log_note "api_group_suffix=$api_group_suffix"
-log_note "log_level=$log_level"
-log_note "custom_labels=$custom_labels"
-log_note "image_repo=$image_repo"
-log_note "image_tag=$image_tag"
-log_note "discovery_url=$discovery_url"
 
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."

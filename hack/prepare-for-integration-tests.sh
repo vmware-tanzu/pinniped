@@ -127,6 +127,7 @@ if [[ "$help" == "yes" ]]; then
   log_note "   -g, --api-group-suffix:       deploy Pinniped with an alternate API group suffix"
   log_note "   -s, --skip-build:             reuse the most recently built image of the app instead of building"
   log_note "   --get-active-directory-vars:  specify a script that exports active directory environment variables"
+  log_note "   --alternate-deploy:           specify an alternate deploy script to install Pinniped"
   exit 1
 fi
 

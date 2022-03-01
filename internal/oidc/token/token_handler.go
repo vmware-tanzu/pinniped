@@ -7,11 +7,13 @@ package token
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/ory/fosite"
 	"github.com/ory/x/errorsx"
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/warning"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -187,6 +189,15 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 	}
 	if refreshedGroups != nil {
+		oldGroups, err := getDownstreamGroupsFromPinnipedSession(session)
+		if err != nil {
+			return err
+		}
+		username, err := getDownstreamUsernameFromPinnipedSession(session)
+		if err != nil {
+			return err
+		}
+		warnIfGroupsChanged(ctx, oldGroups, refreshedGroups, username)
 		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups
 	}
 
@@ -200,6 +211,15 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	}
 
 	return nil
+}
+
+// print out the diff between two lists of sorted groups.
+func diffSortedGroups(oldGroups, newGroups []string) ([]string, []string) {
+	oldGroupsAsSet := sets.NewString(oldGroups...)
+	newGroupsAsSet := sets.NewString(newGroups...)
+	added := newGroupsAsSet.Difference(oldGroupsAsSet)   // groups in newGroups that are not in oldGroups i.e. added
+	removed := oldGroupsAsSet.Difference(newGroupsAsSet) // groups in oldGroups that are not in newGroups i.e. removed
+	return added.List(), removed.List()
 }
 
 func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession, usernameClaimName string) error {
@@ -320,6 +340,8 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 	// Replace the old value with the new value.
 	session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 
+	warnIfGroupsChanged(ctx, oldGroups, groups, username)
+
 	return nil
 }
 
@@ -392,4 +414,14 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 		downstreamGroups = append(downstreamGroups, downstreamGroup)
 	}
 	return downstreamGroups, nil
+}
+
+func warnIfGroupsChanged(ctx context.Context, oldGroups []string, refreshedGroups []string, username string) {
+	added, removed := diffSortedGroups(oldGroups, refreshedGroups)
+	if len(added) > 0 {
+		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been added to the following groups: %q", username, added))
+	}
+	if len(removed) > 0 {
+		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been removed from the following groups: %q: ", username, removed))
+	}
 }

@@ -3624,3 +3624,52 @@ func toSliceOfInterface(s []string) []interface{} {
 	}
 	return r
 }
+
+func TestDiffSortedGroups(t *testing.T) {
+	tests := []struct {
+		name        string
+		oldGroups   []string
+		newGroups   []string
+		wantAdded   []string
+		wantRemoved []string
+	}{
+		{
+			name:        "groups were added",
+			oldGroups:   []string{"b", "c"},
+			newGroups:   []string{"a", "b", "bb", "c", "d"},
+			wantAdded:   []string{"a", "bb", "d"},
+			wantRemoved: []string{},
+		},
+		{
+			name:        "groups were removed",
+			oldGroups:   []string{"a", "b", "bb", "c", "d"},
+			newGroups:   []string{"b", "c"},
+			wantAdded:   []string{},
+			wantRemoved: []string{"a", "bb", "d"},
+		},
+		{
+			name:        "groups were added and removed",
+			oldGroups:   []string{"a", "c"},
+			newGroups:   []string{"b", "c", "d"},
+			wantAdded:   []string{"b", "d"},
+			wantRemoved: []string{"a"},
+		},
+		{
+			name:        "groups are exactly the same",
+			oldGroups:   []string{"a", "b", "c"},
+			newGroups:   []string{"a", "b", "c"},
+			wantAdded:   []string{},
+			wantRemoved: []string{},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			added, removed := diffSortedGroups(test.oldGroups, test.newGroups)
+			require.Equal(t, test.wantAdded, added)
+			require.Equal(t, test.wantRemoved, removed)
+		})
+	}
+}

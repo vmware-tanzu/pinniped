@@ -4,6 +4,6 @@ module go.pinniped.dev/generated/1.18/apis
 go 1.13
 
 require (
-	k8s.io/api v0.18.2
-	k8s.io/apimachinery v0.18.2
+	k8s.io/api v0.18.18
+	k8s.io/apimachinery v0.18.18
 )

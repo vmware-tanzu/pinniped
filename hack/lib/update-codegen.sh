@@ -8,6 +8,9 @@ KUBE_VERSIONS=("$@")
 BASE_PKG="go.pinniped.dev"
 export GO111MODULE="on"
 
+# Note that you can change this value to 10 to debug the Kubernetes code generator shell scripts used below.
+debug_level="${CODEGEN_LOG_LEVEL:-1}"
+
 # If we're not running in a container, assume that we want to loop over and run each build
 # in a container.
 if [[ -z "${CONTAINED:-}" ]]; then
@@ -18,6 +21,7 @@ if [[ -z "${CONTAINED:-}" ]]; then
         echo "generating code for ${kubeVersion} using ${CODEGEN_IMAGE}..."
         docker run --rm \
             --env CONTAINED=1 \
+            --env CODEGEN_LOG_LEVEL="$debug_level" \
             --volume "${ROOT}:/work" \
             --workdir "/work" \
             "${CODEGEN_IMAGE}" \
@@ -111,9 +115,6 @@ EOF
 # Generate a go.sum without changing the go.mod by running go mod download.
 echo "running go mod download in ${OUTPUT_DIR}/client/go.mod to generate a go.sum file..."
 (cd "${OUTPUT_DIR}/client" && go mod download all 2>&1 | sed "s|^|go-mod-download > |")
-
-# Note that you can change this value to 10 to debug the Kubernetes code generator shell scripts used below.
-debug_level=1
 
 # Generate API-related code for our public API groups
 echo "generating API-related code for our public API groups..."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,7 +13,7 @@ export GO111MODULE="on"
 if [[ -z "${CONTAINED:-}" ]]; then
     for kubeVersion in "${KUBE_VERSIONS[@]}"; do
         # CODEGEN_IMAGE is the container image to use when running
-        CODEGEN_IMAGE="projects.registry.vmware.com/pinniped/k8s-code-generator-$(echo "$kubeVersion" | cut -d"." -f1-2):latest"
+        CODEGEN_IMAGE="ghcr.io/pinniped-ci-bot/k8s-code-generator-$(echo "$kubeVersion" | cut -d"." -f1-2):latest"
 
         echo "generating code for ${kubeVersion} using ${CODEGEN_IMAGE}..."
         docker run --rm \
@@ -83,6 +83,10 @@ require (
 )
 EOF
 
+# Generate a go.sum without changing the go.mod by running go mod download.
+echo "running go mod download in ${OUTPUT_DIR}/apis/go.mod to generate a go.sum file..."
+(cd "${OUTPUT_DIR}/apis" && go mod download all 2>&1 | sed "s|^|go-mod-download > |")
+
 # Make the generated client code its own Go module.
 echo "generating ${OUTPUT_DIR}/client/go.mod..."
 mkdir client
@@ -98,33 +102,40 @@ require (
     k8s.io/api ${KUBE_MODULE_VERSION}
     k8s.io/apimachinery ${KUBE_MODULE_VERSION}
     k8s.io/client-go ${KUBE_MODULE_VERSION}
-    k8s.io/apimachinery ${KUBE_MODULE_VERSION}
+    ${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis v0.0.0
 )
 
 replace ${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis => ../apis
 EOF
 
+# Generate a go.sum without changing the go.mod by running go mod download.
+echo "running go mod download in ${OUTPUT_DIR}/client/go.mod to generate a go.sum file..."
+(cd "${OUTPUT_DIR}/client" && go mod download all 2>&1 | sed "s|^|go-mod-download > |")
+
+# Note that you can change this value to 10 to debug the Kubernetes code generator shell scripts used below.
+debug_level=1
+
 # Generate API-related code for our public API groups
 echo "generating API-related code for our public API groups..."
 (cd apis &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        deepcopy \
+        "deepcopy" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-api > |"
+        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-api > |"
 )
 
 # Generate API-related code for our internal API groups
 echo "generating API-related code for our internal API groups..."
 (cd apis &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
-        deepcopy,defaulter,conversion \
+        "deepcopy,defaulter,conversion" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-int-api > |"
+        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-int-api > |"
 )
 
 
@@ -136,19 +147,19 @@ echo "tidying ${OUTPUT_DIR}/apis/go.mod..."
 echo "generating client code for our public API groups..."
 (cd client &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        client,lister,informer \
+        "client,lister,informer" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-client > |"
+        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-client > |"
 )
-  (cd client &&
+(cd client &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        client,lister,informer \
+        "client,lister,informer" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "supervisor/config:v1alpha1 supervisor/idp:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-client > |"
+        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-client > |"
 )
 
 # Tidy up the .../client module

@@ -9,4 +9,4 @@ menu:
     weight: 35
     parent: reference
 ---
-Full API reference documentation for the Pinniped Kubernetes API is available [on GitHub](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc).
+Full API reference documentation for the Pinniped Kubernetes API is available [on GitHub](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.23/README.adoc).

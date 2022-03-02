@@ -416,12 +416,12 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 	return downstreamGroups, nil
 }
 
-func warnIfGroupsChanged(ctx context.Context, oldGroups []string, refreshedGroups []string, username string) {
-	added, removed := diffSortedGroups(oldGroups, refreshedGroups)
+func warnIfGroupsChanged(ctx context.Context, oldGroups, newGroups []string, username string) {
+	added, removed := diffSortedGroups(oldGroups, newGroups)
 	if len(added) > 0 {
 		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been added to the following groups: %q", username, added))
 	}
 	if len(removed) > 0 {
-		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been removed from the following groups: %q: ", username, removed))
+		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been removed from the following groups: %q", username, removed))
 	}
 }

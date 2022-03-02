@@ -97,6 +97,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
 	})
 
+	const (
+		yellowColor = "\u001b[33;1m"
+		resetColor  = "\u001b[0m"
+	)
+
 	t.Run("LDAP group refresh flow", func(t *testing.T) {
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
@@ -232,8 +237,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes2))
 		}
 		// the output should include a warning that the groups have changed.
-		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf("User %q has been added to the following groups: %q", env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs))
-		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf("User %q has been removed from the following groups: [\"some-other-group\" \"some-wrong-group\"]", env.SupervisorUpstreamLDAP.TestUserMailAttributeValue))
+		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf(`%sWarning:%s User %q has been added to the following groups: %q`+"\r\n", yellowColor, resetColor, env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs))
+		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf(`%sWarning:%s User %q has been removed from the following groups: ["some-other-group" "some-wrong-group"]`+"\r\n", yellowColor, resetColor, env.SupervisorUpstreamLDAP.TestUserMailAttributeValue))
 
 		t.Logf("second kubectl command took %s", time.Since(startTime2).String())
 	})
@@ -431,8 +436,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes2))
 		}
 		// the output should include a warning that the groups have changed.
-		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf("User %q has been added to the following groups: %q", env.SupervisorUpstreamOIDC.Username, env.SupervisorUpstreamOIDC.ExpectedGroups))
-		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf("User %q has been removed from the following groups: [\"some-other-group\" \"some-wrong-group\"]", env.SupervisorUpstreamOIDC.Username))
+		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf(`%sWarning:%s User %q has been added to the following groups: %q`+"\r\n", yellowColor, resetColor, env.SupervisorUpstreamOIDC.Username, env.SupervisorUpstreamOIDC.ExpectedGroups))
+		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf(`%sWarning:%s User %q has been removed from the following groups: ["some-other-group" "some-wrong-group"]`+"\r\n", yellowColor, resetColor, env.SupervisorUpstreamOIDC.Username))
 
 		t.Logf("second kubectl command took %s", time.Since(startTime2).String())
 	})

@@ -242,6 +242,122 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		t.Logf("second kubectl command took %s", time.Since(startTime2).String())
 	})
+	t.Run("Active Directory group refresh flow", func(t *testing.T) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("LDAP integration test requires connectivity to an LDAP server")
+		}
+		if env.SupervisorUpstreamActiveDirectory.Host == "" {
+			t.Skip("Active Directory hostname not specified")
+		}
+
+		expectedUsername, password := testlib.CreateFreshADTestUser(t, env)
+		t.Cleanup(func() {
+			testlib.DeleteTestADUser(t, env, expectedUsername)
+		})
+
+		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
+		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
+		credentialCachePath := tempDir + "/ldap-test-refresh-credentials.yaml"
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a cli-based login.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		var kubectlStdoutPipe io.ReadCloser
+		if runtime.GOOS != "darwin" {
+			// For some unknown reason this breaks the pty library on some MacOS machines.
+			// The problem doesn't reproduce for everyone, so this is just a workaround.
+			kubectlStdoutPipe, err = kubectlCmd.StdoutPipe()
+			require.NoError(t, err)
+		}
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(password + "\n")
+		require.NoError(t, err)
+
+		// Read all of the remaining output from the subprocess until EOF.
+		t.Logf("waiting for kubectl to output namespace list")
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		if kubectlStdoutPipe != nil {
+			// On non-MacOS check that stdout of the CLI contains the expected output.
+			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
+		} else {
+			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes))
+		}
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		// create an active directory group, and add our user to it.
+		groupName := testlib.CreateFreshADTestGroup(t, env)
+		t.Cleanup(func() {
+			testlib.DeleteTestADUser(t, env, groupName)
+		})
+		testlib.AddTestUserToGroup(t, env, groupName, expectedUsername)
+
+		// remove the credential cache, which includes the cached cert, so it won't be reused and the refresh flow will be triggered.
+		err = os.Remove(credentialCachePath)
+		require.NoError(t, err)
+
+		ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Minute)
+		defer cancel2()
+
+		// Run kubectl, which should work without any prompting for authentication.
+		kubectlCmd2 := exec.CommandContext(ctx2, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		startTime2 := time.Now()
+		var kubectlStdoutPipe2 io.ReadCloser
+		if runtime.GOOS != "darwin" {
+			// For some unknown reason this breaks the pty library on some MacOS machines.
+			// The problem doesn't reproduce for everyone, so this is just a workaround.
+			kubectlStdoutPipe2, err = kubectlCmd2.StdoutPipe()
+			require.NoError(t, err)
+		}
+		ptyFile2, err := pty.Start(kubectlCmd2)
+		require.NoError(t, err)
+
+		// Read all of the remaining output from the subprocess until EOF.
+		t.Logf("waiting for kubectl to output namespace list")
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlPtyOutputBytes2, _ := ioutil.ReadAll(ptyFile2)
+		if kubectlStdoutPipe2 != nil {
+			// On non-MacOS check that stdout of the CLI contains the expected output.
+			kubectlStdOutOutputBytes2, _ := ioutil.ReadAll(kubectlStdoutPipe2)
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes2))
+		} else {
+			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
+			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes2))
+		}
+		// the output should include a warning that a group has been added.
+		require.Contains(t, string(kubectlPtyOutputBytes2), fmt.Sprintf(`%sWarning:%s User %q has been added to the following groups: %q`+"\r\n", yellowColor, resetColor, sAMAccountName, []string{groupName + "@" + env.SupervisorUpstreamActiveDirectory.Domain}))
+		// there should not be a warning about being removed from groups, since we haven't done so.
+		require.NotContains(t, string(kubectlPtyOutputBytes2), "has been removed from")
+
+		t.Logf("second kubectl command took %s", time.Since(startTime2).String())
+	})
 
 	t.Run("OIDC group refresh flow", func(t *testing.T) {
 		if len(env.SupervisorUpstreamOIDC.ExpectedGroups) == 0 {

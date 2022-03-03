@@ -71,7 +71,7 @@ staticClients:
 
 ## Configure the Supervisor
 
-Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#oidcidentityprovider) resource in the same namespace as the Supervisor.
+Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcidentityprovider) resource in the same namespace as the Supervisor.
 
 For example, the following OIDCIdentityProvider and the corresponding Secret use Dex's `email` claim as the Kubernetes username:
 

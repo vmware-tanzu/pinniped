@@ -45,7 +45,7 @@ Here are some good resources to review while setting up and using JumpCloud's LD
 
 ## Configure the Supervisor cluster
 
-Create an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#ldapidentityprovider) in the same namespace as the Supervisor.
+Create an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{ .Site.Params.latest_codegen_version }}/README.adoc#ldapidentityprovider) in the same namespace as the Supervisor.
 
 For example, this LDAPIdentityProvider configures the LDAP entry's `uid` as the Kubernetes username,
 and the `cn` (common name) of each group to which the user belongs as the Kubernetes group names.

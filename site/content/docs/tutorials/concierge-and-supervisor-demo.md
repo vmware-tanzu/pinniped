@@ -361,7 +361,7 @@ kubectl get secret supervisor-tls-cert \
 
 ### Configure a FederationDomain in the Pinniped Supervisor
 
-The Supervisor should be configured to have a [FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#federationdomain), which, under the hood:
+The Supervisor should be configured to have a [FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{ .Site.Params.latest_codegen_version }}/README.adoc#federationdomain), which, under the hood:
 - Acts as an OIDC provider to the Pinniped CLI, creating a consistent interface for the CLI to use regardless
   of which protocol the Supervisor is using to talk to the external identity provider
 - Also acts as an OIDC provider to the workload cluster's Concierge component, which will receive JWT tokens
@@ -417,7 +417,7 @@ The general steps required to create and configure a client in Okta are:
 
 ### Configure the Supervisor to use Okta as the external identity provider
 
-Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#oidcidentityprovider) and a Secret.
+Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{ .Site.Params.latest_codegen_version }}/README.adoc#oidcidentityprovider) and a Secret.
 
 ```sh
 # Replace the issuer's domain, the client ID, and client secret below.
@@ -488,7 +488,7 @@ kubectl apply -f \
 
 Configure the Concierge on the first workload cluster to trust the Supervisor's
 FederationDomain for authentication by creating a
-[JWTAuthenticator](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#jwtauthenticator).
+[JWTAuthenticator](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{ .Site.Params.latest_codegen_version }}/README.adoc#jwtauthenticator).
 
 ```sh
 # The audience value below is an arbitrary value which must uniquely

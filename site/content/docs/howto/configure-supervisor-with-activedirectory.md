@@ -22,7 +22,7 @@ and that you have [configured a FederationDomain to issue tokens for your downst
 
 ## Configure the Supervisor cluster
 
-Create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#activedirectoryidentityprovider) in the same namespace as the Supervisor.
+Create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{ .Site.Params.latest_codegen_version }}/README.adoc#activedirectoryidentityprovider) in the same namespace as the Supervisor.
 
 ### ActiveDirectoryIdentityProvider with default options
 

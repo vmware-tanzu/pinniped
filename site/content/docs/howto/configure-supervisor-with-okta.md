@@ -49,7 +49,7 @@ For example, to create an app:
 
 ## Configure the Supervisor
 
-Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#oidcidentityprovider) in the same namespace as the Supervisor.
+Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcidentityprovider) in the same namespace as the Supervisor.
 
 For example, this OIDCIdentityProvider and corresponding Secret use Okta's `email` claim as the Kubernetes username:
 

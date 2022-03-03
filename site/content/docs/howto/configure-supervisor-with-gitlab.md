@@ -41,7 +41,7 @@ For example, to create a user-owned application:
 
 ## Configure the Supervisor cluster
 
-Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#oidcidentityprovider) in the same namespace as the Supervisor.
+Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcidentityprovider) in the same namespace as the Supervisor.
 
 For example, this OIDCIdentityProvider and corresponding Secret for [gitlab.com](https://gitlab.com) use the `nickname` claim (GitLab username) as the Kubernetes username:
 

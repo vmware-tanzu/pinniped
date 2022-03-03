@@ -24,7 +24,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition"]
 ==== Condition 
 
-
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
 
 .Appears In:
 ****
@@ -36,7 +36,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 |===
 | Field | Description
 | *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-conditionstatus[$$ConditionStatus$$]__ | status of the condition, one of True, False, Unknown.
 | *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
 | *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
 | *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
@@ -47,7 +47,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-conditionstatus"]
 ==== ConditionStatus (string) 
 
-
+ConditionStatus is effectively an enum type for Condition.Status.
 
 .Appears In:
 ****
@@ -137,7 +137,7 @@ JWTTokenClaims allows customization of the claims that will be mapped to user id
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
-
+Configuration for configuring TLS on various authenticators.
 
 .Appears In:
 ****
@@ -240,7 +240,7 @@ CredentialIssuer describes the configuration and status of the Pinniped Concierg
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerfrontend"]
 ==== CredentialIssuerFrontend 
 
-
+CredentialIssuerFrontend describes how to connect using a particular integration strategy.
 
 .Appears In:
 ****
@@ -259,7 +259,7 @@ CredentialIssuer describes the configuration and status of the Pinniped Concierg
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
 ==== CredentialIssuerKubeConfigInfo 
 
-
+CredentialIssuerKubeConfigInfo provides the information needed to form a valid Pinniped-based kubeconfig using this credential issuer. This type is deprecated and will be removed in a future version.
 
 .Appears In:
 ****
@@ -314,7 +314,7 @@ CredentialIssuerStatus describes the status of the Concierge.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstrategy"]
 ==== CredentialIssuerStrategy 
 
-
+CredentialIssuerStrategy describes the status of an integration strategy that was attempted by Pinniped.
 
 .Appears In:
 ****
@@ -336,7 +336,7 @@ CredentialIssuerStatus describes the status of the Concierge.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyinfo"]
 ==== ImpersonationProxyInfo 
 
-
+ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
 
 .Appears In:
 ****
@@ -354,7 +354,7 @@ CredentialIssuerStatus describes the status of the Concierge.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxymode"]
 ==== ImpersonationProxyMode (string) 
 
-
+ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
 
 .Appears In:
 ****
@@ -376,7 +376,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`type`* __ImpersonationProxyServiceType__ | Type specifies the type of Service to provision for the impersonation proxy. 
+| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyservicetype[$$ImpersonationProxyServiceType$$]__ | Type specifies the type of Service to provision for the impersonation proxy. 
  If the type is "None", then the "spec.impersonationProxy.externalEndpoint" field must be set to a non-empty value so that the Concierge can properly advertise the endpoint in the CredentialIssuer's status.
 | *`loadBalancerIP`* __string__ | LoadBalancerIP specifies the IP address to set in the spec.loadBalancerIP field of the provisioned Service. This is not supported on all cloud providers.
 | *`annotations`* __object (keys:string, values:string)__ | Annotations specifies zero or more key/value pairs to set as annotations on the provisioned Service.
@@ -386,7 +386,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyservicetype"]
 ==== ImpersonationProxyServiceType (string) 
 
-
+ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
 
 .Appears In:
 ****
@@ -398,7 +398,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyspec"]
 ==== ImpersonationProxySpec 
 
-
+ImpersonationProxySpec describes the intended configuration of the Concierge impersonation proxy.
 
 .Appears In:
 ****
@@ -408,7 +408,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`mode`* __ImpersonationProxyMode__ | Mode configures whether the impersonation proxy should be started: - "disabled" explicitly disables the impersonation proxy. This is the default. - "enabled" explicitly enables the impersonation proxy. - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
+| *`mode`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxymode[$$ImpersonationProxyMode$$]__ | Mode configures whether the impersonation proxy should be started: - "disabled" explicitly disables the impersonation proxy. This is the default. - "enabled" explicitly enables the impersonation proxy. - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
 | *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will be served using the external name of the LoadBalancer service or the cluster service DNS name. 
  This field must be non-empty when spec.impersonationProxy.service.type is "None".
@@ -418,7 +418,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
 ==== TokenCredentialRequestAPIInfo 
 
-
+TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
 
 .Appears In:
 ****
@@ -880,7 +880,7 @@ Status of an Active Directory identity provider.
 |===
 | Field | Description
 | *`base`* __string__ | Base is the dn (distinguished name) that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com". Optional, when not specified it will be based on the result of a query for the defaultNamingContext (see https://docs.microsoft.com/en-us/windows/win32/adschema/rootdse). The default behavior searches your entire domain for users. It may make sense to specify a subtree as a search base if you wish to exclude some users or to make searches faster.
-| *`filter`* __string__ | Filter is the search filter which should be applied when searching for users. The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will be '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={}")(mail={})(userPrincipalName={})(sAMAccountType=805306368))' This means that the user is a person, is not a computer, the sAMAccountType is for a normal user account, and is not shown in advanced view only (which would likely mean its a system created service account with advanced permissions). Also, either the sAMAccountName, the userPrincipalName, or the mail attribute matches the input username.
+| *`filter`* __string__ | Filter is the search filter which should be applied when searching for users. The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will be '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(\|(sAMAccountName={}")(mail={})(userPrincipalName={})(sAMAccountType=805306368))' This means that the user is a person, is not a computer, the sAMAccountType is for a normal user account, and is not shown in advanced view only (which would likely mean its a system created service account with advanced permissions). Also, either the sAMAccountName, the userPrincipalName, or the mail attribute matches the input username.
 | *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearchattributes[$$ActiveDirectoryIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the ActiveDirectory entry which was found as the result of the user search.
 |===
 
@@ -906,7 +906,7 @@ Status of an Active Directory identity provider.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-condition"]
 ==== Condition 
 
-
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
 
 .Appears In:
 ****
@@ -919,7 +919,7 @@ Status of an Active Directory identity provider.
 |===
 | Field | Description
 | *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-conditionstatus[$$ConditionStatus$$]__ | status of the condition, one of True, False, Unknown.
 | *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
 | *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
 | *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
@@ -930,7 +930,7 @@ Status of an Active Directory identity provider.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-conditionstatus"]
 ==== ConditionStatus (string) 
 
-
+ConditionStatus is effectively an enum type for Condition.Status.
 
 .Appears In:
 ****
@@ -1212,7 +1212,7 @@ OIDCIdentityProviderStatus is the status of an OIDC identity provider.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-parameter"]
 ==== Parameter 
 
-
+Parameter is a key/value pair which represents a parameter in an HTTP request.
 
 .Appears In:
 ****
@@ -1230,7 +1230,7 @@ OIDCIdentityProviderStatus is the status of an OIDC identity provider.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
-
+Configuration for TLS parameters related to identity provider integration.
 
 .Appears In:
 ****

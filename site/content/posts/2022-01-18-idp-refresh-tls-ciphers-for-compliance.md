@@ -77,6 +77,21 @@ If your access tokens have a lifetime shorter than 3 hours, Pinniped will issue 
 
 LDAP does not have a concept of sessions or refresh tokens. Hence we run LDAP queries against the LDAP or AD IDP to approximate a refresh. For LDAP, we validate if the LDAP entry still exists with no changes to Pinniped UID and username fields. For AD, we validate the same LDAP checks and we also validate that the user's password has not changed since the original login (note that we only store the time that the password was last changed, not the password itself) and their account is not locked or disabled.
 
+#### *Update:* LDAP / Active Directory Group Refresh added in v0.15.0
+
+With the release of Pinniped [v0.15.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.15.0) in March 2022, we added support for refreshing LDAP and Active Directory groups. A user's group membership is refreshed as they interact with the supervisor to obtain new credentials. This allows group membership changes to be quickly reflected into Kubernetes clusters.
+
+In some environments, frequent group membership queries may result in a significant performance impact on the identity provider and/or the supervisor. The best approach to handle performance impacts is to tweak the group query to be more performant, for example by disabling nested group search or by using a more targeted group search base. If the group search query cannot be made performant, and you are willing to have group memberships remain static for approximately a day, then set **skipGroupRefresh** to true.  Please be aware that this is an insecure configuration as authorization policies that are bound to group membership will not notice if a user has been removed from a particular group until their next login. Also, the skipGroupRefresh flag is an experimental feature that may be removed or significantly altered in the future. Consumers of this configuration should carefully read all release notes before upgrading to ensure that the meaning of this field has not changed. See example below for how to configure this in an ActiveDirectoryIdentityProvider custom resource.
+
+```yaml
+  groupSearch:
+     base: "ou=Groups,DC=activedirectory,DC=example,DC=com"
+     filter: "&(objectClass=group)(member={})"
+     attributes:
+       groupName: "dn"
+     skipGroupRefresh: true
+ ```
+
 ## Secure TLS ciphers
 
 As part of our effort to harden Pinniped deployments, we have changed the TLS configuration for all Pinniped components. This will help meet the compliance standards for TLS ciphers in regulatory environments. *Note that this change does not offer any configuration options to the user.* We have tested our TLS configurations with Qualys' [ssltest tool]( https://www.ssllabs.com/ssltest) as well as with [sslyze](https://github.com/nabla-c0d3/sslyze). Please do provide us with any feedback in case your scanning tools show Pinniped is using TLS ciphers of concern to you.

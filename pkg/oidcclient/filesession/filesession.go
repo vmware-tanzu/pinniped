@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package filesession implements a simple YAML file-based login.sessionCache.
@@ -111,6 +111,22 @@ func (c *Cache) PutToken(key oidcclient.SessionCacheKey, token *oidctypes.Token)
 			Tokens:            *token,
 		})
 	})
+}
+
+// DeleteToken deletes the token from the session cache at the given cache cache key.
+// It returns whether it deleted a token.
+func (c *Cache) DeleteToken(key oidcclient.SessionCacheKey) bool {
+	_, err := os.Stat(c.path)
+	if errors.Is(err, os.ErrNotExist) {
+		// if the cache file doesn't exist there's no session info
+		// to delete
+		return false
+	}
+	deleted := false
+	c.withCache(func(cache *sessionCache) {
+		deleted = cache.delete(key)
+	})
+	return deleted
 }
 
 // withCache is an internal helper which locks, reads the cache, processes/mutates it with the provided function, then

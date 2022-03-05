@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -84,7 +84,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 }
 
 func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
-	pLogger, err := SetLogLevel(deps.lookupEnv)
+	pLogger, err := SetLogLevel(deps.lookupEnv, "Pinniped login: ")
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}

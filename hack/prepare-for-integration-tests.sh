@@ -333,6 +333,7 @@ popd >/dev/null
 manifest=/tmp/pinniped-concierge.yaml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
+image_repo="$registry_repo"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"

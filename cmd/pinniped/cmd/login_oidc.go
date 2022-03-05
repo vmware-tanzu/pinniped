@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -125,7 +125,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error { //nolint:funlen
-	pLogger, err := SetLogLevel(deps.lookupEnv)
+	pLogger, err := SetLogLevel(deps.lookupEnv, "Pinniped login: ")
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}
@@ -326,7 +326,7 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel(lookupEnv func(string) (string, bool)) (plog.Logger, error) {
+func SetLogLevel(lookupEnv func(string) (string, bool), prefix string) (plog.Logger, error) {
 	debug, _ := lookupEnv("PINNIPED_DEBUG")
 	if debug == "true" {
 		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
@@ -334,7 +334,7 @@ func SetLogLevel(lookupEnv func(string) (string, bool)) (plog.Logger, error) {
 			return nil, err
 		}
 	}
-	logger := plog.New("Pinniped login: ")
+	logger := plog.New(prefix)
 	return logger, nil
 }
 

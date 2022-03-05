@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package cachefile implements the file format for session caches.
@@ -150,6 +150,19 @@ func (c *sessionCache) lookup(key oidcclient.SessionCacheKey) *sessionEntry {
 		}
 	}
 	return nil
+}
+
+// delete a cache entry by key. Returns whether it successfully deleted an entry.
+func (c *sessionCache) delete(key oidcclient.SessionCacheKey) bool {
+	length := len(c.Sessions)
+	for i := range c.Sessions {
+		if reflect.DeepEqual(c.Sessions[i].Key, key) {
+			c.Sessions[i] = c.Sessions[length-1]
+			c.Sessions = c.Sessions[:length-1]
+			return true
+		}
+	}
+	return false
 }
 
 // insert a cache entry.

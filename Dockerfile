@@ -3,7 +3,7 @@
 # Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.17.7 as build-env
+FROM golang:1.17.8 as build-env
 
 WORKDIR /work
 COPY . .

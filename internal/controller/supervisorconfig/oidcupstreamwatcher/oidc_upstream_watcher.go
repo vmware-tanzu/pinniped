@@ -53,7 +53,7 @@ const (
 	oidcValidatorCacheTTL = 15 * time.Minute
 
 	// Constants related to conditions.
-	typeClientCredentialsValid             = "ClientCredentialsValid"
+	typeClientCredentialsValid             = "ClientCredentialsValid" //nolint:gosec // this is not a credential
 	typeAdditionalAuthorizeParametersValid = "AdditionalAuthorizeParametersValid"
 	typeOIDCDiscoverySucceeded             = "OIDCDiscoverySucceeded"
 

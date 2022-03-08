@@ -33,7 +33,7 @@ type logger struct {
 
 func (l logger) clone() logger {
 	out := l
-	l.values = copySlice(l.values)
+	l.values = copySlice(l.values) //nolint:staticcheck // ignore ineffective assignment warning
 	return out
 }
 

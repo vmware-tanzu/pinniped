@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -28,7 +28,6 @@ type DiscoveryInfoSpec struct {
 }
 
 // APIConfigSpec contains configuration knobs for the Pinniped API.
-//nolint: golint
 type APIConfigSpec struct {
 	ServingCertificateConfig ServingCertificateConfigSpec `json:"servingCertificate"`
 }

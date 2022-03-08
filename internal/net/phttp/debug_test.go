@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package phttp
@@ -260,7 +260,7 @@ func Test_safeDebugWrappers_clean(t *testing.T) {
 
 					gotReq = r
 
-					resp, err := rt.RoundTrip(r) //nolint:bodyclose
+					resp, err := rt.RoundTrip(r)
 
 					gotResp = resp
 					gotErr = err

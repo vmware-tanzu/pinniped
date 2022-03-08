@@ -412,6 +412,7 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	env := testlib.IntegrationEnv(t)
 	callbackURL, err := url.Parse(env.CLIUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
+	//nolint:gosec // not worried about these potentially tainted inputs
 	cmd := exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
 		"--issuer", env.CLIUpstreamOIDC.Issuer,
 		"--client-id", env.CLIUpstreamOIDC.ClientID,

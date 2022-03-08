@@ -1080,7 +1080,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.Empty(t, rsp.Body.String())
 			}
 
-			if test.wantRedirectLocationRegexp != "" { //nolint:nestif // don't mind have several sequential if statements in this test
+			if test.wantRedirectLocationRegexp != "" {
 				require.Len(t, rsp.Header().Values("Location"), 1)
 				oidctestutil.RequireAuthCodeRegexpMatch(
 					t,

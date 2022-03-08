@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -51,7 +51,7 @@ const (
 
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
 //nolint:gochecknoglobals
-var generateKey func(r io.Reader) (interface{}, error) = generateECKey
+var generateKey = generateECKey
 
 func generateECKey(r io.Reader) (interface{}, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), r)

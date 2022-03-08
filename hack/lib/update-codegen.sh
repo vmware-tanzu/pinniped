@@ -178,8 +178,8 @@ crd-ref-docs \
 
 # Generate CRD YAML
 (cd apis &&
-    controller-gen paths=./supervisor/config/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds &&
-    controller-gen paths=./supervisor/idp/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds &&
-    controller-gen paths=./concierge/config/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds &&
-    controller-gen paths=./concierge/authentication/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds
+    controller-gen paths=./supervisor/config/v1alpha1 crd output:crd:artifacts:config=../crds &&
+    controller-gen paths=./supervisor/idp/v1alpha1 crd output:crd:artifacts:config=../crds &&
+    controller-gen paths=./concierge/config/v1alpha1 crd output:crd:artifacts:config=../crds &&
+    controller-gen paths=./concierge/authentication/v1alpha1 crd output:crd:artifacts:config=../crds
 )

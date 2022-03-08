@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package fositestorage
@@ -15,7 +15,7 @@ const (
 	ErrInvalidRequestType     = constable.Error("requester must be of type fosite.Request")
 	ErrInvalidClientType      = constable.Error("requester's client must be of type clientregistry.Client")
 	ErrInvalidSessionType     = constable.Error("requester's session must be of type openid.DefaultSession")
-	StorageRequestIDLabelName = "storage.pinniped.dev/request-id" //nolint:gosec // this is not a credential
+	StorageRequestIDLabelName = "storage.pinniped.dev/request-id"
 )
 
 func ValidateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Request, error) {

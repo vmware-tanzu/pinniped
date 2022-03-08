@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamldap
@@ -1489,7 +1489,7 @@ func TestRealTLSDialing(t *testing.T) {
 
 				// Indirectly checking that the Dialer method constructed the ldap.Conn with isTLS set to true,
 				// since this is always the correct behavior unless/until we want to support StartTLS.
-				err := conn.(*ldap.Conn).StartTLS(&tls.Config{})
+				err := conn.(*ldap.Conn).StartTLS(&tls.Config{}) //nolint:gosec // not concerned with TLS MinVersion here
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)
 			}
 		})

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -278,7 +278,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 }
 
 func defaultTLSCertSecretName(env *testlib.TestEnv) string {
-	return env.SupervisorAppName + "-default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
+	return env.SupervisorAppName + "-default-tls-certificate"
 }
 
 func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {

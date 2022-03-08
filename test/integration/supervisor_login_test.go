@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -999,7 +999,7 @@ func testSupervisorLogin(
 	// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
+			TLSClientConfig: &tls.Config{RootCAs: ca.Pool()}, //nolint:gosec // not concerned with TLS MinVersion here
 			Proxy: func(req *http.Request) (*url.URL, error) {
 				if strings.HasPrefix(req.URL.Host, "127.0.0.1") {
 					// don't proxy requests to localhost to avoid proxying calls to our local callback listener

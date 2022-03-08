@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonatorconfig
@@ -51,7 +51,7 @@ import (
 func TestImpersonatorConfigControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
-		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
+		const credentialIssuerResourceName = "some-credential-issuer-resource-name" //nolint:gosec // this is not a credential
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
 		const generatedClusterIPServiceName = "some-cluster-ip-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
@@ -252,7 +252,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
-		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
+		const credentialIssuerResourceName = "some-credential-issuer-resource-name" //nolint:gosec // this is not a credential
 		const loadBalancerServiceName = "some-service-resource-name"
 		const clusterIPServiceName = "some-cluster-ip-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
@@ -461,7 +461,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				rootCAs := x509.NewCertPool()
 				rootCAs.AppendCertsFromPEM(caCrt)
 				tr = &http.Transport{
-					TLSClientConfig: &tls.Config{
+					TLSClientConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 						// Server's TLS serving cert CA
 						RootCAs: rootCAs,
 						// Client cert which is supposed to work against the server's dynamic CAContentProvider

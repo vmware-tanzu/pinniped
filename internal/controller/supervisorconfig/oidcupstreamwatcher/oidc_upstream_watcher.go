@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcupstreamwatcher implements a controller which watches OIDCIdentityProviders.
@@ -52,7 +52,7 @@ const (
 	oidcValidatorCacheTTL = 15 * time.Minute
 
 	// Constants related to conditions.
-	typeClientCredentialsValid = "ClientCredentialsValid"
+	typeClientCredentialsValid = "ClientCredentialsValid" //nolint:gosec // this is not a credential
 	typeOIDCDiscoverySucceeded = "OIDCDiscoverySucceeded"
 
 	reasonUnreachable     = "Unreachable"

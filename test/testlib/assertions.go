@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -30,7 +30,7 @@ type (
 	}
 )
 
-// loopTestingT implements require.TestingT:
+// loopTestingT implements require.TestingT.
 var _ require.TestingT = (*loopTestingT)(nil)
 
 // Errorf is called by the assert.Assertions methods to record an error.

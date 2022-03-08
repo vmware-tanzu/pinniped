@@ -2051,7 +2051,7 @@ func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.Tes
 			// There will be other strategy types in the list, so ignore those.
 			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType &&
 				strategy.Status == conciergev1alpha.ErrorStrategyStatus &&
-				strategy.Reason == conciergev1alpha.DisabledStrategyReason { //nolint:nestif
+				strategy.Reason == conciergev1alpha.DisabledStrategyReason {
 				return true, nil // found it, continue the test!
 			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for disabled impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
@@ -2214,7 +2214,6 @@ func kubectlCommand(timeout context.Context, t *testing.T, kubeconfigPath string
 	t.Helper()
 
 	allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
-	//nolint:gosec // we are not performing malicious argument injection against ourselves
 	kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
 	var stdout, stderr syncBuffer
 	kubectlCmd.Stdout = &stdout

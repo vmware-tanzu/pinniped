@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -170,7 +170,6 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	return cmd
 }
 
-//nolint:funlen
 func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
 	ctx, cancel := context.WithTimeout(ctx, flags.timeout)
 	defer cancel()

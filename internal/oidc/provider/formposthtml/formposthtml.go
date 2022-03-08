@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package formposthtml defines HTML templates used by the Supervisor.
@@ -34,7 +34,7 @@ var parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(te
 	"minifiedJS":  func() template.JS { return template.JS(minifiedJS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
 }).Parse(rawHTMLTemplate))
 
-// Generate the CSP header value once since it's effectively constant:
+// Generate the CSP header value once since it's effectively constant.
 var cspValue = strings.Join([]string{
 	`default-src 'none'`,
 	`script-src '` + cspHash(minifiedJS) + `'`,

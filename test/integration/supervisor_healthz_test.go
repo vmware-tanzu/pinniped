@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -75,7 +75,7 @@ func httpGet(ctx context.Context, t *testing.T, client *http.Client, url string,
 	)
 	require.NoError(t, err)
 
-	response, err := client.Do(req) //nolint:bodyclose
+	response, err := client.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, expectedStatus, response.StatusCode)
 

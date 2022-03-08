@@ -34,7 +34,7 @@ linters:
   - godot
   - goheader
   - goimports
-  - golint
+  - revive
   - goprintffuncname
   - gosec
   - misspell
@@ -44,7 +44,7 @@ linters:
   - nolintlint
   - prealloc
   - rowserrcheck
-  - scopelint
+  - exportloopref
   - sqlclosecheck
   - unconvert
   - whitespace

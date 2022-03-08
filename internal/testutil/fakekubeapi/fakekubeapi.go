@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package fakekubeapi contains a *very* simple httptest.Server that can be used to stand in for
@@ -193,7 +193,7 @@ func encodeObj(w http.ResponseWriter, r *http.Request, obj runtime.Object) error
 		return httperr.Newf(http.StatusInternalServerError, "unable to find serialier with content-type %s", mediaType)
 	}
 
-	data, err := runtime.Encode(serializerInfo.Serializer, obj.(runtime.Object))
+	data, err := runtime.Encode(serializerInfo.Serializer, obj)
 	if err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "decode obj", err)
 	}

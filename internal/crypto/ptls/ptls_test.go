@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ptls
@@ -55,7 +55,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "default no protos",
 			tlsConfigFunc: Default,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{
@@ -75,7 +75,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "default with protos",
 			tlsConfigFunc: Default,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "a different thing for passthrough",
 				NextProtos: []string{"panda"},
 			},
@@ -96,7 +96,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "secure no protos",
 			tlsConfigFunc: Secure,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{
@@ -113,7 +113,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "secure with protos",
 			tlsConfigFunc: Secure,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "a different thing for passthrough",
 				NextProtos: []string{"panda"},
 			},
@@ -131,7 +131,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "default ldap no protos",
 			tlsConfigFunc: DefaultLDAP,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{

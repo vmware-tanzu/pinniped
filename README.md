@@ -32,14 +32,12 @@ building and testing the code, submitting PRs, and other contributor topics.
 
 ## Community meetings
 
-Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great 
-software to the community. Please join us during our online community meetings, occurring every first and third 
-Thursday of the month at 9 AM PT / 12 PM ET. 
+Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great
+software to the community. Please join us during our online community meetings, occurring every first and third
+Thursday of the month at 9 AM PT / 12 PM ET.
 
-**Note:** Community meetings are currently paused until early 2022 as we wind down 2021! 
-
-Use [this Zoom Link](https://go.pinniped.dev/community/zoom) to attend and add any agenda items you wish to 
-discuss to [the notes document](https://go.pinniped.dev/community/agenda). 
+Use [this Zoom Link](https://go.pinniped.dev/community/zoom) to attend and add any agenda items you wish to
+discuss to [the notes document](https://go.pinniped.dev/community/agenda).
 Join our [Google Group](https://groups.google.com/g/project-pinniped) to receive invites to this meeting.
 
 If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
@@ -57,4 +55,4 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE).
 
-Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.

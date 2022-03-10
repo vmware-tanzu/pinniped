@@ -352,7 +352,7 @@ else
     --data-value "api_group_suffix=$api_group_suffix" \
     --data-value "log_level=$log_level" \
     --data-value-yaml "custom_labels=$concierge_custom_labels" \
-    --data-value "image_repo=$image_repo" \
+    --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
 

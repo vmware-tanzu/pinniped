@@ -50,7 +50,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, testlib.NewKubernetesClientset(t))
+	temporarilyRemoveAllFederationDomains(ctx, t, ns, client) // leave the default TLS cert so we can still bring up a proper TLS connection
 
 	tests := []struct {
 		Scheme   string
@@ -62,86 +62,89 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		scheme := test.Scheme
-		addr := test.Address
-		caBundle := test.CABundle
+		test := test
+		t.Run(test.Scheme, func(t *testing.T) {
+			scheme := test.Scheme
+			addr := test.Address
+			caBundle := test.CABundle
 
-		if addr == "" {
-			// Both cases are not required, so when one is empty skip it.
-			continue
-		}
+			if addr == "" {
+				// Both cases are not required, so when one is empty skip it.
+				return
+			}
 
-		// Test that there is no default discovery endpoint available when there are no FederationDomains.
-		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
+			// Test that there is no default discovery endpoint available when there are no FederationDomains.
+			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
-		// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
-		issuer1 := fmt.Sprintf("https://%s/nested/issuer1", addr)
-		issuer2 := fmt.Sprintf("https://%s/nested/issuer2", addr)
-		issuer3 := fmt.Sprintf("https://%s/issuer3", addr)
-		issuer4 := fmt.Sprintf("https://%s/issuer4", addr)
-		issuer5 := fmt.Sprintf("https://%s/issuer5", addr)
-		issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
-		badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
+			// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
+			issuer1 := fmt.Sprintf("https://%s/nested/issuer1", addr)
+			issuer2 := fmt.Sprintf("https://%s/nested/issuer2", addr)
+			issuer3 := fmt.Sprintf("https://%s/issuer3", addr)
+			issuer4 := fmt.Sprintf("https://%s/issuer4", addr)
+			issuer5 := fmt.Sprintf("https://%s/issuer5", addr)
+			issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
+			badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
 
-		// When FederationDomain are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
-		config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
-		config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
-		// The auto-created JWK's were different from each other.
-		require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
-		require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
+			// When FederationDomain are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
+			config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
+			config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
+			// The auto-created JWK's were different from each other.
+			require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
+			require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
 
-		// When multiple FederationDomains exist at the same time they each serve a unique discovery endpoint.
-		config3, jwks3 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
-		config4, jwks4 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
-		requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
-		// The auto-created JWK's were different from each other.
-		require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
-		require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
+			// When multiple FederationDomains exist at the same time they each serve a unique discovery endpoint.
+			config3, jwks3 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
+			config4, jwks4 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
+			requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
+			// The auto-created JWK's were different from each other.
+			require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
+			require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
-		// Editing a provider to change the issuer name updates the endpoints that are being served.
-		updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
-		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
-		jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
-		// The JWK did not change when the issuer name was updated.
-		require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
+			// Editing a provider to change the issuer name updates the endpoints that are being served.
+			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
+			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
+			jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
+			// The JWK did not change when the issuer name was updated.
+			require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
-		// When they are deleted they stop serving discovery endpoints.
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
+			// When they are deleted they stop serving discovery endpoints.
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
 
-		// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
-		config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
-		config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, issuer6, "", "")
-		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
-		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
-		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
+			// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
+			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, issuer6, "", "")
+			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
+			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
+			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
-		// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
-		requireDelete(t, client, ns, config6Duplicate1.Name)
-		requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
-		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+			// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+			requireDelete(t, client, ns, config6Duplicate1.Name)
+			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
+			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
-		// When we finally delete all issuers, the endpoint should be down.
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
+			// When we finally delete all issuers, the endpoint should be down.
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
-		// Only test this for http endpoints because https endpoints are going through an Ingress,
-		// and while it is possible to configure an Ingress to serve multiple hostnames with matching TLS certs
-		// for each hostname, that it not something that we felt like doing on all of our clusters that we
-		// run tests against.  :)
-		if scheme == "http" {
-			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
-			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
-			config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
-		}
+			// Only test this for http endpoints because https endpoints are going through an Ingress,
+			// and while it is possible to configure an Ingress to serve multiple hostnames with matching TLS certs
+			// for each hostname, that it not something that we felt like doing on all of our clusters that we
+			// run tests against.  :)
+			if scheme == "http" {
+				// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+				issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
+				config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
+				requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+			}
 
-		// When we create a provider with an invalid issuer, the status is set to invalid.
-		badConfig := testlib.CreateTestFederationDomain(ctx, t, badIssuer, "", "")
-		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidFederationDomainStatusCondition)
-		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
-		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+			// When we create a provider with an invalid issuer, the status is set to invalid.
+			badConfig := testlib.CreateTestFederationDomain(ctx, t, badIssuer, "", "")
+			requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidFederationDomainStatusCondition)
+			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+		})
 	}
 }
 
@@ -329,6 +332,20 @@ func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 	pinnipedClient pinnipedclientset.Interface,
 	kubeClient kubernetes.Interface,
 ) {
+	t.Helper()
+
+	temporarilyRemoveAllFederationDomains(ctx, t, ns, pinnipedClient)
+	temporarilyRemoveDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName, kubeClient)
+}
+
+func temporarilyRemoveAllFederationDomains(
+	ctx context.Context,
+	t *testing.T,
+	ns string,
+	pinnipedClient pinnipedclientset.Interface,
+) {
+	t.Helper()
+
 	// Temporarily remove any existing FederationDomains from the cluster so we can test from a clean slate.
 	originalConfigList, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
@@ -337,18 +354,7 @@ func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 		require.NoError(t, err)
 	}
 
-	// Also remove the supervisor's default TLS cert
-	originalSecret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, defaultTLSCertSecretName, metav1.GetOptions{})
-	notFound := k8serrors.IsNotFound(err)
-	require.False(t, err != nil && !notFound, "unexpected error when getting %s", defaultTLSCertSecretName)
-	if notFound {
-		originalSecret = nil
-	} else {
-		err = kubeClient.CoreV1().Secrets(ns).Delete(ctx, defaultTLSCertSecretName, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}
-
-	// When this test has finished, recreate any FederationDomains and default secret that had existed on the cluster before this test.
+	// When this test has finished, recreate any FederationDomains that had existed on the cluster before this test.
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -359,12 +365,35 @@ func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 			_, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
 			require.NoError(t, err)
 		}
+	})
+}
 
-		if originalSecret != nil {
-			originalSecret.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
-			_, err = kubeClient.CoreV1().Secrets(ns).Create(cleanupCtx, originalSecret, metav1.CreateOptions{})
-			require.NoError(t, err)
-		}
+func temporarilyRemoveDefaultTLSCertSecret(
+	ctx context.Context,
+	t *testing.T,
+	ns string,
+	defaultTLSCertSecretName string,
+	kubeClient kubernetes.Interface,
+) {
+	t.Helper()
+
+	originalSecret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, defaultTLSCertSecretName, metav1.GetOptions{})
+	if k8serrors.IsNotFound(err) {
+		return
+	}
+	require.NoError(t, err, "unexpected error when getting %s", defaultTLSCertSecretName)
+
+	err = kubeClient.CoreV1().Secrets(ns).Delete(ctx, defaultTLSCertSecretName, metav1.DeleteOptions{})
+	require.NoError(t, err)
+
+	// When this test has finished, recreate the default secret that had existed on the cluster before this test.
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		originalSecret.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
+		_, err = kubeClient.CoreV1().Secrets(ns).Create(cleanupCtx, originalSecret, metav1.CreateOptions{})
+		require.NoError(t, err)
 	})
 }
 

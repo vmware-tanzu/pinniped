@@ -17,27 +17,6 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-// The Supervisor health endpoint is public because that makes it easier
-// for users to create an Ingress for the supervisor on platforms like
-// GKE where the Ingress wants to perform a health check. It's somewhere
-// between inconvenient and impossible to make that Ingress health check
-// happen on a private container port at this time.
-// This test checks that it is working and that it is public.
-func TestSupervisorHealthz(t *testing.T) {
-	env := testlib.IntegrationEnv(t)
-
-	if env.SupervisorHTTPAddress == "" {
-		t.Skip("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS not defined")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	httpClient := &http.Client{}
-
-	httpGet(ctx, t, httpClient, fmt.Sprintf("http://%s/healthz", env.SupervisorHTTPAddress), http.StatusOK, "ok")
-}
-
 // Never run this test in parallel since deleting all federation domains and the default TLS secret is disruptive, see main_test.go.
 func TestSupervisorHealthzBootstrap_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)

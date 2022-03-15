@@ -5,9 +5,13 @@ package ptls
 
 import (
 	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
-	"fmt"
+	"log"
+	"time"
 )
 
-func main() {
-	fmt.Println("using fips only mode.")
+func init() {
+	go func() {
+		time.Sleep(5 * time.Second)
+		log.Println("using boringcrypto in fips only mode.")
+	}()
 }

@@ -26,7 +26,7 @@ nodes:
       listenAddress: 127.0.0.1
 kubeadmConfigPatches:
 - |
-  apiVersion: kubeadm.k8s.io/v1beta2
+  apiVersion: kubeadm.k8s.io/v1beta3
   kind: ClusterConfiguration
   apiServer:
     extraArgs:

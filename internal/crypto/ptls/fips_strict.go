@@ -59,13 +59,13 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		//
 		// The Kubernetes API server must use approved cipher suites.
 		// https://stigviewer.com/stig/kubernetes/2021-06-17/finding/V-242418
-		CipherSuites: []uint16{
-			// these are all AEADs with ECDHE, some use ChaCha20Poly1305 while others use AES-GCM
-			// this provides forward secrecy, confidentiality and authenticity of data
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-		},
+		//CipherSuites: []uint16{
+		//	// these are all AEADs with ECDHE, some use ChaCha20Poly1305 while others use AES-GCM
+		//	// this provides forward secrecy, confidentiality and authenticity of data
+		//	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		//	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		//	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		//},
 
 		// enable HTTP2 for go's 1.7 HTTP Server
 		// setting this explicitly is only required in very specific circumstances

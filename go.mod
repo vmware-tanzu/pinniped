@@ -62,7 +62,7 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/tdewolff/minify/v2 v2.10.0
 	go.uber.org/atomic v1.9.0
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292

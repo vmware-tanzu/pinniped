@@ -11,6 +11,8 @@ import (
 	"crypto/x509"
 )
 
+const secureMinTLSVersion = "VersionTLS13"
+
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// as of 2021-10-19, Mozilla Guideline v5.6, Go 1.17.2, modern configuration, supports:
 	// - Firefox 63

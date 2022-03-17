@@ -21,6 +21,8 @@ import (
 
 // TODO decide if we need to expose the four TLS levels (secure, default, default-ldap, legacy) as config.
 
+const defaultMinTLSVersion = "VersionTLS12"
+
 type ConfigFunc func(*x509.CertPool) *tls.Config
 
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
@@ -88,11 +90,11 @@ func defaultServing(opts *options.SecureServingOptionsWithLoopback) {
 	}
 	opts.CipherSuites = cipherSuites
 
-	opts.MinTLSVersion = "VersionTLS12"
+	opts.MinTLSVersion = defaultMinTLSVersion
 }
 
 func secureServing(opts *options.SecureServingOptionsWithLoopback) {
-	opts.MinTLSVersion = "VersionTLS13"
+	opts.MinTLSVersion = secureMinTLSVersion
 	opts.CipherSuites = nil
 }
 

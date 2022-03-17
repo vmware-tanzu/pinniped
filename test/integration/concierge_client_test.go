@@ -79,7 +79,7 @@ func TestClient(t *testing.T) {
 		resp, err := client.ExchangeToken(ctx, env.TestUser.Token)
 		requireEventually.NoError(err)
 		requireEventually.NotNil(resp.Status.ExpirationTimestamp)
-		requireEventually.InDelta(5*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
+		requireEventually.InDelta(10*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
 
 		// Create a client using the certificate and key returned by the token exchange.
 		validClient := testlib.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)

@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
@@ -162,8 +163,16 @@ func (a *App) runServer(ctx context.Context) error {
 		dynamiccertauthority.New(impersonationProxySigningCertProvider), // fallback to our internal CA if we need to
 	}
 
+	// Make a kube client without leader election to allow the rest endpoints to use it selectively
+	// only where it makes sense. This could use the deploymentRef middleware, but we don't need it yet.
+	clientWithoutLeaderElection, err := kubeclient.New()
+	if err != nil {
+		return fmt.Errorf("could not create clientWithoutLeaderElection for the rest handlers: %w", err)
+	}
+
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
+		clientWithoutLeaderElection.Kubernetes,
 		dynamicServingCertProvider,
 		authenticators,
 		certIssuer,
@@ -190,6 +199,7 @@ func (a *App) runServer(ctx context.Context) error {
 
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
+	kubeClientWithoutLeaderElection kubernetes.Interface,
 	dynamicCertProvider dynamiccert.Private,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer issuer.ClientCertIssuer,
@@ -238,13 +248,14 @@ func getAggregatedAPIServerConfig(
 	apiServerConfig := &apiserver.Config{
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{
-			Authenticator:                 authenticator,
-			Issuer:                        issuer,
-			BuildControllersPostStartHook: buildControllers,
-			Scheme:                        scheme,
-			NegotiatedSerializer:          codecs,
-			LoginConciergeGroupVersion:    loginConciergeGroupVersion,
-			IdentityConciergeGroupVersion: identityConciergeGroupVersion,
+			Authenticator:                   authenticator,
+			Issuer:                          issuer,
+			BuildControllersPostStartHook:   buildControllers,
+			Scheme:                          scheme,
+			NegotiatedSerializer:            codecs,
+			LoginConciergeGroupVersion:      loginConciergeGroupVersion,
+			IdentityConciergeGroupVersion:   identityConciergeGroupVersion,
+			KubeClientWithoutLeaderElection: kubeClientWithoutLeaderElection,
 		},
 	}
 	return apiServerConfig, nil

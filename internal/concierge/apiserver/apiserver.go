@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 
 	"go.pinniped.dev/internal/controllerinit"
@@ -29,13 +30,14 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
-	Issuer                        issuer.ClientCertIssuer
-	BuildControllersPostStartHook controllerinit.RunnerBuilder
-	Scheme                        *runtime.Scheme
-	NegotiatedSerializer          runtime.NegotiatedSerializer
-	LoginConciergeGroupVersion    schema.GroupVersion
-	IdentityConciergeGroupVersion schema.GroupVersion
+	Authenticator                   credentialrequest.TokenCredentialRequestAuthenticator
+	Issuer                          issuer.ClientCertIssuer
+	BuildControllersPostStartHook   controllerinit.RunnerBuilder
+	Scheme                          *runtime.Scheme
+	NegotiatedSerializer            runtime.NegotiatedSerializer
+	LoginConciergeGroupVersion      schema.GroupVersion
+	IdentityConciergeGroupVersion   schema.GroupVersion
+	KubeClientWithoutLeaderElection kubernetes.Interface
 }
 
 type PinnipedServer struct {
@@ -80,7 +82,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			tokenCredReqGVR := c.ExtraConfig.LoginConciergeGroupVersion.WithResource("tokencredentialrequests")
-			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, tokenCredReqGVR.GroupResource())
+			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, c.ExtraConfig.KubeClientWithoutLeaderElection, tokenCredReqGVR.GroupResource())
 			return tokenCredReqGVR, tokenCredStorage
 		},
 		func() (schema.GroupVersionResource, rest.Storage) {

@@ -6,9 +6,17 @@ package credentialrequest
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"time"
 
+	certificatesv1 "k8s.io/api/certificates/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +26,10 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/cert"
+	"k8s.io/client-go/util/certificate/csr"
+	"k8s.io/client-go/util/keyutil"
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
@@ -31,18 +43,20 @@ type TokenCredentialRequestAuthenticator interface {
 	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
 }
 
-func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer issuer.ClientCertIssuer, resource schema.GroupResource) *REST {
+func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer issuer.ClientCertIssuer, kubeClientWithoutLeaderElection kubernetes.Interface, resource schema.GroupResource) *REST {
 	return &REST{
-		authenticator:  authenticator,
-		issuer:         issuer,
-		tableConvertor: rest.NewDefaultTableConvertor(resource),
+		authenticator:                   authenticator,
+		issuer:                          issuer,
+		tableConvertor:                  rest.NewDefaultTableConvertor(resource),
+		kubeClientWithoutLeaderElection: kubeClientWithoutLeaderElection,
 	}
 }
 
 type REST struct {
-	authenticator  TokenCredentialRequestAuthenticator
-	issuer         issuer.ClientCertIssuer
-	tableConvertor rest.TableConvertor
+	authenticator                   TokenCredentialRequestAuthenticator
+	issuer                          issuer.ClientCertIssuer
+	tableConvertor                  rest.TableConvertor
+	kubeClientWithoutLeaderElection kubernetes.Interface
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -106,12 +120,19 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return failureResponse(), nil
 	}
 
-	// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
-	expires := metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL))
-	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
+	// By commenting out this code for the spike, we prevent the usual kube cert agent and impersonation proxy
+	// strategies from getting involved in creating client certs. Instead, we will use the Kube CSR APIs below.
+	//// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
+	//expires := metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL))
+	//certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
+	//if err != nil {
+	//	traceFailureWithError(t, "cert issuer", err)
+	//	return failureResponse(), nil
+	//}
+
+	expires, certPEM, keyPEM, err := getCertFromCSR(ctx, r.kubeClientWithoutLeaderElection, userInfo)
 	if err != nil {
-		traceFailureWithError(t, "cert issuer", err)
-		return failureResponse(), nil
+		return nil, apierrors.NewInternalError(err) // TODO better error handling, but this is good enough for a spike
 	}
 
 	traceSuccess(t, userInfo, true)
@@ -125,6 +146,91 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			},
 		},
 	}, nil
+}
+
+func getCertFromCSR(
+	ctx context.Context,
+	kubeClient kubernetes.Interface,
+	userInfo user.Info,
+) (expires metav1.Time, certPEM []byte, keyPEM []byte, err error) {
+	// Make a private key.
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+	der, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: keyutil.ECPrivateKeyBlockType, Bytes: der})
+
+	// Make a CSR.
+	csrPEM, err := cert.MakeCSR(privateKey, &pkix.Name{
+		CommonName:   userInfo.GetName(),
+		Organization: userInfo.GetGroups(),
+	}, nil, nil)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+
+	// Docs say that 600 seconds is the smallest allowed duration.
+	// This should result in a cert which is valid from 5 minutes ago
+	// until 10 minutes in the future.
+	minimumAllowedDuration := time.Second * 600
+
+	// Use the CSR API to request a client cert for the API server.
+	csrName, csrUID, err := csr.RequestCertificate(
+		kubeClient,
+		csrPEM,
+		"", // empty means auto-generate a random name
+		certificatesv1.KubeAPIServerClientSignerName,
+		&minimumAllowedDuration,
+		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+		privateKey,
+	)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+
+	// These CSRs are not auto-approved, so approve our own request.
+	_, err = kubeClient.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrName, &certificatesv1.CertificateSigningRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: csrName,
+		},
+		Status: certificatesv1.CertificateSigningRequestStatus{
+			Conditions: []certificatesv1.CertificateSigningRequestCondition{
+				{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+					Reason: "TokenCredentialRequest",
+				},
+			},
+		},
+	}, metav1.UpdateOptions{})
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+
+	// Wait for the cert to be issued by the signer, or error after a reasonably long timeout.
+	timeoutCtx, cancelFunc := context.WithTimeout(ctx, 90*time.Second)
+	defer cancelFunc()
+	certPEM, err = csr.WaitForCertificate(timeoutCtx, kubeClient, csrName, csrUID)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+
+	// This feels awkward to need to decode the cert to find out when it expires,
+	// but the CSR API only returns the encoded cert. It might be nice if it also
+	// returned the cert's expiration time as a separate field?
+	decodedCertPEMBlock, _ := pem.Decode(certPEM)
+	parsedCertPEM, err := x509.ParseCertificate(decodedCertPEMBlock.Bytes)
+	if err != nil {
+		return metav1.Time{}, nil, nil, err
+	}
+	// TODO maybe return an error unless the signer honored our 600 second duration request
+	expires = metav1.NewTime(parsedCertPEM.NotAfter)
+
+	return expires, certPEM, keyPEM, nil
 }
 
 func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*loginapi.TokenCredentialRequest, error) {

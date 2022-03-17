@@ -108,7 +108,7 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 				requireEventually.ElementsMatch(groups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
 				requireEventually.NotEmpty(response.Status.Credential.ClientKeyData)
 				requireEventually.NotNil(response.Status.Credential.ExpirationTimestamp)
-				requireEventually.InDelta(5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
+				requireEventually.InDelta(10*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
 			}, 10*time.Second, 500*time.Millisecond)
 
 			// Create a client using the certificate from the CredentialRequest.

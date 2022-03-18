@@ -33,7 +33,7 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: Jan 2022
+Last Updated: March 2022
 |Theme|Description|Timeline|
 |--|--|--|
 |Improving Security Posture|Support FIPS compliant Boring crypto libraries |March/April 2022|

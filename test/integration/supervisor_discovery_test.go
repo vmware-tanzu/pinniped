@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"go.pinniped.dev/internal/crypto/ptls"
+
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -660,7 +662,7 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 		caCertPool.AppendCertsFromPEM([]byte(caBundle))
 		c.Transport = &http.Transport{
 			DialContext:     overrideDialContext,
-			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: caCertPool},
+			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool},
 		}
 	} else {
 		c.Transport = &http.Transport{

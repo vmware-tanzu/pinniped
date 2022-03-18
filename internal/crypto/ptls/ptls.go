@@ -21,7 +21,10 @@ import (
 
 // TODO decide if we need to expose the four TLS levels (secure, default, default-ldap, legacy) as config.
 
-const defaultMinTLSVersion = "VersionTLS12"
+// defaultServingOptionsMinTLSVersion is the minimum tls version in the format
+// expected by SecureServingOptions.MinTLSVersion from
+// k8s.io/apiserver/pkg/server/options
+const defaultServingOptionsMinTLSVersion = "VersionTLS12"
 
 type ConfigFunc func(*x509.CertPool) *tls.Config
 
@@ -90,11 +93,11 @@ func defaultServing(opts *options.SecureServingOptionsWithLoopback) {
 	}
 	opts.CipherSuites = cipherSuites
 
-	opts.MinTLSVersion = defaultMinTLSVersion
+	opts.MinTLSVersion = defaultServingOptionsMinTLSVersion
 }
 
 func secureServing(opts *options.SecureServingOptionsWithLoopback) {
-	opts.MinTLSVersion = secureMinTLSVersion
+	opts.MinTLSVersion = secureServingOptionsMinTLSVersion
 	opts.CipherSuites = nil
 }
 

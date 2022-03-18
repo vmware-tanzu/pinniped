@@ -11,7 +11,14 @@ import (
 	"crypto/x509"
 )
 
-const secureMinTLSVersion = "VersionTLS13"
+// secureServingOptionsMinTLSVersion is the minimum tls version in the format
+// expected by SecureServingOptions.MinTLSVersion from
+// k8s.io/apiserver/pkg/server/options
+const secureServingOptionsMinTLSVersion = "VersionTLS13"
+
+// SecureTLSConfigMinTLSVersion is the minimum tls version in the format expected
+// by tls.Config
+const SecureTLSConfigMinTLSVersion = tls.VersionTLS13
 
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// as of 2021-10-19, Mozilla Guideline v5.6, Go 1.17.2, modern configuration, supports:
@@ -25,7 +32,7 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// - Safari 12.1
 	// https://ssl-config.mozilla.org/#server=go&version=1.17.2&config=modern&guideline=5.6
 	c := Default(rootCAs)
-	c.MinVersion = tls.VersionTLS13 // max out the security
+	c.MinVersion = SecureTLSConfigMinTLSVersion // max out the security
 	c.CipherSuites = []uint16{
 		// TLS 1.3 ciphers are not configurable, but we need to explicitly set them here to make our client hello behave correctly
 		// See https://github.com/golang/go/pull/49293

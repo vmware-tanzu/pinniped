@@ -15,7 +15,8 @@ import (
 )
 
 // Always use TLS 1.2 for FIPs
-const secureMinTLSVersion = "VersionTLS12"
+const secureServingOptionsMinTLSVersion = "VersionTLS12"
+const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 
 func init() {
 	go func() {
@@ -41,7 +42,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		// The Kubernetes API Server must use TLS 1.2, at a minimum,
 		// to protect the confidentiality of sensitive data during electronic dissemination.
 		// https://stigviewer.com/stig/kubernetes/2021-06-17/finding/V-242378
-		MinVersion: tls.VersionTLS12,
+		MinVersion: SecureTLSConfigMinTLSVersion,
 
 		// enable HTTP2 for go's 1.7 HTTP Server
 		// setting this explicitly is only required in very specific circumstances

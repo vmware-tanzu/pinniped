@@ -79,6 +79,13 @@ a Pull Request. For questions about the CLA process, see the
 [FAQ](https://cla.vmware.com/faq) or submit a question through the GitHub issue
 tracker.
 
+## Learning about Pinniped
+
+New to Pinniped?
+- Start here to learn how to install and use Pinniped: [Learn to use Pinniped for federated authentication to Kubernetes clusters](https://pinniped.dev/docs/tutorials/concierge-and-supervisor-demo/)
+- Start here to learn how to navigate the source code: [Code Walk-through](https://pinniped.dev/docs/reference/code-walkthrough/)
+- Other more detailed documentation can be found at: [Pinniped Docs](https://pinniped.dev/docs/)
+
 ## Building
 
 The [Dockerfile](Dockerfile) at the root of the repo can be used to build and
@@ -139,8 +146,13 @@ go build -o pinniped ./cmd/pinniped
 1. Run the Pinniped integration tests:
 
    ```bash
-   source /tmp/integration-test-env && go test -v -count 1 -timeout 0 ./test/integration
+   ulimit -n 512 && source /tmp/integration-test-env && go test -v -count 1 -timeout 0 ./test/integration
    ```
+
+   To run specific integration tests, add the `-run` flag to the above command to specify a regexp for the test names.
+   Use a leading `/` on the regexp because the Pinniped integration tests are automatically nested under several parent tests
+   (see [integration/main_test.go](https://github.com/vmware-tanzu/pinniped/blob/main/test/integration/main_test.go)).
+   For example, to run an integration test called `TestE2E`, add `-run /TestE2E` to the command shown above.
 
 1. After making production code changes, recompile, redeploy, and run tests again by repeating the same
    commands described above. If there are only test code changes, then simply run the tests again.

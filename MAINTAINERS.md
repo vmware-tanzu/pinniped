@@ -21,4 +21,4 @@ This is the current list of maintainers for the Pinniped project.
 | ----------------------------- | :---------------------: |
 | Technical Lead | Mo Khan (enj) |
 | Product Management | Anjali Telang (anjaltelang) |
-| Community Management | Nanci Lancaster (microwavables) |
+| Community Management | Nigel Brown (pnbrown) |

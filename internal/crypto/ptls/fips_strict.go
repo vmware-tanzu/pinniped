@@ -53,3 +53,8 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		RootCAs: rootCAs,
 	}
 }
+
+func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
+	c := Default(rootCAs)
+	return c
+}

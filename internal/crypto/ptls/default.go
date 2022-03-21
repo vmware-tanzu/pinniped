@@ -57,3 +57,17 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		RootCAs: rootCAs,
 	}
 }
+
+func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
+	c := Default(rootCAs)
+	// add less secure ciphers to support the default AWS Active Directory config
+	c.CipherSuites = append(c.CipherSuites,
+		// CBC with ECDHE
+		// this provides forward secrecy and confidentiality of data but not authenticity
+		// MAC-then-Encrypt CBC ciphers are susceptible to padding oracle attacks
+		// See https://crypto.stackexchange.com/a/205 and https://crypto.stackexchange.com/a/224
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	)
+	return c
+}

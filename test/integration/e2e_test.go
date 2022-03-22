@@ -659,8 +659,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 			"--oidc-session-cache", sessionCachePath,
 		})
 
-		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
-		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		// Run "kubectl get --raw /healthz" which should trigger a browser-less CLI prompt login via the plugin.
+		// Avoid using something like "kubectl get namespaces" for this test because we expect the auth to fail,
+		// and kubectl might call the credential exec plugin a second time to try to auth again if it needs to do API
+		// discovery, in which case this test would hang until the kubectl subprocess is killed because the process
+		// would be stuck waiting for input on the second username prompt. "kubectl get --raw /healthz" doesn't need
+		// to do API discovery, so we know it will only call the credential exec plugin once.
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "--raw", "/healthz", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)

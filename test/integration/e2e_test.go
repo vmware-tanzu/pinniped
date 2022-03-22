@@ -259,7 +259,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		t.Logf("waiting for kubectl to output namespace list")
 		var kubectlOutput string
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(1 * time.Minute):
 			require.Fail(t, "timed out waiting for kubectl output")
 		case kubectlOutput = <-kubectlOutputChan:
 		}

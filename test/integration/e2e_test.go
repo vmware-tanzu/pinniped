@@ -52,7 +52,7 @@ import (
 func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)
+	topSetupCtx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.
@@ -93,7 +93,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := testlib.CreateTestFederationDomain(ctx, t,
+	downstream := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		issuerURL.String(),
 		certSecret.Name,
 		configv1alpha1.SuccessFederationDomainStatusCondition,
@@ -101,7 +101,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
-	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
+	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   downstream.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
@@ -109,7 +109,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
-		testCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
@@ -278,6 +278,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -329,7 +332,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		ptyFile, err := pty.Start(kubectlCmd)
@@ -378,7 +381,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -389,6 +392,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	})
 
 	t.Run("access token based refresh with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -448,7 +454,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
@@ -514,7 +520,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -525,6 +531,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow without web browser", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
@@ -575,7 +584,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -597,7 +606,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -608,6 +617,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow when OIDCIdentityProvider disallows it", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		// Create upstream OIDC provider and wait for it to become ready.
 		oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -648,7 +660,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -680,6 +692,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
 	// by interacting with the CLI's username and password prompts.
 	t.Run("with Supervisor LDAP upstream IDP using username and password prompts", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
@@ -702,7 +717,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -724,7 +739,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -737,6 +752,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
 	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
 	t.Run("with Supervisor LDAP upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
@@ -777,7 +795,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -793,7 +811,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -806,6 +824,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
 	// by interacting with the CLI's username and password prompts.
 	t.Run("with Supervisor ActiveDirectory upstream IDP using username and password prompts", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
 		}
@@ -831,7 +852,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -853,7 +874,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,
@@ -866,6 +887,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	// Add an ActiveDirectory upstream IDP and try using it to authenticate during kubectl commands
 	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
 	t.Run("with Supervisor ActiveDirectory upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("ActiveDirectory integration test requires connectivity to an LDAP server")
 		}
@@ -910,7 +934,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -926,7 +950,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
 			kubeconfigPath,
 			sessionCachePath,

@@ -188,9 +188,8 @@ func runNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 // This is because goboring's maxtlsversion is 1.2.
 func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	config := configFunc(nil)
-	secureConfig := ptls.Secure(nil)
 
-	var tls12Bit string
+	var tls12Bit, tls13Bit string
 
 	// sort the TLS 1.2 ciphers.
 	sort.SliceStable(config.CipherSuites, func(i, j int) bool {

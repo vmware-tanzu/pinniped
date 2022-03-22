@@ -23,7 +23,7 @@ import (
 
 // defaultServingOptionsMinTLSVersion is the minimum tls version in the format
 // expected by SecureServingOptions.MinTLSVersion from
-// k8s.io/apiserver/pkg/server/options
+// k8s.io/apiserver/pkg/server/options.
 const defaultServingOptionsMinTLSVersion = "VersionTLS12"
 
 type ConfigFunc func(*x509.CertPool) *tls.Config

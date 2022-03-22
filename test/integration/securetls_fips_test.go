@@ -1,8 +1,8 @@
 // Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !fips_strict
-// +build !fips_strict
+//go:build fips_strict
+// +build fips_strict
 
 package integration
 
@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -29,9 +30,12 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
+// This test mirrors securetls_test.go, but adapted for fips mode.
+// e.g. checks for only TLS 1.2 ciphers
 // TLS checks safe to run in parallel with serial tests, see main_test.go.
 func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
+	t.Log("testing FIPs tls config")
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Secure) // pinniped CLI uses ptls.Secure when talking to KAS
@@ -180,49 +184,43 @@ func runNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 	return stdout.String(), stderr.String()
 }
 
+// Note that the fips version doesn't do the same TLS 1.3 checks.
+// This is because goboring's maxtlsversion is 1.2.
 func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	config := configFunc(nil)
 	secureConfig := ptls.Secure(nil)
 
-	skip12 := config.MinVersion == secureConfig.MinVersion
+	var tls12Bit string
 
-	var tls12Bit, tls13Bit string
+	// sort the TLS 1.2 ciphers.
+	sort.SliceStable(config.CipherSuites, func(i, j int) bool {
+		a := tls.CipherSuiteName(config.CipherSuites[i])
+		b := tls.CipherSuiteName(config.CipherSuites[j])
 
-	if !skip12 {
-		sort.SliceStable(config.CipherSuites, func(i, j int) bool {
-			a := tls.CipherSuiteName(config.CipherSuites[i])
-			b := tls.CipherSuiteName(config.CipherSuites[j])
+		ok1 := strings.Contains(a, "_ECDSA_")
+		ok2 := strings.Contains(b, "_ECDSA_")
 
-			ok1 := strings.Contains(a, "_ECDSA_")
-			ok2 := strings.Contains(b, "_ECDSA_")
-
-			if ok1 && ok2 {
-				return false
-			}
-
-			return ok1
-		})
-
-		var s strings.Builder
-		for i, id := range config.CipherSuites {
-			s.WriteString(fmt.Sprintf(tls12Item, tls.CipherSuiteName(id)))
-			if i == len(config.CipherSuites)-1 {
-				break
-			}
-			s.WriteString("\n")
+		if ok1 && ok2 {
+			return false
 		}
-		tls12Bit = fmt.Sprintf(tls12Base, s.String())
-	}
 
+		return ok1
+	})
+
+	// use the TLS 1.2 ciphers to create the output in nmap's format.
 	var s strings.Builder
-	for i, id := range secureConfig.CipherSuites {
-		s.WriteString(fmt.Sprintf(tls13Item, strings.Replace(tls.CipherSuiteName(id), "TLS_", "TLS_AKE_WITH_", 1)))
-		if i == len(secureConfig.CipherSuites)-1 {
+	for i, id := range config.CipherSuites {
+		s.WriteString(fmt.Sprintf(tls12Item, tls.CipherSuiteName(id)))
+		if i == len(config.CipherSuites)-1 {
 			break
 		}
 		s.WriteString("\n")
 	}
-	tls13Bit = fmt.Sprintf(tls13Base, s.String())
+	tls12Bit = fmt.Sprintf(tls12Base, s.String())
+
+	// There should be an empty list for the TLS 1.3 ciphers.
+	// goboring disallows TLS 1.3
+	tls13Bit = fmt.Sprintf(tls13Base, "")
 
 	return fmt.Sprintf(baseItem, tls12Bit, tls13Bit)
 }
@@ -230,7 +228,7 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 const (
 	// this surrounds the tls 1.2 and 1.3 text in a way that guarantees that other TLS versions are not supported.
 	baseItem = `/tcp open  unknown
-| ssl-enum-ciphers: %s%s
+| s-sl-enum-ciphers: %s%s
 |_  least strength: A
 
 Nmap done: 1 IP address (1 host up) scanned in`

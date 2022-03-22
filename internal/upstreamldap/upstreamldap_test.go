@@ -1820,7 +1820,7 @@ func TestRealTLSDialing(t *testing.T) {
 				_, _ = recordFunc(info)
 				r, err := http.NewRequestWithContext(info.Context(), http.MethodGet, "/this-is-ldap", nil)
 				require.NoError(t, err)
-				tlsserver.AssertTLS(t, r, ptls.DefaultLDAP)
+				tlsserver.AssertTLS(t, r, ptls.DefaultLDAP(nil))
 				return nil, nil
 			}
 		})

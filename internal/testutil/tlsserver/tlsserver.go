@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package tlsserver
@@ -66,7 +66,7 @@ func RecordTLSHello(server *httptest.Server) {
 	}
 }
 
-func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
+func AssertTLS(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
 	t.Helper()
 
 	m, ok := getCtxMap(r.Context())
@@ -77,8 +77,6 @@ func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 
 	info, ok := h.(*tls.ClientHelloInfo)
 	require.True(t, ok)
-
-	tlsConfig := tlsConfigFunc(nil)
 
 	supportedVersions := []uint16{tlsConfig.MinVersion}
 	ciphers := tlsConfig.CipherSuites

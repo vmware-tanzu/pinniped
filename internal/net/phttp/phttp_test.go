@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package phttp
@@ -84,7 +84,7 @@ func TestClient(t *testing.T) {
 
 			var sawRequest bool
 			server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, tt.configFunc)
+				tlsserver.AssertTLS(t, r, tt.configFunc(nil))
 				assertUserAgent(t, r)
 				sawRequest = true
 			}), tlsserver.RecordTLSHello)

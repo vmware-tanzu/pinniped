@@ -701,7 +701,7 @@ func TestImpersonator(t *testing.T) {
 			testKubeAPIServerWasCalled := false
 			var testKubeAPIServerSawHeaders http.Header
 			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, ptls.Secure)
+				tlsserver.AssertTLS(t, r, ptls.Secure(nil))
 
 				switch r.URL.Path {
 				case "/api/v1/namespaces/kube-system/configmaps":
@@ -1780,7 +1780,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			testKubeAPIServerWasCalled := false
 			testKubeAPIServerSawHeaders := http.Header{}
 			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, ptls.Secure)
+				tlsserver.AssertTLS(t, r, ptls.Secure(nil))
 
 				testKubeAPIServerWasCalled = true
 				testKubeAPIServerSawHeaders = r.Header

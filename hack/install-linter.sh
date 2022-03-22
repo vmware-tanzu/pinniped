@@ -12,5 +12,5 @@ cd "${ROOT}"
 # so you can get the same results when running the linter locally.
 # Whenever the linter is updated in the CI pipelines, it should also be
 # updated here to make local development more convenient.
-go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2
+go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.0
 golangci-lint --version

@@ -30,6 +30,20 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
+// In fips-only mode, we don't explicitly set the cipher suites
+// in the tls config, we just let them default.
+// The expected cipher suites should belong to this
+// hard-coded list, copied from here:
+// https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
+var defaultCipherSuitesFIPS []uint16 = []uint16{
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+}
+
 // This test mirrors securetls_test.go, but adapted for fips mode.
 // e.g. checks for only TLS 1.2 ciphers
 // TLS checks safe to run in parallel with serial tests, see main_test.go.
@@ -188,11 +202,18 @@ func runNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 // This is because goboring's maxtlsversion is 1.2.
 func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	config := configFunc(nil)
+	// Cipher suites may be nil, in which case
+	// we should use the default fips cipher
+	// suites.
+	cipherSuites := config.CipherSuites
+	if cipherSuites == nil {
+		cipherSuites = defaultCipherSuitesFIPS
+	}
 
 	var tls12Bit, tls13Bit string
 
 	// sort the TLS 1.2 ciphers.
-	sort.SliceStable(config.CipherSuites, func(i, j int) bool {
+	sort.SliceStable(cipherSuites, func(i, j int) bool {
 		a := tls.CipherSuiteName(config.CipherSuites[i])
 		b := tls.CipherSuiteName(config.CipherSuites[j])
 
@@ -208,9 +229,9 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 
 	// use the TLS 1.2 ciphers to create the output in nmap's format.
 	var s strings.Builder
-	for i, id := range config.CipherSuites {
+	for i, id := range cipherSuites {
 		s.WriteString(fmt.Sprintf(tls12Item, tls.CipherSuiteName(id)))
-		if i == len(config.CipherSuites)-1 {
+		if i == len(cipherSuites)-1 {
 			break
 		}
 		s.WriteString("\n")

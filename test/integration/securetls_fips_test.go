@@ -227,9 +227,9 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	}
 	tls12Bit = fmt.Sprintf(tls12Base, s.String())
 
-	// There should be an empty list for the TLS 1.3 ciphers.
+	// There should be no TLS 1.3 ciphers.
 	// goboring disallows TLS 1.3
-	tls13Bit = fmt.Sprintf(tls13Base, "")
+	tls13Bit = ""
 
 	return fmt.Sprintf(baseItem, tls12Bit, tls13Bit)
 }
@@ -250,12 +250,6 @@ Nmap done: 1 IP address (1 host up) scanned in`
 %s
 |     compressors:
 |       NULL
-|     cipher preference: client`
-
-	tls13Base = `
-|   TLSv1.3:
-|     ciphers:
-%s
 |     cipher preference: server`
 
 	tls12Item = `|       %s (secp256r1) - A`

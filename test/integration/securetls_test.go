@@ -238,16 +238,16 @@ Nmap done: 1 IP address (1 host up) scanned in`
 	// the "cipher preference: client" bit a bug in nmap.
 	// https://github.com/nmap/nmap/issues/1691#issuecomment-536919978
 	tls12Base = `
-|   TLSv1.2:
-|     ciphers:
+|   TLSv1.2: 
+|     ciphers: 
 %s
-|     compressors:
+|     compressors: 
 |       NULL
 |     cipher preference: client`
 
 	tls13Base = `
-|   TLSv1.3:
-|     ciphers:
+|   TLSv1.3: 
+|     ciphers: 
 %s
 |     cipher preference: server`
 

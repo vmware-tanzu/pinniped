@@ -36,8 +36,8 @@ import (
 // https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
 var defaultCipherSuitesFIPS []uint16 = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
@@ -219,7 +219,14 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	// use the TLS 1.2 ciphers to create the output in nmap's format.
 	var s strings.Builder
 	for i, id := range cipherSuites {
-		s.WriteString(fmt.Sprintf(tls12Item, tls.CipherSuiteName(id)))
+		name := tls.CipherSuiteName(id)
+		description := ""
+		if strings.Contains(name, "_ECDHE_") {
+			description = secp256r1
+		} else {
+			description = rsa2048
+		}
+		s.WriteString(fmt.Sprintf(tls12Item, name, description))
 		if i == len(cipherSuites)-1 {
 			break
 		}
@@ -237,7 +244,7 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 const (
 	// this surrounds the tls 1.2 and 1.3 text in a way that guarantees that other TLS versions are not supported.
 	baseItem = `/tcp open  unknown
-| s-sl-enum-ciphers: %s%s
+| ssl-enum-ciphers: %s%s
 |_  least strength: A
 
 Nmap done: 1 IP address (1 host up) scanned in`
@@ -252,6 +259,11 @@ Nmap done: 1 IP address (1 host up) scanned in`
 |       NULL
 |     cipher preference: server`
 
-	tls12Item = `|       %s (secp256r1) - A`
-	tls13Item = `|       %s (ecdh_x25519) - A`
+	tls12Item = `|       %s (%s) - A`
+
+	// This curve name is part of the output for each of our elliptic curve ciphers.
+	// secp256r1 is also known as P-256.
+	secp256r1 = "secp256r1"
+	// For the RSA ciphers, we expect this output to be RSA 2048.
+	rsa2048 = "rsa 2048"
 )

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 
@@ -66,6 +67,8 @@ func RecordTLSHello(server *httptest.Server) {
 	}
 }
 
+// TODO maybe change this back to just taking a configfunc and making a wrapper for the
+//  fips stuff
 func AssertTLS(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
 	t.Helper()
 
@@ -91,9 +94,12 @@ func AssertTLS(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
 		protos = tlsConfig.NextProtos[1:]
 	}
 
+	helloInfoCiphers := info.CipherSuites
+	sort.Slice(helloInfoCiphers, func(i, j int) bool { return helloInfoCiphers[i] < helloInfoCiphers[j] })
+	sort.Slice(ciphers, func(i, j int) bool { return ciphers[i] < ciphers[j] })
 	// use assert instead of require to not break the http.Handler with a panic
 	ok1 := assert.Equal(t, supportedVersions, info.SupportedVersions)
-	ok2 := assert.Equal(t, ciphers, info.CipherSuites)
+	ok2 := assert.Equal(t, ciphers, helloInfoCiphers)
 	ok3 := assert.Equal(t, protos, info.SupportedProtos)
 
 	if all := ok1 && ok2 && ok3; !all {

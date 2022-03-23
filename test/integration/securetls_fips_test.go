@@ -35,6 +35,8 @@ import (
 // The expected cipher suites should belong to this
 // hard-coded list, copied from here:
 // https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
+// TODO this is a private variable in the tls package... is there a better
+//  way to get access to it than just copying?
 var defaultCipherSuitesFIPS []uint16 = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -143,8 +145,8 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 	// supervisor's cert is ECDSA
 	defaultECDSAOnly := func(rootCAs *x509.CertPool) *tls.Config {
 		c := ptls.Default(rootCAs)
-		ciphers := make([]uint16, 0, len(c.CipherSuites)/2)
-		for _, id := range c.CipherSuites {
+		ciphers := make([]uint16, 0, len(defaultCipherSuitesFIPS)/3)
+		for _, id := range defaultCipherSuitesFIPS {
 			id := id
 			if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
 				continue

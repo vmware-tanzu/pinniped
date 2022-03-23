@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -36,10 +35,10 @@ import (
 // hard-coded list, copied from here:
 // https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
 var defaultCipherSuitesFIPS []uint16 = []uint16{
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 }
@@ -216,21 +215,6 @@ func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
 	}
 
 	var tls12Bit, tls13Bit string
-
-	// sort the TLS 1.2 ciphers.
-	sort.SliceStable(cipherSuites, func(i, j int) bool {
-		a := tls.CipherSuiteName(config.CipherSuites[i])
-		b := tls.CipherSuiteName(config.CipherSuites[j])
-
-		ok1 := strings.Contains(a, "_ECDSA_")
-		ok2 := strings.Contains(b, "_ECDSA_")
-
-		if ok1 && ok2 {
-			return false
-		}
-
-		return ok1
-	})
 
 	// use the TLS 1.2 ciphers to create the output in nmap's format.
 	var s strings.Builder

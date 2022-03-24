@@ -34,7 +34,7 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Secure(nil)) // pinniped CLI uses ptls.Secure when talking to KAS
+		tlsserver.AssertTLS(t, r, ptls.Secure) // pinniped CLI uses ptls.Secure when talking to KAS
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
 			`"status":{"credential":{"token":"some-fancy-token"}}}`)
@@ -65,7 +65,7 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default(nil)) // pinniped CLI uses ptls.Default when talking to supervisor
+		tlsserver.AssertTLS(t, r, ptls.Default) // pinniped CLI uses ptls.Default when talking to supervisor
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
 	}), tlsserver.RecordTLSHello)

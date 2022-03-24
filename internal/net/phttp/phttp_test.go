@@ -84,7 +84,7 @@ func TestClient(t *testing.T) {
 
 			var sawRequest bool
 			server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, tt.configFunc(nil))
+				tlsserver.AssertTLS(t, r, tt.configFunc)
 				assertUserAgent(t, r)
 				sawRequest = true
 			}), tlsserver.RecordTLSHello)

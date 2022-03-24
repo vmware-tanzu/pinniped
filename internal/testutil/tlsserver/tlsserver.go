@@ -67,9 +67,15 @@ func RecordTLSHello(server *httptest.Server) {
 	}
 }
 
-// TODO maybe change this back to just taking a configfunc and making a wrapper for the
-//  fips stuff
-func AssertTLS(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
+func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
+	t.Helper()
+
+	tlsConfig := tlsConfigFunc(nil)
+
+	AssertTLSConfig(t, r, tlsConfig)
+}
+
+func AssertTLSConfig(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
 	t.Helper()
 
 	m, ok := getCtxMap(r.Context())

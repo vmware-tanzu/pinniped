@@ -662,7 +662,7 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 		caCertPool.AppendCertsFromPEM([]byte(caBundle))
 		c.Transport = &http.Transport{
 			DialContext:     overrideDialContext,
-			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint: gosec // this seems to be a false flag, min tls version is 1.3 or 1.2 in fips mode
+			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint: gosec // this seems to be a false flag, min tls version is 1.3 in normal mode or 1.2 in fips mode
 		}
 	} else {
 		c.Transport = &http.Transport{

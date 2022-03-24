@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -35,8 +34,6 @@ import (
 // The expected cipher suites should belong to this
 // hard-coded list, copied from here:
 // https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
-// TODO this is a private variable in the tls package... is there a better
-//  way to get access to it than just copying?
 var defaultCipherSuitesFIPS []uint16 = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -47,18 +44,20 @@ var defaultCipherSuitesFIPS []uint16 = []uint16{
 }
 
 // This test mirrors securetls_test.go, but adapted for fips mode.
-// e.g. checks for only TLS 1.2 ciphers
+// e.g. checks for only TLS 1.2 ciphers and checks for the
+// list of fips-approved ciphers above.
 // TLS checks safe to run in parallel with serial tests, see main_test.go.
 func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 	t.Log("testing FIPs tls config")
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// in fips mode the ciphers are nil, so we need to replace them with what we actually expect.
+		// pinniped CLI uses ptls.Secure when talking to KAS,
+		// although the distinction doesn't matter much in FIPs mode because
+		// each of the configs is a wrapper for the same base FIPs config.
 		secure := ptls.Secure(nil)
-		// TODO this is kind of ugly... but I want different sort orders...
 		secure.CipherSuites = deepcopy.Copy(defaultCipherSuitesFIPS).([]uint16)
-		tlsserver.AssertTLS(t, r, secure) // pinniped CLI uses ptls.Secure when talking to KAS
+		tlsserver.AssertTLSConfig(t, r, secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
 			`"status":{"credential":{"token":"some-fancy-token"}}}`)
@@ -89,10 +88,12 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// pinniped CLI uses ptls.Default when talking to supervisor,
+		// although the distinction doesn't matter much in FIPs mode because
+		// each of the configs is a wrapper for the same base FIPs config.
 		defaultTLS := ptls.Default(nil)
-		// TODO this is kind of ugly... but I want different sort orders...
 		defaultTLS.CipherSuites = deepcopy.Copy(defaultCipherSuitesFIPS).([]uint16)
-		tlsserver.AssertTLS(t, r, defaultTLS) // pinniped CLI uses ptls.Default when talking to supervisor
+		tlsserver.AssertTLSConfig(t, r, defaultTLS)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
 	}), tlsserver.RecordTLSHello)

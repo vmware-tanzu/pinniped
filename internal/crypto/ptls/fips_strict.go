@@ -1,6 +1,9 @@
 // Copyright 2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// The configurations here override the usual ptls.Secure, ptls.Default, and ptls.DefaultLDAP
+// configs when Pinniped is built in fips-only mode.
+// All of these are the same because FIPs is already so limited.
 //go:build fips_strict
 // +build fips_strict
 
@@ -25,23 +28,9 @@ func init() {
 	}()
 }
 
-// FIPS does not support TLS 1.3.
-// Therefore, we cannot use Pinniped's usual secure configuration,
-// which requires TLS 1.3.
-// Secure is just a wrapper for Default in this case.
-func Secure(rootCAs *x509.CertPool) *tls.Config {
-	return Default(rootCAs)
-}
-
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	return &tls.Config{
-		// Can't use SSLv3 because of POODLE and BEAST
-		// Can't use TLSv1.0 because of POODLE and BEAST using CBC cipher
-		// Can't use TLSv1.1 because of RC4 cipher usage
-		//
-		// The Kubernetes API Server must use TLS 1.2, at a minimum,
-		// to protect the confidentiality of sensitive data during electronic dissemination.
-		// https://stigviewer.com/stig/kubernetes/2021-06-17/finding/V-242378
+		// goboring requires TLS 1.2 and only TLS 1.2
 		MinVersion: SecureTLSConfigMinTLSVersion,
 
 		// enable HTTP2 for go's 1.7 HTTP Server
@@ -51,10 +40,15 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 
 		// optional root CAs, nil means use the host's root CA set
 		RootCAs: rootCAs,
+
+		// Don't set CipherSuites, which means it will default to the FIPS-compatible ones.
 	}
 }
 
+func Secure(rootCAs *x509.CertPool) *tls.Config {
+	return Default(rootCAs)
+}
+
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
-	c := Default(rootCAs)
-	return c
+	return Default(rootCAs)
 }

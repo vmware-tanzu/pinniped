@@ -56,7 +56,7 @@ func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server,
 	}
 
 	server := tlsserver.TLSTestServer(t, httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		tlsserver.AssertTLS(t, r, ptls.Secure(nil))
+		tlsserver.AssertTLS(t, r, ptls.Secure)
 
 		obj, err := decodeObj(r)
 		if err != nil {

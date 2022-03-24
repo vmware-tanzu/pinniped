@@ -59,7 +59,7 @@ func TestController(t *testing.T) {
 
 	mux := http.NewServeMux()
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default(nil))
+		tlsserver.AssertTLS(t, r, ptls.Default)
 		mux.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
 

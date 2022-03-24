@@ -19,7 +19,7 @@ import (
 func TestSecureTLS(t *testing.T) {
 	var sawRequest bool
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Secure(nil))
+		tlsserver.AssertTLS(t, r, ptls.Secure)
 		sawRequest = true
 	}), tlsserver.RecordTLSHello)
 

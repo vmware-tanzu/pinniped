@@ -55,7 +55,6 @@ require (
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/ory/fosite v0.42.1
-	github.com/ory/x v0.0.352
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
@@ -141,6 +140,7 @@ require (
 	github.com/ory/go-acc v0.2.7 // indirect
 	github.com/ory/go-convenience v0.1.0 // indirect
 	github.com/ory/viper v1.7.5 // indirect
+	github.com/ory/x v0.0.214 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

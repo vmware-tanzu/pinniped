@@ -1,16 +1,16 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"k8s.io/utils/pointer"
-
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/internal/here"
 )
@@ -37,7 +37,8 @@ func TestFromPath(t *testing.T) {
 				    network: unix
 				    address: :1234
 				  http:
-				    network: disabled
+				    network: tcp
+					address: 127.0.0.1:1234
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -54,7 +55,8 @@ func TestFromPath(t *testing.T) {
 						Address: ":1234",
 					},
 					HTTP: &Endpoint{
-						Network: "disabled",
+						Network: "tcp",
+						Address: "127.0.0.1:1234",
 					},
 				},
 			},
@@ -78,8 +80,7 @@ func TestFromPath(t *testing.T) {
 						Address: ":8443",
 					},
 					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: ":8080",
+						Network: "disabled",
 					},
 				},
 			},
@@ -125,6 +126,21 @@ func TestFromPath(t *testing.T) {
 				    network: bar
 			`),
 			wantError: `validate http endpoint: unknown network "bar"`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: tcp
+					address: :8080
+			`),
+			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
 		},
 		{
 			name: "endpoint disabled with non-empty address",
@@ -205,6 +221,69 @@ func TestFromPath(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, test.wantConfig, config)
 			}
+		})
+	}
+}
+
+func TestAddrIsOnlyOnLoopback(t *testing.T) {
+	tests := []struct {
+		addr string
+		want bool
+	}{
+		{addr: "localhost:", want: true},
+		{addr: "localhost:0", want: true},
+		{addr: "localhost:80", want: true},
+		{addr: "localhost:http", want: true},
+		{addr: "127.0.0.1:", want: true},
+		{addr: "127.0.0.1:0", want: true},
+		{addr: "127.0.0.1:80", want: true},
+		{addr: "127.0.0.1:http", want: true},
+		{addr: "[::1]:", want: true},
+		{addr: "[::1]:0", want: true},
+		{addr: "[::1]:80", want: true},
+		{addr: "[::1]:http", want: true},
+		{addr: "[0:0:0:0:0:0:0:1]:", want: true},
+		{addr: "[0:0:0:0:0:0:0:1]:0", want: true},
+		{addr: "[0:0:0:0:0:0:0:1]:80", want: true},
+		{addr: "[0:0:0:0:0:0:0:1]:http", want: true},
+		{addr: "", want: false},               // illegal input, can't be empty
+		{addr: "host", want: false},           // illegal input, need colon
+		{addr: "localhost", want: false},      // illegal input, need colon
+		{addr: "127.0.0.1", want: false},      // illegal input, need colon
+		{addr: ":", want: false},              // illegal input, need either host or port
+		{addr: "2001:db8::1:80", want: false}, // illegal input, forgot square brackets
+		{addr: ":0", want: false},
+		{addr: ":80", want: false},
+		{addr: ":http", want: false},
+		{addr: "notlocalhost:", want: false},
+		{addr: "notlocalhost:0", want: false},
+		{addr: "notlocalhost:80", want: false},
+		{addr: "notlocalhost:http", want: false},
+		{addr: "0.0.0.0:", want: false},
+		{addr: "0.0.0.0:0", want: false},
+		{addr: "0.0.0.0:80", want: false},
+		{addr: "0.0.0.0:http", want: false},
+		{addr: "[::]:", want: false},
+		{addr: "[::]:0", want: false},
+		{addr: "[::]:80", want: false},
+		{addr: "[::]:http", want: false},
+		{addr: "42.42.42.42:", want: false},
+		{addr: "42.42.42.42:0", want: false},
+		{addr: "42.42.42.42:80", want: false},
+		{addr: "42.42.42.42:http", want: false},
+		{addr: "[2001:db8::1]:", want: false},
+		{addr: "[2001:db8::1]:0", want: false},
+		{addr: "[2001:db8::1]:80", want: false},
+		{addr: "[2001:db8::1]:http", want: false},
+		{addr: "[fe80::1%zone]:", want: false},
+		{addr: "[fe80::1%zone]:0", want: false},
+		{addr: "[fe80::1%zone]:80", want: false},
+		{addr: "[fe80::1%zone]:http", want: false},
+	}
+	for _, test := range tests {
+		tt := test
+		t.Run(fmt.Sprintf("address %s should be %t", tt.addr, tt.want), func(t *testing.T) {
+			require.Equal(t, tt.want, addrIsOnlyOnLoopback(tt.addr))
 		})
 	}
 }

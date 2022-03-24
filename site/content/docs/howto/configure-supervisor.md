@@ -46,26 +46,26 @@ The most common ways are:
   configured with TLS certificates and will terminate the TLS connection itself (see the section about FederationDomain
   below). The LoadBalancer Service should be configured to use the HTTPS port 443 of the Supervisor pods as its `targetPort`.
 
-  *Warning:* Never expose the Supervisor's HTTP port 8080 to the public. It would not be secure for the OIDC protocol
-  to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
-
 - Or, define an [Ingress resource](https://kubernetes.io/docs/concepts/services-networking/ingress/).
 
    In this case, the [Ingress typically terminates TLS](https://kubernetes.io/docs/concepts/services-networking/ingress/#tls)
-   and then talks plain HTTP to its backend,
-   which would be a NodePort or LoadBalancer Service in front of the HTTP port 8080 of the Supervisor pods.
-   However, because the Supervisor's endpoints deal with sensitive credentials, it is much better if the
-   traffic is encrypted using TLS all the way into the Supervisor's Pods. Some Ingress implementations
-   may support re-encrypting the traffic before sending it to the backend. If your Ingress controller does not
-   support this, then consider using one of the other configurations described here instead of using an Ingress.
+   and then talks plain HTTP to its backend.
+   However, because the Supervisor's endpoints deal with sensitive credentials, the ingress must be configured to re-encrypt
+   traffic using TLS on the backend (upstream) into the Supervisor's Pods. It would not be secure for the OIDC protocol
+   to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
+   If your Ingress controller does not support this feature, then consider using one of the other configurations
+   described here instead of using an Ingress. The backend of the Ingress would typically point to a NodePort or
+   LoadBalancer Service which exposes the HTTPS port 8443 of the Supervisor pods.
 
    The required configuration of the Ingress is specific to your cluster's Ingress Controller, so please refer to the
    documentation from your Kubernetes provider. If you are using a cluster from a cloud provider, then you'll probably
    want to start with that provider's documentation. For example, if your cluster is a Google GKE cluster, refer to
-   the [GKE documentation for Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/ingress).
+   the [GKE documentation for Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/ingress) and the
+   [GKE documentation for enabling TLS on the backend of an Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/ingress-xlb#https_tls_between_load_balancer_and_your_application).
    Otherwise, the Kubernetes documentation provides a list of popular
    [Ingress Controllers](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/), including
-   [Contour](https://projectcontour.io/) and many others.
+   [Contour](https://projectcontour.io/) and many others. Contour is an example of an ingress implementation which
+   [supports TLS on the backend](https://projectcontour.io/docs/main/config/upstream-tls/).
 
 - Or, expose the Supervisor app using a Kubernetes service mesh technology (e.g. [Istio](https://istio.io/)).
 
@@ -133,7 +133,7 @@ spec:
   ports:
   - protocol: TCP
     port: 443
-    targetPort: 8443 # 8443 is the TLS port. Do not expose port 8080.
+    targetPort: 8443 # 8443 is the TLS port.
 ```
 
 ### Example: Creating a NodePort Service

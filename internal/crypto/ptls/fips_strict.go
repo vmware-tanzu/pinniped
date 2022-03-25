@@ -32,6 +32,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 	return &tls.Config{
 		// goboring requires TLS 1.2 and only TLS 1.2
 		MinVersion: SecureTLSConfigMinTLSVersion,
+		MaxVersion: SecureTLSConfigMinTLSVersion,
 
 		// enable HTTP2 for go's 1.7 HTTP Server
 		// setting this explicitly is only required in very specific circumstances

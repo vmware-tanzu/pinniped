@@ -7,21 +7,14 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/mohae/deepcopy"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/crypto/ptls"
@@ -34,10 +27,10 @@ import (
 // The expected cipher suites should belong to this
 // hard-coded list, copied from here:
 // https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
-var defaultCipherSuitesFIPS []uint16 = []uint16{
+var defaultCipherSuitesFIPS = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
@@ -56,7 +49,7 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 		// although the distinction doesn't matter much in FIPs mode because
 		// each of the configs is a wrapper for the same base FIPs config.
 		secure := ptls.Secure(nil)
-		secure.CipherSuites = deepcopy.Copy(defaultCipherSuitesFIPS).([]uint16)
+		secure.CipherSuites = defaultCipherSuitesFIPS
 		tlsserver.AssertTLSConfig(t, r, secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
@@ -92,7 +85,7 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 		// although the distinction doesn't matter much in FIPs mode because
 		// each of the configs is a wrapper for the same base FIPs config.
 		defaultTLS := ptls.Default(nil)
-		defaultTLS.CipherSuites = deepcopy.Copy(defaultCipherSuitesFIPS).([]uint16)
+		defaultTLS.CipherSuites = defaultCipherSuitesFIPS
 		tlsserver.AssertTLSConfig(t, r, defaultTLS)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
@@ -127,10 +120,12 @@ func TestSecureTLSConciergeAggregatedAPI_Parallel(t *testing.T) {
 
 	startKubectlPortForward(cancelCtx, t, "10446", "443", env.ConciergeAppName+"-api", env.ConciergeNamespace)
 
-	stdout, stderr := runNmapSSLEnum(t, "127.0.0.1", 10446)
+	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10446)
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, getExpectedCiphers(ptls.Secure), "stdout:\n%s", stdout)
+	secure := ptls.Secure(nil)
+	secure.CipherSuites = defaultCipherSuitesFIPS
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(secure, "server"), "stdout:\n%s", stdout)
 }
 
 func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because of the createSupervisorDefaultTLSCertificateSecretIfNeeded call
@@ -141,25 +136,22 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 
 	startKubectlPortForward(ctx, t, "10447", "443", env.SupervisorAppName+"-nodeport", env.SupervisorNamespace)
 
-	stdout, stderr := runNmapSSLEnum(t, "127.0.0.1", 10447)
+	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10447)
 
 	// supervisor's cert is ECDSA
-	defaultECDSAOnly := func(rootCAs *x509.CertPool) *tls.Config {
-		c := ptls.Default(rootCAs)
-		ciphers := make([]uint16, 0, len(defaultCipherSuitesFIPS)/3)
-		for _, id := range defaultCipherSuitesFIPS {
-			id := id
-			if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
-				continue
-			}
-			ciphers = append(ciphers, id)
+	defaultECDSAOnly := ptls.Default(nil)
+	ciphers := make([]uint16, 0, len(defaultCipherSuitesFIPS)/3)
+	for _, id := range defaultCipherSuitesFIPS {
+		id := id
+		if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
+			continue
 		}
-		c.CipherSuites = ciphers
-		return c
+		ciphers = append(ciphers, id)
 	}
+	defaultECDSAOnly.CipherSuites = ciphers
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, getExpectedCiphers(defaultECDSAOnly), "stdout:\n%s", stdout)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(defaultECDSAOnly, "server"), "stdout:\n%s", stdout)
 }
 
 type fakeT struct {
@@ -178,98 +170,3 @@ func (t *fakeT) Errorf(format string, args ...interface{}) {
 		t.Logf("reporting previously ignored errors since main test failed:\n"+format, args...)
 	})
 }
-
-func runNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	version, err := exec.CommandContext(ctx, "nmap", "-V").CombinedOutput()
-	require.NoError(t, err)
-
-	versionMatches := regexp.MustCompile(`Nmap version 7\.(?P<minor>\d+)`).FindStringSubmatch(string(version))
-	require.Len(t, versionMatches, 2)
-	minorVersion, err := strconv.Atoi(versionMatches[1])
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, minorVersion, 92, "nmap >= 7.92.x is required")
-
-	var stdout, stderr bytes.Buffer
-	//nolint:gosec // we are not performing malicious argument injection against ourselves
-	cmd := exec.CommandContext(ctx, "nmap", "--script", "ssl-enum-ciphers",
-		"-p", strconv.FormatUint(uint64(port), 10),
-		host,
-	)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
-
-	return stdout.String(), stderr.String()
-}
-
-// Note that the fips version doesn't do the same TLS 1.3 checks.
-// This is because goboring's maxtlsversion is 1.2.
-func getExpectedCiphers(configFunc ptls.ConfigFunc) string {
-	config := configFunc(nil)
-	// Cipher suites may be nil, in which case
-	// we should use the default fips cipher
-	// suites.
-	cipherSuites := config.CipherSuites
-	if cipherSuites == nil {
-		cipherSuites = defaultCipherSuitesFIPS
-	}
-
-	var tls12Bit, tls13Bit string
-
-	// use the TLS 1.2 ciphers to create the output in nmap's format.
-	var s strings.Builder
-	for i, id := range cipherSuites {
-		name := tls.CipherSuiteName(id)
-		description := ""
-		if strings.Contains(name, "_ECDHE_") {
-			description = secp256r1
-		} else {
-			description = rsa2048
-		}
-		s.WriteString(fmt.Sprintf(tls12Item, name, description))
-		if i == len(cipherSuites)-1 {
-			break
-		}
-		s.WriteString("\n")
-	}
-	tls12Bit = fmt.Sprintf(tls12Base, s.String())
-
-	// There should be no TLS 1.3 ciphers.
-	// goboring disallows TLS 1.3
-	tls13Bit = ""
-
-	return fmt.Sprintf(baseItem, tls12Bit, tls13Bit)
-}
-
-const (
-	// this surrounds the tls 1.2 and 1.3 text in a way that guarantees that other TLS versions are not supported.
-	baseItem = `/tcp open  unknown
-| ssl-enum-ciphers: %s%s
-|_  least strength: A
-
-Nmap done: 1 IP address (1 host up) scanned in`
-
-	// the "cipher preference: client" bit a bug in nmap.
-	// https://github.com/nmap/nmap/issues/1691#issuecomment-536919978
-	tls12Base = `
-|   TLSv1.2: 
-|     ciphers: 
-%s
-|     compressors: 
-|       NULL
-|     cipher preference: server`
-
-	tls12Item = `|       %s (%s) - A`
-
-	// This curve name is part of the output for each of our elliptic curve ciphers.
-	// secp256r1 is also known as P-256.
-	secp256r1 = "secp256r1"
-	// For the RSA ciphers, we expect this output to be RSA 2048.
-	rsa2048 = "rsa 2048"
-)

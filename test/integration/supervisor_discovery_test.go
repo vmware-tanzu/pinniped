@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/crypto/ptls"
-
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +28,7 @@ import (
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
 )

@@ -1503,10 +1503,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			startKubectlPortForward(cancelCtx, t, "10445", "443", env.ConciergeAppName+"-proxy", env.ConciergeNamespace)
 
-			stdout, stderr := runNmapSSLEnum(t, "127.0.0.1", 10445)
+			stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10445)
 
 			require.Empty(t, stderr)
-			require.Contains(t, stdout, getExpectedCiphers(ptls.Default), "stdout:\n%s", stdout)
+			require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Default(nil), "client"), "stdout:\n%s", stdout)
 		})
 	})
 

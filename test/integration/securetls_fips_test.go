@@ -22,20 +22,6 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-// In fips-only mode, we don't explicitly set the cipher suites
-// in the tls config, we just let them default.
-// The expected cipher suites should belong to this
-// hard-coded list, copied from here:
-// https://github.com/golang/go/blob/dev.boringcrypto/src/crypto/tls/boring.go.
-var defaultCipherSuitesFIPS = []uint16{
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-}
-
 // This test mirrors securetls_test.go, but adapted for fips mode.
 // e.g. checks for only TLS 1.2 ciphers and checks for the
 // list of fips-approved ciphers above.
@@ -49,7 +35,6 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 		// although the distinction doesn't matter much in FIPs mode because
 		// each of the configs is a wrapper for the same base FIPs config.
 		secure := ptls.Secure(nil)
-		secure.CipherSuites = defaultCipherSuitesFIPS
 		tlsserver.AssertTLSConfig(t, r, secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
@@ -85,7 +70,6 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 		// although the distinction doesn't matter much in FIPs mode because
 		// each of the configs is a wrapper for the same base FIPs config.
 		defaultTLS := ptls.Default(nil)
-		defaultTLS.CipherSuites = defaultCipherSuitesFIPS
 		tlsserver.AssertTLSConfig(t, r, defaultTLS)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
@@ -124,7 +108,6 @@ func TestSecureTLSConciergeAggregatedAPI_Parallel(t *testing.T) {
 
 	require.Empty(t, stderr)
 	secure := ptls.Secure(nil)
-	secure.CipherSuites = defaultCipherSuitesFIPS
 	require.Contains(t, stdout, testlib.GetExpectedCiphers(secure, "server"), "stdout:\n%s", stdout)
 }
 
@@ -140,8 +123,8 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 
 	// supervisor's cert is ECDSA
 	defaultECDSAOnly := ptls.Default(nil)
-	ciphers := make([]uint16, 0, len(defaultCipherSuitesFIPS)/3)
-	for _, id := range defaultCipherSuitesFIPS {
+	ciphers := make([]uint16, 0, len(defaultECDSAOnly.CipherSuites)/3)
+	for _, id := range defaultECDSAOnly.CipherSuites {
 		id := id
 		if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
 			continue

@@ -10,6 +10,7 @@
 package ptls
 
 import (
+	"C"
 	"crypto/tls"
 	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 	"crypto/x509"
@@ -42,7 +43,15 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		// optional root CAs, nil means use the host's root CA set
 		RootCAs: rootCAs,
 
-		// Don't set CipherSuites, which means it will default to the FIPS-compatible ones.
+		// this is all of the fips-approved ciphers.
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		},
 	}
 }
 

@@ -39,7 +39,7 @@ replace (
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.1.0
-	github.com/creack/pty v1.1.17
+	github.com/creack/pty v1.1.18
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.2
 	github.com/go-ldap/ldap/v3 v3.4.2

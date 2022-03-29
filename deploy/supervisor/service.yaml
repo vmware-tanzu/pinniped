@@ -2,19 +2,20 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("@ytt:assert", "assert")
 #@ load("helpers.lib.yaml", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
-#@ if data.values.service_http_nodeport_port != "removed":
-#@   fail("value service_http_nodeport_port has been renamed to deprecated_service_http_nodeport_port and will be removed in a future release")
+#@ if hasattr(data.values, "service_http_nodeport_port"):
+#@   assert.fail('value "service_http_nodeport_port" has been renamed to "deprecated_service_http_nodeport_port" and will be removed in a future release')
 #@ end
-#@ if data.values.service_http_nodeport_nodeport != "removed":
-#@   fail("value service_http_nodeport_nodeport has been renamed to deprecated_service_http_nodeport_nodeport and will be removed in a future release")
+#@ if hasattr(data.values, "service_http_nodeport_nodeport"):
+#@   assert.fail('value "service_http_nodeport_nodeport" has been renamed to "deprecated_service_http_nodeport_nodeport" and will be removed in a future release')
 #@ end
-#@ if data.values.service_http_loadbalancer_port != "removed":
-#@   fail("value service_http_loadbalancer_port has been renamed to deprecated_service_http_loadbalancer_port and will be removed in a future release")
+#@ if hasattr(data.values, "service_http_loadbalancer_port"):
+#@   assert.fail('value "service_http_loadbalancer_port" has been renamed to "deprecated_service_http_loadbalancer_port" and will be removed in a future release')
 #@ end
-#@ if data.values.service_http_clusterip_port != "removed":
-#@   fail("value service_http_clusterip_port has been renamed to deprecated_service_http_clusterip_port and will be removed in a future release")
+#@ if hasattr(data.values, "service_http_clusterip_port"):
+#@   assert.fail('value "service_http_clusterip_port" has been renamed to "deprecated_service_http_clusterip_port" and will be removed in a future release')
 #@ end
 
 #@ if data.values.deprecated_service_http_nodeport_port or data.values.service_https_nodeport_port:

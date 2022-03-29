@@ -41,10 +41,6 @@ image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"
 #! Note that all port numbers should be numbers (not strings), i.e. use ytt's `--data-value-yaml` instead of `--data-value`.
 #! Several of these values have been deprecated and will be removed in a future release. Their names have been changed to
 #! mark them as deprecated and to make it obvious upon upgrade to anyone who was using them that they have been deprecated.
-service_http_nodeport_port: removed #! this value has been deprecated and renamed to deprecated_service_http_nodeport_port; will be removed in a future release
-service_http_nodeport_nodeport: removed #! this value has been deprecated and renamed to deprecated_service_http_nodeport_nodeport; will be removed in a future release
-service_http_loadbalancer_port: removed #! this value has been deprecated and renamed to deprecated_service_http_loadbalancer_port; will be removed in a future release
-service_http_clusterip_port: removed #! this value has been deprecated and renamed to deprecated_service_http_clusterip_port; will be removed in a future release
 deprecated_service_http_nodeport_port: #! will be removed in a future release; when specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`; e.g. 31234
 deprecated_service_http_nodeport_nodeport: #! will be removed in a future release; the `nodePort` value of the NodePort Service, optional when `deprecated_service_http_nodeport_port` is specified; e.g. 31234
 deprecated_service_http_loadbalancer_port: #! will be removed in a future release; when specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`; e.g. 8443

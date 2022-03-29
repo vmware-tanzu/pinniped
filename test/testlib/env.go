@@ -206,7 +206,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.TestWebhook.TLS = &auth1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
-	result.SupervisorHTTPSIngressAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
+	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
 	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
 	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
 		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",

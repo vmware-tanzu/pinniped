@@ -15,6 +15,7 @@ import (
 	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 	"crypto/x509"
 	"log"
+	"runtime"
 	"time"
 )
 
@@ -25,7 +26,8 @@ const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 func init() {
 	go func() {
 		time.Sleep(5 * time.Second)
-		log.Println("using boringcrypto in fips only mode.")
+		version := runtime.Version()
+		log.Println("using boringcrypto in fips only mode.", "go version", version)
 	}()
 }
 

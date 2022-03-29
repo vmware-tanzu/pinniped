@@ -39,6 +39,7 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: 127.0.0.1:1234
+				insecure_accept_external_unencrypted_http_requests: false
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -59,6 +60,7 @@ func TestFromPath(t *testing.T) {
 						Address: "127.0.0.1:1234",
 					},
 				},
+				AllowExternalHTTP: "false",
 			},
 		},
 		{
@@ -83,6 +85,7 @@ func TestFromPath(t *testing.T) {
 						Network: "disabled",
 					},
 				},
+				AllowExternalHTTP: "",
 			},
 		},
 		{
@@ -128,7 +131,7 @@ func TestFromPath(t *testing.T) {
 			wantError: `validate http endpoint: unknown network "bar"`,
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests missing",
 			yaml: here.Doc(`
 				---
 				names:
@@ -141,6 +144,100 @@ func TestFromPath(t *testing.T) {
 					address: :8080
 			`),
 			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to boolean false",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: tcp
+					address: :8080
+				insecure_accept_external_unencrypted_http_requests: false
+			`),
+			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to string false",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: tcp
+					address: :8080
+				insecure_accept_external_unencrypted_http_requests: "false"
+			`),
+			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to boolean true",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  http:
+				    network: tcp
+					address: :1234
+				insecure_accept_external_unencrypted_http_requests: true
+			`),
+			wantConfig: &Config{
+				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				Labels:         map[string]string{},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "tcp",
+						Address: ":8443",
+					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: ":1234",
+					},
+				},
+				AllowExternalHTTP: "true",
+			},
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to string true",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  http:
+				    network: tcp
+					address: :1234
+				insecure_accept_external_unencrypted_http_requests: "true"
+			`),
+			wantConfig: &Config{
+				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				Labels:         map[string]string{},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "tcp",
+						Address: ":8443",
+					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: ":1234",
+					},
+				},
+				AllowExternalHTTP: "true",
+			},
 		},
 		{
 			name: "endpoint disabled with non-empty address",
@@ -234,6 +331,14 @@ func TestAddrIsOnlyOnLoopback(t *testing.T) {
 		{addr: "localhost:0", want: true},
 		{addr: "localhost:80", want: true},
 		{addr: "localhost:http", want: true},
+		{addr: "ip6-localhost:", want: true},
+		{addr: "ip6-localhost:0", want: true},
+		{addr: "ip6-localhost:80", want: true},
+		{addr: "ip6-localhost:http", want: true},
+		{addr: "ip6-loopback:", want: true},
+		{addr: "ip6-loopback:0", want: true},
+		{addr: "ip6-loopback:80", want: true},
+		{addr: "ip6-loopback:http", want: true},
 		{addr: "127.0.0.1:", want: true},
 		{addr: "127.0.0.1:0", want: true},
 		{addr: "127.0.0.1:80", want: true},

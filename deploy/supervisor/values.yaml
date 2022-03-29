@@ -35,26 +35,31 @@ image_tag: latest
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
-#! Specify how to expose the Supervisor app's HTTP and/or HTTPS ports as a Service.
-#! Typically you would set a value for only one of the following service types, for either HTTP or HTTPS depending on your needs.
-#! An HTTP service should not be exposed outside the cluster. It would not be secure to serve OIDC endpoints to end users via HTTP.
-#! Setting any of these values means that a Service of that type will be created.
+#! Specify how to expose the Supervisor app's HTTPS port as a Service.
+#! Typically, you would set a value for only one of the following service types.
+#! Setting any of these values means that a Service of that type will be created. They are all optional.
 #! Note that all port numbers should be numbers (not strings), i.e. use ytt's `--data-value-yaml` instead of `--data-value`.
-service_http_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`; e.g. 31234
-service_http_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_http_nodeport_port` is specified; e.g. 31234
-service_http_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`; e.g. 8443
-service_http_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`; e.g. 8443
+#! Several of these values have been deprecated and will be removed in a future release. Their names have been changed to
+#! mark them as deprecated and to make it obvious upon upgrade to anyone who was using them that they have been deprecated.
+service_http_nodeport_port: removed #! this value has been deprecated and renamed to deprecated_service_http_nodeport_port; will be removed in a future release
+service_http_nodeport_nodeport: removed #! this value has been deprecated and renamed to deprecated_service_http_nodeport_nodeport; will be removed in a future release
+service_http_loadbalancer_port: removed #! this value has been deprecated and renamed to deprecated_service_http_loadbalancer_port; will be removed in a future release
+service_http_clusterip_port: removed #! this value has been deprecated and renamed to deprecated_service_http_clusterip_port; will be removed in a future release
+deprecated_service_http_nodeport_port: #! will be removed in a future release; when specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`; e.g. 31234
+deprecated_service_http_nodeport_nodeport: #! will be removed in a future release; the `nodePort` value of the NodePort Service, optional when `deprecated_service_http_nodeport_port` is specified; e.g. 31234
+deprecated_service_http_loadbalancer_port: #! will be removed in a future release; when specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`; e.g. 8443
+deprecated_service_http_clusterip_port: #! will be removed in a future release; when specified, creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`; e.g. 8443
 service_https_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`; e.g. 31243
-service_https_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_http_nodeport_port` is specified; e.g. 31243
+service_https_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_https_nodeport_port` is specified; e.g. 31243
 service_https_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, with port 8443 as its `targetPort`; e.g. 8443
 service_https_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, with port 8443 as its `targetPort`; e.g. 8443
 #! The `loadBalancerIP` value of the LoadBalancer Service.
-#! Ignored unless service_http_loadbalancer_port and/or service_https_loadbalancer_port are provided.
+#! Ignored unless service_https_loadbalancer_port is provided.
 #! Optional.
 service_loadbalancer_ip: #! e.g. 1.2.3.4
 
-#! Specify the verbosity of logging: info ("nice to know" information), debug (developer
-#! information), trace (timing information), all (kitchen sink).
+#! Specify the verbosity of logging: info ("nice to know" information), debug (developer information), trace (timing information),
+#! or all (kitchen sink). Do not use trace or all on production systems, as credentials may get logged.
 log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.
 
 run_as_user: 65532 #! run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
@@ -115,3 +120,14 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #!
 #! Optional.
 endpoints:
+
+#! Optionally override the validation on the endpoints.http value which checks that only loopback interfaces are used.
+#! When deprecated_insecure_accept_external_unencrypted_http_requests is true, the HTTP listener is allowed to bind to any
+#! interface, including interfaces that are listening for traffic from outside the pod. This value is being introduced
+#! to ease the transition to the new loopback interface validation for the HTTP port for any users who need more time
+#! to change their ingress strategy to avoid using plain HTTP into the Supervisor pods.
+#! This value is being introduced and immediately deprecated. It will be removed in some future release, at which time
+#! traffic from outside the pod will need to be sent to the HTTPS listener instead, with no simple workaround available.
+#! Allowed values are true (boolean), "true" (string), false (boolean), and "false" (string). The default is false.
+#! Optional.
+deprecated_insecure_accept_external_unencrypted_http_requests: false

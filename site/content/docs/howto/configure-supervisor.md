@@ -55,7 +55,11 @@ The most common ways are:
    to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
    If your Ingress controller does not support this feature, then consider using one of the other configurations
    described here instead of using an Ingress. The backend of the Ingress would typically point to a NodePort or
-   LoadBalancer Service which exposes the HTTPS port 8443 of the Supervisor pods.
+   LoadBalancer Service which exposes the HTTPS port 8443 of the Supervisor pods. (Using plain HTTP from the Ingress
+   to the Supervisor pods is deprecated and will be removed in a future release. To aid in transition, it may be enabled
+   using the `insecure_accept_external_unencrypted_http_requests` value in
+   [values.yaml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml),
+   until that setting is removed in a future release.)
 
    The required configuration of the Ingress is specific to your cluster's Ingress Controller, so please refer to the
    documentation from your Kubernetes provider. If you are using a cluster from a cloud provider, then you'll probably
@@ -65,7 +69,9 @@ The most common ways are:
    Otherwise, the Kubernetes documentation provides a list of popular
    [Ingress Controllers](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/), including
    [Contour](https://projectcontour.io/) and many others. Contour is an example of an ingress implementation which
-   [supports TLS on the backend](https://projectcontour.io/docs/main/config/upstream-tls/).
+   [supports TLS on the backend](https://projectcontour.io/docs/main/config/upstream-tls/),
+   along with [TLS session proxying and TLS session pass-through](https://projectcontour.io/docs/main/config/tls-termination/)
+   as alternative ways to maintain TLS all the way to the backend service.
 
 - Or, expose the Supervisor app using a Kubernetes service mesh technology (e.g. [Istio](https://istio.io/)).
 

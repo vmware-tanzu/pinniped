@@ -48,7 +48,6 @@ type TestEnv struct {
 	KubernetesDistribution         KubeDistro                           `json:"kubernetesDistribution"`
 	Capabilities                   map[Capability]bool                  `json:"capabilities"`
 	TestWebhook                    auth1alpha1.WebhookAuthenticatorSpec `json:"testWebhook"`
-	SupervisorHTTPAddress          string                               `json:"supervisorHttpAddress"`
 	SupervisorHTTPSAddress         string                               `json:"supervisorHttpsAddress"`
 	SupervisorHTTPSIngressAddress  string                               `json:"supervisorHttpsIngressAddress"`
 	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
@@ -207,12 +206,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.TestWebhook.TLS = &auth1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
-	result.SupervisorHTTPAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS")
-	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
-	require.NotEmptyf(t,
-		result.SupervisorHTTPAddress+result.SupervisorHTTPSIngressAddress,
-		"must specify either PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS or PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS env var (or both) for integration tests",
-	)
+	result.SupervisorHTTPSIngressAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
 	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
 	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
 		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",

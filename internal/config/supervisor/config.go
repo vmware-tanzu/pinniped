@@ -76,7 +76,7 @@ func FromPath(path string) (*Config, error) {
 	if err := validateEndpoint(*config.Endpoints.HTTP); err != nil {
 		return nil, fmt.Errorf("validate http endpoint: %w", err)
 	}
-	if err := validateAdditionalHTTPEndpointRequirements(*config.Endpoints.HTTP); err != nil {
+	if err := validateAdditionalHTTPEndpointRequirements(*config.Endpoints.HTTP, config.AllowExternalHTTP); err != nil {
 		return nil, fmt.Errorf("validate http endpoint: %w", err)
 	}
 	if err := validateAtLeastOneEnabledEndpoint(*config.Endpoints.HTTPS, *config.Endpoints.HTTP); err != nil {
@@ -131,8 +131,16 @@ func validateEndpoint(endpoint Endpoint) error {
 	}
 }
 
-func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint) error {
+func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint, allowExternalHTTP string) error {
 	if endpoint.Network == NetworkTCP && !addrIsOnlyOnLoopback(endpoint.Address) {
+		if allowExternalHTTP == "true" {
+			// Log that the validation should have been triggered.
+			plog.Warning("Listening on non-loopback interfaces for the HTTP port is deprecated and will be removed " +
+				"in a future release. Your current configuration would not be allowed in that future release. " +
+				"Please see comments in deploy/supervisor/values.yaml and review your settings.")
+			// Skip enforcement of the validation.
+			return nil
+		}
 		return fmt.Errorf(
 			"http listener address %q for %q network may only bind to loopback interfaces",
 			endpoint.Address,
@@ -170,8 +178,9 @@ func addrIsOnlyOnLoopback(addr string) bool {
 		// Input was :port. This would bind to all interfaces, so it is not only on loopback.
 		return false
 	}
-	if host == "localhost" {
-		// This is only on loopback.
+	if host == "localhost" || host == "ip6-localhost" || host == "ip6-loopback" {
+		// These hostnames are documented as the loopback hostnames seen inside the pod's containers in
+		// https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/#default-hosts-file-content
 		return true
 	}
 	// The host could be a hostname, an IPv4 address, or an IPv6 address.

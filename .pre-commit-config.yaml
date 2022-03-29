@@ -11,6 +11,7 @@ repos:
   - id: check-json
   - id: end-of-file-fixer
   - id: trailing-whitespace
+    exclude: 'securetls*' # prevent the linter from running in this file because it's not smart enough not to trim the nmap test output.
   - id: check-merge-conflict
   - id: check-added-large-files
   - id: check-byte-order-marker

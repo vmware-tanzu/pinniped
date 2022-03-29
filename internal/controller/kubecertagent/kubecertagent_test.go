@@ -120,12 +120,12 @@ func TestAgentController(t *testing.T) {
 						}},
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("16Mi"),
-								corev1.ResourceCPU:    resource.MustParse("10m"),
+								corev1.ResourceMemory: resource.MustParse("32Mi"),
+								corev1.ResourceCPU:    resource.MustParse("20m"),
 							},
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("16Mi"),
-								corev1.ResourceCPU:    resource.MustParse("10m"),
+								corev1.ResourceMemory: resource.MustParse("32Mi"),
+								corev1.ResourceCPU:    resource.MustParse("20m"),
 							},
 						},
 						ImagePullPolicy: corev1.PullIfNotPresent,
@@ -1028,7 +1028,7 @@ func TestAgentController(t *testing.T) {
 			}
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			log := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -1106,7 +1106,7 @@ func TestAgentController(t *testing.T) {
 			require.NoError(t, err)
 			if tt.wantAgentDeployment == nil {
 				assert.Empty(t, deployments.Items, "did not expect an agent deployment")
-			} else { //nolint: gocritic
+			} else { // nolint: gocritic
 				if assert.Len(t, deployments.Items, 1, "expected a single agent deployment") {
 					assert.Equal(t, tt.wantAgentDeployment, &deployments.Items[0])
 				}

@@ -49,6 +49,7 @@ help=no
 skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
+dockerfile_path=""
 skip_chromedriver_check=no
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
 alternate_deploy="undefined"
@@ -89,6 +90,16 @@ while (("$#")); do
       exit 1
     fi
     get_active_directory_vars=$1
+    shift
+    ;;
+  --dockerfile-path)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--dockerfile-path requires a script name to be specified"
+      exit 1
+    fi
+    dockerfile_path=$1
     shift
     ;;
   --alternate-deploy)
@@ -219,9 +230,14 @@ registry_repo_tag="${registry_repo}:${tag}"
 
 if [[ "$do_build" == "yes" ]]; then
   # Rebuild the code
-  log_note "Docker building the app..."
-  # DOCKER_BUILDKIT=1 is optional on MacOS but required on linux.
-  DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag"
+  if [[ "$dockerfile_path"  != "" ]]; then
+    log_note "Docker building the app with dockerfile $dockerfile_path..."
+    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag" --file "$dockerfile_path"
+  else
+    log_note "Docker building the app..."
+    # DOCKER_BUILDKIT=1 is optional on MacOS but required on linux.
+    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag"
+  fi
 fi
 
 # Load it into the cluster

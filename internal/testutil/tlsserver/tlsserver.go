@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package tlsserver
@@ -69,6 +69,14 @@ func RecordTLSHello(server *httptest.Server) {
 func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 	t.Helper()
 
+	tlsConfig := tlsConfigFunc(nil)
+
+	AssertTLSConfig(t, r, tlsConfig)
+}
+
+func AssertTLSConfig(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
+	t.Helper()
+
 	m, ok := getCtxMap(r.Context())
 	require.True(t, ok)
 
@@ -77,8 +85,6 @@ func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 
 	info, ok := h.(*tls.ClientHelloInfo)
 	require.True(t, ok)
-
-	tlsConfig := tlsConfigFunc(nil)
 
 	supportedVersions := []uint16{tlsConfig.MinVersion}
 	ciphers := tlsConfig.CipherSuites
@@ -95,13 +101,21 @@ func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 
 	// use assert instead of require to not break the http.Handler with a panic
 	ok1 := assert.Equal(t, supportedVersions, info.SupportedVersions)
-	ok2 := assert.Equal(t, ciphers, info.CipherSuites)
+	ok2 := assert.Equal(t, cipherSuiteIDsToStrings(ciphers), cipherSuiteIDsToStrings(info.CipherSuites))
 	ok3 := assert.Equal(t, protos, info.SupportedProtos)
 
 	if all := ok1 && ok2 && ok3; !all {
 		t.Errorf("insecure TLS detected for %q %q %q upgrade=%v supportedVersions=%v ciphers=%v protos=%v",
 			r.Proto, r.Method, r.URL.String(), httpstream.IsUpgradeRequest(r), ok1, ok2, ok3)
 	}
+}
+
+func cipherSuiteIDsToStrings(ids []uint16) []string {
+	cipherSuites := make([]string, 0, len(ids))
+	for _, id := range ids {
+		cipherSuites = append(cipherSuites, tls.CipherSuiteName(id))
+	}
+	return cipherSuites
 }
 
 func getCtxMap(ctx context.Context) (*sync.Map, bool) {

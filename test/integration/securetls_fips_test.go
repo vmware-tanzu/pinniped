@@ -1,8 +1,8 @@
 // Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !fips_strict
-// +build !fips_strict
+//go:build fips_strict
+// +build fips_strict
 
 package integration
 
@@ -16,18 +16,27 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/util/cert"
 
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 	"go.pinniped.dev/test/testlib"
 )
 
+// This test mirrors securetls_test.go, but adapted for fips mode.
+// e.g. checks for only TLS 1.2 ciphers and checks for the
+// list of fips-approved ciphers above.
 // TLS checks safe to run in parallel with serial tests, see main_test.go.
 func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
+	t.Log("testing FIPs tls config")
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Secure) // pinniped CLI uses ptls.Secure when talking to KAS
+		// pinniped CLI uses ptls.Secure when talking to KAS,
+		// although the distinction doesn't matter much in FIPs mode because
+		// each of the configs is a wrapper for the same base FIPs config.
+		secure := ptls.Secure(nil)
+		tlsserver.AssertTLSConfig(t, r, secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
 			`"status":{"credential":{"token":"some-fancy-token"}}}`)
@@ -58,7 +67,11 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default) // pinniped CLI uses ptls.Default when talking to supervisor
+		// pinniped CLI uses ptls.Default when talking to supervisor,
+		// although the distinction doesn't matter much in FIPs mode because
+		// each of the configs is a wrapper for the same base FIPs config.
+		defaultTLS := ptls.Default(nil)
+		tlsserver.AssertTLSConfig(t, r, defaultTLS)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
 	}), tlsserver.RecordTLSHello)
@@ -95,7 +108,8 @@ func TestSecureTLSConciergeAggregatedAPI_Parallel(t *testing.T) {
 	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10446)
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil)), "stdout:\n%s", stdout)
+	secure := ptls.Secure(nil)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(secure), "stdout:\n%s", stdout)
 }
 
 func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because of the createSupervisorDefaultTLSCertificateSecretIfNeeded call
@@ -110,7 +124,7 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 
 	// supervisor's cert is ECDSA
 	defaultECDSAOnly := ptls.Default(nil)
-	ciphers := make([]uint16, 0, len(defaultECDSAOnly.CipherSuites)/2)
+	ciphers := make([]uint16, 0, len(defaultECDSAOnly.CipherSuites)/3)
 	for _, id := range defaultECDSAOnly.CipherSuites {
 		id := id
 		if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
@@ -122,6 +136,41 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 
 	require.Empty(t, stderr)
 	require.Contains(t, stdout, testlib.GetExpectedCiphers(defaultECDSAOnly), "stdout:\n%s", stdout)
+}
+
+// this test ensures that if the list of default fips cipher
+// suites changes, we will know.
+func TestFIPSCipherSuites_Parallel(t *testing.T) {
+	_ = testlib.IntegrationEnv(t)
+	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// use the default fips config which contains a hard coded list of cipher suites
+		// that should be equal to the default list of fips cipher suites.
+		defaultTLS := ptls.Default(nil)
+		// assert that the client hello response has the same tls config as this test server.
+		tlsserver.AssertTLSConfig(t, r, defaultTLS)
+	}), tlsserver.RecordTLSHello)
+
+	ca := tlsserver.TLSTestServerCA(server)
+	pool, err := cert.NewPoolFromBytes(ca)
+	require.NoError(t, err)
+	// create a tls config that does not explicitly set cipher suites,
+	// and therefore uses goboring's default fips ciphers.
+	defaultConfig := &tls.Config{
+		RootCAs:    pool,
+		NextProtos: ptls.Default(nil).NextProtos,
+	}
+	transport := http.Transport{
+		TLSClientConfig:   defaultConfig,
+		ForceAttemptHTTP2: true,
+	}
+	// make a request against the test server, which will validate that the
+	// tls config of the client without explicitly set ciphers
+	// is the same as the tls config of the test server with explicitly
+	// set ciphers from ptls.
+	request, _ := http.NewRequest("GET", server.URL, nil)
+	response, err := transport.RoundTrip(request)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode)
 }
 
 type fakeT struct {

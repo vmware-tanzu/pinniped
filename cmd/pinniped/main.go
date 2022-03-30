@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -9,6 +9,8 @@ import (
 	"github.com/pkg/browser"
 
 	"go.pinniped.dev/cmd/pinniped/cmd"
+	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
+	_ "go.pinniped.dev/internal/crypto/ptls"
 )
 
 //nolint: gochecknoinits

@@ -12,3 +12,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+
+  - package-ecosystem: "docker"
+    directory: "/hack"  # this should keep the FIPS dockerfile updated per https://github.com/dependabot/feedback/issues/145#issuecomment-414738498
+    schedule:
+      interval: "daily"

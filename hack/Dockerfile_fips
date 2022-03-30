@@ -1,0 +1,45 @@
+# syntax = docker/dockerfile:1.0-experimental
+
+# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# this dockerfile is used to produce a binary of Pinniped that uses
+# only fips-allowable ciphers.
+
+# use go-boringcrypto rather than main go
+FROM us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto/golang:1.17.8b7 as build-env
+
+WORKDIR /work
+COPY . .
+ARG GOPROXY
+
+# Build the executable binary (CGO_ENABLED=1 is required for go boring)
+# Pass in GOCACHE (build cache) and GOMODCACHE (module cache) so they
+# can be re-used between image builds.
+RUN \
+  --mount=type=cache,target=/cache/gocache \
+  --mount=type=cache,target=/cache/gomodcache \
+  mkdir out && \
+  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 && \
+  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
+  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator
+
+# Use a distroless runtime image with CA certificates, timezone data, and not much else.
+FROM gcr.io/distroless/static:nonroot@sha256:80c956fb0836a17a565c43a4026c9c80b2013c83bea09f74fa4da195a59b7a99
+
+# Copy the server binary from the build-env stage.
+COPY --from=build-env /usr/local/bin /usr/local/bin
+
+# Document the default server ports for the various server apps
+EXPOSE 8443 8444 10250
+
+# Run as non-root for security posture
+# Use the same non-root user as https://github.com/GoogleContainerTools/distroless/blob/fc3c4eaceb0518900f886aae90407c43be0a42d9/base/base.bzl#L9
+# This is a workaround for https://github.com/GoogleContainerTools/distroless/issues/718
+USER 65532:65532
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/pinniped-server"]

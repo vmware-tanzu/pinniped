@@ -145,12 +145,12 @@ type agentController struct {
 
 var (
 	// controllerManagerLabels are the Kubernetes labels we expect on the kube-controller-manager Pod.
-	controllerManagerLabels = labels.SelectorFromSet(map[string]string{ //nolint: gochecknoglobals
+	controllerManagerLabels = labels.SelectorFromSet(map[string]string{ // nolint: gochecknoglobals
 		"component": "kube-controller-manager",
 	})
 
 	// agentLabels are the Kubernetes labels we always expect on the kube-controller-manager Pod.
-	agentLabels = labels.SelectorFromSet(map[string]string{ //nolint: gochecknoglobals
+	agentLabels = labels.SelectorFromSet(map[string]string{ // nolint: gochecknoglobals
 		agentPodLabelKey: agentPodLabelValue,
 	})
 )
@@ -543,12 +543,12 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 							},
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
-									corev1.ResourceMemory: resource.MustParse("16Mi"),
-									corev1.ResourceCPU:    resource.MustParse("10m"),
+									corev1.ResourceMemory: resource.MustParse("32Mi"),
+									corev1.ResourceCPU:    resource.MustParse("20m"),
 								},
 								Requests: corev1.ResourceList{
-									corev1.ResourceMemory: resource.MustParse("16Mi"),
-									corev1.ResourceCPU:    resource.MustParse("10m"),
+									corev1.ResourceMemory: resource.MustParse("32Mi"),
+									corev1.ResourceCPU:    resource.MustParse("20m"),
 								},
 							},
 						},

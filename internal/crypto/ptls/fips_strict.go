@@ -47,6 +47,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		// This is all of the fips-approved ciphers.
 		// The list is hard-coded for convenience of testing.
 		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,

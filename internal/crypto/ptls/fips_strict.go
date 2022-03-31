@@ -17,6 +17,8 @@ import (
 	"C"                     // explicitly import cgo so that runtime/cgo gets linked into the kube-cert-agent
 	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 
+	"k8s.io/apiserver/pkg/server/options"
+
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -62,4 +64,8 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
+}
+
+func secureServing(opts *options.SecureServingOptionsWithLoopback) {
+	defaultServing(opts)
 }

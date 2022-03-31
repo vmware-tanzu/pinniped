@@ -122,7 +122,7 @@ endpoints:
 #! interface, including interfaces that are listening for traffic from outside the pod. This value is being introduced
 #! to ease the transition to the new loopback interface validation for the HTTP port for any users who need more time
 #! to change their ingress strategy to avoid using plain HTTP into the Supervisor pods.
-#! This value is being introduced and immediately deprecated. It will be removed in some future release, at which time
+#! This value is immediately deprecated upon its introduction. It will be removed in some future release, at which time
 #! traffic from outside the pod will need to be sent to the HTTPS listener instead, with no simple workaround available.
 #! Allowed values are true (boolean), "true" (string), false (boolean), and "false" (string). The default is false.
 #! Optional.

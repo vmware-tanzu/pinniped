@@ -131,9 +131,9 @@ func validateEndpoint(endpoint Endpoint) error {
 	}
 }
 
-func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint, allowExternalHTTP string) error {
+func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint, allowExternalHTTP stringOrBoolAsBool) error {
 	if endpoint.Network == NetworkTCP && !addrIsOnlyOnLoopback(endpoint.Address) {
-		if allowExternalHTTP == "true" {
+		if allowExternalHTTP {
 			// Log that the validation should have been triggered.
 			plog.Warning("Listening on non-loopback interfaces for the HTTP port is deprecated and will be removed " +
 				"in a future release. Your current configuration would not be allowed in that future release. " +

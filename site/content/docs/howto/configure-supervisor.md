@@ -29,13 +29,17 @@ It is recommended that the traffic to these endpoints should be encrypted via TL
 Supervisor pods, even when crossing boundaries that are entirely inside the Kubernetes cluster.
 The credentials and tokens that are handled by these endpoints are too sensitive to transmit without encryption.
 
-In all versions of the Supervisor app so far, there are both HTTP and HTTPS ports available for use by default.
+In previous versions of the Supervisor app, there were both HTTP and HTTPS ports available for use by default.
 These ports each host all the Supervisor's endpoints. Unfortunately, this has caused some confusion in the community
 and some blog posts have been written which demonstrate using the HTTP port in such a way that a portion of the traffic's
-path is unencrypted. **Anything which exposes the non-TLS HTTP port outside the Pod should be considered deprecated**.
-A future version of the Supervisor app may include a breaking change to adjust the default behavior of the HTTP port
-to only listen on 127.0.0.1 (or perhaps even to be disabled) to make it more clear that the Supervisor app is not intended
-to receive non-TLS HTTP traffic from outside the Pod.
+path is unencrypted. Newer versions of the Supervisor disable the HTTP port by default to make it more clear that
+the Supervisor app is not intended to receive non-TLS HTTP traffic from outside the Pod. Furthermore, in these newer versions,
+when the HTTP listener is configured to be enabled it may only listen on loopback interfaces for traffic from within its own pod.
+To aid in transition for impacted users, the old behavior of allowing the HTTP listener to receive traffic from
+outside the pod may be re-enabled using the
+`deprecated_insecure_accept_external_unencrypted_http_requests` value in
+[values.yaml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml),
+until that setting is removed in a future release.
 
 Because there are many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
 The most common ways are:
@@ -54,12 +58,9 @@ The most common ways are:
    traffic using TLS on the backend (upstream) into the Supervisor's Pods. It would not be secure for the OIDC protocol
    to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
    If your Ingress controller does not support this feature, then consider using one of the other configurations
-   described here instead of using an Ingress. The backend of the Ingress would typically point to a NodePort or
-   LoadBalancer Service which exposes the HTTPS port 8443 of the Supervisor pods. (Using plain HTTP from the Ingress
-   to the Supervisor pods is deprecated and will be removed in a future release. To aid in transition, it may be enabled
-   using the `insecure_accept_external_unencrypted_http_requests` value in
-   [values.yaml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml),
-   until that setting is removed in a future release.)
+   described here instead of using an Ingress. (Please refer to the paragraph above regarding the deprecation of the HTTP listener for more
+   information.) The backend of the Ingress would typically point to a NodePort or LoadBalancer Service which exposes
+   the HTTPS port 8443 of the Supervisor pods.
 
    The required configuration of the Ingress is specific to your cluster's Ingress Controller, so please refer to the
    documentation from your Kubernetes provider. If you are using a cluster from a cloud provider, then you'll probably
@@ -81,24 +82,25 @@ The most common ways are:
 
    If your service mesh is capable of transparently encrypting traffic all the way into the
    Supervisor Pods, then you should use that capability. In this case, it may make sense to configure the Supervisor's
-   HTTP port to only listen on a Unix domain socket, such as when the service mesh injects a sidecar container that can
-   securely access the socket from within the same Pod.
+   HTTP port to listen on a Unix domain socket, such as when the service mesh injects a sidecar container that can
+   securely access the socket from within the same Pod. Alternatively, the HTTP port can be configured as a TCP listener
+   on loopback interfaces to receive traffic from sidecar containers.
    See the `endpoints` option in [deploy/supervisor/values.yml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml)
    for more information.
-   This would prevent any unencrypted traffic from accidentally being transmitted from outside the Pod into the
-   Supervisor app's HTTP port.
+   Using either a Unix domain socket or a loopback interface listener would prevent any unencrypted traffic from
+   accidentally being transmitted from outside the Pod into the Supervisor app's HTTP port.
 
    For example, the following high level steps cover configuring Istio for use with the Supervisor:
 
-   - Update the http listener to use a Unix domain socket
+   - Update the HTTP listener to use a Unix domain socket
      i.e. `--data-value-yaml 'endpoints={"http":{"network":"unix","address":"/pinniped_socket/socketfile.sock"}}'`
    - Arrange for the Istio sidecar to be injected into the Supervisor app with an appropriate `IstioIngressListener`
      i.e `defaultEndpoint: unix:///pinniped_socket/socketfile.sock`
    - Mount the socket volume into the Istio sidecar container by including the appropriate annotation on the Supervisor pods
      i.e. `sidecar.istio.io/userVolumeMount: '{"socket":{"mountPath":"/pinniped_socket"}}'`
-   - Disable the https listener and update the deployment health checks as desired
+   - Disable the HTTPS listener and update the deployment health checks as desired
 
-   For service meshes that do not support Unix domain sockets, the http listener should be configured to listen on 127.0.0.1.
+   For service meshes that do not support Unix domain sockets, the HTTP listener should be configured as a TCP listener on a loopback interface.
 
 ## Creating a Service to expose the Supervisor app's endpoints within the cluster
 

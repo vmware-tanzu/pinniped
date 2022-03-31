@@ -39,7 +39,7 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: 127.0.0.1:1234
-				insecure_accept_external_unencrypted_http_requests: false
+				insecureAcceptExternalUnencryptedHttpRequests: false
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -60,7 +60,7 @@ func TestFromPath(t *testing.T) {
 						Address: "127.0.0.1:1234",
 					},
 				},
-				AllowExternalHTTP: "false",
+				AllowExternalHTTP: false,
 			},
 		},
 		{
@@ -85,7 +85,7 @@ func TestFromPath(t *testing.T) {
 						Network: "disabled",
 					},
 				},
-				AllowExternalHTTP: "",
+				AllowExternalHTTP: false,
 			},
 		},
 		{
@@ -131,7 +131,7 @@ func TestFromPath(t *testing.T) {
 			wantError: `validate http endpoint: unknown network "bar"`,
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests missing",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests missing",
 			yaml: here.Doc(`
 				---
 				names:
@@ -146,7 +146,7 @@ func TestFromPath(t *testing.T) {
 			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to boolean false",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to boolean false",
 			yaml: here.Doc(`
 				---
 				names:
@@ -157,12 +157,22 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: :8080
-				insecure_accept_external_unencrypted_http_requests: false
+				insecureAcceptExternalUnencryptedHttpRequests: false
 			`),
 			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to string false",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to unsupported value",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				insecureAcceptExternalUnencryptedHttpRequests: "garbage" # this will be treated as the default, which is false
+			`),
+			wantError: `decode yaml: error unmarshaling JSON: while decoding JSON: invalid value for boolean`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to string false",
 			yaml: here.Doc(`
 				---
 				names:
@@ -173,12 +183,12 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: :8080
-				insecure_accept_external_unencrypted_http_requests: "false"
+				insecureAcceptExternalUnencryptedHttpRequests: "false"
 			`),
 			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to boolean true",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to boolean true",
 			yaml: here.Doc(`
 				---
 				names:
@@ -187,7 +197,7 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: :1234
-				insecure_accept_external_unencrypted_http_requests: true
+				insecureAcceptExternalUnencryptedHttpRequests: true
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
@@ -205,11 +215,11 @@ func TestFromPath(t *testing.T) {
 						Address: ":1234",
 					},
 				},
-				AllowExternalHTTP: "true",
+				AllowExternalHTTP: true,
 			},
 		},
 		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecure_accept_external_unencrypted_http_requests set to string true",
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to string true",
 			yaml: here.Doc(`
 				---
 				names:
@@ -218,7 +228,7 @@ func TestFromPath(t *testing.T) {
 				  http:
 				    network: tcp
 					address: :1234
-				insecure_accept_external_unencrypted_http_requests: "true"
+				insecureAcceptExternalUnencryptedHttpRequests: "true"
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
@@ -236,7 +246,7 @@ func TestFromPath(t *testing.T) {
 						Address: ":1234",
 					},
 				},
-				AllowExternalHTTP: "true",
+				AllowExternalHTTP: true,
 			},
 		},
 		{
@@ -297,6 +307,8 @@ func TestFromPath(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Write yaml to temp file
 			f, err := ioutil.TempFile("", "pinniped-test-config-yaml-*")
 			require.NoError(t, err)
@@ -388,6 +400,8 @@ func TestAddrIsOnlyOnLoopback(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(fmt.Sprintf("address %s should be %t", tt.addr, tt.want), func(t *testing.T) {
+			t.Parallel()
+
 			require.Equal(t, tt.want, addrIsOnlyOnLoopback(tt.addr))
 		})
 	}

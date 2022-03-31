@@ -52,7 +52,7 @@ _: #@ template.replace(data.values.custom_labels)
 #@       "defaultTLSCertificateSecret": defaultResourceNameWithSuffix("default-tls-certificate"),
 #@     },
 #@     "labels": labels(),
-#@     "insecure_accept_external_unencrypted_http_requests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests
+#@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests
 #@   }
 #@   if data.values.log_level:
 #@     config["logLevel"] = getAndValidateLogLevel()

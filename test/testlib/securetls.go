@@ -87,7 +87,7 @@ func GetExpectedCiphers(config *tls.Config) string {
 			}
 			s.WriteString("\n")
 		}
-		tls12Bit = fmt.Sprintf(tls12Base, s.String(), getCipherSuitePreference())
+		tls12Bit = fmt.Sprintf(tls12Base, s.String(), cipherSuitePreference)
 	}
 
 	skip13 := config.MaxVersion == tls.VersionTLS12

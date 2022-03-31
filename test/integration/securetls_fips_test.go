@@ -138,10 +138,11 @@ func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because
 	require.Contains(t, stdout, testlib.GetExpectedCiphers(defaultECDSAOnly), "stdout:\n%s", stdout)
 }
 
-// this test ensures that if the list of default fips cipher
-// suites changes, we will know.
+// TestFIPSCipherSuites_Parallel ensures that if the list of default fips cipher suites changes,
+// we will know.  This is an integration test because we do not support build tags on unit tests.
 func TestFIPSCipherSuites_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
+
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// use the default fips config which contains a hard coded list of cipher suites
 		// that should be equal to the default list of fips cipher suites.
@@ -157,7 +158,7 @@ func TestFIPSCipherSuites_Parallel(t *testing.T) {
 	// and therefore uses goboring's default fips ciphers.
 	defaultConfig := &tls.Config{
 		RootCAs:    pool,
-		NextProtos: ptls.Default(nil).NextProtos,
+		NextProtos: ptls.Default(nil).NextProtos, // we do not care about field for this test, so just make it match
 	}
 	transport := http.Transport{
 		TLSClientConfig:   defaultConfig,

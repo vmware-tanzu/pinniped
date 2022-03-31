@@ -1,9 +1,6 @@
 // Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !fips_strict
-// +build !fips_strict
-
 package integration
 
 import (
@@ -27,7 +24,10 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Secure) // pinniped CLI uses ptls.Secure when talking to KAS
+		// pinniped CLI uses ptls.Secure when talking to KAS
+		// in FIPs mode the distinction doesn't matter much because
+		// each of the configs is a wrapper for the same base FIPs config
+		tlsserver.AssertTLS(t, r, ptls.Secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
 			`"status":{"credential":{"token":"some-fancy-token"}}}`)
@@ -58,7 +58,10 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default) // pinniped CLI uses ptls.Default when talking to supervisor
+		// pinniped CLI uses ptls.Default when talking to supervisor
+		// in FIPs mode the distinction doesn't matter much because
+		// each of the configs is a wrapper for the same base FIPs config
+		tlsserver.AssertTLS(t, r, ptls.Default)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
 	}), tlsserver.RecordTLSHello)

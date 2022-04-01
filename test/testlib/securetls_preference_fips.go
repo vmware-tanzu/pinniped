@@ -10,6 +10,4 @@ package testlib
 // incorrectly shown as 'client' in some cases.
 // in fips-only mode, it correctly shows the cipher preference
 // as 'server', while in non-fips mode it shows as 'client'.
-func getCipherSuitePreference() string {
-	return "server"
-}
+const cipherSuitePreference = "server"

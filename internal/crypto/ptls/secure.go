@@ -9,6 +9,8 @@ package ptls
 import (
 	"crypto/tls"
 	"crypto/x509"
+
+	"k8s.io/apiserver/pkg/server/options"
 )
 
 // secureServingOptionsMinTLSVersion is the minimum tls version in the format
@@ -41,4 +43,9 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 		tls.TLS_CHACHA20_POLY1305_SHA256,
 	}
 	return c
+}
+
+func secureServing(opts *options.SecureServingOptionsWithLoopback) {
+	opts.MinTLSVersion = secureServingOptionsMinTLSVersion
+	opts.CipherSuites = nil
 }

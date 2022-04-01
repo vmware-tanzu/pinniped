@@ -82,11 +82,6 @@ func defaultServing(opts *options.SecureServingOptionsWithLoopback) {
 	opts.MinTLSVersion = defaultServingOptionsMinTLSVersion
 }
 
-func secureServing(opts *options.SecureServingOptionsWithLoopback) {
-	opts.MinTLSVersion = secureServingOptionsMinTLSVersion
-	opts.CipherSuites = nil
-}
-
 func secureClient(opts *options.RecommendedOptions, f RestConfigFunc) error {
 	inClusterClient, inClusterConfig, err := f(nil)
 	if err != nil {

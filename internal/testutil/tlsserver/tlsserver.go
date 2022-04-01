@@ -69,14 +69,6 @@ func RecordTLSHello(server *httptest.Server) {
 func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 	t.Helper()
 
-	tlsConfig := tlsConfigFunc(nil)
-
-	AssertTLSConfig(t, r, tlsConfig)
-}
-
-func AssertTLSConfig(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
-	t.Helper()
-
 	m, ok := getCtxMap(r.Context())
 	require.True(t, ok)
 
@@ -85,6 +77,8 @@ func AssertTLSConfig(t *testing.T, r *http.Request, tlsConfig *tls.Config) {
 
 	info, ok := h.(*tls.ClientHelloInfo)
 	require.True(t, ok)
+
+	tlsConfig := tlsConfigFunc(nil)
 
 	supportedVersions := []uint16{tlsConfig.MinVersion}
 	ciphers := tlsConfig.CipherSuites

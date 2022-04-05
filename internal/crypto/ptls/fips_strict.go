@@ -10,11 +10,14 @@
 package ptls
 
 import (
-	"C"
 	"crypto/tls"
-	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 	"crypto/x509"
 	"runtime"
+
+	"C"                     // explicitly import cgo so that runtime/cgo gets linked into the kube-cert-agent
+	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
+
+	"k8s.io/apiserver/pkg/server/options"
 
 	"go.pinniped.dev/internal/plog"
 )
@@ -24,10 +27,7 @@ const secureServingOptionsMinTLSVersion = "VersionTLS12"
 const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 
 func init() {
-	go func() {
-		version := runtime.Version()
-		plog.Debug("using boringcrypto in fips only mode.", "go version", version)
-	}()
+	plog.Debug("using boring crypto in fips only mode", "go version", runtime.Version())
 }
 
 func Default(rootCAs *x509.CertPool) *tls.Config {
@@ -46,6 +46,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 
 		// This is all of the fips-approved ciphers.
 		// The list is hard-coded for convenience of testing.
+		// This is kept in sync with the boring crypto compiler via TestFIPSCipherSuites.
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -63,4 +64,8 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
+}
+
+func secureServing(opts *options.SecureServingOptionsWithLoopback) {
+	defaultServing(opts)
 }

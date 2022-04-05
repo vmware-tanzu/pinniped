@@ -218,7 +218,7 @@ spec:
   ports:
   - protocol: TCP
     port: 443
-    targetPort: 8443 # 8443 is the TLS port. Do not expose port 8080.
+    targetPort: 8443 # 8443 is the TLS port.
 EOF
 ```
 

@@ -31,8 +31,9 @@ type FederationDomainTLSSpec struct {
 	// SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same
 	// SecretName value even if they have different port numbers.
 	//
-	// SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an
-	// Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to
+	// SecretName is not required when you would like to use only the HTTP endpoints (e.g. when the HTTP listener is
+	// configured to listen on loopback interfaces or UNIX domain sockets for traffic from a service mesh sidecar).
+	// It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to
 	// use the default TLS certificate, which is configured elsewhere.
 	//
 	// When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.

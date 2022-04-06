@@ -1,2 +1,3 @@
 *.go.tmpl linguist-language=Go
+Dockerfile_fips linguist-language=Dockerfile
 generated/** linguist-generated

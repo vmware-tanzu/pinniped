@@ -42,7 +42,7 @@ require (
 	github.com/creack/pty v1.1.17
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.2
-	github.com/go-ldap/ldap/v3 v3.4.2
+	github.com/go-ldap/ldap/v3 v3.4.3
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/stdr v1.2.2
 	github.com/gofrs/flock v0.8.1
@@ -64,7 +64,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tdewolff/minify/v2 v2.10.0
 	go.uber.org/atomic v1.9.0
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
+	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
@@ -110,7 +110,7 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-asn1-ber/asn1-ber v1.5.3 // indirect
+	github.com/go-asn1-ber/asn1-ber v1.5.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect

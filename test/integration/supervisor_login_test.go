@@ -1818,6 +1818,9 @@ func testSupervisorLogin(
 		authcode := callback.URL.Query().Get("code")
 		require.NotEmpty(t, authcode)
 
+		// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
+		require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
+
 		// Call the token endpoint to get tokens.
 		tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 		require.NoError(t, err)
@@ -1973,8 +1976,12 @@ func verifyTokenResponse(
 	require.NotZero(t, tokenResponse.Expiry)
 	expectedAccessTokenLifetime := oidc.DefaultOIDCTimeoutsConfiguration().AccessTokenLifespan
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(expectedAccessTokenLifetime), tokenResponse.Expiry, time.Second*30)
+	// Access tokens should start with the custom prefix "pin_at_" to make them identifiable as access tokens when seen by a user out of context.
+	require.True(t, strings.HasPrefix(tokenResponse.AccessToken, "pin_at_"), "token %q did not have expected prefix 'pin_at_'", tokenResponse.AccessToken)
 
 	require.NotEmpty(t, tokenResponse.RefreshToken)
+	// Refresh tokens should start with the custom prefix "pin_rt_" to make them identifiable as refresh tokens when seen by a user out of context.
+	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {

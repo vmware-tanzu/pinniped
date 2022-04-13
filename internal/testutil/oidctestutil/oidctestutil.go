@@ -901,6 +901,9 @@ func RequireAuthCodeRegexpMatch(
 	require.Lenf(t, submatches, 2, "no regexp match in actualContent: %", actualContent)
 	capturedAuthCode := submatches[1]
 
+	// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
+	require.True(t, strings.HasPrefix(capturedAuthCode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", capturedAuthCode)
+
 	// fosite authcodes are in the format `data.signature`, so grab the signature part, which is the lookup key in the storage interface
 	authcodeDataAndSignature := strings.Split(capturedAuthCode, ".")
 	require.Len(t, authcodeDataAndSignature, 2)

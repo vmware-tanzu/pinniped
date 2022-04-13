@@ -3251,6 +3251,9 @@ func requireValidRefreshTokenStorage(
 	storedRequest, err := storage.GetRefreshTokenSession(context.Background(), getFositeDataSignature(t, refreshTokenString), nil)
 	require.NoError(t, err)
 
+	// Refresh tokens should start with the custom prefix "pin_rt_" to make them identifiable as refresh tokens when seen by a user out of context.
+	require.True(t, strings.HasPrefix(refreshTokenString, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", refreshTokenString)
+
 	// Fosite stores refresh tokens without any of the original request form parameters.
 	requireValidStoredRequest(
 		t,
@@ -3286,6 +3289,9 @@ func requireValidAccessTokenStorage(
 	require.NotEmpty(t, accessTokenString)
 	storedRequest, err := storage.GetAccessTokenSession(context.Background(), getFositeDataSignature(t, accessTokenString), nil)
 	require.NoError(t, err)
+
+	// Access tokens should start with the custom prefix "pin_at_" to make them identifiable as access tokens when seen by a user out of context.
+	require.True(t, strings.HasPrefix(accessTokenString, "pin_at_"), "token %q did not have expected prefix 'pin_at_'", accessTokenString)
 
 	// Make sure the other body fields are valid.
 	tokenType, ok := body["token_type"]

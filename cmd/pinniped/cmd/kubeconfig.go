@@ -714,7 +714,7 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 func countCACerts(pemData []byte) int {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(pemData)
-	return len(pool.Subjects())
+	return len(pool.Subjects()) // nolint: staticcheck  // not system cert pool
 }
 
 func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool {

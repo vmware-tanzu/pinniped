@@ -12,6 +12,8 @@ package ptls
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"os"
+	"path/filepath"
 	"runtime"
 
 	"C"                     // explicitly import cgo so that runtime/cgo gets linked into the kube-cert-agent
@@ -26,6 +28,12 @@ const secureServingOptionsMinTLSVersion = "VersionTLS12"
 const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 
 func init() {
+	switch filepath.Base(os.Args[0]) {
+	case "pinniped-server", "pinniped-supervisor", "pinniped-concierge", "pinniped-concierge-kube-cert-agent":
+	default:
+		return // do not print FIPS logs if we cannot confirm that we are running a server binary
+	}
+
 	// this init runs before we have parsed our config to determine our log level
 	// thus we must use a log statement that will always print instead of conditionally print
 	// for plog, that is only error and warning logs, neither of which seem appropriate here

@@ -198,7 +198,7 @@ fi
 log_note "Checking for running kind cluster..."
 if ! kind get clusters | grep -q -e '^pinniped$'; then
   log_note "Creating a kind cluster..."
-  # Our kind config exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
+  # Our kind config exposes node port 31243 as 127.0.0.1:12344 and 31235 as 127.0.0.1:12346
   ./hack/kind-up.sh
 else
   if ! kubectl cluster-info | grep -E '(master|control plane)' | grep -q 127.0.0.1; then
@@ -306,8 +306,6 @@ supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
 supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
 log_level="debug"
-service_http_nodeport_port="80"
-service_http_nodeport_nodeport="31234"
 service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
@@ -327,15 +325,10 @@ else
     --data-value "image_tag=$tag" \
     --data-value "log_level=$log_level" \
     --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-    --data-value-yaml "service_http_nodeport_port=$service_http_nodeport_port" \
-    --data-value-yaml "service_http_nodeport_nodeport=$service_http_nodeport_nodeport" \
     --data-value-yaml "service_https_nodeport_port=$service_https_nodeport_port" \
     --data-value-yaml "service_https_nodeport_nodeport=$service_https_nodeport_nodeport" \
     --data-value-yaml "service_https_clusterip_port=$service_https_clusterip_port" \
     >"$manifest"
-    # example of how to disable the http endpoint
-    # this is left enabled for now because our integration tests still rely on it
-    # --data-value-yaml 'endpoints={"http": {"network": "disabled"}}' \
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
@@ -408,7 +401,6 @@ export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'
-export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
 export PINNIPED_TEST_LDAP_HOST=ldap.tools.svc.cluster.local

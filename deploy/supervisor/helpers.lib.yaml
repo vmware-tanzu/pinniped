@@ -1,4 +1,4 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -52,6 +52,7 @@ _: #@ template.replace(data.values.custom_labels)
 #@       "defaultTLSCertificateSecret": defaultResourceNameWithSuffix("default-tls-certificate"),
 #@     },
 #@     "labels": labels(),
+#@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests
 #@   }
 #@   if data.values.log_level:
 #@     config["logLevel"] = getAndValidateLogLevel()

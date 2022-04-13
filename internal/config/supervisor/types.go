@@ -1,17 +1,22 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
 
-import "go.pinniped.dev/internal/plog"
+import (
+	"errors"
+
+	"go.pinniped.dev/internal/plog"
+)
 
 // Config contains knobs to setup an instance of the Pinniped Supervisor.
 type Config struct {
-	APIGroupSuffix *string           `json:"apiGroupSuffix,omitempty"`
-	Labels         map[string]string `json:"labels"`
-	NamesConfig    NamesConfigSpec   `json:"names"`
-	LogLevel       plog.LogLevel     `json:"logLevel"`
-	Endpoints      *Endpoints        `json:"endpoints"`
+	APIGroupSuffix    *string            `json:"apiGroupSuffix,omitempty"`
+	Labels            map[string]string  `json:"labels"`
+	NamesConfig       NamesConfigSpec    `json:"names"`
+	LogLevel          plog.LogLevel      `json:"logLevel"`
+	Endpoints         *Endpoints         `json:"endpoints"`
+	AllowExternalHTTP stringOrBoolAsBool `json:"insecureAcceptExternalUnencryptedHttpRequests"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.
@@ -27,4 +32,18 @@ type Endpoints struct {
 type Endpoint struct {
 	Network string `json:"network"`
 	Address string `json:"address"`
+}
+
+type stringOrBoolAsBool bool
+
+func (sb *stringOrBoolAsBool) UnmarshalJSON(b []byte) error {
+	switch string(b) {
+	case "true", `"true"`:
+		*sb = true
+	case "false", `"false"`:
+		*sb = false
+	default:
+		return errors.New("invalid value for boolean")
+	}
+	return nil
 }

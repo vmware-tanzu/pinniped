@@ -13,13 +13,6 @@ nodes:
     - protocol: TCP
       # This same port number is hardcoded in the integration test setup
       # when creating a Service on a kind cluster. It is used to talk to
-      # the supervisor app via HTTP.
-      containerPort: 31234
-      hostPort: 12345
-      listenAddress: 127.0.0.1
-    - protocol: TCP
-      # This same port number is hardcoded in the integration test setup
-      # when creating a Service on a kind cluster. It is used to talk to
       # the Dex app.
       containerPort: 31235
       hostPort: 12346

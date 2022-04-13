@@ -30,7 +30,7 @@ FROM gcr.io/distroless/static:nonroot@sha256:80c956fb0836a17a565c43a4026c9c80b20
 COPY --from=build-env /usr/local/bin /usr/local/bin
 
 # Document the default server ports for the various server apps
-EXPOSE 8080 8443 8444 10250
+EXPOSE 8443 8444 10250
 
 # Run as non-root for security posture
 # Use the same non-root user as https://github.com/GoogleContainerTools/distroless/blob/fc3c4eaceb0518900f886aae90407c43be0a42d9/base/base.bzl#L9

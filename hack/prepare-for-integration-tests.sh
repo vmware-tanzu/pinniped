@@ -148,8 +148,8 @@ cd "$pinniped_path" || exit 1
 #
 check_dependency docker "Please install docker. See https://docs.docker.com/get-docker"
 check_dependency kind "Please install kind. e.g. 'brew install kind' for MacOS"
-check_dependency ytt "Please install ytt. e.g. 'brew tap k14s/tap && brew install ytt' for MacOS"
-check_dependency kapp "Please install kapp. e.g. 'brew tap k14s/tap && brew install kapp' for MacOS"
+check_dependency ytt "Please install ytt. e.g. 'brew tap vmware-tanzu/carvel && brew install ytt' for MacOS"
+check_dependency kapp "Please install kapp. e.g. 'brew tap vmware-tanzu/carvel && brew install kapp' for MacOS"
 check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
 check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."

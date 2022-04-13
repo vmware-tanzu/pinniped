@@ -134,7 +134,7 @@ go build -o pinniped ./cmd/pinniped
    On macOS, these tools can be installed with [Homebrew](https://brew.sh/) (assuming you have Chrome installed already):
 
    ```bash
-   brew install kind k14s/tap/ytt k14s/tap/kapp kubectl chromedriver nmap && brew cask install docker
+   brew install kind vmware-tanzu/carvel/ytt vmware-tanzu/carvel/kapp kubectl chromedriver nmap && brew cask install docker
    ```
 
 1. Create a kind cluster, compile, create container images, and install Pinniped and supporting test dependencies using:

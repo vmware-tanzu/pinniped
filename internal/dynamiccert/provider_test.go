@@ -41,7 +41,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
-				return pool.Subjects(), []tls.Certificate{cert}
+				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 
 				certKey.UnsetCertKeyContent()
 
-				return pool.Subjects(), []tls.Certificate{cert}
+				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
 			},
 		},
 		{
@@ -87,7 +87,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
-				return newCA.Pool().Subjects(), []tls.Certificate{cert}
+				return newCA.Pool().Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				ok := pool.AppendCertsFromPEM(ca.CurrentCABundleContent())
 				require.True(t, ok, "should have valid non-empty CA bundle")
 
-				return pool.Subjects(), []tls.Certificate{cert}
+				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
 			},
 		},
 		{
@@ -137,7 +137,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				err = ca.SetCertKeyContent(newOtherCA.Bundle(), caKey)
 				require.NoError(t, err)
 
-				return newOtherCA.Pool().Subjects(), []tls.Certificate{cert}
+				return newOtherCA.Pool().Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
 			},
 		},
 	}
@@ -221,7 +221,7 @@ func poolSubjects(pool *x509.CertPool) [][]byte {
 	if pool == nil {
 		return nil
 	}
-	return pool.Subjects()
+	return pool.Subjects() // nolint: staticcheck  // not system cert pool
 }
 
 func TestNewServingCert(t *testing.T) {

@@ -206,7 +206,7 @@ func TestPool(t *testing.T) {
 	require.NoError(t, err)
 
 	pool := ca.Pool()
-	require.Len(t, pool.Subjects(), 1)
+	require.Len(t, pool.Subjects(), 1) // nolint: staticcheck  // not system cert pool
 }
 
 type errSigner struct {

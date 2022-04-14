@@ -5,6 +5,8 @@ package impersonator
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"math/rand"
 	"net"
@@ -701,7 +703,28 @@ func TestImpersonator(t *testing.T) {
 			testKubeAPIServerWasCalled := false
 			var testKubeAPIServerSawHeaders http.Header
 			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, ptls.Secure)
+				tlsConfigFunc := func(rootCAs *x509.CertPool) *tls.Config {
+					// Requests to get configmaps, flowcontrol requests, and healthz requests
+					// are not done by our http round trippers that specify only one protocol
+					// (either http1.1 or http2, not both).
+					// For all other requests from the impersonator, if it is not an upgrade
+					// request it should only be using http2.
+					// If it is an upgrade request it should only be using http1.1, but that
+					// is covered by the AssertTLS function.
+					secure := ptls.Secure(rootCAs)
+					switch r.URL.Path {
+					case "/api/v1/namespaces/kube-system/configmaps",
+						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
+						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas",
+						"/healthz":
+					default:
+						if !httpstream.IsUpgradeRequest(r) {
+							secure.NextProtos = []string{secure.NextProtos[0]}
+						}
+					}
+					return secure
+				}
+				tlsserver.AssertTLS(t, r, tlsConfigFunc)
 
 				switch r.URL.Path {
 				case "/api/v1/namespaces/kube-system/configmaps":
@@ -1780,7 +1803,28 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			testKubeAPIServerWasCalled := false
 			testKubeAPIServerSawHeaders := http.Header{}
 			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tlsserver.AssertTLS(t, r, ptls.Secure)
+				tlsConfigFunc := func(rootCAs *x509.CertPool) *tls.Config {
+					// Requests to get configmaps, flowcontrol requests, and healthz requests
+					// are not done by our http round trippers that specify only one protocol
+					// (either http1.1 or http2, not both).
+					// For all other requests from the impersonator, if it is not an upgrade
+					// request it should only be using http2.
+					// If it is an upgrade request it should only be using http1.1, but that
+					// is covered by the AssertTLS function.
+					secure := ptls.Secure(rootCAs)
+					switch r.URL.Path {
+					case "/api/v1/namespaces/kube-system/configmaps",
+						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
+						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas",
+						"/healthz":
+					default:
+						if !httpstream.IsUpgradeRequest(r) {
+							secure.NextProtos = []string{secure.NextProtos[0]}
+						}
+					}
+					return secure
+				}
+				tlsserver.AssertTLS(t, r, tlsConfigFunc)
 
 				testKubeAPIServerWasCalled = true
 				testKubeAPIServerSawHeaders = r.Header

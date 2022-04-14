@@ -24,7 +24,7 @@ RUN \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator
 
 # Use a distroless runtime image with CA certificates, timezone data, and not much else.
-FROM gcr.io/distroless/static:nonroot@sha256:80c956fb0836a17a565c43a4026c9c80b2013c83bea09f74fa4da195a59b7a99
+FROM gcr.io/distroless/static:nonroot@sha256:2556293984c5738fc75208cce52cf0a4762c709cf38e4bf8def65a61992da0ad
 
 # Copy the server binary from the build-env stage.
 COPY --from=build-env /usr/local/bin /usr/local/bin

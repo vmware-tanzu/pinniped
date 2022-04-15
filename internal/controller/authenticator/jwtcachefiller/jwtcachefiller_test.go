@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
@@ -293,7 +294,7 @@ func TestController(t *testing.T) {
 					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantErr: `failed to build jwt authenticator: could not initialize provider: Get "` + goodIssuer + `/.well-known/openid-configuration": x509: certificate signed by unknown authority`,
+			wantErr: `failed to build jwt authenticator: could not initialize provider: Get "` + goodIssuer + `/.well-known/openid-configuration": ` + testutil.X509UntrustedCertError("Acme Co"),
 		},
 		{
 			name:    "invalid jwt authenticator CA",

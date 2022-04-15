@@ -1905,7 +1905,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  nil,
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`,
+			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": %s`, testutil.X509UntrustedCertError("Acme Co")),
 		},
 		{
 			name: "cannot connect to host",

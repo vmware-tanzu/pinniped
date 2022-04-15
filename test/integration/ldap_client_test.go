@@ -20,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/upstreamldap"
 	"go.pinniped.dev/test/testlib"
 )
@@ -467,7 +468,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = nil })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapsLocalhostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": %s`, ldapsLocalhostPort, testutil.X509UntrustedCertError("Pinniped Test")),
 		},
 		{
 			name:     "when the CA bundle does not cause the host to be trusted with StartTLS",
@@ -478,7 +479,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.CABundle = nil
 			})),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (x509: certificate signed by unknown authority)`, ldapLocalhostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (%s)`, ldapLocalhostPort, testutil.X509UntrustedCertError("Pinniped Test")),
 		},
 		{
 			name:      "when trying to use TLS to connect to a port which only supports StartTLS",

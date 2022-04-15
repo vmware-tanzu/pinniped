@@ -1,7 +1,7 @@
 ---
 title: "Dynamic Supervisor OIDC Clients"
 authors: [ "@cfryanr" ]
-status: "draft"
+status: "in-review"
 sponsor: [ ]
 approval_date: ""
 ---

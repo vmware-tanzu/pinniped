@@ -6,15 +6,15 @@ package conditionsutil
 import (
 	"sort"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/equality"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/plog"
 )
 
 // Merge merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func Merge(conditions []*v1alpha1.Condition, observedGeneration int64, conditionsToUpdate *[]v1alpha1.Condition, log logr.Logger) bool {
+func Merge(conditions []*v1alpha1.Condition, observedGeneration int64, conditionsToUpdate *[]v1alpha1.Condition, log plog.MinLogger) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()

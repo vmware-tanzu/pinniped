@@ -13,12 +13,10 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
-
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -28,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -360,7 +359,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 }
 
 func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider, conditions []*v1alpha1.Condition) {
-	log := klogr.New().WithValues("namespace", upstream.Namespace, "name", upstream.Name)
+	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
 	hadErrorCondition := conditionsutil.Merge(conditions, upstream.Generation, &updated.Status.Conditions, log)
@@ -379,7 +378,7 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 		ActiveDirectoryIdentityProviders(upstream.Namespace).
 		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err != nil {
-		log.Error(err, "failed to update status")
+		log.Error("failed to update status", err)
 	}
 }
 

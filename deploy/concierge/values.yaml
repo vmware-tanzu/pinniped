@@ -54,6 +54,10 @@ api_serving_certificate_renew_before_seconds: 2160000
 #! Specify the verbosity of logging: info ("nice to know" information), debug (developer
 #! information), trace (timing information), all (kitchen sink).
 log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.
+#! Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs).
+#! By default, when this value is left unset, logs are formatted in json.
+#! This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json.
+deprecated_log_format:
 
 run_as_user: 65532 #! run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
 run_as_group: 65532 #! run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice

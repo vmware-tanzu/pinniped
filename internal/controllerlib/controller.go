@@ -15,7 +15,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/plog"
 )
@@ -215,7 +214,7 @@ func (c *controller) handleKey(key Key, err error) {
 
 	if errors.Is(err, ErrSyntheticRequeue) {
 		// logging this helps detecting wedged controllers with missing pre-requirements
-		klog.V(4).InfoS("requested synthetic requeue", "controller", c.Name(), "key", key)
+		plog.Debug("requested synthetic requeue", "controller", c.Name(), "key", key)
 	} else {
 		utilruntime.HandleError(fmt.Errorf("%s: %v failed with: %w", c.Name(), key, err))
 	}

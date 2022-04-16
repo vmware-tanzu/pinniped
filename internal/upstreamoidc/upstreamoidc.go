@@ -411,13 +411,13 @@ func (p *ProviderConfig) maybeFetchUserInfo(ctx context.Context, tok *oauth2.Tok
 func maybeLogClaims(msg, name string, claims map[string]interface{}) {
 	if plog.Enabled(plog.LevelAll) { // log keys and values at all level
 		data, _ := json.Marshal(claims) // nothing we can do if it fails, but it really never should
-		plog.Info(msg, "providerName", name, "claims", string(data))
+		plog.All(msg, "providerName", name, "claims", string(data))
 		return
 	}
 
 	if plog.Enabled(plog.LevelDebug) { // log keys at debug level
 		keys := sets.StringKeySet(claims).List() // note: this is only safe because the compiler asserts that claims is a map[string]<anything>
-		plog.Info(msg, "providerName", name, "keys", keys)
+		plog.Debug(msg, "providerName", name, "keys", keys)
 		return
 	}
 }

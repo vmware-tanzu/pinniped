@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-	"k8s.io/klog/v2/klogr"
 
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/execcredcache"
@@ -33,7 +32,7 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
-//nolint: gochecknoinits
+// nolint: gochecknoinits
 func init() {
 	loginCmd.AddCommand(oidcLoginCommand(oidcLoginCommandRealDeps()))
 }
@@ -125,7 +124,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error { //nolint:funlen
-	pLogger, err := SetLogLevel(deps.lookupEnv)
+	pLogger, err := SetLogLevel(cmd.Context(), deps.lookupEnv)
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}
@@ -133,11 +132,11 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the session cache.
 	var sessionOptions []filesession.Option
 
-	// If the hidden --debug-session-cache option is passed, log all the errors from the session cache with klog.
+	// If the hidden --debug-session-cache option is passed, log all the errors from the session cache.
 	if flags.debugSessionCache {
-		logger := klogr.New().WithName("session")
+		logger := plog.WithName("session")
 		sessionOptions = append(sessionOptions, filesession.WithErrorReporter(func(err error) {
-			logger.Error(err, "error during session cache operation")
+			logger.Error("error during session cache operation", err)
 		}))
 	}
 	sessionCache := filesession.New(flags.sessionCachePath, sessionOptions...)
@@ -145,7 +144,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
 		oidcclient.WithContext(cmd.Context()),
-		oidcclient.WithLogger(klogr.New()),
+		oidcclient.WithLogger(plog.Logr()), // nolint: staticcheck  // old code with lots of log statements
 		oidcclient.WithScopes(flags.scopes),
 		oidcclient.WithSessionCache(sessionCache),
 	}
@@ -326,15 +325,15 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel(lookupEnv func(string) (string, bool)) (plog.Logger, error) {
+func SetLogLevel(ctx context.Context, lookupEnv func(string) (string, bool)) (plog.Logger, error) {
 	debug, _ := lookupEnv("PINNIPED_DEBUG")
 	if debug == "true" {
-		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+		err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, plog.LogSpec{Level: plog.LevelDebug, Format: plog.FormatCLI})
 		if err != nil {
 			return nil, err
 		}
 	}
-	logger := plog.New("Pinniped login: ")
+	logger := plog.New().WithName("pinniped-login")
 	return logger, nil
 }
 

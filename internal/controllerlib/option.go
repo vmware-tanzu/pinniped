@@ -13,7 +13,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 type Option func(*controller)
@@ -62,7 +63,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 			AddFunc: func(obj interface{}) {
 				object := metaOrDie(obj)
 				if filter.Add(object) {
-					klog.V(4).InfoS("handling add",
+					plog.Debug("handling add",
 						"controller", c.Name(),
 						"namespace", object.GetNamespace(),
 						"name", object.GetName(),
@@ -76,7 +77,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 				oldObject := metaOrDie(oldObj)
 				newObject := metaOrDie(newObj)
 				if filter.Update(oldObject, newObject) {
-					klog.V(4).InfoS("handling update",
+					plog.Debug("handling update",
 						"controller", c.Name(),
 						"namespace", newObject.GetNamespace(),
 						"name", newObject.GetName(),
@@ -101,7 +102,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 					}
 				}
 				if filter.Delete(accessor) {
-					klog.V(4).InfoS("handling delete",
+					plog.Debug("handling delete",
 						"controller", c.Name(),
 						"namespace", accessor.GetNamespace(),
 						"name", accessor.GetName(),

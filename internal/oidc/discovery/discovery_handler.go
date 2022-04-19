@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package discovery provides a handler for the OIDC discovery endpoint.
@@ -37,7 +37,9 @@ type Metadata struct {
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	ScopesSupported                   []string `json:"scopes_supported"`
 	ClaimsSupported                   []string `json:"claims_supported"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+
+	// https://datatracker.ietf.org/doc/html/rfc8414#section-2 says, “If omitted, the authorization server does not support PKCE.”
+	CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
 
 	// ^^^ Optional ^^^
 

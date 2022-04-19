@@ -5,8 +5,8 @@ go 1.13
 
 require (
 	go.pinniped.dev/generated/1.20/apis v0.0.0
-	k8s.io/apimachinery v0.20.14
-	k8s.io/client-go v0.20.14
+	k8s.io/apimachinery v0.20.15
+	k8s.io/client-go v0.20.15
 )
 
 replace go.pinniped.dev/generated/1.20/apis => ../apis

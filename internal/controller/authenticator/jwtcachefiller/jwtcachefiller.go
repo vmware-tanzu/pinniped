@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package jwtcachefiller implements a controller for filling an authncache.Cache with each
@@ -17,7 +17,6 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/klog/v2"
 
@@ -150,19 +149,11 @@ func (c *controller) extractValueAsJWTAuthenticator(value authncache.Value) *jwt
 
 // newJWTAuthenticator creates a jwt authenticator from the provided spec.
 func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthenticator, error) {
-	rootCAs, caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
+	rootCAs, _, err := pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
 
-	var caContentProvider oidc.CAContentProvider
-	if len(caBundle) != 0 {
-		var caContentProviderErr error
-		caContentProvider, caContentProviderErr = dynamiccertificates.NewStaticCAContent("ignored", caBundle)
-		if caContentProviderErr != nil {
-			return nil, caContentProviderErr // impossible since caBundle is validated already
-		}
-	}
 	usernameClaim := spec.Claims.Username
 	if usernameClaim == "" {
 		usernameClaim = defaultUsernameClaim
@@ -199,7 +190,6 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 	if len(providerJSON.JWKSURL) == 0 {
 		return nil, fmt.Errorf("issuer %q does not have jwks_uri set", spec.Issuer)
 	}
-
 	oidcAuthenticator, err := oidc.New(oidc.Options{
 		IssuerURL:            spec.Issuer,
 		KeySet:               coreosoidc.NewRemoteKeySet(ctx, providerJSON.JWKSURL),
@@ -207,9 +197,7 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 		UsernameClaim:        usernameClaim,
 		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
-		// this is still needed for distributed claim resolution, meaning this uses a http client that does not honor our TLS config
-		// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106141
-		CAContentProvider: caContentProvider,
+		Client:               client,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize authenticator: %w", err)

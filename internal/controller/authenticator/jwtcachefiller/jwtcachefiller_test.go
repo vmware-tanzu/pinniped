@@ -58,6 +58,9 @@ func TestController(t *testing.T) {
 	require.NoError(t, err)
 	goodRSASigningAlgo := jose.RS256
 
+	customGroupsClaim := "my-custom-groups-claim"
+	distributedGroups := []string{"some-distributed-group-1", "some-distributed-group-2"}
+
 	mux := http.NewServeMux()
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
@@ -87,6 +90,59 @@ func TestController(t *testing.T) {
 		}
 		require.NoError(t, json.NewEncoder(w).Encode(jwks))
 	}))
+	// Claims without the subject, to be used distributed claims tests.
+	// OIDC 1.0 section 5.6.2:
+	// A sub (subject) Claim SHOULD NOT be returned from the Claims Provider unless its value
+	// is an identifier for the End-User at the Claims Provider (and not for the OpenID Provider or another party);
+	// this typically means that a sub Claim SHOULD NOT be provided.
+	claimsWithoutSubject := jwt.Claims{
+		Issuer:    server.URL,
+		Audience:  []string{goodAudience},
+		Expiry:    jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		NotBefore: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+	}
+	mux.Handle("/claim_source", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Unfortunately we have to set this up pretty early in the test because we can't redeclare
+		// mux.Handle. This means that we can't return a different groups claim per test; we have to
+		// return both and predecide which groups are returned.
+		sig, err := jose.NewSigner(
+			jose.SigningKey{Algorithm: goodECSigningAlgo, Key: goodECSigningKey},
+			(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", goodECSigningKeyID),
+		)
+		require.NoError(t, err)
+
+		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
+
+		builder = builder.Claims(map[string]interface{}{customGroupsClaim: distributedGroups})
+		builder = builder.Claims(map[string]interface{}{"groups": distributedGroups})
+
+		distributedClaimsJwt, err := builder.CompactSerialize()
+		require.NoError(t, err)
+
+		_, err = w.Write([]byte(distributedClaimsJwt))
+		require.NoError(t, err)
+	}))
+	mux.Handle("/wrong_claim_source", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Unfortunately we have to set this up pretty early in the test because we can't redeclare
+		// mux.Handle. This means that we can't return a different groups claim per test; we have to
+		// return both and predecide which groups are returned.
+		sig, err := jose.NewSigner(
+			jose.SigningKey{Algorithm: goodECSigningAlgo, Key: goodECSigningKey},
+			(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", goodECSigningKeyID),
+		)
+		require.NoError(t, err)
+
+		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
+
+		builder = builder.Claims(map[string]interface{}{"some-other-claim": distributedGroups})
+
+		distributedClaimsJwt, err := builder.CompactSerialize()
+		require.NoError(t, err)
+
+		_, err = w.Write([]byte(distributedClaimsJwt))
+		require.NoError(t, err)
+	}))
 
 	goodIssuer := server.URL
 
@@ -108,7 +164,7 @@ func TestController(t *testing.T) {
 		Audience: goodAudience,
 		TLS:      tlsSpecFromTLSConfig(server.TLS),
 		Claims: auth1alpha1.JWTTokenClaims{
-			Groups: "my-custom-groups-claim",
+			Groups: customGroupsClaim,
 		},
 	}
 	otherJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
@@ -384,6 +440,7 @@ func TestController(t *testing.T) {
 				goodUsername,
 				tt.wantUsernameClaim,
 				tt.wantGroupsClaim,
+				goodIssuer,
 			) {
 				test := test
 				t.Run(test.name, func(t *testing.T) {
@@ -418,6 +475,7 @@ func TestController(t *testing.T) {
 						&wellKnownClaims,
 						tt.wantGroupsClaim,
 						groups,
+						test.distributedGroupsClaimURL,
 						tt.wantUsernameClaim,
 						username,
 					)
@@ -447,9 +505,10 @@ func TestController(t *testing.T) {
 }
 
 // isNotInitialized checks if the error is the internally-defined "oidc: authenticator not initialized" error from
-// the underlying OIDC authenticator, which is initialized asynchronously.
+// the underlying OIDC authenticator or "verifier is not initialized" from verifying distributed claims,
+// both of which are initialized asynchronously.
 func isNotInitialized(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "authenticator not initialized")
+	return err != nil && (strings.Contains(err.Error(), "authenticator not initialized") || strings.Contains(err.Error(), "verifier not initialized"))
 }
 
 func testTableForAuthenticateTokenTests(
@@ -462,21 +521,24 @@ func testTableForAuthenticateTokenTests(
 	goodUsername string,
 	expectedUsernameClaim string,
 	expectedGroupsClaim string,
+	issuer string,
 ) []struct {
-	name              string
-	jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
-	jwtSignature      func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
-	wantResponse      *authenticator.Response
-	wantAuthenticated bool
-	wantErrorRegexp   string
+	name                      string
+	jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
+	jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
+	wantResponse              *authenticator.Response
+	wantAuthenticated         bool
+	wantErrorRegexp           string
+	distributedGroupsClaimURL string
 } {
 	tests := []struct {
-		name              string
-		jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
-		jwtSignature      func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
-		wantResponse      *authenticator.Response
-		wantAuthenticated bool
-		wantErrorRegexp   string
+		name                      string
+		jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
+		jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
+		wantResponse              *authenticator.Response
+		wantAuthenticated         bool
+		wantErrorRegexp           string
+		distributedGroupsClaimURL string
 	}{
 		{
 			name: "good token without groups and with EC signature",
@@ -513,6 +575,33 @@ func testTableForAuthenticateTokenTests(
 				},
 			},
 			wantAuthenticated: true,
+		},
+		{
+			name: "good token with good distributed groups",
+			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			},
+			distributedGroupsClaimURL: issuer + "/claim_source",
+			wantResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   goodUsername,
+					Groups: []string{"some-distributed-group-1", "some-distributed-group-2"},
+				},
+			},
+			wantAuthenticated: true,
+		},
+		{
+			name: "distributed groups returns a 404",
+			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			},
+			distributedGroupsClaimURL: issuer + "/not_found_claim_source",
+			wantErrorRegexp:           `oidc: could not expand distributed claims: while getting distributed claim "` + expectedGroupsClaim + `": error while getting distributed claim JWT: 404 Not Found`,
+		},
+		{
+			name: "distributed groups doesn't return the right claim",
+			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			},
+			distributedGroupsClaimURL: issuer + "/wrong_claim_source",
+			wantErrorRegexp:           `oidc: could not expand distributed claims: jwt returned by distributed claim endpoint "` + issuer + `/wrong_claim_source" did not contain claim: `,
 		},
 		{
 			name: "good token with groups as string",
@@ -644,6 +733,7 @@ func createJWT(
 	claims *jwt.Claims,
 	groupsClaim string,
 	groupsValue interface{},
+	distributedGroupsClaimURL string,
 	usernameClaim string,
 	usernameValue string,
 ) string {
@@ -658,6 +748,10 @@ func createJWT(
 	builder := jwt.Signed(sig).Claims(claims)
 	if groupsValue != nil {
 		builder = builder.Claims(map[string]interface{}{groupsClaim: groupsValue})
+	}
+	if distributedGroupsClaimURL != "" {
+		builder = builder.Claims(map[string]interface{}{"_claim_names": map[string]string{groupsClaim: "src1"}})
+		builder = builder.Claims(map[string]interface{}{"_claim_sources": map[string]interface{}{"src1": map[string]string{"endpoint": distributedGroupsClaimURL}}})
 	}
 	if usernameValue != "" {
 		builder = builder.Claims(map[string]interface{}{usernameClaim: usernameValue})

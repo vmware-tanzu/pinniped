@@ -1,10 +1,10 @@
 ---
 title: "Pinniped v0.16.0: With Build-Your-Own FIPS Binaries, Workspace ONE IDP configuration, and Supervisor HTTP listener changes"
 slug: fips-and-more
-date: 2022-04-14
+date: 2022-04-20
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1618075254478-850bc1729c17?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2274&q=80
-excerpt: "With the release of v0.16.0 , You can now build your own Pinniped binaries with FIPS compliant BoringCrypto, HTTPS will be the default for our public facing Supervisor listener ports, and we provide you with documentation to configure Workspace ONE Access as an OIDC Identity Provider"
+excerpt: "You can now build your own Pinniped binaries with FIPS compliant BoringCrypto, HTTPS will be the default for our public facing Supervisor listener ports, and we provide you with documentation to configure Workspace ONE Access as an OIDC Identity Provider"
 tags: ['Margo Crawford','Ryan Richard', 'Mo Khan', 'Anjali Telang', 'release']
 ---
 

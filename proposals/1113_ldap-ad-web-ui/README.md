@@ -66,10 +66,45 @@ custom Username/Password headers, they should be rejected.
 
 The discovery metadata for LDAP/AD IDPS should indicate that they support a flow of `browser_authcode`.
 
-The pinniped cli should default to using the cli-based password flow, but when a tty is unavailable,
-it will open a browser to log in
+The state param should be augmented to include the IDP type as well as the IDP name. The type
+should be included in `UpstreamStateParamData` so that later when we get it back in the callback
+request we can tell which IDP it is referring to. This will require an update to
+`UpstreamStataParamData.FormatVersion`, which would mean that logins in progress at the time of
+upgrade would fail.
+
+The pinniped cli should default to using the cli-based password flow, but when the `--upstream-identity-provider-flow`,
+flag specifies `browser_authcode`, it will open a browser to log in
 instead of prompting for username and password. Some users (for example, IDE plugins for kubernetes)
 may wish to authenticate using the pinniped cli but without access to a terminal.
+
+Here is how the login flow might work:
+1. The supervisor receives an authorization request.
+   1. If the client_id param is not "pinniped-cli", and it includes username and password via the custom headers, reject the request.
+   2. If the request does not include the custom username/password headers, assume we want to use the webpage login.
+   3. Some day we may want to allow specifying the idp name and type as request parameters, but
+      for now we do not have multiple idps.
+   4. Encode the request parameters into a state param like is done today for the `OIDCIdentityProvider`.
+      In addition to the values encoded today (auth params, upstream IDP name, nonce, csrf token and pkce),
+      encode the upstream IDP type.
+   5. Set a CSRF cookie on the response like what we do for OIDC today.
+   6. Return a redirect to the LDAP web url. This should take the form `<issuer-url>/login`
+2. The client receives the redirect and follows it to `<issuer-url>/login`
+3. The supervisor receives the GET request to `<issuer-url>/login` and renders a simple login form with the Pinniped
+logo and the IDP name.
+   1. The submission should be POST `<issuer-url>/login`.
+   2. The state param’s value is written into a hidden form input, properly escaped.
+   3. Username and password form inputs are shown.
+4. The supervisor receives the POST request.
+   1. Decode your state form param to reconstitute the original authorization request params
+   (the client’s nonce and PKCE, requested scopes, etc) and also compare the incoming CSRF cookie to the value
+   from the state param. This code would be identical to what we do in the upstream OIDC callback endpoint today.
+   If the decoded state param’s timestamp is too old, it might be prudent to reject the request.
+   2. Using the idp name/type from the state param, look up the IDP, bind to it, verify the username/password and
+   get the users downstream username and groups.
+   3. If the login succeeds, mint an authcode and store the session as a secret the same way as we do on the
+   callback endpoint today. Redirect to the client’s redirect URI with the new authcode.
+   4. If the login fails, respond with an error so the login page can render an error message. Allow the user to retry
+   login the same way we do with the CLI today (we leave brute force protection to the IDP)
 
 #### Upgrades
 
@@ -134,8 +169,6 @@ config because Dex does not have an equivalent.
 * Currently we have little validation on branding requirements. Is specifying the idp name enough for users to understand
   how to log in?
 * How many users will be blocked on using this feature until they can have a company name and logo on the login page?
-* Should we allow admins or users to decide to use the web ui with the pinniped cli, or is it sufficient for us to
-  determine it based on presence/absence of tty?
 
 ## Implementation Plan
 While this work is intended to supplement the dynamic client work, parts of it

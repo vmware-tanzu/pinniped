@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"go.pinniped.dev/internal/oidc/login"
 
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -133,6 +135,8 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 			m.upstreamIDPs,
 			oauthHelperWithKubeStorage,
 		)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler()
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)
 	}

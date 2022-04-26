@@ -409,23 +409,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return pathWithQuery("/some/path", modifiedHappyGetRequestQueryMap(queryOverrides))
 	}
 
-	expectedUpstreamStateParam := func(queryOverrides map[string]string, csrfValueOverride, upstreamNameOverride string) string {
+	expectedUpstreamStateParam := func(queryOverrides map[string]string, csrfValueOverride, upstreamName, upstreamType string) string {
 		csrf := happyCSRF
 		if csrfValueOverride != "" {
 			csrf = csrfValueOverride
-		}
-		upstreamName := oidcUpstreamName
-		if upstreamNameOverride != "" {
-			upstreamName = upstreamNameOverride
 		}
 		encoded, err := happyStateEncoder.Encode("s",
 			oidctestutil.ExpectedUpstreamStateParamFormat{
 				P: encodeQuery(modifiedHappyGetRequestQueryMap(queryOverrides)),
 				U: upstreamName,
+				T: upstreamType,
 				N: happyNonce,
 				C: csrf,
 				K: happyPKCE,
-				V: "1",
+				V: "2",
 			},
 		)
 		require.NoError(t, err)
@@ -558,7 +555,24 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:                                   "LDAP upstream browser flow happy path using GET without a CSRF cookie",
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPath,
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(nil, "", ldapUpstreamName, "ldap")}),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -639,7 +653,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, ""), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -659,7 +673,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -748,7 +762,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", ""), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -767,7 +781,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", ""), map[string]string{"prompt": "consent", "abc": "123", "def": "456"}),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"prompt": "login"}, "", oidcUpstreamName, "oidc"), map[string]string{"prompt": "consent", "abc": "123", "def": "456"}),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -802,7 +816,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType: htmlContentType,
 			// Generated a new CSRF cookie and set it in the response.
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -823,7 +837,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
-			}, "", ""), nil),
+			}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -889,7 +903,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
 				"scope": "openid offline_access",
-			}, "", ""), nil),
+			}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -1063,7 +1077,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:                 "missing upstream username on request for LDAP authentication",
+			name:                 "missing upstream username but has password on request for LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
@@ -1338,21 +1352,45 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:               "response type is unsupported when using LDAP upstream",
+			name:                 "response type is unsupported when using LDAP cli upstream",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:               "response type is unsupported when using LDAP browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
 			wantBodyString:     "",
 		},
 		{
-			name:               "response type is unsupported when using active directory upstream",
+			name:                 "response type is unsupported when using active directory cli upstream",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:               "response type is unsupported when using active directory browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1436,21 +1474,45 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:               "missing response type in request using LDAP upstream",
+			name:                 "missing response type in request using LDAP cli upstream",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:               "missing response type in request using LDAP browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
 			wantBodyString:     "",
 		},
 		{
-			name:               "missing response type in request using Active Directory upstream",
+			name:                 "missing response type in request using Active Directory cli upstream",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:               "missing response type in request using Active Directory browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
-			wantStatus:         http.StatusFound,
+			wantStatus:         http.StatusSeeOther,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
 			wantBodyString:     "",
@@ -1720,7 +1782,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(
-				map[string]string{"prompt": "none login", "scope": "email"}, "", "",
+				map[string]string{"prompt": "none login", "scope": "email"}, "", oidcUpstreamName, "oidc",
 			), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
@@ -2543,7 +2605,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"scope":         "some-other-new-scope1 some-other-new-scope2", // updated expectation
 				"client_id":     "some-other-new-client-id",                    // updated expectation
 				"state": expectedUpstreamStateParam(
-					nil, "", "some-other-new-idp-name",
+					nil, "", "some-other-new-idp-name", "oidc",
 				), // updated expectation
 				"nonce":                 happyNonce,
 				"code_challenge":        expectedUpstreamCodeChallenge,

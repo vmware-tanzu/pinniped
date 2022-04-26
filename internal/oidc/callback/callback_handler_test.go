@@ -48,7 +48,7 @@ const (
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
 	happyDownstreamNonce        = "test-nonce"
-	happyDownstreamStateVersion = "1"
+	happyDownstreamStateVersion = "2"
 
 	downstreamIssuer              = "https://my-downstream-issuer.com/path"
 	downstreamRedirectURI         = "http://127.0.0.1/callback"
@@ -1162,6 +1162,7 @@ func happyUpstreamStateParam() *upstreamStateParamBuilder {
 	return &upstreamStateParamBuilder{
 		U: happyUpstreamIDPName,
 		P: happyDownstreamRequestParams,
+		T: "oidc",
 		N: happyDownstreamNonce,
 		C: happyDownstreamCSRF,
 		K: happyDownstreamPKCE,

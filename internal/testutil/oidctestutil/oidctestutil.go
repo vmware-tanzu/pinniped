@@ -830,6 +830,7 @@ func NewTestUpstreamOIDCIdentityProviderBuilder() *TestUpstreamOIDCIdentityProvi
 type ExpectedUpstreamStateParamFormat struct {
 	P string `json:"p"`
 	U string `json:"u"`
+	T string `json:"t"`
 	N string `json:"n"`
 	C string `json:"c"`
 	K string `json:"k"`

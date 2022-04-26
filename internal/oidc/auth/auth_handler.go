@@ -7,6 +7,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
@@ -75,15 +76,33 @@ func NewHandler(
 				cookieCodec,
 			)
 		}
-		return handleAuthRequestForLDAPUpstream(r, w,
-			oauthHelperWithStorage,
+
+		// we know it's an AD/LDAP upstream.
+		if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 || len(r.Header.Values(supervisoroidc.AuthorizePasswordHeaderName)) > 0 {
+			// The client set a username header, so they are trying to log in with a username/password.
+			return handleAuthRequestForLDAPUpstreamCLIFlow(r, w,
+				oauthHelperWithStorage,
+				ldapUpstream,
+				idpType,
+			)
+		}
+		return handleAuthRequestForLDAPUpstreamBrowserFlow(
+			r,
+			w,
+			oauthHelperWithoutStorage,
+			generateCSRF,
+			generateNonce,
+			generatePKCE,
 			ldapUpstream,
 			idpType,
+			downstreamIssuer,
+			upstreamStateEncoder,
+			cookieCodec,
 		)
 	}))
 }
 
-func handleAuthRequestForLDAPUpstream(
+func handleAuthRequestForLDAPUpstreamCLIFlow(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
@@ -136,6 +155,93 @@ func handleAuthRequestForLDAPUpstream(
 
 	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w,
 		oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
+}
+
+func handleAuthRequestForLDAPUpstreamBrowserFlow(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	generateCSRF func() (csrftoken.CSRFToken, error),
+	generateNonce func() (nonce.Nonce, error),
+	generatePKCE func() (pkce.Code, error),
+	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	idpType psession.ProviderType,
+	downstreamIssuer string,
+	upstreamStateEncoder oidc.Encoder,
+	cookieCodec oidc.Codec,
+) error {
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
+	if !created {
+		return nil
+	}
+
+	now := time.Now()
+	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
+				Subject:     "none",
+				AuthTime:    now,
+				RequestedAt: now,
+			},
+		},
+	})
+	if err != nil {
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
+	}
+
+	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
+	if err != nil {
+		plog.Error("authorize generate error", err)
+		return err
+	}
+	csrfFromCookie := readCSRFCookie(r, cookieCodec)
+	if csrfFromCookie != "" {
+		csrfValue = csrfFromCookie
+	}
+
+	encodedStateParamValue, err := upstreamStateParam(
+		authorizeRequester,
+		ldapUpstream.GetName(),
+		string(idpType),
+		nonceValue,
+		csrfValue,
+		pkceValue,
+		upstreamStateEncoder,
+	)
+	if err != nil {
+		plog.Error("authorize upstream state param error", err)
+		return err
+	}
+
+	promptParam := r.Form.Get(promptParamName)
+	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
+		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
+	}
+
+	if csrfFromCookie == "" {
+		// We did not receive an incoming CSRF cookie, so write a new one.
+		err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
+		if err != nil {
+			plog.Error("error setting CSRF cookie", err)
+			return err
+		}
+	}
+
+	loginURL, err := url.Parse(downstreamIssuer + "/login")
+	if err != nil {
+		return err
+	}
+	q := loginURL.Query()
+	q.Set("state", encodedStateParamValue)
+	loginURL.RawQuery = q.Encode()
+
+	http.Redirect(w, r,
+		loginURL.String(),
+		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
+	)
+
+	return nil
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
@@ -246,6 +352,7 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	encodedStateParamValue, err := upstreamStateParam(
 		authorizeRequester,
 		oidcUpstream.GetName(),
+		string(psession.ProviderTypeOIDC),
 		nonceValue,
 		csrfValue,
 		pkceValue,
@@ -463,6 +570,7 @@ func generateValues(
 func upstreamStateParam(
 	authorizeRequester fosite.AuthorizeRequester,
 	upstreamName string,
+	upstreamType string,
 	nonceValue nonce.Nonce,
 	csrfValue csrftoken.CSRFToken,
 	pkceValue pkce.Code,
@@ -471,6 +579,7 @@ func upstreamStateParam(
 	stateParamData := oidc.UpstreamStateParamData{
 		AuthParams:    authorizeRequester.GetRequestForm().Encode(),
 		UpstreamName:  upstreamName,
+		UpstreamType:  upstreamType,
 		Nonce:         nonceValue,
 		CSRFToken:     csrfValue,
 		PKCECode:      pkceValue,

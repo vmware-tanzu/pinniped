@@ -136,7 +136,12 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 			oauthHelperWithKubeStorage,
 		)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler()
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(
+			upstreamStateEncoder,
+			csrfCookieEncoder,
+			login.NewGetHandler(m.upstreamIDPs),
+			login.NewPostHandler(m.upstreamIDPs, oauthHelperWithKubeStorage),
+		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)
 	}

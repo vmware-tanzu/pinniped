@@ -15,6 +15,7 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -835,6 +836,44 @@ type ExpectedUpstreamStateParamFormat struct {
 	C string `json:"c"`
 	K string `json:"k"`
 	V string `json:"v"`
+}
+
+type UpstreamStateParamBuilder ExpectedUpstreamStateParamFormat
+
+func (b UpstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) string {
+	state, err := stateEncoder.Encode("s", b)
+	require.NoError(t, err)
+	return state
+}
+
+func (b *UpstreamStateParamBuilder) WithAuthorizeRequestParams(params string) *UpstreamStateParamBuilder {
+	b.P = params
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithNonce(nonce string) *UpstreamStateParamBuilder {
+	b.N = nonce
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithCSRF(csrf string) *UpstreamStateParamBuilder {
+	b.C = csrf
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithPKCE(pkce string) *UpstreamStateParamBuilder {
+	b.K = pkce
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithUpstreamIDPType(upstreamIDPType string) *UpstreamStateParamBuilder {
+	b.T = upstreamIDPType
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithStateVersion(version string) *UpstreamStateParamBuilder {
+	b.V = version
+	return b
 }
 
 type staticKeySet struct {

@@ -1156,10 +1156,8 @@ func (r *requestPath) String() string {
 	return path + params.Encode()
 }
 
-type upstreamStateParamBuilder oidctestutil.ExpectedUpstreamStateParamFormat
-
-func happyUpstreamStateParam() *upstreamStateParamBuilder {
-	return &upstreamStateParamBuilder{
+func happyUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
+	return &oidctestutil.UpstreamStateParamBuilder{
 		U: happyUpstreamIDPName,
 		P: happyDownstreamRequestParams,
 		T: "oidc",
@@ -1168,37 +1166,6 @@ func happyUpstreamStateParam() *upstreamStateParamBuilder {
 		K: happyDownstreamPKCE,
 		V: happyDownstreamStateVersion,
 	}
-}
-
-func (b upstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) string {
-	state, err := stateEncoder.Encode("s", b)
-	require.NoError(t, err)
-	return state
-}
-
-func (b *upstreamStateParamBuilder) WithAuthorizeRequestParams(params string) *upstreamStateParamBuilder {
-	b.P = params
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithNonce(nonce string) *upstreamStateParamBuilder {
-	b.N = nonce
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithCSRF(csrf string) *upstreamStateParamBuilder {
-	b.C = csrf
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithPKCVE(pkce string) *upstreamStateParamBuilder {
-	b.K = pkce
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithStateVersion(version string) *upstreamStateParamBuilder {
-	b.V = version
-	return b
 }
 
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {

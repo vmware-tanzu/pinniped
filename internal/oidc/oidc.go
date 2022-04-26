@@ -5,12 +5,15 @@
 package oidc
 
 import (
+	"crypto/subtle"
+	"net/http"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 
+	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -296,4 +299,69 @@ func ScopeWasRequested(authorizeRequester fosite.AuthorizeRequester, scopeName s
 		}
 	}
 	return false
+}
+
+func ReadStateParamAndValidateCSRFCookie(r *http.Request, cookieDecoder Decoder, stateDecoder Decoder) (string, *UpstreamStateParamData, error) {
+	csrfValue, err := readCSRFCookie(r, cookieDecoder)
+	if err != nil {
+		return "", nil, err
+	}
+
+	encodedState, decodedState, err := readStateParam(r, stateDecoder)
+	if err != nil {
+		return "", nil, err
+	}
+
+	err = validateCSRFValue(decodedState, csrfValue)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return encodedState, decodedState, nil
+}
+
+func readCSRFCookie(r *http.Request, cookieDecoder Decoder) (csrftoken.CSRFToken, error) {
+	receivedCSRFCookie, err := r.Cookie(CSRFCookieName)
+	if err != nil {
+		// Error means that the cookie was not found
+		return "", httperr.Wrap(http.StatusForbidden, "CSRF cookie is missing", err)
+	}
+
+	var csrfFromCookie csrftoken.CSRFToken
+	err = cookieDecoder.Decode(CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
+	if err != nil {
+		return "", httperr.Wrap(http.StatusForbidden, "error reading CSRF cookie", err)
+	}
+
+	return csrfFromCookie, nil
+}
+
+func readStateParam(r *http.Request, stateDecoder Decoder) (string, *UpstreamStateParamData, error) {
+	encodedState := r.FormValue("state")
+
+	if encodedState == "" {
+		return "", nil, httperr.New(http.StatusBadRequest, "state param not found")
+	}
+
+	var state UpstreamStateParamData
+	if err := stateDecoder.Decode(
+		UpstreamStateParamEncodingName,
+		r.FormValue("state"),
+		&state,
+	); err != nil {
+		return "", nil, httperr.New(http.StatusBadRequest, "error reading state")
+	}
+
+	if state.FormatVersion != UpstreamStateParamFormatVersion {
+		return "", nil, httperr.New(http.StatusUnprocessableEntity, "state format version is invalid")
+	}
+
+	return encodedState, &state, nil
+}
+
+func validateCSRFValue(state *UpstreamStateParamData, csrfCookieValue csrftoken.CSRFToken) error {
+	if subtle.ConstantTimeCompare([]byte(state.CSRFToken), []byte(csrfCookieValue)) != 1 {
+		return httperr.New(http.StatusForbidden, "CSRF value does not match")
+	}
+	return nil
 }

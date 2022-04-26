@@ -63,7 +63,8 @@ func NewHandler(
 		}
 
 		if idpType == psession.ProviderTypeOIDC {
-			if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 {
+			if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 ||
+				len(r.Header.Values(supervisoroidc.AuthorizePasswordHeaderName)) > 0 {
 				// The client set a username header, so they are trying to log in with a username/password.
 				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
 			}
@@ -78,7 +79,8 @@ func NewHandler(
 		}
 
 		// we know it's an AD/LDAP upstream.
-		if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 || len(r.Header.Values(supervisoroidc.AuthorizePasswordHeaderName)) > 0 {
+		if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 ||
+			len(r.Header.Values(supervisoroidc.AuthorizePasswordHeaderName)) > 0 {
 			// The client set a username header, so they are trying to log in with a username/password.
 			return handleAuthRequestForLDAPUpstreamCLIFlow(r, w,
 				oauthHelperWithStorage,

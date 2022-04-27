@@ -172,62 +172,23 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) error {
-	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
-	if !created {
-		return nil
-	}
-
-	now := time.Now()
-	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
-		Fosite: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
-				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
-				Subject:     "none",
-				AuthTime:    now,
-				RequestedAt: now,
-			},
-		},
-	})
-	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
-	}
-
-	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
-	if err != nil {
-		plog.Error("authorize generate error", err)
-		return err
-	}
-	csrfFromCookie := readCSRFCookie(r, cookieCodec)
-	if csrfFromCookie != "" {
-		csrfValue = csrfFromCookie
-	}
-
-	encodedStateParamValue, err := upstreamStateParam(
-		authorizeRequester,
+	encodedStateParamValue, _, _, err := handleBrowserAuthRequest(
+		r,
+		w,
+		oauthHelper,
+		generateCSRF,
+		generateNonce,
+		generatePKCE,
 		ldapUpstream.GetName(),
-		string(idpType),
-		nonceValue,
-		csrfValue,
-		pkceValue,
+		idpType,
+		cookieCodec,
 		upstreamStateEncoder,
 	)
 	if err != nil {
-		plog.Error("authorize upstream state param error", err)
 		return err
 	}
-
-	promptParam := r.Form.Get(promptParamName)
-	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
-	}
-
-	if csrfFromCookie == "" {
-		// We did not receive an incoming CSRF cookie, so write a new one.
-		err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
-		if err != nil {
-			plog.Error("error setting CSRF cookie", err)
-			return err
-		}
+	if encodedStateParamValue == "" {
+		return nil
 	}
 
 	loginURL, err := url.Parse(downstreamIssuer + "/login")
@@ -312,34 +273,23 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) error {
-	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
-	if !created {
-		return nil
-	}
-
-	now := time.Now()
-	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
-		Fosite: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
-				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
-				Subject:     "none",
-				AuthTime:    now,
-				RequestedAt: now,
-			},
-		},
-	})
+	encodedStateParamValue, pkceValue, nonceValue, err := handleBrowserAuthRequest(
+		r,
+		w,
+		oauthHelper,
+		generateCSRF,
+		generateNonce,
+		generatePKCE,
+		oidcUpstream.GetName(),
+		psession.ProviderTypeOIDC,
+		cookieCodec,
+		upstreamStateEncoder,
+	)
 	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
-	}
-
-	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
-	if err != nil {
-		plog.Error("authorize generate error", err)
 		return err
 	}
-	csrfFromCookie := readCSRFCookie(r, cookieCodec)
-	if csrfFromCookie != "" {
-		csrfValue = csrfFromCookie
+	if encodedStateParamValue == "" {
+		return nil
 	}
 
 	upstreamOAuthConfig := oauth2.Config{
@@ -351,42 +301,14 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 		Scopes:      oidcUpstream.GetScopes(),
 	}
 
-	encodedStateParamValue, err := upstreamStateParam(
-		authorizeRequester,
-		oidcUpstream.GetName(),
-		string(psession.ProviderTypeOIDC),
-		nonceValue,
-		csrfValue,
-		pkceValue,
-		upstreamStateEncoder,
-	)
-	if err != nil {
-		plog.Error("authorize upstream state param error", err)
-		return err
-	}
-
 	authCodeOptions := []oauth2.AuthCodeOption{
 		nonceValue.Param(),
 		pkceValue.Challenge(),
 		pkceValue.Method(),
 	}
 
-	promptParam := r.Form.Get(promptParamName)
-	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
-	}
-
 	for key, val := range oidcUpstream.GetAdditionalAuthcodeParams() {
 		authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam(key, val))
-	}
-
-	if csrfFromCookie == "" {
-		// We did not receive an incoming CSRF cookie, so write a new one.
-		err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
-		if err != nil {
-			plog.Error("error setting CSRF cookie", err)
-			return err
-		}
 	}
 
 	http.Redirect(w, r,
@@ -547,6 +469,81 @@ func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider
 	default:
 		return nil, ldapUpstreams[0], psession.ProviderTypeLDAP, nil
 	}
+}
+
+// handleBrowserAuthRequest performs the shared validations and setup between browser based auth requests
+// regardless of IDP type-- LDAP, Active Directory and OIDC.
+// It generates the state param, sets the CSRF cookie, and validates the prompt param.
+func handleBrowserAuthRequest(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	generateCSRF func() (csrftoken.CSRFToken, error),
+	generateNonce func() (nonce.Nonce, error),
+	generatePKCE func() (pkce.Code, error),
+	upstreamName string,
+	idpType psession.ProviderType,
+	cookieCodec oidc.Codec,
+	upstreamStateEncoder oidc.Encoder,
+) (string, pkce.Code, nonce.Nonce, error) {
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
+	if !created {
+		return "", "", "", nil
+	}
+
+	now := time.Now()
+	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
+		Fosite: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
+				Subject:     "none",
+				AuthTime:    now,
+				RequestedAt: now,
+			},
+		},
+	})
+	if err != nil {
+		return "", "", "", writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
+	}
+
+	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
+	if err != nil {
+		plog.Error("authorize generate error", err)
+		return "", "", "", err
+	}
+	csrfFromCookie := readCSRFCookie(r, cookieCodec)
+	if csrfFromCookie != "" {
+		csrfValue = csrfFromCookie
+	}
+
+	encodedStateParamValue, err := upstreamStateParam(
+		authorizeRequester,
+		upstreamName,
+		string(idpType),
+		nonceValue,
+		csrfValue,
+		pkceValue,
+		upstreamStateEncoder,
+	)
+	if err != nil {
+		plog.Error("authorize upstream state param error", err)
+		return "", "", "", err
+	}
+
+	promptParam := r.Form.Get(promptParamName)
+	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
+		return "", "", "", writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
+	}
+
+	if csrfFromCookie == "" {
+		// We did not receive an incoming CSRF cookie, so write a new one.
+		err = addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
+		if err != nil {
+			plog.Error("error setting CSRF cookie", err)
+			return "", "", "", err
+		}
+	}
+	return encodedStateParamValue, pkceValue, nonceValue, nil
 }
 
 func generateValues(

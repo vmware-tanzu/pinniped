@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -271,11 +271,11 @@ func flowOptions(requestedIDPType idpdiscoveryv1alpha1.IDPType, requestedFlow id
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword, "":
 			return useCLIFlow, nil
 		case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
-			fallthrough // not supported for LDAP providers, so fallthrough to error case
+			return nil, nil
 		default:
 			return nil, fmt.Errorf(
 				"--upstream-identity-provider-flow value not recognized for identity provider type %q: %s (supported values: %s)",
-				requestedIDPType, requestedFlow, []string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String()})
+				requestedIDPType, requestedFlow, strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
 		}
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236

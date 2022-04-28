@@ -19,9 +19,12 @@ import (
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
 
+const (
+	htmlContentType = "text/html; charset=utf-8"
+)
+
 func TestLoginEndpoint(t *testing.T) {
 	const (
-		htmlContentType = "text/html; charset=utf-8"
 		happyGetResult  = "<p>get handler result</p>"
 		happyPostResult = "<p>post handler result</p>"
 

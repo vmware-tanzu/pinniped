@@ -1078,6 +1078,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		regex := regexp.MustCompile(`\A` + downstream.Spec.Issuer + `/login.+`)
 		browsertest.WaitForURL(t, page, regex)
 
+		browsertest.WaitForVisibleElements(t, page, "input#username", "input#password", "button#submit")
 		// TODO actually log in :P
 	})
 }

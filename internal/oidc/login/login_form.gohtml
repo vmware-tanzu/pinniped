@@ -1,0 +1,32 @@
+<!--
+Copyright 2022 the Pinniped contributors. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+--><!DOCTYPE html>
+<html>
+<body>
+
+<h1>Pinniped</h1>
+<p>{{ .IDPName }}</p>
+
+<form action="/login?state={{.State}}" method="post">
+
+    <div>
+        <label for="uname"><b>Username</b></label>
+        <input type="text" placeholder="Username" name="username" id="username" required>
+    </div>
+
+    <div>
+        <label for="psw"><b>Password</b></label>
+        <input type="password" placeholder="Password" name="password" id="password" required>
+    </div>
+
+    <div>
+        <input type="hidden" name="state" id="state" value="{{.State}}">
+    </div>
+
+    <button name="submit" id="submit" type="submit">Login</button>
+
+</form>
+
+</body>
+</html>

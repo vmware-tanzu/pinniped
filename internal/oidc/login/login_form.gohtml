@@ -8,15 +8,15 @@ SPDX-License-Identifier: Apache-2.0
 <h1>Pinniped</h1>
 <p>{{ .IDPName }}</p>
 
-<form action="/login?state={{.State}}" method="post">
+<form action="/login" method="post">
 
     <div>
-        <label for="uname"><b>Username</b></label>
+        <label for="username"><b>Username</b></label>
         <input type="text" placeholder="Username" name="username" id="username" required>
     </div>
 
     <div>
-        <label for="psw"><b>Password</b></label>
+        <label for="password"><b>Password</b></label>
         <input type="password" placeholder="Password" name="password" id="password" required>
     </div>
 
@@ -24,7 +24,7 @@ SPDX-License-Identifier: Apache-2.0
         <input type="hidden" name="state" id="state" value="{{.State}}">
     </div>
 
-    <button name="submit" id="submit" type="submit">Login</button>
+    <button type="submit" name="submit" id="submit">Login</button>
 
 </form>
 

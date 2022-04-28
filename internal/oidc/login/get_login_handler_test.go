@@ -1,3 +1,6 @@
+// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package login
 
 import (
@@ -22,19 +25,23 @@ func TestGetLogin(t *testing.T) {
 <h1>Pinniped</h1>
 <p>some-ldap-idp</p>
 
-<form action="/login?state=foo" method="post">
+<form action="/login" method="post">
 
     <div>
-        <label for="uname"><b>Username</b></label>
-        <input type="text" placeholder="Username" name="uname" required>
+        <label for="username"><b>Username</b></label>
+        <input type="text" placeholder="Username" name="username" id="username" required>
     </div>
 
     <div>
-        <label for="psw"><b>Password</b></label>
-        <input type="password" placeholder="Password" name="psw" required>
+        <label for="password"><b>Password</b></label>
+        <input type="password" placeholder="Password" name="password" id="password" required>
     </div>
 
-    <button type="submit">Login</button>
+    <div>
+        <input type="hidden" name="state" id="state" value="foo">
+    </div>
+
+    <button type="submit" name="submit" id="submit">Login</button>
 
 </form>
 

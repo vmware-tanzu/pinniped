@@ -16,16 +16,14 @@ var (
 	rawHTMLTemplate string
 )
 
-var parsedHTMLTemplate = template.Must(template.New("login_post.gohtml").Parse(rawHTMLTemplate))
-
 type PageData struct {
 	State   string
 	IDPName string
 }
 
 func NewGetHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) HandlerFunc {
+	var parsedHTMLTemplate = template.Must(template.New("login_post.gohtml").Parse(rawHTMLTemplate))
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
-
 		err := parsedHTMLTemplate.Execute(w, &PageData{State: encodedState, IDPName: decodedState.UpstreamName})
 		if err != nil {
 			return err

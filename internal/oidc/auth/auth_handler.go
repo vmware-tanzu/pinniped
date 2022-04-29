@@ -7,24 +7,21 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
-	"github.com/felixge/httpsnoop"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
-	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 
 	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
-	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
+	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
@@ -127,36 +124,19 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
 	}
 	if !authenticated {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."), true)
+		return nil
 	}
 
-	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
+	subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
-	dn := authenticateResponse.DN
+	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
-	customSessionData := &psession.CustomSessionData{
-		ProviderUID:  ldapUpstream.GetResourceUID(),
-		ProviderName: ldapUpstream.GetName(),
-		ProviderType: idpType,
-	}
-
-	if idpType == psession.ProviderTypeLDAP {
-		customSessionData.LDAP = &psession.LDAPSessionData{
-			UserDN:                 dn,
-			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
-		}
-	}
-	if idpType == psession.ProviderTypeActiveDirectory {
-		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
-			UserDN:                 dn,
-			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
-		}
-	}
-
-	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w,
-		oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
+	return nil
 }
 
 func handleAuthRequestForLDAPUpstreamBrowserFlow(
@@ -191,20 +171,7 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 		return nil
 	}
 
-	loginURL, err := url.Parse(downstreamIssuer + "/login")
-	if err != nil {
-		return err
-	}
-	q := loginURL.Query()
-	q.Set("state", encodedStateParamValue)
-	loginURL.RawQuery = q.Encode()
-
-	http.Redirect(w, r,
-		loginURL.String(),
-		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
-	)
-
-	return nil
+	return login.RedirectToLoginPage(r, w, downstreamIssuer, encodedStateParamValue, login.ShowNoError)
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
@@ -225,9 +192,10 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 
 	if !oidcUpstream.AllowsPasswordGrant() {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHint(
 				"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."), true)
+		return nil
 	}
 
 	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
@@ -239,26 +207,33 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
 		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
 		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
+		return nil
 	}
 
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
+		return nil
 	}
 
 	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token)
 	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
+		return nil
 	}
 
-	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups, customSessionData)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+
+	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
+
+	return nil
 }
 
 func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
@@ -322,78 +297,11 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	return nil
 }
 
-func writeAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) error {
-	if plog.Enabled(plog.LevelTrace) {
-		// When trace level logging is enabled, include the stack trace in the log message.
-		keysAndValues := oidc.FositeErrorForLog(err)
-		errWithStack := errors.WithStack(err)
-		keysAndValues = append(keysAndValues, "errWithStack")
-		// klog always prints error values using %s, which does not include stack traces,
-		// so convert the error to a string which includes the stack trace here.
-		keysAndValues = append(keysAndValues, fmt.Sprintf("%+v", errWithStack))
-		plog.Trace("authorize response error", keysAndValues...)
-	} else {
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-	}
-	if isBrowserless {
-		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
-	}
-	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-	return nil
-}
-
-func makeDownstreamSessionAndReturnAuthcodeRedirect(
-	r *http.Request,
-	w http.ResponseWriter,
-	oauthHelper fosite.OAuth2Provider,
-	authorizeRequester fosite.AuthorizeRequester,
-	subject string,
-	username string,
-	groups []string,
-	customSessionData *psession.CustomSessionData,
-) error {
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
-
-	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
-	if err != nil {
-		return writeAuthorizeError(w, oauthHelper, authorizeRequester, err, true)
-	}
-
-	w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
-	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
-
-	return nil
-}
-
-func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) http.ResponseWriter {
-	// rewrite http.StatusSeeOther to http.StatusFound for backwards compatibility with old pinniped CLIs.
-	// we can drop this in a few releases once we feel enough time has passed for users to update.
-	//
-	// WriteAuthorizeResponse/WriteAuthorizeError calls used to result in http.StatusFound until
-	// https://github.com/ory/fosite/pull/636 changed it to http.StatusSeeOther to address
-	// https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
-	// Safari has the bad behavior in the case of http.StatusFound and not just http.StatusTemporaryRedirect.
-	//
-	// in the browserless flows, the OAuth client is the pinniped CLI and it already has access to the user's
-	// password.  Thus there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
-	return httpsnoop.Wrap(w, httpsnoop.Hooks{
-		WriteHeader: func(delegate httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
-			return func(code int) {
-				if code == http.StatusSeeOther {
-					code = http.StatusFound
-				}
-				delegate(code)
-			}
-		},
-	})
-}
-
 func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
 	username := r.Header.Get(supervisoroidc.AuthorizeUsernameHeaderName)
 	password := r.Header.Get(supervisoroidc.AuthorizePasswordHeaderName)
 	if username == "" || password == "" {
-		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."), true)
 		return "", "", false
 	}
@@ -403,7 +311,7 @@ func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseW
 func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, isBrowserless bool) (fosite.AuthorizeRequester, bool) {
 	authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 	if err != nil {
-		_ = writeAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
 		return nil, false
 	}
 
@@ -435,7 +343,8 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 	return csrfFromCookie
 }
 
-// Select either an OIDC, an LDAP or an AD IDP, or return an error.
+// chooseUpstreamIDP selects either an OIDC, an LDAP, or an AD IDP, or returns an error.
+// Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
 func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, provider.UpstreamLDAPIdentityProviderI, psession.ProviderType, error) {
 	oidcUpstreams := idpLister.GetOIDCIdentityProviders()
 	ldapUpstreams := idpLister.GetLDAPIdentityProviders()
@@ -503,7 +412,8 @@ func handleBrowserAuthRequest(
 		},
 	})
 	if err != nil {
-		return "", "", "", writeAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
+		return "", "", "", nil
 	}
 
 	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
@@ -532,7 +442,8 @@ func handleBrowserAuthRequest(
 
 	promptParam := r.Form.Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
-		return "", "", "", writeAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
+		return "", "", "", nil
 	}
 
 	if csrfFromCookie == "" {
@@ -607,9 +518,4 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	})
 
 	return nil
-}
-
-func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
-	ldapURL := *ldapUpstream.GetURL()
-	return downstreamsession.DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
 }

@@ -6,18 +6,25 @@ package oidc
 
 import (
 	"crypto/subtle"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/felixge/httpsnoop"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+	errorsx "github.com/pkg/errors"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
+	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -364,4 +371,107 @@ func validateCSRFValue(state *UpstreamStateParamData, csrfCookieValue csrftoken.
 		return httperr.New(http.StatusForbidden, "CSRF value does not match")
 	}
 	return nil
+}
+
+// FindUpstreamIDPByNameAndType finds the requested IDP by name and type, or returns an error.
+// Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
+func FindUpstreamIDPByNameAndType(
+	idpLister UpstreamIdentityProvidersLister,
+	upstreamName string,
+	upstreamType string,
+) (
+	provider.UpstreamOIDCIdentityProviderI,
+	provider.UpstreamLDAPIdentityProviderI,
+	psession.ProviderType,
+	error,
+) {
+	switch upstreamType {
+	case string(v1alpha1.IDPTypeOIDC):
+		for _, p := range idpLister.GetOIDCIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return p, nil, psession.ProviderTypeOIDC, nil
+			}
+		}
+	case string(v1alpha1.IDPTypeLDAP):
+		for _, p := range idpLister.GetLDAPIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return nil, p, psession.ProviderTypeLDAP, nil
+			}
+		}
+	case string(v1alpha1.IDPTypeActiveDirectory):
+		for _, p := range idpLister.GetActiveDirectoryIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return nil, p, psession.ProviderTypeActiveDirectory, nil
+			}
+		}
+	}
+	return nil, nil, "", errors.New("provider not found")
+}
+
+// WriteAuthorizeError writes an authorization error as it should be returned by the authorization endpoint and other
+// similar endpoints that are the end of the downstream authcode flow. Errors responses are written in the usual fosite style.
+func WriteAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) {
+	if plog.Enabled(plog.LevelTrace) {
+		// When trace level logging is enabled, include the stack trace in the log message.
+		keysAndValues := FositeErrorForLog(err)
+		errWithStack := errorsx.WithStack(err)
+		keysAndValues = append(keysAndValues, "errWithStack")
+		// klog always prints error values using %s, which does not include stack traces,
+		// so convert the error to a string which includes the stack trace here.
+		keysAndValues = append(keysAndValues, fmt.Sprintf("%+v", errWithStack))
+		plog.Trace("authorize response error", keysAndValues...)
+	} else {
+		plog.Info("authorize response error", FositeErrorForLog(err)...)
+	}
+	if isBrowserless {
+		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
+	}
+	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+}
+
+// PerformAuthcodeRedirect successfully completes a downstream login by creating a session and
+// writing the authcode redirect response as it should be returned by the authorization endpoint and other
+// similar endpoints that are the end of the downstream authcode flow.
+func PerformAuthcodeRedirect(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	authorizeRequester fosite.AuthorizeRequester,
+	openIDSession *psession.PinnipedSession,
+	isBrowserless bool,
+) {
+	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+	if err != nil {
+		plog.WarningErr("error while generating and saving authcode", err)
+		WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
+		return
+	}
+	if isBrowserless {
+		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
+	}
+	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+}
+
+func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) http.ResponseWriter {
+	// rewrite http.StatusSeeOther to http.StatusFound for backwards compatibility with old pinniped CLIs.
+	// we can drop this in a few releases once we feel enough time has passed for users to update.
+	//
+	// WriteAuthorizeResponse/WriteAuthorizeError calls used to result in http.StatusFound until
+	// https://github.com/ory/fosite/pull/636 changed it to http.StatusSeeOther to address
+	// https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
+	// Safari has the bad behavior in the case of http.StatusFound and not just http.StatusTemporaryRedirect.
+	//
+	// in the browserless flows, the OAuth client is the pinniped CLI and it already has access to the user's
+	// password.  Thus there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
+	return httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(delegate httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(code int) {
+				if code == http.StatusSeeOther {
+					code = http.StatusFound
+				}
+				delegate(code)
+			}
+		},
+	})
 }

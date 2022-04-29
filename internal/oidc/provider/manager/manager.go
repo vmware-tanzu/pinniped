@@ -140,7 +140,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 			upstreamStateEncoder,
 			csrfCookieEncoder,
 			login.NewGetHandler(m.upstreamIDPs),
-			login.NewPostHandler(m.upstreamIDPs, oauthHelperWithKubeStorage),
+			login.NewPostHandler(issuer, m.upstreamIDPs, oauthHelperWithKubeStorage),
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)

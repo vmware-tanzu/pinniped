@@ -478,6 +478,9 @@ desired.
 ## Open Questions
 
 - Which of the options presented above should we choose? Are there other options to consider?
+    - The author of this propsal doc would like to recommend that we choose:
+      - "Option 1: Providing client secrets already hashed", because of the tradeoffs of advantages and disadvantages discussed above. And also because client secrets should be decided by admins (see paragraph about that above).
+      - And "Option 1: Explicitly associate specific clients with issuers", because it sets us up nicely for the upcoming multiple IDP feature. However, if the team does not have an appitite for doing this now, then we could choose "Option 2: Implicitly associate all clients with all issuers" for now and then reconsider when we implement the upcoming multiple IDPs feature. The security concerns raised above with Option 2 are especially important with multiple IDP support.
 - Should we make the initial ID token from an authorization flow more inert? (See the audience confusion section above
   for more details.)
 

@@ -4,6 +4,7 @@
 package login
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,40 +19,13 @@ import (
 func TestGetLogin(t *testing.T) {
 	const (
 		happyLdapIDPName = "some-ldap-idp"
-		happyGetResult   = `<!DOCTYPE html>
-<html>
-<body>
-
-<h1>Pinniped</h1>
-<p>some-ldap-idp</p>
-
-<form action="/login" method="post">
-
-    <div>
-        <label for="username"><b>Username</b></label>
-        <input type="text" placeholder="Username" name="username" id="username" required>
-    </div>
-
-    <div>
-        <label for="password"><b>Password</b></label>
-        <input type="password" placeholder="Password" name="password" id="password" required>
-    </div>
-
-    <div>
-        <input type="hidden" name="state" id="state" value="foo">
-    </div>
-
-    <button type="submit" name="submit" id="submit">Login</button>
-
-</form>
-
-</body>
-</html>`
 	)
+
 	tests := []struct {
 		name            string
 		decodedState    *oidc.UpstreamStateParamData
 		encodedState    string
+		errParam        string
 		idps            oidc.UpstreamIdentityProvidersLister
 		wantStatus      int
 		wantContentType string
@@ -66,7 +40,57 @@ func TestGetLogin(t *testing.T) {
 			encodedState:    "foo", // the encoded and decoded state don't match, but that verification is handled one level up.
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
-			wantBody:        happyGetResult,
+			wantBody:        getHTMLResult(""),
+		},
+		{
+			name: "displays error banner when err=login_error param is sent",
+			decodedState: &oidc.UpstreamStateParamData{
+				UpstreamName: happyLdapIDPName,
+				UpstreamType: "ldap",
+			},
+			encodedState:    "foo",
+			errParam:        "login_error",
+			wantStatus:      http.StatusOK,
+			wantContentType: htmlContentType,
+			wantBody: getHTMLResult(`
+    <div class="alert">
+        <span>Incorrect username or password.</span>
+    </div>
+`),
+		},
+		{
+			name: "displays error banner when err=internal_error param is sent",
+			decodedState: &oidc.UpstreamStateParamData{
+				UpstreamName: happyLdapIDPName,
+				UpstreamType: "ldap",
+			},
+			encodedState:    "foo",
+			errParam:        "internal_error",
+			wantStatus:      http.StatusOK,
+			wantContentType: htmlContentType,
+			wantBody: getHTMLResult(`
+    <div class="alert">
+        <span>An internal error occurred. Please contact your administrator for help.</span>
+    </div>
+`),
+		},
+		// If we get an error that we don't recognize, that's also an error, so we
+		// should probably just tell you to contact your administrator...
+		{
+			name: "displays generic error banner when unrecognized err param is sent",
+			decodedState: &oidc.UpstreamStateParamData{
+				UpstreamName: happyLdapIDPName,
+				UpstreamType: "ldap",
+			},
+			encodedState:    "foo",
+			errParam:        "some_other_error",
+			wantStatus:      http.StatusOK,
+			wantContentType: htmlContentType,
+			wantBody: getHTMLResult(`
+    <div class="alert">
+        <span>An internal error occurred. Please contact your administrator for help.</span>
+    </div>
+`),
 		},
 	}
 
@@ -74,7 +98,11 @@ func TestGetLogin(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewGetHandler(tt.idps)
-			req := httptest.NewRequest(http.MethodGet, "/login", nil)
+			target := "/login?state=" + tt.encodedState
+			if tt.errParam != "" {
+				target += "&err=" + tt.errParam
+			}
+			req := httptest.NewRequest(http.MethodGet, target, nil)
 			rsp := httptest.NewRecorder()
 			err := handler(rsp, req, tt.encodedState, tt.decodedState)
 			require.NoError(t, err)
@@ -85,4 +113,41 @@ func TestGetLogin(t *testing.T) {
 			require.Equal(t, tt.wantBody, body)
 		})
 	}
+}
+
+func getHTMLResult(errorBanner string) string {
+	happyGetResult := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Pinniped</title>
+</head>
+<body>
+
+<h1>Pinniped</h1>
+<p>some-ldap-idp</p>
+%s
+<form action="/login" method="post">
+
+    <div>
+        <label for="username"><b>Username</b></label>
+        <input type="text" name="username" id="username" autocomplete="username" required>
+    </div>
+
+    <div>
+        <label for="password"><b>Password</b></label>
+        <input type="password" name="password" id="password current-password" autocomplete="current-password" required>
+    </div>
+
+    <div>
+        <input type="hidden" name="state" id="state" value="foo">
+    </div>
+
+    <button type="submit" name="submit" id="submit">Log in</button>
+
+</form>
+
+</body>
+</html>
+`
+	return fmt.Sprintf(happyGetResult, errorBanner)
 }

@@ -3,28 +3,35 @@ Copyright 2022 the Pinniped contributors. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 --><!DOCTYPE html>
 <html>
+<head>
+    <title>{{.Title}}</title>
+</head>
 <body>
 
 <h1>Pinniped</h1>
 <p>{{ .IDPName }}</p>
-
+{{if .HasAlertError}}
+    <div class="alert">
+        <span>{{.AlertMessage}}</span>
+    </div>
+{{end}}
 <form action="/login" method="post">
 
     <div>
         <label for="username"><b>Username</b></label>
-        <input type="text" placeholder="Username" name="username" id="username" required>
+        <input type="text" name="username" id="username" autocomplete="username" required>
     </div>
 
     <div>
         <label for="password"><b>Password</b></label>
-        <input type="password" placeholder="Password" name="password" id="password" required>
+        <input type="password" name="password" id="password current-password" autocomplete="current-password" required>
     </div>
 
     <div>
         <input type="hidden" name="state" id="state" value="{{.State}}">
     </div>
 
-    <button type="submit" name="submit" id="submit">Login</button>
+    <button type="submit" name="submit" id="submit">Log in</button>
 
 </form>
 

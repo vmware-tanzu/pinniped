@@ -25,7 +25,7 @@ logs.
 ### How Pinniped Works Today (as of version v0.16.0)
 
 The Pinniped Supervisor and Concierge components are Kubernetes Deployments. Today, each Pod has a single container,
-which is the Supervisor or Concierge app. Kubernetes captures the stdout of the app into the Pod logs.
+which is the Supervisor or Concierge app. Kubernetes captures the stdout and stderr of the app into the Pod logs.
 
 Today, the Pinniped Supervisor and Concierge log many interesting events to their Pod logs. These logs are meant
 primarily to help an admin user debug problems with their Pinniped configuration or with their cluster. The Supervisor
@@ -59,7 +59,7 @@ Goals
 
 Non-goals
 
-- Enabling auditing in the impersonation proxy. If needed, this will be handled in a separate feature.
+- Enabling Kubernetes API request auditing in the impersonation proxy. If needed, this will be handled in a separate feature.
 - Providing the ability to filter or choose which audit events to capture.
 - Auditing the management of CRs (e.g. OIDCIdentityProvider). These events are captured by the API server audit logs.
 
@@ -252,7 +252,7 @@ a GKE Ingress, if no health checks were configured.
 
 #### Tests
 
-Audit logging will be a user-facing feature, and the format of the logs should be considered a kind of documented API.
+Audit logging will be a user-facing feature, and the format of the logs should be considered a documented and versioned API.
 Unnecessary changes to the format should be avoided after the first release. Therefore, all audit log events should be
 covered by unit tests.
 

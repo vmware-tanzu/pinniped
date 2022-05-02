@@ -479,7 +479,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(nil),
 		},
 		{
-			name:           "when the username has special LDAP search filter characters then they must be properly escaped in the search filter, because the username is end-user input",
+			name:           "when the username has special LDAP search filter characters then they must be properly escaped in the custom user search filter, because the username is end-user input",
 			username:       `a&b|c(d)e\f*g`,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
@@ -496,6 +496,92 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:     "when the username has special LDAP search filter characters then they must be properly escaped in the default user search filter, because the username is end-user input",
+			username: `a&b|c(d)e\f*g`,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.UserSearch.Filter = ""
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					r.Filter = fmt.Sprintf("(some-upstream-username-attribute=%s)", `a&b|c\28d\29e\5cf\2ag`)
+				})).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:           "when the user search result DN has special LDAP search filter characters then they must be properly escaped in the custom group search filter",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: `result DN with * \ special characters ()`,
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+									ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								},
+							},
+						},
+					}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					escapedDN := `result DN with \2a \5c special characters \28\29`
+					r.Filter = fmt.Sprintf("(some-group-filter=%s-and-more-filter=%s)", escapedDN, escapedDN)
+				}), expectedGroupSearchPageSize).Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(`result DN with * \ special characters ()`, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				r.DN = `result DN with * \ special characters ()`
+			}),
+		},
+		{
+			name:     "when the user search result DN has special LDAP search filter characters then they must be properly escaped in the default group search filter",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.Filter = ""
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: `result DN with * \ special characters ()`,
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+									ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								},
+							},
+						},
+					}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Filter = fmt.Sprintf("(member=%s)", `result DN with \2a \5c special characters \28\29`)
+				}), expectedGroupSearchPageSize).Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(`result DN with * \ special characters ()`, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				r.DN = `result DN with * \ special characters ()`
+			}),
 		},
 		{
 			name:           "group names are sorted to make the result more stable/predictable",

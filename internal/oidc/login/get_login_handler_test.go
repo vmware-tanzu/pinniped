@@ -98,7 +98,7 @@ func TestGetLogin(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewGetHandler(tt.idps)
-			target := "/login?state=" + tt.encodedState
+			target := "/some/path/login?state=" + tt.encodedState
 			if tt.errParam != "" {
 				target += "&err=" + tt.errParam
 			}
@@ -126,7 +126,7 @@ func getHTMLResult(errorBanner string) string {
 <h1>Pinniped</h1>
 <p>some-ldap-idp</p>
 %s
-<form action="/login" method="post">
+<form action="/some/path/login" method="post" target="_parent">
 
     <div>
         <label for="username"><b>Username</b></label>

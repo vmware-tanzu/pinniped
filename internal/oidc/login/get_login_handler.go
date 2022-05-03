@@ -28,6 +28,7 @@ type PageData struct {
 	HasAlertError bool
 	AlertMessage  string
 	Title         string
+	PostPath      string
 }
 
 func NewGetHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) HandlerFunc {
@@ -44,6 +45,7 @@ func NewGetHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) HandlerFun
 			HasAlertError: alertError != "",
 			AlertMessage:  message,
 			Title:         "Pinniped",
+			PostPath:      r.URL.Path, // the path for POST is the same as for GET
 		})
 		if err != nil {
 			return err

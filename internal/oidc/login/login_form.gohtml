@@ -15,7 +15,7 @@ SPDX-License-Identifier: Apache-2.0
         <span>{{.AlertMessage}}</span>
     </div>
 {{end}}
-<form action="/login" method="post">
+<form action="{{.PostPath}}" method="post" target="_parent">
 
     <div>
         <label for="username"><b>Username</b></label>

@@ -370,9 +370,11 @@ func TestLoginEndpoint(t *testing.T) {
 		tt := test
 
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			if test.csrfCookie != "" {
-				req.Header.Set("Cookie", test.csrfCookie)
+			if tt.csrfCookie != "" {
+				req.Header.Set("Cookie", tt.csrfCookie)
 			}
 			rsp := httptest.NewRecorder()
 
@@ -414,7 +416,11 @@ func TestLoginEndpoint(t *testing.T) {
 
 			subject.ServeHTTP(rsp, req)
 
-			testutil.RequireSecurityHeaders(t, rsp)
+			if tt.method == http.MethodPost {
+				testutil.RequireSecurityHeadersWithFormPostCSPs(t, rsp)
+			} else {
+				testutil.RequireSecurityHeadersWithoutFormPostCSPs(t, rsp)
+			}
 
 			require.Equal(t, tt.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)

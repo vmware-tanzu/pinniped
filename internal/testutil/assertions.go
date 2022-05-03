@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -54,9 +54,35 @@ func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.Secret
 	require.Len(t, storedAuthcodeSecrets.Items, expectedNumberOfSecrets)
 }
 
-func RequireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
-	// This is a more relaxed assertion rather than an exact match, so it can cover all the CSP headers we use.
-	require.Contains(t, response.Header().Get("Content-Security-Policy"), "default-src 'none'")
+func RequireSecurityHeadersWithFormPostCSPs(t *testing.T, response *httptest.ResponseRecorder) {
+	// Loosely confirm that the unique CSPs needed for the form_post page were used.
+	cspHeader := response.Header().Get("Content-Security-Policy")
+	require.Contains(t, cspHeader, "script-src '") // loose assertion
+	require.Contains(t, cspHeader, "style-src '")  // loose assertion
+	require.Contains(t, cspHeader, "img-src data:")
+	require.Contains(t, cspHeader, "connect-src *")
+
+	// Also require all the usual security headers.
+	requireSecurityHeaders(t, response)
+}
+
+func RequireSecurityHeadersWithoutFormPostCSPs(t *testing.T, response *httptest.ResponseRecorder) {
+	// Confirm that the unique CSPs needed for the form_post page were NOT used.
+	cspHeader := response.Header().Get("Content-Security-Policy")
+	require.NotContains(t, cspHeader, "script-src")
+	require.NotContains(t, cspHeader, "style-src")
+	require.NotContains(t, cspHeader, "img-src data:")
+	require.NotContains(t, cspHeader, "connect-src *")
+
+	// Also require all the usual security headers.
+	requireSecurityHeaders(t, response)
+}
+
+func requireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
+	// Loosely confirm that the generic CSPs were used.
+	cspHeader := response.Header().Get("Content-Security-Policy")
+	require.Contains(t, cspHeader, "default-src 'none'")
+	require.Contains(t, cspHeader, "frame-ancestors 'none'")
 
 	require.Equal(t, "DENY", response.Header().Get("X-Frame-Options"))
 	require.Equal(t, "1; mode=block", response.Header().Get("X-XSS-Protection"))

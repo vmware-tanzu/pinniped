@@ -96,7 +96,10 @@ func TestGetLogin(t *testing.T) {
 
 	for _, test := range tests {
 		tt := test
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			handler := NewGetHandler(tt.idps)
 			target := "/some/path/login?state=" + tt.encodedState
 			if tt.errParam != "" {
@@ -107,7 +110,7 @@ func TestGetLogin(t *testing.T) {
 			err := handler(rsp, req, tt.encodedState, tt.decodedState)
 			require.NoError(t, err)
 
-			require.Equal(t, test.wantStatus, rsp.Code)
+			require.Equal(t, tt.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)
 			body := rsp.Body.String()
 			require.Equal(t, tt.wantBody, body)

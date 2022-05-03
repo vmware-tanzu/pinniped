@@ -1034,7 +1034,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
 
-			testutil.RequireSecurityHeaders(t, rsp)
+			testutil.RequireSecurityHeadersWithFormPostCSPs(t, rsp)
 
 			if test.wantAuthcodeExchangeCall != nil {
 				test.wantAuthcodeExchangeCall.args.Ctx = reqContext

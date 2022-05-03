@@ -2566,7 +2566,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 		require.Equal(t, test.wantStatus, rsp.Code)
 		testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
-		testutil.RequireSecurityHeaders(t, rsp)
+		testutil.RequireSecurityHeadersWithoutFormPostCSPs(t, rsp)
 
 		if test.wantPasswordGrantCall != nil {
 			test.wantPasswordGrantCall.args.Ctx = reqContext

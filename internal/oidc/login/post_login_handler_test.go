@@ -617,6 +617,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 		tt := test
 
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			kubeClient := fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
 
@@ -650,7 +652,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)
-			require.Equal(t, test.wantBodyString, rsp.Body.String())
+			require.Equal(t, tt.wantBodyString, rsp.Body.String())
 
 			actualLocation := rsp.Header().Get("Location")
 
@@ -660,30 +662,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 				oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					actualLocation,
-					test.wantRedirectLocationRegexp,
+					tt.wantRedirectLocationRegexp,
 					kubeClient,
 					secretsClient,
 					kubeOauthStore,
-					test.wantDownstreamGrantedScopes,
-					test.wantDownstreamIDTokenSubject,
-					test.wantDownstreamIDTokenUsername,
-					test.wantDownstreamIDTokenGroups,
-					test.wantDownstreamRequestedScopes,
-					test.wantDownstreamPKCEChallenge,
-					test.wantDownstreamPKCEChallengeMethod,
-					test.wantDownstreamNonce,
+					tt.wantDownstreamGrantedScopes,
+					tt.wantDownstreamIDTokenSubject,
+					tt.wantDownstreamIDTokenUsername,
+					tt.wantDownstreamIDTokenGroups,
+					tt.wantDownstreamRequestedScopes,
+					tt.wantDownstreamPKCEChallenge,
+					tt.wantDownstreamPKCEChallengeMethod,
+					tt.wantDownstreamNonce,
 					downstreamClientID,
-					test.wantDownstreamRedirectURI,
-					test.wantDownstreamCustomSessionData,
+					tt.wantDownstreamRedirectURI,
+					tt.wantDownstreamCustomSessionData,
 				)
 			case tt.wantRedirectToLoginPageError != "":
 				expectedLocation := downstreamIssuer + oidc.PinnipedLoginPath +
 					"?err=" + tt.wantRedirectToLoginPageError + "&state=" + happyEncodedUpstreamState
 				require.Equal(t, expectedLocation, actualLocation)
-				require.Len(t, kubeClient.Actions(), test.wantUnnecessaryStoredRecords)
+				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
 			case tt.wantRedirectLocationString != "":
 				require.Equal(t, tt.wantRedirectLocationString, actualLocation)
-				require.Len(t, kubeClient.Actions(), test.wantUnnecessaryStoredRecords)
+				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
 			default:
 				require.Failf(t, "test should have expected a redirect",
 					"actual location was %q", actualLocation)

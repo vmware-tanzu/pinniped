@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 
-# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
 # A script to perform the setup required to manually test using the supervisor on a kind cluster.
 # Assumes that you installed the apps already using hack/prepare-for-integration-tests.sh.
+#
+# This script is a little hacky to avoid setting up any kind of ingress or load balancer on Kind.
+# It uses an http proxy server and port forwarding to route the requests into the cluster.
+# This is only intended for quick manual testing of features by contributors and is not a
+# representation of how to really deploy or configure Pinniped.
 #
 # This uses the Supervisor and Concierge in the same cluster. Usually the Supervisor would be
 # deployed in one cluster while each workload cluster would have a Concierge. All the workload
@@ -22,6 +27,7 @@ cd "$ROOT"
 
 use_oidc_upstream=no
 use_ldap_upstream=no
+use_ad_upstream=no
 while (("$#")); do
   case "$1" in
   --ldap)
@@ -30,6 +36,12 @@ while (("$#")); do
     ;;
   --oidc)
     use_oidc_upstream=yes
+    shift
+    ;;
+  --ad)
+    # Use an ActiveDirectoryIdentityProvider.
+    # This assumes that you used the --get-active-directory-vars flag with hack/prepare-for-integration-tests.sh.
+    use_ad_upstream=yes
     shift
     ;;
   -*)
@@ -43,8 +55,8 @@ while (("$#")); do
   esac
 done
 
-if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" ]]; then
-  echo "Error: Please use --oidc or --ldap to specify which type of upstream identity provider(s) you would like"
+if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_upstream" == "no" ]]; then
+  echo "Error: Please use --oidc, --ldap, or --ad to specify which type of upstream identity provider(s) you would like"
   exit 1
 fi
 
@@ -95,6 +107,7 @@ spec:
 EOF
 
 echo "Waiting for FederationDomain to initialize..."
+# Sleeping is a race, but that's probably good enough for the purposes of this script.
 sleep 5
 
 # Test that the federation domain is working before we proceed.
@@ -152,6 +165,10 @@ spec:
     certificateAuthorityData: "$PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE"
   bind:
     secretName: my-ldap-service-account
+  groupSearch:
+    base: "$PINNIPED_TEST_LDAP_GROUPS_SEARCH_BASE"
+    attributes:
+      groupName: "cn"
   userSearch:
     base: "$PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"
     filter: "cn={}"
@@ -178,6 +195,39 @@ EOF
     --dry-run=client --output yaml | kubectl apply -f -
 fi
 
+if [[ "$use_ad_upstream" == "yes" ]]; then
+  # Make an ActiveDirectoryIdentityProvider.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: ActiveDirectoryIdentityProvider
+metadata:
+  name: my-ad-provider
+spec:
+  host: "$PINNIPED_TEST_AD_HOST"
+  tls:
+    certificateAuthorityData: "$PINNIPED_TEST_AD_LDAPS_CA_BUNDLE"
+  bind:
+    secretName: my-ad-service-account
+EOF
+
+  # Make a Secret for the above ActiveDirectoryIdentityProvider to describe the bind account.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-ad-service-account
+stringData:
+  username: "$PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME"
+  password: "$PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD"
+type: "kubernetes.io/basic-auth"
+EOF
+
+  # Grant the test user some RBAC permissions so we can play with kubectl as that user.
+  kubectl create clusterrolebinding ldap-test-user-can-view --clusterrole view \
+    --user "$PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME" \
+    --dry-run=client --output yaml | kubectl apply -f -
+fi
+
 # Make a JWTAuthenticator which respects JWTs from the Supervisor's issuer.
 # The issuer URL must be accessible from within the cluster for OIDC discovery.
 cat <<EOF | kubectl apply -f -
@@ -193,10 +243,17 @@ spec:
 EOF
 
 echo "Waiting for JWTAuthenticator to initialize..."
+# Sleeping is a race, but that's probably good enough for the purposes of this script.
 sleep 5
 
 # Compile the CLI.
 go build ./cmd/pinniped
+
+# In case Pinniped was just installed moments ago, wait for the CredentialIssuer to be ready.
+while [[ -z "$(kubectl get credentialissuer pinniped-concierge-config -o=jsonpath='{.status.strategies[?(@.status == "Success")].type}')" ]]; do
+  echo "Waiting for a successful strategy on CredentialIssuer"
+  sleep 2
+done
 
 # Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for logins.
 https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped get kubeconfig --oidc-skip-browser >kubeconfig
@@ -224,14 +281,21 @@ if [[ "$use_ldap_upstream" == "yes" ]]; then
   echo "    Password: $PINNIPED_TEST_LDAP_USER_PASSWORD"
 fi
 
+if [[ "$use_ad_upstream" == "yes" ]]; then
+  echo
+  echo "When prompted for username and password by the CLI, use these values:"
+  echo "    Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
+  echo "    Password: $PINNIPED_TEST_AD_USER_PASSWORD"
+fi
+
 # Perform a login using the kubectl plugin. This should print the URL to be followed for the Dex login page
 # if using an OIDC upstream, or should prompt on the CLI for username/password if using an LDAP upstream.
 echo
-echo "Running: https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" kubectl --kubeconfig ./kubeconfig get pods -A"
-https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" kubectl --kubeconfig ./kubeconfig get pods -A
+echo "Running: PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" kubectl --kubeconfig ./kubeconfig get pods -A"
+PINNIPED_DEBUG=true https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" kubectl --kubeconfig ./kubeconfig get pods -A
 
 # Print the identity of the currently logged in user. The CLI has cached your tokens, and will automatically refresh
 # your short-lived credentials whenever they expire, so you should not be prompted to log in again for the rest of the day.
 echo
-echo "Running: https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig"
-https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped whoami --kubeconfig ./kubeconfig
+echo "Running: PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig"
+PINNIPED_DEBUG=true https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped whoami --kubeconfig ./kubeconfig

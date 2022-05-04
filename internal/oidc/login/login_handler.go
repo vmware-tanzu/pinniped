@@ -84,15 +84,11 @@ func NewHandler(
 
 func wrapSecurityHeaders(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var wrapped http.Handler
-		switch r.Method {
-		case http.MethodPost:
+		wrapped := securityheader.Wrap(handler)
+		if r.Method == http.MethodPost {
 			// POST requests can result in the form_post html page, so allow it with CSP headers.
 			wrapped = securityheader.WrapWithCustomCSP(handler, formposthtml.ContentSecurityPolicy())
-		default:
-			wrapped = securityheader.Wrap(handler)
 		}
-
 		wrapped.ServeHTTP(w, r)
 	})
 }

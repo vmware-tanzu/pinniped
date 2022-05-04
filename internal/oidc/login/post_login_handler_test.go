@@ -249,6 +249,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		// upstream LDAP or AD provider.
 		wantRedirectLocationRegexp        string // for loose matching
 		wantRedirectLocationString        string // for exact matching instead
+		wantBodyFormResponseRegexp        string // for form_post html page matching instead
 		wantDownstreamRedirectURI         string
 		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
@@ -310,6 +311,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
+		},
+		{
+			name: "happy LDAP login when downstream response_mode=form_post returns 200 with HTML+JS form",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				query := copyOfHappyDownstreamRequestParamsQuery()
+				query["response_mode"] = []string{"form_post"}
+				data.AuthParams = query.Encode()
+			}),
+			formParams:      happyUsernamePasswordFormParams,
+			wantStatus:      http.StatusOK,
+			wantContentType: htmlContentType,
+			wantBodyFormResponseRegexp: `(?s)<html.*<script>.*To finish logging in, paste this authorization code` +
+				`.*<form>.*<code id="manual-auth-code">(.+)</code>.*</html>`, // "(?s)" means match "." across newlines
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 		},
 		{
 			name: "happy LDAP login when downstream redirect uri matches what is configured for client except for the port number",
@@ -652,12 +677,13 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)
-			require.Equal(t, tt.wantBodyString, rsp.Body.String())
 
 			actualLocation := rsp.Header().Get("Location")
 
 			switch {
 			case tt.wantRedirectLocationRegexp != "":
+				// Expecting a success redirect to the client.
+				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				require.Len(t, rsp.Header().Values("Location"), 1)
 				oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
@@ -679,15 +705,42 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamCustomSessionData,
 				)
 			case tt.wantRedirectToLoginPageError != "":
+				// Expecting an error redirect to the login UI page.
+				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				expectedLocation := downstreamIssuer + oidc.PinnipedLoginPath +
 					"?err=" + tt.wantRedirectToLoginPageError + "&state=" + happyEncodedUpstreamState
 				require.Equal(t, expectedLocation, actualLocation)
 				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
 			case tt.wantRedirectLocationString != "":
+				// Expecting an error redirect to the client.
+				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				require.Equal(t, tt.wantRedirectLocationString, actualLocation)
 				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
+			case tt.wantBodyFormResponseRegexp != "":
+				// Expecting the body of the response to be a html page with a form (for "response_mode=form_post").
+				_, hasLocationHeader := rsp.Header()["Location"]
+				require.False(t, hasLocationHeader)
+				oidctestutil.RequireAuthCodeRegexpMatch(
+					t,
+					rsp.Body.String(),
+					tt.wantBodyFormResponseRegexp,
+					kubeClient,
+					secretsClient,
+					kubeOauthStore,
+					tt.wantDownstreamGrantedScopes,
+					tt.wantDownstreamIDTokenSubject,
+					tt.wantDownstreamIDTokenUsername,
+					tt.wantDownstreamIDTokenGroups,
+					tt.wantDownstreamRequestedScopes,
+					tt.wantDownstreamPKCEChallenge,
+					tt.wantDownstreamPKCEChallengeMethod,
+					tt.wantDownstreamNonce,
+					downstreamClientID,
+					tt.wantDownstreamRedirectURI,
+					tt.wantDownstreamCustomSessionData,
+				)
 			default:
-				require.Failf(t, "test should have expected a redirect",
+				require.Failf(t, "test should have expected a redirect or form body",
 					"actual location was %q", actualLocation)
 			}
 		})

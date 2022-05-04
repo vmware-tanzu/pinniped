@@ -102,7 +102,10 @@ logo and the IDP name.
    2. Using the idp name/type from the state param, look up the IDP, bind to it, verify the username/password and
    get the users downstream username and groups.
    3. If the login succeeds, mint an authcode and store the session as a secret the same way as we do on the
-   callback endpoint today. Redirect to the client’s redirect URI with the new authcode.
+   callback endpoint today, and return the new authcode. If `response_mode=form_post` was requested, return a 200
+   with Pinniped's form post html page, to be displayed on the login page. If it is `query`, return a redirect
+   with the authcode as a query param. Default behavior when `response_mode` is unspecified should be handled
+   by other parts of the code, but it should default to `query` on the supervisor.
    4. If the login fails, respond with an error so the login page can render an error message. Allow the user to retry
    login the same way we do with the CLI today (we leave brute force protection to the IDP)
 
@@ -119,6 +122,20 @@ However if they do choose to register a new client they may need to update the f
 - The name of the idp custom resource is currently not published to users logging in with Pinniped.
   We plan on exposing this to indicate to users which idp they are logging in to.
   Admins may need to update this to something more user-friendly.
+  Note: While branding is an important part of the user experience, and we may consider adding
+  the option to customize the page or add new fields (such as an IDP "display name" field), we
+  are choosing to defer this work until later. We want to get the MVP work done and into users'
+  hands and hope to hear more from the community once the MVP is completed.
+  For the MVP, we should not add new config but should remind admins that the IDP field field
+  is now displayed.
+
+To enable users to upgrade smoothly, the behavior of the Pinniped CLI when it encounters multiple possible flow options will change.
+Previously, the team had decided that the CLI should fail when there were multiple options (e.g. when it's could
+use either the `browser_authcode` flow or the `cli_password` flow). However, that behavior would break existing
+kubeconfigs once the `browser_authcode` flow was introduced to the IDP discovery doc.
+Instead we are opting to prioritize based on the order listed in the IDP discovery doc.
+Users will still have the option to override this priority with the `--upstream-identity-provider-flow` flag,
+but that flag will not be required.
 
 #### Tests
 
@@ -139,6 +156,8 @@ Once dynamic clients are implemented:
 #### New Dependencies
 This should be kept to a very simple HTML page with minimal, clean CSS styling.
 Javascript should be avoided.
+The styling should match the [form post html page](https://github.com/vmware-tanzu/pinniped/tree/main/internal/oidc/provider/formposthtml)
+as much as possible, we should reuse some of the existing css and add to it to keep the style consistent.
 
 #### Observability Considerations
 * Logging login attempts at higher log levels.

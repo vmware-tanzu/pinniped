@@ -974,6 +974,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		page := browsertest.Open(t)
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
@@ -992,6 +993,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
@@ -1078,8 +1080,39 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		regex := regexp.MustCompile(`\A` + downstream.Spec.Issuer + `/login.+`)
 		browsertest.WaitForURL(t, page, regex)
 
-		browsertest.WaitForVisibleElements(t, page, "input#username", "input#password", "button#submit")
-		// TODO actually log in :P
+		usernameSelector := "input#username"
+		passwordSelector := "input[type='password']"
+		loginButtonSelector := "button#submit"
+		browsertest.WaitForVisibleElements(t, page, usernameSelector, passwordSelector, loginButtonSelector)
+
+		// Fill in the username and password and click "submit".
+		t.Logf("logging into ldap")
+		require.NoError(t, page.First(usernameSelector).Fill(expectedUsername))
+		require.NoError(t, page.First(passwordSelector).Fill(env.SupervisorUpstreamLDAP.TestUserPassword))
+		require.NoError(t, page.First(loginButtonSelector).Click())
+
+		formpostExpectSuccessState(t, page)
+
+		// Expect the CLI to output a list of namespaces.
+		t.Logf("waiting for kubectl to output namespace list")
+		var kubectlOutput string
+		select {
+		case <-time.After(1 * time.Minute):
+			require.Fail(t, "timed out waiting for kubectl output")
+		case kubectlOutput = <-kubectlOutputChan:
+		}
+		requireKubectlGetNamespaceOutput(t, env, kubectlOutput)
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
 	})
 }
 

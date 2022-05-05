@@ -4,53 +4,39 @@
 package login
 
 import (
-	_ "embed"
-	"html/template"
 	"net/http"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/login/loginhtml"
 )
 
-const defaultErrorMessage = "An internal error occurred. Please contact your administrator for help."
-
-var (
-	//go:embed login_form.gohtml
-	rawHTMLTemplate string
-
-	errorMappings = map[string]string{
-		"login_error": "Incorrect username or password.",
-	}
+const (
+	internalErrorMessage                    = "An internal error occurred. Please contact your administrator for help."
+	incorrectUsernameOrPasswordErrorMessage = "Incorrect username or password."
 )
 
-type PageData struct {
-	State         string
-	IDPName       string
-	HasAlertError bool
-	AlertMessage  string
-	Title         string
-	PostPath      string
-}
-
-func NewGetHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) HandlerFunc {
-	var parsedHTMLTemplate = template.Must(template.New("login_post.gohtml").Parse(rawHTMLTemplate))
+func NewGetHandler() HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
-		alertError := r.URL.Query().Get("err")
-		message := errorMappings[alertError]
-		if message == "" {
-			message = defaultErrorMessage
-		}
-		err := parsedHTMLTemplate.Execute(w, &PageData{
+		alertMessage, hasAlert := getAlert(r)
+
+		pageInputs := &loginhtml.PageData{
+			PostPath:      r.URL.Path, // the path for POST is the same as for GET
 			State:         encodedState,
 			IDPName:       decodedState.UpstreamName,
-			HasAlertError: alertError != "",
-			AlertMessage:  message,
-			Title:         "Pinniped",
-			PostPath:      r.URL.Path, // the path for POST is the same as for GET
-		})
-		if err != nil {
-			return err
+			HasAlertError: hasAlert,
+			AlertMessage:  alertMessage,
 		}
-
-		return nil
+		return loginhtml.Template().Execute(w, pageInputs)
 	}
+}
+
+func getAlert(r *http.Request) (string, bool) {
+	errorParamValue := r.URL.Query().Get(errParamName)
+
+	message := internalErrorMessage
+	if errorParamValue == string(ShowBadUserPassErr) {
+		message = incorrectUsernameOrPasswordErrorMessage
+	}
+
+	return message, errorParamValue != ""
 }

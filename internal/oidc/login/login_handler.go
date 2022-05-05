@@ -11,6 +11,7 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/login/loginhtml"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
 )
@@ -84,7 +85,7 @@ func NewHandler(
 
 func wrapSecurityHeaders(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wrapped := securityheader.Wrap(handler)
+		wrapped := securityheader.WrapWithCustomCSP(handler, loginhtml.ContentSecurityPolicy())
 		if r.Method == http.MethodPost {
 			// POST requests can result in the form_post html page, so allow it with CSP headers.
 			wrapped = securityheader.WrapWithCustomCSP(handler, formposthtml.ContentSecurityPolicy())

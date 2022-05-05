@@ -4,21 +4,23 @@
 package login
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"go.pinniped.dev/internal/testutil"
-
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/login/loginhtml"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestGetLogin(t *testing.T) {
 	const (
-		happyLdapIDPName = "some-ldap-idp"
+		testPath         = "/some/path/login"
+		testUpstreamName = "some-ldap-idp"
+		testUpstreamType = "ldap"
+		testEncodedState = "fake-encoded-state-value"
 	)
 
 	tests := []struct {
@@ -34,63 +36,57 @@ func TestGetLogin(t *testing.T) {
 		{
 			name: "Happy path ldap",
 			decodedState: &oidc.UpstreamStateParamData{
-				UpstreamName: happyLdapIDPName,
-				UpstreamType: "ldap",
+				UpstreamName: testUpstreamName,
+				UpstreamType: testUpstreamType,
 			},
-			encodedState:    "foo", // the encoded and decoded state don't match, but that verification is handled one level up.
+			encodedState:    testEncodedState, // the encoded and decoded state don't match, but that verification is handled one level up.
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
-			wantBody:        getHTMLResult(""),
+			wantBody:        testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState, ""), // no alert message
 		},
 		{
 			name: "displays error banner when err=login_error param is sent",
 			decodedState: &oidc.UpstreamStateParamData{
-				UpstreamName: happyLdapIDPName,
-				UpstreamType: "ldap",
+				UpstreamName: testUpstreamName,
+				UpstreamType: testUpstreamType,
 			},
-			encodedState:    "foo",
+			encodedState:    testEncodedState,
 			errParam:        "login_error",
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
-			wantBody: getHTMLResult(`
-    <div class="alert">
-        <span>Incorrect username or password.</span>
-    </div>
-`),
+			wantBody: testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState,
+				"Incorrect username or password.",
+			),
 		},
 		{
 			name: "displays error banner when err=internal_error param is sent",
 			decodedState: &oidc.UpstreamStateParamData{
-				UpstreamName: happyLdapIDPName,
-				UpstreamType: "ldap",
+				UpstreamName: testUpstreamName,
+				UpstreamType: testUpstreamType,
 			},
-			encodedState:    "foo",
+			encodedState:    testEncodedState,
 			errParam:        "internal_error",
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
-			wantBody: getHTMLResult(`
-    <div class="alert">
-        <span>An internal error occurred. Please contact your administrator for help.</span>
-    </div>
-`),
+			wantBody: testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState,
+				"An internal error occurred. Please contact your administrator for help.",
+			),
 		},
-		// If we get an error that we don't recognize, that's also an error, so we
-		// should probably just tell you to contact your administrator...
 		{
+			// If we get an error that we don't recognize, that's also an error, so we
+			// should probably just tell you to contact your administrator...
 			name: "displays generic error banner when unrecognized err param is sent",
 			decodedState: &oidc.UpstreamStateParamData{
-				UpstreamName: happyLdapIDPName,
-				UpstreamType: "ldap",
+				UpstreamName: testUpstreamName,
+				UpstreamType: testUpstreamType,
 			},
-			encodedState:    "foo",
+			encodedState:    testEncodedState,
 			errParam:        "some_other_error",
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
-			wantBody: getHTMLResult(`
-    <div class="alert">
-        <span>An internal error occurred. Please contact your administrator for help.</span>
-    </div>
-`),
+			wantBody: testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState,
+				"An internal error occurred. Please contact your administrator for help.",
+			),
 		},
 	}
 
@@ -100,8 +96,8 @@ func TestGetLogin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := NewGetHandler(tt.idps)
-			target := "/some/path/login?state=" + tt.encodedState
+			handler := NewGetHandler()
+			target := testPath + "?state=" + tt.encodedState
 			if tt.errParam != "" {
 				target += "&err=" + tt.errParam
 			}
@@ -113,44 +109,8 @@ func TestGetLogin(t *testing.T) {
 			require.Equal(t, tt.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)
 			body := rsp.Body.String()
+			// t.Log("actual body:", body) // useful when updating expected values
 			require.Equal(t, tt.wantBody, body)
 		})
 	}
-}
-
-func getHTMLResult(errorBanner string) string {
-	happyGetResult := `<!DOCTYPE html>
-<html>
-<head>
-    <title>Pinniped</title>
-</head>
-<body>
-
-<h1>Pinniped</h1>
-<p>some-ldap-idp</p>
-%s
-<form action="/some/path/login" method="post" target="_parent">
-
-    <div>
-        <label for="username"><b>Username</b></label>
-        <input type="text" name="username" id="username" autocomplete="username" required>
-    </div>
-
-    <div>
-        <label for="password"><b>Password</b></label>
-        <input type="password" name="password" id="password current-password" autocomplete="current-password" required>
-    </div>
-
-    <div>
-        <input type="hidden" name="state" id="state" value="foo">
-    </div>
-
-    <button type="submit" name="submit" id="submit">Log in</button>
-
-</form>
-
-</body>
-</html>
-`
-	return fmt.Sprintf(happyGetResult, errorBanner)
 }

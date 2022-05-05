@@ -417,9 +417,9 @@ func TestLoginEndpoint(t *testing.T) {
 			subject.ServeHTTP(rsp, req)
 
 			if tt.method == http.MethodPost {
-				testutil.RequireSecurityHeadersWithFormPostCSPs(t, rsp)
+				testutil.RequireSecurityHeadersWithFormPostPageCSPs(t, rsp)
 			} else {
-				testutil.RequireSecurityHeadersWithoutFormPostCSPs(t, rsp)
+				testutil.RequireSecurityHeadersWithLoginPageCSPs(t, rsp)
 			}
 
 			require.Equal(t, tt.wantStatus, rsp.Code)

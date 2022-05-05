@@ -1,9 +1,9 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package formposthtml defines HTML templates used by the Supervisor.
+// Package loginhtml defines HTML templates used by the Supervisor.
 //nolint: gochecknoglobals // This package uses globals to ensure that all parsing and minifying happens at init.
-package formposthtml
+package loginhtml
 
 import (
 	_ "embed" // Needed to trigger //go:embed directives below.
@@ -16,31 +16,23 @@ import (
 )
 
 var (
-	//go:embed form_post.css
+	//go:embed login_form.css
 	rawCSS      string
 	minifiedCSS = mustMinify(minify.CSS(rawCSS))
 
-	//go:embed form_post.js
-	rawJS      string
-	minifiedJS = mustMinify(minify.JS(rawJS))
-
-	//go:embed form_post.gohtml
+	//go:embed login_form.gohtml
 	rawHTMLTemplate string
 )
 
 // Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
-var parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(template.FuncMap{
+var parsedHTMLTemplate = template.Must(template.New("login_form.gohtml").Funcs(template.FuncMap{
 	"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) },
-	"minifiedJS":  func() template.JS { return template.JS(minifiedJS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
 }).Parse(rawHTMLTemplate))
 
 // Generate the CSP header value once since it's effectively constant.
 var cspValue = strings.Join([]string{
 	`default-src 'none'`,
-	`script-src '` + csp.Hash(minifiedJS) + `'`,
 	`style-src '` + csp.Hash(minifiedCSS) + `'`,
-	`img-src data:`,
-	`connect-src *`,
 	`frame-ancestors 'none'`,
 }, "; ")
 
@@ -56,5 +48,18 @@ func mustMinify(s string, err error) string {
 // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy.
 func ContentSecurityPolicy() string { return cspValue }
 
-// Template returns the html/template.Template for rendering the response_type=form_post response page.
+// Template returns the html/template.Template for rendering the login page.
 func Template() *template.Template { return parsedHTMLTemplate }
+
+// CSS returns the minified CSS that will be embedded into the page template.
+func CSS() string { return minifiedCSS }
+
+// PageData represents the inputs to the template.
+type PageData struct {
+	State         string
+	IDPName       string
+	HasAlertError bool
+	AlertMessage  string
+	MinifiedCSS   template.CSS
+	PostPath      string
+}

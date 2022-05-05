@@ -1080,9 +1080,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		regex := regexp.MustCompile(`\A` + downstream.Spec.Issuer + `/login.+`)
 		browsertest.WaitForURL(t, page, regex)
 
-		usernameSelector := "input#username"
-		passwordSelector := "input[type='password']"
-		loginButtonSelector := "button#submit"
+		usernameSelector := "#username"
+		passwordSelector := "#password"
+		loginButtonSelector := "#submit"
 		browsertest.WaitForVisibleElements(t, page, usernameSelector, passwordSelector, loginButtonSelector)
 
 		// Fill in the username and password and click "submit".

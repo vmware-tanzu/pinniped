@@ -7,6 +7,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
@@ -53,6 +54,12 @@ func NewHandler(
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
 		}
 
+		// Note that the client might have used supervisoroidc.AuthorizeUpstreamIDPNameParamName and
+		// supervisoroidc.AuthorizeUpstreamIDPTypeParamName query params to request a certain upstream IDP.
+		// The Pinniped CLI has been sending these params since v0.9.0.
+		// Currently, these are ignored because the Supervisor does not yet support logins when multiple IDPs
+		// are configured. However, these params should be honored in the future when choosing an upstream
+		// here, e.g. by calling supervisoroidc.FindUpstreamIDPByNameAndType() when the params are present.
 		oidcUpstream, ldapUpstream, idpType, err := chooseUpstreamIDP(idpLister)
 		if err != nil {
 			plog.WarningErr("authorize upstream config", err)
@@ -65,7 +72,7 @@ func NewHandler(
 				// The client set a username header, so they are trying to log in with a username/password.
 				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
 			}
-			return handleAuthRequestForOIDCUpstreamAuthcodeGrant(r, w,
+			return handleAuthRequestForOIDCUpstreamBrowserFlow(r, w,
 				oauthHelperWithoutStorage,
 				generateCSRF, generateNonce, generatePKCE,
 				oidcUpstream,
@@ -75,7 +82,7 @@ func NewHandler(
 			)
 		}
 
-		// we know it's an AD/LDAP upstream.
+		// We know it's an AD/LDAP upstream.
 		if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 ||
 			len(r.Header.Values(supervisoroidc.AuthorizePasswordHeaderName)) > 0 {
 			// The client set a username header, so they are trying to log in with a username/password.
@@ -236,7 +243,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	return nil
 }
 
-func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
+func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
@@ -487,7 +494,12 @@ func upstreamStateParam(
 	encoder oidc.Encoder,
 ) (string, error) {
 	stateParamData := oidc.UpstreamStateParamData{
-		AuthParams:    authorizeRequester.GetRequestForm().Encode(),
+		// The auth params might have included supervisoroidc.AuthorizeUpstreamIDPNameParamName and
+		// supervisoroidc.AuthorizeUpstreamIDPTypeParamName, but those can be ignored by other handlers
+		// that are reading from the encoded upstream state param being built here.
+		// The UpstreamName and UpstreamType struct fields can be used instead.
+		// Remove those params here to avoid potential confusion about which should be used later.
+		AuthParams:    removeCustomIDPParams(authorizeRequester.GetRequestForm()).Encode(),
 		UpstreamName:  upstreamName,
 		UpstreamType:  upstreamType,
 		Nonce:         nonceValue,
@@ -500,6 +512,18 @@ func upstreamStateParam(
 		return "", httperr.Wrap(http.StatusInternalServerError, "error encoding upstream state param", err)
 	}
 	return encodedStateParamValue, nil
+}
+
+func removeCustomIDPParams(params url.Values) url.Values {
+	p := url.Values{}
+	// Copy all params.
+	for k, v := range params {
+		p[k] = v
+	}
+	// Remove the unnecessary params.
+	delete(p, supervisoroidc.AuthorizeUpstreamIDPNameParamName)
+	delete(p, supervisoroidc.AuthorizeUpstreamIDPTypeParamName)
+	return p
 }
 
 func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec oidc.Encoder) error {

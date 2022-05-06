@@ -106,8 +106,12 @@ logo and the IDP name.
    with Pinniped's form post html page, to be displayed on the login page. If it is `query`, return a redirect
    with the authcode as a query param. Default behavior when `response_mode` is unspecified should be handled
    by other parts of the code, but it should default to `query` on the supervisor.
-   4. If the login fails, respond with an error so the login page can render an error message. Allow the user to retry
-   login the same way we do with the CLI today (we leave brute force protection to the IDP)
+   4. If the login fails, respond with a redirect to `<issuer-url>/login` with an error type as the query param,
+   so the login page can render an error message. Allow the user to retry login the same way we do with the CLI today
+   (we leave brute force protection to the IDP). Display two types of errors-- "login error" (incorrect username or password)
+   or "internal error" for something that can't be easily fixed by the user (for example, requests to the LDAP server timing
+   out, LDAP queries malformed). The error that is displayed to the user should be generic but should suggest to the user
+   whether they should try again, or contact their administrator. (thanks @vrabbi for the suggestion!)
 
 #### Upgrades
 

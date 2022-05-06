@@ -450,6 +450,105 @@ Given that, there are two kinds of potential audience confusion for the token ex
    exchange should be allowed if it requests that the new audience name be the name of any existing client in that
    FederationDomain, to avoid this kind of purposeful audience confusion.
 
+###### Option 1: Add automatic prefix to the audience of ID tokens retrieved from token exchange
+
+The `audience` parameter passed into the token exchange API is directly used as the audience for the resulting ID token.
+This could instead be changed to automatically attach the prefix `client.oauth.pinniped.dev/token-exchange:` to the
+requested audience, i.e. if `audience=cluster-001` is passed, the resulting ID token will have an audience of
+`client.oauth.pinniped.dev/token-exchange:cluster-001`.  This is guaranteed never to conflict with the audience of an
+OAuth client because clients cannot include `:` in their name (since that is not allowed in basic auth).  Without
+further action, this is guaranteed to be a breaking change as existing `JWTAuthenticator` configurations will not work.
+Note in particular that some environments use old versions of the concierge with newer versions of the supervisor.  This
+is not an officially supported or tested config, but we may want to consider this scenario.
+
+An approach that can help mitigate backwards compatibility issues:
+
+When the access token passed via the `subject_token` parameter was issued for the `pinniped-cli` OAuth client, the
+resulting audience will be set to both `cluster-001` and `client.oauth.pinniped.dev/token-exchange:cluster-001`.  This
+will prevent `JWTAuthenticator` configs from rejecting `kubectl` based logins.  To use a new dynamic OAuth client, the
+`JWTAuthenticator` config will have to be updated to set `.spec.audience` to
+`client.oauth.pinniped.dev/token-exchange:cluster-001` instead of `cluster-001` (or an additional `JWTAuthenticator`
+can be created with the prefixed audience).  This will be a transient workaround - at some future release the
+`cluster-001` audience will no longer be automatically included for the `pinniped-cli` client.  The token credential
+request API will be updated to issue a warning when the `cluster-001` audience is used when the ID token is issued by a
+supervisor (this can be detected via the OIDC discovery document).  To limit the chance that `cluster-001` results in
+audience confusion during the transition period, the token exchange API would not include it for the `pinniped-cli` when
+a dynamic OAuth client is defined with that name (or even more strictly, if any dynamic OAuth client is defined - i.e.
+using the new dynamic OAuth client feature would force `JWTAuthenticator` config updates - we can detect if any dynamic
+OAuth client is defined via a live list call with limit=1).
+
+###### Option 2: Require a static, reserved prefix for all dynamic OAuth client IDs
+
+When a dynamic client is configured, the full name will not be configurable.  Instead, only the suffix will be
+configurable and the suffix will not be allowed to contain `--`.  The prefix will be always be
+`client.oauth.pinniped.dev--`.  Thus if the suffix is set to `fancy-client`, the ID for the client will be
+`client.oauth.pinniped.dev--fancy-client`.  The token exchange API will be updated to reject attempts to request an
+audience with this prefix. It may be prudent to rename the CLI OAuth client to `client.oauth.pinniped.dev--pinniped-cli`
+and prevent a token exchange for the `pinniped-cli` audience.  `JWTAuthenticator` will be updated to reject audiences
+with the `client.oauth.pinniped.dev--` prefix as well as `pinniped-cli` to disallow use of ID tokens issued during the
+authorization flow.  Users will need to understand this prefixing rule as they will need to configure their app to use
+`client.oauth.pinniped.dev--fancy-client` as the client ID.  Renaming the `pinniped-cli` would be phased effort with the
+old name being supported for some number of releases.  The supervisor would issue warnings to indicate that kubeconfigs
+need to be regenerated to use the new client name (dynamic clients would not be allowed to use this reserved name).
+
+###### Option 2.5: Some mix of Option 1 and 2
+
+It is likely possible to use both options in conjunction.  Note that mixing old and new versions of the supervisor and
+concierge may still result in audience confusion as components may not enforce all checks.
+
+###### Option 3: Break apart signing keys for dynamic OAuth clients
+
+Cryptographic isolation of signing keys is a guaranteed way to prevent any form of confusion between ID tokens issued
+by the authorization code flow and and ID tokens issued by the token exchange API.  At a high level, we could separate
+the single OIDC issuer into as many as four distinct issuers (authorization code vs. token exchange x static vs. dynamic
+OAuth client).  Consumers would be configured to trust the exact sub-issuer that they are expected to understand.  The
+OIDC discovery protocol makes this incredibly painful to express.  This technical specifics for this option have been
+mostly omitted as it does not seem viable.
+
+###### Option 4: Migrate to token webhook
+
+The foundational reason that audience confusion is even possible is because pinniped misuses the audience field to
+represent a cluster ID and an OAuth client ID at the same time.  The ID token returned from the authorization code flow
+has no semantic relationship with the ID token returned by the token exchange API, but because they use the exact same
+structure and signing key, it is possible to get them confused.  Options 1 and 2 above are simply attempts to slice up
+the audience field in a way that the two use cases are less likely to collide.
+
+To remove the problem altogether, pinniped should move to a webhook based model for the token exchange API that uses
+semantically opaque tokens.  These tokens will have no meaning outside of the context of the webhook and token exchange
+API.  In particular, they will have meaning in an OAuth/OIDC context.
+
+We will define a new `requested_token_type` for this purpose: `urn:pinniped:params:oauth:token-type:cluster_token`.  The
+existing support for `urn:ietf:params:oauth:token-type:jwt` will be retained (at least for a while) but will explicitly
+be restricted to the `pinniped-cli` OAuth client.  Existing `JWTAuthenticator` semantics for the `pinniped-cli` will be
+retained for some period of time as well.  At some future point, support for `urn:ietf:params:oauth:token-type:jwt` will
+be dropped.
+
+When the `cluster_token` type is used (by any client, including `pinniped-cli`), an opaque token will be returned after
+successful validation.  To avoid excessive writes to etcd, this opaque token will be a short lived encrypted JWT (JWE)
+that will encode the information necessary to validate it as a cluster scoped token.  The key used to encrypt this token
+will be a distinct key that is used only for this single purpose and it will not be published for external consumption.
+Some claims that would be relevant to include in the JWE: expiration timestamp, cluster ID, client ID, username,
+groups, etc.  The webhook would implement the `v1` `TokenReview` API.  This endpoint would be unauthenticated as it will
+return the same information we encode today into the token exchange ID token (after validating that the token is
+encrypted using the correct key, it is not expired, the client still exists, the cluster ID matches, etc).  If it makes
+migrations easier, the webhook could also support validating ID tokens issued for the `pinniped-cli`.
+
+The `WebhookAuthenticator` config will simply set the `.spec.endpoint` to
+`https://<supervisor_url>/cluster_token_v1alpha1/<cluster_id>` (along with the CA bundle if needed).  Due to
+limitations of the upstream webhook code that we use today, we cannot encode query parameters into the URL.  The v1.24
+upstream changes to migrate the token webhook code to use a `rest.Config` as input may let us work around this
+limitation (which will make it easier to add extra parameters in the future).  Configuring the `WebhookAuthenticator`
+will be mandatory to use the dynamic OAuth client feature, and initially it will be optional for the `pinniped-cli`.
+Over time, we will migrate to fully using only the webhook based approach.
+
+This approach is the preferred method for solving the audience confusion problem.
+
+##### Preventing web apps from caching identities without re-validation
+
+Even with opaque tokens, once a web app learns the identity of a user, it is free to ignore the expiration on a short
+lived token and cache that identity indefinitely.  Thus at a minimum, we should provide guidance to web apps to continue
+to perform the refresh grant at regular intervals to allow for group memberships to be updated, sessions to be revoked, etc.
+
 #### Usability Considerations
 
 Some considerations were mentioned already in the API section above.

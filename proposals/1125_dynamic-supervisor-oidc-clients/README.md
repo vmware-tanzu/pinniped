@@ -92,7 +92,7 @@ admin to create, update, and delete OIDC clients for the Supervisor.
 An example of the new CRD to define a client:
 
 ```yaml
-apiVersion: clients.supervisor.pinniped.dev/v1alpha1
+apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
 kind: OIDCClient
 metadata:
   name: my-webapp-client
@@ -171,6 +171,98 @@ Some other settings are implied and will not be configurable:
   endpoint. This excludes clients from using `form_post`. We could consider allowing `form_post` in the future if it is
   desired.
 - Clients are not allowed to use JWT-based client auth. This could potentially be added as a feature in the future.
+
+##### Configuring clients via an aggregated API server (alternative data model to CRD)
+
+CRDs are convenient to use, however, they have one core limitation - they cannot represent non-CRUD semantics.  For
+example, the existing token credential request API could not be implemented using a CRD - it processes an incoming token
+and returns a client certificate without writing any data to etcd.  Aggregated APIs have no such limitation.
+
+An example of how the aggregated API would define a client:
+
+```yaml
+apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
+kind: OIDCClient
+metadata:
+  name: my-webapp-client
+  namespace: pinniped-supervisor
+spec:
+  allowedRedirectURIs:
+    - https://my-webapp.example.com/callback
+  allowedGrantTypes:
+    - authorization_code
+    - refresh_token
+    - urn:ietf:params:oauth:grant-type:token-exchange
+  allowedScopes:
+    - openid
+    - offline_access
+    - pinniped:request-audience
+    - groups
+```
+
+Some key differences from the CRD based approach:
+
+- The `.status` field is omitted - validation is performed statically on every `create` and `update` operation - the
+  client object is always guaranteed to be valid.  The admin is notified directly via a validation error if they attempt
+  to create an incorrect object (for example, with `metadata.name` set to a value that includes a `:`).  Similarly, if
+  the `.spec.allowed*` fields include invalid data, the object will be rejected.  Consumers of this API, such as our
+  controllers, can rely on the data being valid, which simplifies their logic.
+- `.spec.secretNames` has been removed as the client secret is generated on the server after the client has already been
+  created.  This is handled via a `create` operation to the `secret` subresource (this is modeled after the Kubernetes
+  service account API's `token` subresource).  Just as the SA `token` subresource uses the `TokenRequest` API as the
+  input and output schema, the `secret` subresource would use a `SecretRequest` API as the input and output schema.
+  The response from this API is the only time that the plaintext client secret is made available.  Since rotation is not
+  part of this proposal, the `secret` API can only be invoked once per client - all subsequent requests will fail.  A
+  "hard" rotation can be performed by deleting and re-creating the client, followed by calling the `secret` API.  Note
+  that this purely an artificial limitation - it would not be difficult to allow multiple invocations of the `secret`
+  API (with each creating a new client secret).  `SecretRequestSpec` would need to be expanded with a `bool` field to
+  revoke old client secrets (all except the latest, a new client secret would not be generated for this call).
+
+```go
+type SecretRequest struct {
+  metav1.TypeMeta   `json:",inline"`
+  metav1.ObjectMeta `json:"metadata,omitempty"`
+
+
+  Spec SecretRequestSpec     `json:"spec"`
+  Status SecretRequestStatus `json:"status"`
+}
+
+type SecretRequestSpec struct {}  // empty for now
+
+type SecretRequestStatus struct {
+  Secret string `json:"secret"`
+}
+```
+
+The bulk of the aggregated API server implementation would involve copy-pasting the concierge aggregated API server code
+and changing the API group strings.  The interesting part of the implementation would be the rest storage implementation
+of the `OIDCClient` API.  Normally this would be done via direct calls to etcd, but running etcd is onerous.  Instead we
+would follow the same model we use for the fosite storage layer - everything would be stored in Kubernetes secrets.  The
+Kubernetes API semantics such as resource version would be trivial to implement since we would simply passthrough the
+object meta information from the underlying secret (each client would have a 1:1 mapping with a secret).  The existing
+`crud.Storage` code can likely be re-used for this purpose with minor modifications.  Each secret would store a single
+JSON object with the following schema:
+
+```go
+type clientStorage struct {
+  Name string              `json:"name"`
+  Labels map[string]string `json:"labels"`
+  Client OIDCClientSpec    `json:"client"`
+  SecretHashes []string    `json:"hashes"`
+  Version string           `json:"version"`  // updating this would require some form of migration
+}
+```
+
+The `client` field would store the `.spec` provided by the user.  The `hashes` field would store the hash of the server
+generated client secret on calls to the `secret` subresource API.  The `name` field would store the `metadata.name` of
+the `OIDCClient` as the actual secret would be named `pinniped-storage-oidcclient-<base32(sha256Hash(metadata.name))>`
+to prevent any issues that could arise from giving the user control over the name (i.e. length issues, collision
+issues, validation issues, etc).  Similarly, the `labels` field would store the `metadata.labels` of the `OIDCClient` to
+prevent any collisions with our internal labels such as `storage.pinniped.dev/type`.  While the bulk of the object
+meta's fields such as `resourceVersion` and `creationTimestamp` would be a simple passthrough, others would not be
+supported such as `generateName` and `managedFields` (there is limited value in doing so, at least for the MVP).  All of
+the standard Kubernetes rest verbs would be implemented.
 
 ##### Configuring client secrets
 
@@ -302,6 +394,46 @@ Disadvantages:
   control loops may break when the objects they try to create are different when read back. Setting originally unset
   fields is less likely to cause problems than overwriting fields set in the original request. Avoid doing the latter."
   So removing or updating an incoming plaintext password field is not advised, although the advice is not very specific.
+
+###### Option 3: Aggregated API
+
+See the earlier section where an aggregated API is discussed.  Aggregated APIs solve both the data model and the secret
+provisioning problem.
+
+###### Option 4: Custom REST endpoint for secret provisioning
+
+This approach combines CRD based storage with the aggregated API subresource secret generation approach.  While CRDs do
+not support subresources today, this can be emulated by either creating an aggregated API or a custom rest endpoint.
+The aggregated API approach would be similar to the subresource approach described above, notably with the API server
+handling authentication.  The easier approach would be to implement the `SecretRequest` API as an endpoint on the
+supervisor such as `https://<supervisor_url>/secret_request_v1alpha1/<client_name>`.  Authentication would be handled in
+a similar way to the token exchange API - a pinniped access token would be used to validate the identity of the caller.
+Unlike the token exchange API, this endpoint would require authorization.  This would be handled by issuing a subject
+access review for the access token's identity (note that the virtual verb `request` is used to distinguish this API from
+regular Kubernetes rest APIs):
+
+```json
+{
+  "name": "my-webapp-client",
+  "namespace": "pinniped-supervisor",
+  "verb": "request",
+  "group": "oauth.supervisor.pinniped.dev",
+  "version": "*",
+  "resource": "oidcclients",
+  "subresource": "secretrequest"
+}
+```
+
+Calls to the `secret_request_v1alpha1` endpoint would, after successful auth, fetch the `client_name` OIDC client from
+the Kubernetes API (to validate that it exists and learn its UID), and then create a secret with an owner reference back
+to the OIDC client.  This secret would be named `pinniped-storage-oidcclientsecret-<base32(sha256Hash(client_name))>`
+and would store the hash of the server generated secret.  The details regarding rotation as mentioned for the aggregated
+subresource API implementation apply here as well.  There would always be at most one Kubernetes secret per OIDC client.
+Since the secret name is deterministic based on the client name, no reference field is required on the OIDC client.
+
+###### Option 5: Asymmetric crypto to store secret in status
+
+TODO
 
 ##### Configuring association between clients and issuers
 
@@ -527,7 +659,7 @@ When the `cluster_token` type is used (by any client, including `pinniped-cli`),
 successful validation.  To avoid excessive writes to etcd, this opaque token will be a short lived encrypted JWT (JWE)
 that will encode the information necessary to validate it as a cluster scoped token.  The key used to encrypt this token
 will be a distinct key that is used only for this single purpose and it will not be published for external consumption.
-Some claims that would be relevant to include in the JWE: expiration timestamp, cluster ID, client ID, username,
+Some claims that would be relevant to include in the JWE: expiration, cluster ID, client ID, token version, username,
 groups, etc.  The webhook would implement the `v1` `TokenReview` API.  This endpoint would be unauthenticated as it will
 return the same information we encode today into the token exchange ID token (after validating that the token is
 encrypted using the correct key, it is not expired, the client still exists, the cluster ID matches, etc).  If it makes
@@ -577,9 +709,9 @@ desired.
 ## Open Questions
 
 - Which of the options presented above should we choose? Are there other options to consider?
-    - The author of this propsal doc would like to recommend that we choose:
-      - "Option 1: Providing client secrets already hashed", because of the tradeoffs of advantages and disadvantages discussed above. And also because client secrets should be decided by admins (see paragraph about that above).
-      - And "Option 1: Explicitly associate specific clients with issuers", because it sets us up nicely for the upcoming multiple IDP feature. However, if the team does not have an appitite for doing this now, then we could choose "Option 2: Implicitly associate all clients with all issuers" for now and then reconsider when we implement the upcoming multiple IDPs feature. The security concerns raised above with Option 2 are especially important with multiple IDP support.
+    - The author of this proposal doc would like to recommend that we choose:
+      - "Option 1: Providing client secrets already hashed", because of the trade-offs of advantages and disadvantages discussed above. And also because client secrets should be decided by admins (see paragraph about that above).
+      - And "Option 1: Explicitly associate specific clients with issuers", because it sets us up nicely for the upcoming multiple IDP feature. However, if the team does not have an appetite for doing this now, then we could choose "Option 2: Implicitly associate all clients with all issuers" for now and then reconsider when we implement the upcoming multiple IDPs feature. The security concerns raised above with Option 2 are especially important with multiple IDP support.
 - Should we make the initial ID token from an authorization flow more inert? (See the audience confusion section above
   for more details.)
 

@@ -216,7 +216,8 @@ Some key differences from the CRD based approach:
   "hard" rotation can be performed by deleting and re-creating the client, followed by calling the `secret` API.  Note
   that this purely an artificial limitation - it would not be difficult to allow multiple invocations of the `secret`
   API (with each creating a new client secret).  `SecretRequestSpec` would need to be expanded with a `bool` field to
-  revoke old client secrets (all except the latest, a new client secret would not be generated for this call).
+  revoke old client secrets (all except the latest, a new client secret would not be generated for this call).  The
+  pinniped CLI would be enhanced with a subcommand to call the `SecretRequest` API.
 
 ```go
 type SecretRequest struct {
@@ -429,11 +430,101 @@ the Kubernetes API (to validate that it exists and learn its UID), and then crea
 to the OIDC client.  This secret would be named `pinniped-storage-oidcclientsecret-<base32(sha256Hash(client_name))>`
 and would store the hash of the server generated secret.  The details regarding rotation as mentioned for the aggregated
 subresource API implementation apply here as well.  There would always be at most one Kubernetes secret per OIDC client.
-Since the secret name is deterministic based on the client name, no reference field is required on the OIDC client.
+Since the secret name is deterministic based on the client name, no reference field is required on the OIDC client.  The
+pinniped CLI would be enhanced with a subcommand to call the `secret_request_v1alpha1` endpoint.
 
-###### Option 5: Asymmetric crypto to store secret in status
+An example CRD:
 
-TODO
+```yaml
+apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
+kind: OIDCClient
+metadata:
+  name: my-webapp-client
+  namespace: pinniped-supervisor
+spec:
+  allowedRedirectURIs:
+    - https://my-webapp.example.com/callback
+  allowedGrantTypes:
+    - authorization_code
+    - refresh_token
+    - urn:ietf:params:oauth:grant-type:token-exchange
+  allowedScopes:
+    - openid
+    - offline_access
+    - pinniped:request-audience
+    - groups
+status:
+  conditions:
+    - type: ClientIDValid
+      status: False
+      reason: InvalidCharacter
+      message: client IDs are not allowed to contain ':'
+```
+
+The schema of the `secret_request_v1alpha1` endpoint is the same as the `SecretRequest` type defined above.
+
+###### Option 5: Asymmetric crypto to store client secret in status
+
+This approach proposes the use of asymmetric crypto, specifically RSA-OAEP with SHA-256, to allow the server to generate
+the secret and deliver it to the client without exposing the plaintext value.  `.spec.rsaPublicKey` is used to specify
+a PEM encoded RSA public key.  After the client has been created, the supervisor would use the public key to encrypt the
+client secret and store the ciphertext in the `.status.encryptedClientSecret` field.  As mentioned in earlier designs,
+the hash of the client secret would be stored in a Kubernetes secret.  The pinniped CLI would be enhanced with a
+subcommand to help generate a RSA key (or use an existing one) and decrypt the secret after it has been populated.  The
+supervisor will validate that the RSA key has a length of at least `3072` bits.  Note that `encryptedClientSecret` could
+instead be a pointer to a Kubernetes secret that holds the encrypted client secret, but that indirection does not
+provide any significant security benefit.
+
+Example RSA code:
+
+```go
+clientSecret := "..."  // base64.RawURLEncoding.EncodeToString(rand.Read(...))
+rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPublicKey, clientSecret, nil)
+```
+
+An example CRD:
+
+```yaml
+apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
+kind: OIDCClient
+metadata:
+  name: my-webapp-client
+  namespace: pinniped-supervisor
+spec:
+  rsaPublicKey: |
+    -----BEGIN PUBLIC KEY-----
+    MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAlRuRnThUjU8/prwYxbty
+    ...
+    AIU+2GKjyT3iMuzZxxFxPFMCAwEAAQ==
+    -----END PUBLIC KEY-----
+  allowedRedirectURIs:
+    - https://my-webapp.example.com/callback
+  allowedGrantTypes:
+    - authorization_code
+    - refresh_token
+    - urn:ietf:params:oauth:grant-type:token-exchange
+  allowedScopes:
+    - openid
+    - offline_access
+    - pinniped:request-audience
+    - groups
+status:
+  conditions:
+    - type: ClientIDValid
+      status: False
+      reason: InvalidCharacter
+      message: client IDs are not allowed to contain ':'
+  encryptedClientSecret: 1..9
+```
+
+Note that RSA-OAEP with SHA-256 is used instead of
+[libsodium sealed box - nacl/box#SealAnonymous](https://pkg.go.dev/golang.org/x/crypto/nacl/box#SealAnonymous) because
+`nacl/box` relies on Curve25519, XSalsa20 and Poly1305 which are all not allowed in strict FIPS contexts.
+Cryptographically, `nacl/box` is modern and superior to RSA-OAEP in every way, but it would be painful to have
+different APIs in regular vs. FIPS mode (or to try and get exceptions for the use of `nacl/box`).  Before committing to
+RSA, we should validate that using `nacl/box` is truly not an option.  For example,
+[GitHub encrypted secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets) uses `nacl/box` to
+"ensure that secrets are encrypted before they reach GitHub and remain encrypted until [they are used] in a workflow."
 
 ##### Configuring association between clients and issuers
 

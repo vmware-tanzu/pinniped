@@ -59,7 +59,8 @@ Goals
 
 Non-goals
 
-- Enabling Kubernetes API request auditing in the impersonation proxy. If needed, this will be handled in a separate feature.
+- Enabling Kubernetes API request auditing in the impersonation proxy. If needed, this will be handled in a separate
+  feature.
 - Providing the ability to filter or choose which audit events to capture.
 - Auditing the management of CRs (e.g. OIDCIdentityProvider). These events are captured by the API server audit logs.
 
@@ -170,6 +171,12 @@ sending to various destinations.
 
 ##### Audit Log JSON Format
 
+The
+[format of Kubernetes audit logs](https://github.com/kubernetes/kubernetes/blob/d0832102a7017e83bf47a5137b690e52f19c267c/staging/src/k8s.io/apiserver/pkg/apis/audit/v1/types.go#L72-L142)
+is not a perfect fit for Pinniped. The Kubernetes audit logs are strongly oriented towards API requests for Kubernetes
+resources, with many of the fields representing the details of a request and response. The format of the Pinniped audit
+logs will draw inspiration from the Kubernetes audit events without trying to directly copy them.
+
 Each line of audit log will represent an event. Each line will be a complete JSON object,
 i.e. `{"key1":"value1","key2":"value2"}`.
 
@@ -194,11 +201,15 @@ Depending on the event type, an event might include other keys, such as:
 - `msg`: a freeform warning or error message meant to be read by a human (e.g. the error message that was returned by an
   upstream IDP during a failed login attempt)
 - `requestID`: a unique ID for the request, if the event is related to an API request
-- `requestPath`: the path of the endpoint, if the event is related to an API request
-- `requestorIP`: the client's IP, if the event is related to an API request
-- `user`: the username of the user performing the action, if there is one
-- `groups`: the group memberships of the user performing the action, if the action is related determining or changing
-  their group memberships
+- `requestURI`: the path of the endpoint, if the event is related to an API request
+- `verb`: the REST method called on the endpoint, if the event is related to an API request
+- `sourceIPs`: the client's IPs, if the event is related to an API request
+- `userAgent`: the user agent string reported by the client, if the event is related to an API request
+- `user`: a nested structure which can include the `username`, `groups`, and `uid` of the user performing the action, if
+  there is one
+
+The names of many of these keys are purposefully similar to the names of the keys used by Kubernetes audit events to
+make them feel familiar.
 
 The details of these additional keys will be worked out as the details of the specific events are being worked out,
 during implementation of this proposal.
@@ -224,9 +235,11 @@ It would be desirable for a timestamp to:
 4. Use at least millisecond precision
 5. Use the consistent JSON key name `time`
 
-[Syslog's RFC 5424](https://datatracker.ietf.org/doc/html/rfc5424#section-6.2.3) defines a timestamp format which meets
-the above goals. An example timestamp in this format is `2003-10-11T22:14:15.003` which is represents UTC time on
-October 11, 2003 at 10:14:15 pm, 3 milliseconds into the next second.
+Golang's standard library's [interpretation](https://pkg.go.dev/time#pkg-constants) of RFC 3339 with nanosecond
+precision defines a timestamp format which meets the above goals. An example timestamp in this format, printed
+by `fmt.Println(time.Now().UTC().Format(time.RFC3339Nano))`, is `2022-05-09T21:32:59.811913Z`, which represents UTC time
+on May 9, 2022, at 21:32:59 pm, 811913 nanoseconds into the next second. Note that trailing zeros on the nanoseconds are
+dropped, so the length of the nanoseconds field is variable in the output.
 
 Given this timestamp format, the following fluentbit configuration could be used to parse Pinniped's audit logs.
 
@@ -235,7 +248,7 @@ Given this timestamp format, the following fluentbit configuration could be used
       Name   json
       Format json
       Time_Key time
-      Time_Format %Y-%m-%dT%H:%M:%S.%L
+      Time_Format %Y-%m-%dT%H:%M:%S.%LZ
 ```
 
 #### Upgrades
@@ -252,9 +265,9 @@ a GKE Ingress, if no health checks were configured.
 
 #### Tests
 
-Audit logging will be a user-facing feature, and the format of the logs should be considered a documented and versioned API.
-Unnecessary changes to the format should be avoided after the first release. Therefore, all audit log events should be
-covered by unit tests.
+Audit logging will be a user-facing feature, and the format of the logs should be considered a documented and versioned
+API. Unnecessary changes to the format should be avoided after the first release. Therefore, all audit log events should
+be covered by unit tests.
 
 This implies that it may be desirable for the implementation to involve passing around a pointer to some interface to
 all code which needs to add events to the audit log. Such an implementation would make the audit logs more testable. A

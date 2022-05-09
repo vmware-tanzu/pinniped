@@ -39,7 +39,7 @@ requiring each app to handle IDP credentials.
 * Provide generalized error messaging for failed logins that do not expose sensitive information (i.e. we should say "invalid username or password"
   but do not expose whether it's the username or password that's incorrect)
 * Provide information easily allowing a user to identify the screen as belonging to Pinniped and which upstream IdP is being represented (e.g. IdP name)
-* Address basic security concerns for web firms (HTTPS, passwords use a password field, CSRF protection, redirect protection)
+* Address basic security concerns for web forms (HTTPS, passwords use a password field, CSRF protection, redirect protection)
 * Prevent LDAP injection attacks
 * Rely on the upstream IdP to address advanced security concerns (brute force protection, username enumeration, etc)
 * Screens are accessible and friendly to screen readers
@@ -47,7 +47,7 @@ requiring each app to handle IDP credentials.
 
 #### Non-goals
 * A rich client (ie the use of javascript)
-* Advanced UI features (e.g. remember me, reveal password). These features are better left to identity providers to implement.
+* Advanced UI features (e.g. remember me, reveal password).
 * Branding & customization beyond the information listed in the goals used to identify the login screen belongs to Pinniped.
 * Supporting SSO integrations
 * Internationalization or localization. The CLI doesn't currently support this either.
@@ -81,8 +81,11 @@ Here is how the login flow might work:
 1. The supervisor receives an authorization request.
    1. If the client_id param is not "pinniped-cli", and it includes username and password via the custom headers, reject the request.
    2. If the request does not include the custom username/password headers, assume we want to use the webpage login.
-   3. Some day we may want to allow specifying the idp name and type as request parameters, but
-      for now we do not have multiple idps.
+   3. Today, the CLI specifies the IDP name and type as request parameters, but the server currently ignores these
+      since the Supervisor does not allow multiple idps today. This could be enhanced in the future to use the requested
+      IDP when the params are present, and to show another UI page to allow the end user to choose which IDP when the params
+      are not present. This leaves room for future multiple IDP support in this flow,
+      however, the details are outside the scope of this proposal.
    4. Encode the request parameters into a state param like is done today for the `OIDCIdentityProvider`.
       In addition to the values encoded today (auth params, upstream IDP name, nonce, csrf token and pkce),
       encode the upstream IDP type.
@@ -150,9 +153,6 @@ With the pinniped cli:
 - succeeds with correct username and password
 - fails with incorrect username, shows useful but nonspecific error message
 - fails with incorrect password, shows useful but nonspecific error message
-- with tty access, prompts for username and password on the cli
-- without tty access, opens a browser
-- without tty access, if the form post fails, don't ask user to copy and paste the authcode (we already know you have no tty to paste it into...)
 Once dynamic clients are implemented:
 - fails when attempting to pass username/password as headers on requests to the authorize endpoint
 - tests of the rest of the dynamic client functionality that should be detailed as part of that proposal
@@ -164,7 +164,8 @@ The styling should match the [form post html page](https://github.com/vmware-tan
 as much as possible, we should reuse some of the existing css and add to it to keep the style consistent.
 
 #### Observability Considerations
-* Logging login attempts at higher log levels.
+* The existing logging in `upstreamldap.go` should be sufficient for logging the attempted logins.
+  Further logging should be proposed as a separate proposal.
 
 #### Security Considerations
 * Preventing LDAP injection attacks: this should be done server-side using our existing
@@ -186,17 +187,22 @@ maintain both Pinniped and Dex in order to use this feature. It also means
 that users do not benefit from the opinionated `ActiveDirectoryIdentityProvider`
 config because Dex does not have an equivalent.
 
+## Answered Questions
+* Q: What is the format for the URL? (`issuer/some/path`? Something else?)
+  A: `<issuer>/login`
+* Q: Can we make it so we can reuse the existing cert, or will we need a new wildcard cert?
+  A: Since the page is hosted on the issuer, we can reuse the existing `FederationDomain` cert.
+
 ## Open Questions
-* What is the format for the URL? (`issuer/some/path`? Something else?) Can we make it so we can reuse the existing cert,
-  or will we need a new wildcard cert?
-* Currently we have little validation on branding requirements. Is specifying the idp name enough for users to understand
-  how to log in?
-* How many users will be blocked on using this feature until they can have a company name and logo on the login page?
+* Q: Currently we have little validation on branding requirements. Is specifying the IDP name enough for users to understand
+  how to log in? How many users will be blocked on using this feature until they can have a company name and logo on the login page?
+  A: For our initial release, we will only specify the IDP name. We are open to adding further customization in response to feedback
+  from users once the feature is released.
 
 ## Implementation Plan
 While this work is intended to supplement the dynamic client work, parts of it
 can be implemented independently.
-The pinniped cli can support a web based ui flow via a command line flag, environment variable or checking whether a tty is available.
+The pinniped cli can support a web based ui flow via a command line flag, or environment variable.
 Then once dynamic clients exist, we can add functionality to accept requests
 from those clients as well.
 

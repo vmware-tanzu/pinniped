@@ -2005,7 +2005,7 @@ func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthor
 	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")

@@ -245,7 +245,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
@@ -358,7 +358,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
@@ -486,7 +486,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
@@ -965,7 +965,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		)
 	})
 
-	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
+	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor LDAP upstream IDP and browser flow", func(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
@@ -1075,21 +1075,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		t.Logf("navigating to login page: %q", loginURL)
 		require.NoError(t, page.Navigate(loginURL))
 
-		// Expect to be redirected to the supervisor's ldap login page.
-		t.Logf("waiting for redirect to supervisor ldap login page")
-		regex := regexp.MustCompile(`\A` + downstream.Spec.Issuer + `/login.+`)
-		browsertest.WaitForURL(t, page, regex)
-
-		usernameSelector := "#username"
-		passwordSelector := "#password"
-		loginButtonSelector := "#submit"
-		browsertest.WaitForVisibleElements(t, page, usernameSelector, passwordSelector, loginButtonSelector)
-
-		// Fill in the username and password and click "submit".
-		t.Logf("logging into ldap")
-		require.NoError(t, page.First(usernameSelector).Fill(expectedUsername))
-		require.NoError(t, page.First(passwordSelector).Fill(env.SupervisorUpstreamLDAP.TestUserPassword))
-		require.NoError(t, page.First(loginButtonSelector).Click())
+		// Confirm that we got to the login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, page)
 

@@ -26,6 +26,7 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/creack/pty"
+	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -57,7 +58,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
-	tempDir := testutil.TempDir(t)
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
 	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
@@ -72,7 +72,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	require.NoError(t, err)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
-	testCABundlePath := filepath.Join(tempDir, "test-ca.pem")
+	testCABundlePath := filepath.Join(testutil.TempDir(t), "test-ca.pem")
 	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
 	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCABundlePEM, 0600))
@@ -108,9 +108,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 	})
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
-	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
+	t.Run("with Supervisor OIDC upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
@@ -149,7 +151,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		}, idpv1alpha1.PhaseReady)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/oidc-test-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -162,89 +164,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
-		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
-		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
-		// in-memory buffer, so we can have the full output available to us at the end.
-		originalStderrPipe, err := kubectlCmd.StderrPipe()
-		require.NoError(t, err)
-		originalStdoutPipe, err := kubectlCmd.StdoutPipe()
-		require.NoError(t, err)
-		var stderrPipeBuf, stdoutPipeBuf bytes.Buffer
-		stderrPipe := io.TeeReader(originalStderrPipe, &stderrPipeBuf)
-		stdoutPipe := io.TeeReader(originalStdoutPipe, &stdoutPipeBuf)
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
 
-		t.Logf("starting kubectl subprocess")
-		require.NoError(t, kubectlCmd.Start())
-		t.Cleanup(func() {
-			// Consume readers so that the tee buffers will contain all the output so far.
-			_, stdoutReadAllErr := readAllCtx(testCtx, stdoutPipe)
-			_, stderrReadAllErr := readAllCtx(testCtx, stderrPipe)
-
-			// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
-			waitErr := kubectlCmd.Wait()
-			t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
-
-			// Upon failure, print the full output so far of the kubectl command.
-			var testAlreadyFailedErr error
-			if t.Failed() {
-				testAlreadyFailedErr = errors.New("test failed prior to clean up function")
-			}
-			cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
-
-			if cleanupErrs != nil {
-				t.Logf("kubectl stdout was:\n----start of stdout\n%s\n----end of stdout", stdoutPipeBuf.String())
-				t.Logf("kubectl stderr was:\n----start of stderr\n%s\n----end of stderr", stderrPipeBuf.String())
-			}
-			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed. "+
-				"Note: if kubectl's first call to the Pinniped CLI results in the Pinniped CLI returning an error, "+
-				"then kubectl may call the Pinniped CLI again, which may hang because it will wait for the user "+
-				"to finish the login. This test will kill the kubectl process after a timeout. In this case, the "+
-				" kubectl output printed above will include multiple prompts for the user to enter their authcode.",
-			)
-		})
-
-		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-		loginURLChan := make(chan string, 1)
-		spawnTestGoroutine(testCtx, t, func() error {
-			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
-				if err == nil && loginURL.Scheme == "https" {
-					loginURLChan <- loginURL.String() // this channel is buffered so this will not block
-					return nil
-				}
-			}
-			return fmt.Errorf("expected stderr to contain login URL")
-		})
-
-		// Start a background goroutine to read stdout from kubectl and return the result as a string.
-		kubectlOutputChan := make(chan string, 1)
-		spawnTestGoroutine(testCtx, t, func() error {
-			output, err := readAllCtx(testCtx, stdoutPipe)
-			if err != nil {
-				return err
-			}
-			t.Logf("kubectl output:\n%s\n", output)
-			kubectlOutputChan <- string(output) // this channel is buffered so this will not block
-			return nil
-		})
-
-		// Wait for the CLI to print out the login URL and open the browser to it.
-		t.Logf("waiting for CLI to output login URL")
-		var loginURL string
-		select {
-		case <-time.After(1 * time.Minute):
-			require.Fail(t, "timed out waiting for login URL")
-		case loginURL = <-loginURLChan:
-		}
-		t.Logf("navigating to login page: %q", loginURL)
-		require.NoError(t, page.Navigate(loginURL))
-
-		// Expect to be redirected to the upstream provider and log in.
+		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
 		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
@@ -255,17 +181,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		// It should now be in the "success" state.
 		formpostExpectSuccessState(t, page)
 
-		// Expect the CLI to output a list of namespaces.
-		t.Logf("waiting for kubectl to output namespace list")
-		var kubectlOutput string
-		select {
-		case <-time.After(1 * time.Minute):
-			require.Fail(t, "timed out waiting for kubectl output")
-		case kubectlOutput = <-kubectlOutputChan:
-		}
-		requireKubectlGetNamespaceOutput(t, env, kubectlOutput)
-
-		t.Logf("first kubectl command took %s", time.Since(start).String())
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
@@ -281,6 +197,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -318,7 +236,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		}, idpv1alpha1.PhaseReady)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/oidc-test-sessions-manual.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
 			"--concierge-api-group-suffix", env.APIGroupSuffix,
@@ -395,6 +314,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
 
@@ -440,7 +361,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		}, idpv1alpha1.PhaseReady)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/oidc-test-sessions-manual.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
 			"--concierge-api-group-suffix", env.APIGroupSuffix,
@@ -534,6 +456,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
@@ -569,7 +493,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		}, idpv1alpha1.PhaseReady)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/oidc-test-sessions-password-grant.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
 			"--concierge-api-group-suffix", env.APIGroupSuffix,
@@ -620,6 +545,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		// Create upstream OIDC provider and wait for it to become ready.
 		oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -640,7 +567,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		}, idpv1alpha1.PhaseReady)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/oidc-test-sessions-password-grant-negative-test.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
 			"--concierge-api-group-suffix", env.APIGroupSuffix,
@@ -700,6 +628,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
@@ -710,7 +640,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/ldap-test-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -760,6 +690,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
@@ -770,7 +702,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/ldap-test-with-env-vars-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -832,6 +764,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
 		}
@@ -845,7 +779,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/ad-test-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -895,6 +829,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("ActiveDirectory integration test requires connectivity to an LDAP server")
 		}
@@ -909,7 +845,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/ad-test-with-env-vars-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -965,10 +901,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		)
 	})
 
-	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
-	t.Run("with Supervisor LDAP upstream IDP and browser flow", func(t *testing.T) {
+	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
+	t.Run("with Supervisor LDAP upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
@@ -979,7 +917,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
-		sessionCachePath := tempDir + "/ldap-test-sessions.yaml"
+		sessionCachePath := tempDir + "/test-sessions.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -993,105 +931,19 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
-		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
-		// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
-		// in-memory buffer, so we can have the full output available to us at the end.
-		originalStderrPipe, err := kubectlCmd.StderrPipe()
-		require.NoError(t, err)
-		originalStdoutPipe, err := kubectlCmd.StdoutPipe()
-		require.NoError(t, err)
-		var stderrPipeBuf, stdoutPipeBuf bytes.Buffer
-		stderrPipe := io.TeeReader(originalStderrPipe, &stderrPipeBuf)
-		stdoutPipe := io.TeeReader(originalStdoutPipe, &stdoutPipeBuf)
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
 
-		t.Logf("starting kubectl subprocess")
-		require.NoError(t, kubectlCmd.Start())
-		t.Cleanup(func() {
-			// Consume readers so that the tee buffers will contain all the output so far.
-			_, stdoutReadAllErr := readAllCtx(testCtx, stdoutPipe)
-			_, stderrReadAllErr := readAllCtx(testCtx, stderrPipe)
-
-			// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
-			waitErr := kubectlCmd.Wait()
-			t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
-
-			// Upon failure, print the full output so far of the kubectl command.
-			var testAlreadyFailedErr error
-			if t.Failed() {
-				testAlreadyFailedErr = errors.New("test failed prior to clean up function")
-			}
-			cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
-
-			if cleanupErrs != nil {
-				t.Logf("kubectl stdout was:\n----start of stdout\n%s\n----end of stdout", stdoutPipeBuf.String())
-				t.Logf("kubectl stderr was:\n----start of stderr\n%s\n----end of stderr", stderrPipeBuf.String())
-			}
-			require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed. "+
-				"Note: if kubectl's first call to the Pinniped CLI results in the Pinniped CLI returning an error, "+
-				"then kubectl may call the Pinniped CLI again, which may hang because it will wait for the user "+
-				"to finish the login. This test will kill the kubectl process after a timeout. In this case, the "+
-				" kubectl output printed above will include multiple prompts for the user to enter their authcode.",
-			)
-		})
-
-		// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-		loginURLChan := make(chan string, 1)
-		spawnTestGoroutine(testCtx, t, func() error {
-			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
-				if err == nil && loginURL.Scheme == "https" {
-					loginURLChan <- loginURL.String() // this channel is buffered so this will not block
-					return nil
-				}
-			}
-			return fmt.Errorf("expected stderr to contain login URL")
-		})
-
-		// Start a background goroutine to read stdout from kubectl and return the result as a string.
-		kubectlOutputChan := make(chan string, 1)
-		spawnTestGoroutine(testCtx, t, func() error {
-			output, err := readAllCtx(testCtx, stdoutPipe)
-			if err != nil {
-				return err
-			}
-			t.Logf("kubectl output:\n%s\n", output)
-			kubectlOutputChan <- string(output) // this channel is buffered so this will not block
-			return nil
-		})
-
-		// Wait for the CLI to print out the login URL and open the browser to it.
-		t.Logf("waiting for CLI to output login URL")
-		var loginURL string
-		select {
-		case <-time.After(1 * time.Minute):
-			require.Fail(t, "timed out waiting for login URL")
-		case loginURL = <-loginURLChan:
-		}
-		t.Logf("navigating to login page: %q", loginURL)
-		require.NoError(t, page.Navigate(loginURL))
-
-		// Confirm that we got to the login page, fill out the form, and submit the form.
+		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
 		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, page)
 
-		// Expect the CLI to output a list of namespaces.
-		t.Logf("waiting for kubectl to output namespace list")
-		var kubectlOutput string
-		select {
-		case <-time.After(1 * time.Minute):
-			require.Fail(t, "timed out waiting for kubectl output")
-		case kubectlOutput = <-kubectlOutputChan:
-		}
-		requireKubectlGetNamespaceOutput(t, env, kubectlOutput)
-
-		t.Logf("first kubectl command took %s", time.Since(start).String())
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
 			downstream,
@@ -1102,6 +954,160 @@ func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
 			expectedGroups,
 		)
 	})
+
+	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
+	t.Run("with Supervisor Active Directory upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
+		}
+		if env.SupervisorUpstreamActiveDirectory.Host == "" {
+			t.Skip("Active Directory hostname not specified")
+		}
+
+		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
+		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
+
+		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--upstream-identity-provider-flow", "browser_authcode",
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+
+		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+			expectedUsername, env.SupervisorUpstreamActiveDirectory.TestUserPassword)
+
+		formpostExpectSuccessState(t, page)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+}
+
+func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, page *agouti.Page) chan string {
+	// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
+	// in-memory buffer, so we can have the full output available to us at the end.
+	originalStderrPipe, err := kubectlCmd.StderrPipe()
+	require.NoError(t, err)
+	originalStdoutPipe, err := kubectlCmd.StdoutPipe()
+	require.NoError(t, err)
+	var stderrPipeBuf, stdoutPipeBuf bytes.Buffer
+	stderrPipe := io.TeeReader(originalStderrPipe, &stderrPipeBuf)
+	stdoutPipe := io.TeeReader(originalStdoutPipe, &stdoutPipeBuf)
+
+	t.Logf("starting kubectl subprocess")
+	require.NoError(t, kubectlCmd.Start())
+	t.Cleanup(func() {
+		// Consume readers so that the tee buffers will contain all the output so far.
+		_, stdoutReadAllErr := readAllCtx(testCtx, stdoutPipe)
+		_, stderrReadAllErr := readAllCtx(testCtx, stderrPipe)
+
+		// Note that Wait closes the stdout/stderr pipes, so we don't need to close them ourselves.
+		waitErr := kubectlCmd.Wait()
+		t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
+
+		// Upon failure, print the full output so far of the kubectl command.
+		var testAlreadyFailedErr error
+		if t.Failed() {
+			testAlreadyFailedErr = errors.New("test failed prior to clean up function")
+		}
+		cleanupErrs := utilerrors.NewAggregate([]error{waitErr, stdoutReadAllErr, stderrReadAllErr, testAlreadyFailedErr})
+
+		if cleanupErrs != nil {
+			t.Logf("kubectl stdout was:\n----start of stdout\n%s\n----end of stdout", stdoutPipeBuf.String())
+			t.Logf("kubectl stderr was:\n----start of stderr\n%s\n----end of stderr", stderrPipeBuf.String())
+		}
+		require.NoErrorf(t, cleanupErrs, "kubectl process did not exit cleanly and/or the test failed. "+
+			"Note: if kubectl's first call to the Pinniped CLI results in the Pinniped CLI returning an error, "+
+			"then kubectl may call the Pinniped CLI again, which may hang because it will wait for the user "+
+			"to finish the login. This test will kill the kubectl process after a timeout. In this case, the "+
+			" kubectl output printed above will include multiple prompts for the user to enter their authcode.",
+		)
+	})
+
+	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
+	loginURLChan := make(chan string, 1)
+	spawnTestGoroutine(testCtx, t, func() error {
+		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
+			if err == nil && loginURL.Scheme == "https" {
+				loginURLChan <- loginURL.String() // this channel is buffered so this will not block
+				return nil
+			}
+		}
+		return fmt.Errorf("expected stderr to contain login URL")
+	})
+
+	// Start a background goroutine to read stdout from kubectl and return the result as a string.
+	kubectlOutputChan := make(chan string, 1)
+	spawnTestGoroutine(testCtx, t, func() error {
+		output, err := readAllCtx(testCtx, stdoutPipe)
+		if err != nil {
+			return err
+		}
+		t.Logf("kubectl output:\n%s\n", output)
+		kubectlOutputChan <- string(output) // this channel is buffered so this will not block
+		return nil
+	})
+
+	// Wait for the CLI to print out the login URL and open the browser to it.
+	t.Logf("waiting for CLI to output login URL")
+	var loginURL string
+	select {
+	case <-time.After(1 * time.Minute):
+		require.Fail(t, "timed out waiting for login URL")
+	case loginURL = <-loginURLChan:
+	}
+	t.Logf("navigating to login page: %q", loginURL)
+	require.NoError(t, page.Navigate(loginURL))
+
+	return kubectlOutputChan
+}
+
+func waitForKubectlOutput(t *testing.T, kubectlOutputChan chan string) string {
+	t.Logf("waiting for kubectl output")
+	var kubectlOutput string
+	select {
+	case <-time.After(1 * time.Minute):
+		require.Fail(t, "timed out waiting for kubectl output")
+	case kubectlOutput = <-kubectlOutputChan:
+	}
+	return kubectlOutput
 }
 
 func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib.TestEnv) {

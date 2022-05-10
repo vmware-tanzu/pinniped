@@ -14,7 +14,7 @@ func ExpectedLoginPageHTML(wantCSS, wantIDPName, wantPostPath, wantEncodedState,
 	if wantAlert != "" {
 		alertHTML = fmt.Sprintf("\n"+
 			"    <div class=\"form-field\">\n"+
-			"        <span class=\"alert\" role=\"alert\" aria-label=\"login error message\">%s</span>\n"+
+			"        <span class=\"alert\" role=\"alert\" aria-label=\"login error message\" id=\"alert\">%s</span>\n"+
 			"    </div>\n    ",
 			wantAlert,
 		)

@@ -26,7 +26,7 @@ Notes:
     </div>
     {{if .HasAlertError}}
     <div class="form-field">
-        <span class="alert" role="alert" aria-label="login error message">{{.AlertMessage}}</span>
+        <span class="alert" role="alert" aria-label="login error message" id="alert">{{.AlertMessage}}</span>
     </div>
     {{end}}
     <form action="{{.PostPath}}" method="post">

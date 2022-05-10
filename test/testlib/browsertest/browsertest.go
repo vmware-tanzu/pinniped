@@ -188,11 +188,7 @@ func LoginToUpstreamOIDC(t *testing.T, page *agouti.Page, upstream testlib.TestO
 func LoginToUpstreamLDAP(t *testing.T, page *agouti.Page, issuer, username, password string) {
 	t.Helper()
 
-	usernameSelector := "#username"
-	passwordSelector := "#password"
-	loginButtonSelector := "#submit"
-
-	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `.+\z`)
+	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?state=.+\z`)
 	require.NoError(t, err)
 
 	// Expect to be redirected to the login page.
@@ -200,11 +196,31 @@ func LoginToUpstreamLDAP(t *testing.T, page *agouti.Page, issuer, username, pass
 	WaitForURL(t, page, loginURLRegexp)
 
 	// Wait for the login page to be rendered.
-	WaitForVisibleElements(t, page, usernameSelector, passwordSelector, loginButtonSelector)
+	WaitForVisibleElements(t, page, "#username", "#password", "#submit")
+
+	// Fill in the username and password and click "submit".
+	SubmitUpstreamLDAPLoginForm(t, page, username, password)
+}
+
+func SubmitUpstreamLDAPLoginForm(t *testing.T, page *agouti.Page, username string, password string) {
+	t.Helper()
 
 	// Fill in the username and password and click "submit".
 	t.Logf("logging in via Supervisor's upstream LDAP/AD login UI page")
-	require.NoError(t, page.First(usernameSelector).Fill(username))
-	require.NoError(t, page.First(passwordSelector).Fill(password))
-	require.NoError(t, page.First(loginButtonSelector).Click())
+	require.NoError(t, page.First("#username").Fill(username))
+	require.NoError(t, page.First("#password").Fill(password))
+	require.NoError(t, page.First("#submit").Click())
+}
+
+func WaitForUpstreamLDAPLoginPageWithError(t *testing.T, page *agouti.Page, issuer string) {
+	t.Helper()
+
+	// Wait for redirect back to the login page again with an error.
+	t.Logf("waiting for redirect to back to login page with error message")
+	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?err=login_error&state=.+\z`)
+	require.NoError(t, err)
+	WaitForURL(t, page, loginURLRegexp)
+
+	// Wait for the login page to be rendered again, this time also with an error message.
+	WaitForVisibleElements(t, page, "#username", "#password", "#submit", "#alert")
 }

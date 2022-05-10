@@ -50,7 +50,7 @@ import (
 )
 
 // TestE2EFullIntegration_Browser tests a full integration scenario that combines the supervisor, concierge, and CLI.
-func TestE2EFullIntegration_Browser(t *testing.T) { // nolint:gocyclo
+func TestE2EFullIntegration_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	topSetupCtx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)

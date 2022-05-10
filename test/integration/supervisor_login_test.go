@@ -47,7 +47,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		maybeSkip                            func(t *testing.T)
 		createTestUser                       func(t *testing.T) (string, string)
 		deleteTestUser                       func(t *testing.T, username string)
-		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
+		requestAuthorization                 func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
 		createIDP                            func(t *testing.T) string
 		wantDownstreamIDTokenSubjectToMatch  string
 		wantDownstreamIDTokenUsernameToMatch func(username string) string
@@ -80,7 +80,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				pinnipedSessionData := pinnipedSession.Custom
 				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
@@ -115,7 +115,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
@@ -169,7 +169,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
@@ -199,7 +199,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, idpv1alpha1.PhaseReady)
 				return oidcIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamOIDC.Username, // username to present to server during login
@@ -267,7 +267,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -289,6 +289,72 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Subject = "not-right"
 			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name: "ldap with browser flow",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
+			createIDP: func(t *testing.T) string {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
+				}, idpv1alpha1.LDAPPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+				return ldapIDP.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
 				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
@@ -350,7 +416,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -440,7 +506,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -522,7 +588,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserCN,       // username to present to server during login
@@ -596,7 +662,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -674,7 +740,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, time.Minute, 500*time.Millisecond)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -781,7 +847,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, time.Minute, 500*time.Millisecond)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -844,7 +910,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 				return adIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -871,7 +937,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
-		}, {
+		},
+		{
 			name: "activedirectory with custom options",
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
@@ -921,7 +988,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 				return adIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue, // username to present to server during login
@@ -1003,7 +1070,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, time.Minute, 500*time.Millisecond)
 				return adIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -1099,7 +1166,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, time.Minute, 500*time.Millisecond)
 				return adIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -1168,7 +1235,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1230,7 +1297,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1292,7 +1359,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1348,7 +1415,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 				return adIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestDeactivatedUserSAMAccountNameValue, // username to present to server during login
@@ -1409,7 +1476,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -1489,7 +1556,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, idpv1alpha1.LDAPPhaseReady)
 				return ldapIDP.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -1573,6 +1640,7 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 		{"LDAPConnectionValid", "True", "Success"},
 	}, conditionsSummary)
 }
+
 func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
 	require.Len(t, adIDP.Status.Conditions, 4)
 
@@ -1669,7 +1737,7 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
-	requestAuthorization func(t *testing.T, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
+	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
 	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
 	createTestUser func(t *testing.T) (string, string),
@@ -1769,7 +1837,9 @@ func testSupervisorLogin(
 	username, password := "", ""
 	if createTestUser != nil {
 		username, password = createTestUser(t)
-		defer deleteTestUser(t, username)
+		if deleteTestUser != nil {
+			defer deleteTestUser(t, username)
+		}
 	}
 
 	// Perform OIDC discovery for our downstream.
@@ -1784,6 +1854,9 @@ func testSupervisorLogin(
 	localCallbackServer := startLocalCallbackServer(t)
 
 	// Form the OAuth2 configuration corresponding to our CLI client.
+	// Note that this is not using response_type=form_post, so the Supervisor will redirect to the callback endpoint
+	// directly, without using the Javascript form_post HTML page to POST back to the callback endpoint. The e2e
+	// tests which use the Pinniped CLI are testing the form_post part of the flow, so that is covered elsewhere.
 	downstreamOAuth2Config := oauth2.Config{
 		// This is the hardcoded public client that the supervisor supports.
 		ClientID:    "pinniped-cli",
@@ -1807,7 +1880,7 @@ func testSupervisorLogin(
 	)
 
 	// Perform parameterized auth code acquisition.
-	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
+	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
 
 	// Expect that our callback handler was invoked.
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
@@ -1984,7 +2057,7 @@ func verifyTokenResponse(
 	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
 }
 
-func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 	t.Helper()
 	env := testlib.IntegrationEnv(t)
 
@@ -1992,12 +2065,7 @@ func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthor
 	defer cancelFunc()
 
 	// Make the authorize request once "manually" so we can check its response security headers.
-	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
-	require.NoError(t, err)
-	authorizeResp, err := httpClient.Do(authorizeRequest)
-	require.NoError(t, err)
-	require.NoError(t, authorizeResp.Body.Close())
-	expectSecurityHeaders(t, authorizeResp, false)
+	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
 
 	// Open the web browser and navigate to the downstream authorize URL.
 	page := browsertest.Open(t)
@@ -2011,6 +2079,38 @@ func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthor
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
 	browsertest.WaitForURL(t, page, callbackURLPattern)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client) {
+	t.Helper()
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelFunc()
+
+	// Make the authorize request once "manually" so we can check its response security headers.
+	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, password)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
+}
+
+func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *testing.T, downstreamAuthorizeURL string, httpClient *http.Client) {
+	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
+	require.NoError(t, err)
+	authorizeResp, err := httpClient.Do(authorizeRequest)
+	require.NoError(t, err)
+	require.NoError(t, authorizeResp.Body.Close())
+	expectSecurityHeaders(t, authorizeResp, false)
 }
 
 func requestAuthorizationUsingCLIPasswordFlow(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client, wantErr bool) {

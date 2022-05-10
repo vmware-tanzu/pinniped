@@ -112,7 +112,7 @@ func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 		func(requireEventually *require.Assertions) {
 			url, err := page.URL()
 			if url != lastURL {
-				t.Logf("saw URL %s", url)
+				t.Logf("saw URL %s", testlib.MaskTokens(url))
 				lastURL = url
 			}
 			requireEventually.NoError(err)

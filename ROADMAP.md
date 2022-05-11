@@ -36,9 +36,8 @@ The following table includes the current roadmap for Pinniped. If you have any q
 Last Updated: March 2022
 |Theme|Description|Timeline|
 |--|--|--|
-|Improving Security Posture|Support FIPS compliant Boring crypto libraries |March/April 2022|
-|Improving Security Posture|Support Audit logging of security events related to Authentication |April/May 2022|
-|Improving Usability|Support for integrating with UI/Dashboards  |June/July 2022|
+|Improving Security Posture|Support Audit logging of security events related to Authentication |May/June 2022|
+|Improving Usability|Support for integrating with UI/Dashboards  |May/June 2022|
 |Improving Security Posture|TLS hardening contd|June/July 2022|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
 |Improving Security Posture|mTLS for Supervisor sessions |Exploring/Ongoing|

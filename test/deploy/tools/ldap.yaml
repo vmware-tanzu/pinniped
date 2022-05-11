@@ -1,4 +1,4 @@
-#! Copyright 2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -114,7 +114,7 @@ ldap.ldif: |
   dn: cn=mammals,ou=groups,dc=pinniped,dc=dev
   cn: mammals
   objectClass: groupOfNames
-  member: cn=pinninpeds,ou=groups,dc=pinniped,dc=dev
+  member: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
   member: cn=olive,ou=users,dc=pinniped,dc=dev
 #@ end
 

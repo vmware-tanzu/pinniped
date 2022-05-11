@@ -89,6 +89,7 @@ spec:
   # application's client credentials (created below).
   client:
     secretName: gitlab-client-credentials
+
 ---
 apiVersion: v1
 kind: Secret
@@ -104,6 +105,10 @@ stringData:
   # The "Secret" that you got from GitLab.
   clientSecret: "<your-client-secret>"
 ```
+
+Note that the `metadata.name` of the OIDCIdentityProvider resource may be visible to end users at login prompts
+if you choose to enable `allowPasswordGrant`, so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-gitlab` over `my-idp`.
 
 Once your OIDCIdentityProvider has been created, you can validate your configuration by running:
 

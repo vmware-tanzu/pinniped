@@ -158,6 +158,7 @@ spec:
         - name: certs
           secret:
             secretName: certs
+
 ---
 apiVersion: v1
 kind: Service
@@ -265,7 +266,6 @@ spec:
     secretName: openldap-bind-account
 
 ---
-
 apiVersion: v1
 kind: Secret
 metadata:
@@ -283,6 +283,10 @@ stringData:
   password: "admin123"
 EOF
 ```
+
+Note that the `metadata.name` of the LDAPIdentityProvider resource may be visible to end users at login prompts,
+so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-ldap` over `my-idp`.
 
 Once your LDAPIdentityProvider has been created, you can validate your configuration by running:
 

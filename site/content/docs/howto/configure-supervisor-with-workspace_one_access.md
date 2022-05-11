@@ -76,7 +76,8 @@ spec:
     # the default claims in your token. The "openid" scope is always
     # included.
     #
-    # See the example claims below to learn how to customize the claims returned.
+    # See the example claims below to learn how to customize the
+    # claims returned.
     additionalScopes: [group, email]
 
   # Specify how Workspace ONE Access claims are mapped to Kubernetes identities.
@@ -85,22 +86,22 @@ spec:
     # Specify the name of the claim in your Workspace ONE Access token that
     # will be mapped to the username in your Kubernetes environment.
     #
-    # User's emails can change. Use the sub claim if 
-    # your environment requires a stable identifier.
+    # User's emails can change. Use the sub claim if your environment
+    # requires a stable identifier.
     username: email
 
-    # Specify the name of the claim in Workspace ONE Access that represents the
-    # groups the user belongs to.
+    # Specify the name of the claim in Workspace ONE Access that represents
+    # the groups to which the user belongs.
     #
-    # Group names may not be unique and can change.
-    # The group_ids claim is recommended for environments
-    # that want to use a more stable identifier.
+    # Group names may not be unique and can change. The group_ids claim is
+    # recommended for environments that want to use a more stable identifier.
     groups: group_names
 
   # Specify the name of the Kubernetes Secret that contains your
   # Workspace ONE Access application's client credentials (created below).
   client:
     secretName: ws1-client-credentials
+
 ---
 apiVersion: v1
 kind: Secret
@@ -116,6 +117,10 @@ stringData:
   # The "Client secret" that you got from Workspace ONE Access.
   clientSecret: "<your-client-secret>"
 ```
+
+Note that the `metadata.name` of the OIDCIdentityProvider resource may be visible to end users at login prompts
+if you choose to enable `allowPasswordGrant`, so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-workspace-one` over `my-idp`.
 
 The following claims are returned by Workspace ONE Access.  The `group` scope is required to use the
 `group_ids` and `group_names` claims.  The `email` scope is required to use the `email` claim.  The

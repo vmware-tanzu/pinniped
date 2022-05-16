@@ -192,12 +192,13 @@ config because Dex does not have an equivalent.
   A: `<issuer>/login`
 * Q: Can we make it so we can reuse the existing cert, or will we need a new wildcard cert?
   A: Since the page is hosted on the issuer, we can reuse the existing `FederationDomain` cert.
-
-## Open Questions
 * Q: Currently we have little validation on branding requirements. Is specifying the IDP name enough for users to understand
   how to log in? How many users will be blocked on using this feature until they can have a company name and logo on the login page?
   A: For our initial release, we will only specify the IDP name. We are open to adding further customization in response to feedback
   from users once the feature is released.
+
+## Open Questions
+None.
 
 ## Implementation Plan
 While this work is intended to supplement the dynamic client work, parts of it

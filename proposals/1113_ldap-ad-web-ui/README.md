@@ -208,7 +208,4 @@ Then once dynamic clients exist, we can add functionality to accept requests
 from those clients as well.
 
 ## Implementation PRs
-This section is a placeholder to list the PRs that implement this proposal.
-This section should be left empty until after the proposal is approved.
-After implementation, the proposal can be updated to list related
-implementation PRs.
+- https://github.com/vmware-tanzu/pinniped/pull/1163

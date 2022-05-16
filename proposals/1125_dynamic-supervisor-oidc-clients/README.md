@@ -1,6 +1,6 @@
 ---
 title: "Dynamic Supervisor OIDC Clients"
-authors: [ "@cfryanr" ]
+authors: [ "@cfryanr", "@enj" ]
 status: "in-review"
 sponsor: [ ]
 approval_date: ""
@@ -54,14 +54,17 @@ Goals for this proposal:
 - Allow Pinniped admins to configure applications (OIDC clients) other than the Pinniped CLI to interact with the
   Supervisor.
 - Provide a mechanism which governs a client's access to the token exchange APIs. Not all webapps should have permission
-  to act on behalf of the user with the Kubernetes API of the clusters, so an admin should be able to configure which
+  to act on behalf of the user with the Kubernetes API of the clusters, so an admin must be able to configure which
   clients have this permission.
 - Provide a mechanism for requesting access to different aspects of a user identity, especially getting group
   memberships or not, to allow the admin to exclude this potentially information for clients which do not need it.
 - Support a web UI based LDAP/ActiveDirectory login screen. This is needed to avoid having webapps handle the user's
-  password, which should only be seen by the Supervisor and the LDAP server. However, the details of this item have been
+  password, which must only be seen by the Supervisor and the LDAP server. However, the details of this item have been
   split out to a separate proposal document.
-- Client secrets should be stored encrypted or hashed, not in plain text.
+- Client secrets must be stored encrypted or hashed, not in plain text.
+- Creation of client credentials on the operator's behalf - the server must generate any secrets.
+- The operator must be able to initiate manual rotation of client credentials.
+- Documentation describing the token exchanges a webapp backend must perform to interact with the Kubernetes API.
 
 Non-goals for this proposal:
 
@@ -73,12 +76,15 @@ Non-goals for this proposal:
 - Implementing any self-service client registration API. Clients will be registered by the Pinniped admin user.
 - Implementing a consent screen. This would be clearly valuable but will be left as a potential future enhancement in
   the interest of keeping the first draft of this feature smaller.
-- Management (ie creation & rotation) of client credentials on the operator's behalf. This will be the operator's
-  responsibility.
 - Orchestration of token exchanges on behalf of the client. Webapps which want to make calls to the Kubernetes API of
   clusters acting as the authenticated user will need to perform the rest of the token and credential exchange flow that
   it currently implemented by the Pinniped CLI. Providing some kind of component or library to assist webapp developers
   with these steps might be valuable but will be left as a potential future enhancement.
+- Supporting JWT-based client auth as described in [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523).  For now
+  client secret basic auth will be used.  This is left as a potential future enhancement.
+- Supporting public clients.
+- Supporting any policy around which users an OAuth client can interact with.  This is left as a potential future
+  enhancement.
 
 ### Specification / How it Solves the Use Cases
 
@@ -95,13 +101,9 @@ An example of the new CRD to define a client:
 apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
 kind: OIDCClient
 metadata:
-  name: my-webapp-client
+  name: client.oauth.pinniped.dev-my-webapp-client
   namespace: pinniped-supervisor
 spec:
-  id: my-webapp
-  secretNames:
-    - my-webapp-client-secret-1
-    - my-webapp-client-secret-2
   allowedRedirectURIs:
     - https://my-webapp.example.com/callback
   allowedGrantTypes:
@@ -112,49 +114,63 @@ spec:
     - openid
     - offline_access
     - pinniped:request-audience
+    - username
     - groups
 status:
+  phase: Error
+  totalClientSecrets: 0
   conditions:
-    - type: ClientIDValid
+    - type: Ready
       status: False
-      reason: InvalidCharacter
-      message: client IDs are not allowed to contain ':'
+      reason: NoClientSecret
+      message: no secrets have been provisioned for this client
 ```
 
 A brief description of each field:
 
-- `name`: Any name that is allowed by Kubernetes.
-- `namespace`: Only clients in the same namespace as the Supervisor will be honored. This prevents cluster users who
-  have write permission in other namespaces from changing the configuration of the Supervisor.
-- `id`: The client ID, which is conceptually the username of the client. Validated against the same rules applied
-  to `name`. Especially note that `:` characters are not allowed because the basic auth specification disallows them in
-  usernames.
-- `secretNames`: The names of Secrets in the same namespace which contain the client secrets for this client. A client
-  secret is conceptually the password for this client. Clients can have multiple passwords at the same time, which are
-  all acceptable for use during an authcode flow. This allows for smooth rotation of the client secret by an admin
-  without causing downtime for the webapp's authentication flow.
-- `allowedRedirectURIs`: The list of allowed redirect URI. Must be `https://` URIs, unless the host of the URI
-  is `127.0.0.1`, in which case `http://` is also allowed
-  (see [RFC 8252](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)).
+- `metadata.name`: The client ID, which is conceptually the username of the client. Note that `:` characters are not
+  allowed because the basic auth specification disallows them in usernames.  Kubernetes custom resource name validation
+  already enforces that this field must be a DNS subdomain, which means it must consist of lower case alphanumeric
+  characters, '-' or '.', and must start and end with an alphanumeric character (i.e. we do not need to do anything
+  special to enforce that clients do not have a ":" in their name).  See the audience confusion discussion below for
+  details on further restrictions that are applied to this field (i.e. required prefix).
+- `metadata.namespace`: Only clients in the same namespace as the Supervisor will be honored. This prevents cluster
+  users who have write permission in other namespaces from changing the configuration of the Supervisor.
+- `allowedRedirectURIs`: The list of allowed redirect URI. Must be `https://` URIs.  `127.0.0.1`, `localhost`, and other
+  forms of loopback redirect URIs are disallowed.
 - `allowedGrantTypes`: May only contain the following valid options:
     - `authorization_code` allows the client to perform the authorization code grant flow, i.e. allows the webapp to
-      authenticate users.
-    - `refresh_token` allows the client to perform refresh grants for the user to extend the user's session.
+      authenticate users.  This grant must always be listed.
+    - `refresh_token` allows the client to perform refresh grants for the user to extend the user's session.  This grant
+      must be listed if `allowedScopes` lists `offline_access`.
     - `urn:ietf:params:oauth:grant-type:token-exchange` allows the client to perform RFC8693 token exchange, which is a
-      step in the process to be able to get a cluster credential for the user.
+      step in the process to be able to get a cluster credential for the user.  This grant must be listed if
+      `allowedScopes` lists `pinniped:request-audience`.
 - `allowedScopes`: Decide what the client is allowed to request. Note that the client must also actually request
   particular scopes during the authorization flow for the scopes to be granted. May only contain the following valid
   options:
-    - `openid`: The client is allowed to request ID tokens.
+    - `openid`: The client is allowed to request ID tokens.  ID tokens only include the
+      [required claims](https://openid.net/specs/openid-connect-core-1_0.html#IDToken) by default (`iss`, `sub`, `aud`,
+      `exp`, `iat`).  This scope must always be listed.
     - `offline_access`: The client is allowed to request an initial refresh token during the authorization code grant
-      flow.
+      flow.  This scope must be listed if `allowedGrantTypes` lists `refresh_token`.
     - `pinniped:request-audience`: The client is allowed to request a new audience value during a RFC8693 token
-      exchange, which is a step in the process to be able to get a cluster credential for the user.
+      exchange, which is a step in the process to be able to get a cluster credential for the user.  `openid`,
+      `username` and `groups` scopes must be listed when this scope is present.  This scope must be listed if
+      `allowedGrantTypes` lists `urn:ietf:params:oauth:grant-type:token-exchange`.
+    - `username`: The client is allowed to request that ID tokens contain the user's username.  This is a newly
+      proposed scope which does not currently exist in the Supervisor. Without the `username` scope being requested and
+      allowed, the ID token would not contain the user's username.
     - `groups`: The client is allowed to request that ID tokens contain the user's group membership, if their group
       membership is discoverable by the Supervisor. This is a newly proposed scope which does not currently exist in the
       Supervisor. Without the `groups` scope being requested and allowed, the ID token would not contain groups.
+- `phase`: This enum (`Pending`,`Ready`,`Error`) summarizes the overall status of the client (defaults to `Pending`).
+- `totalClientSecrets`: The number of client secrets that are currently associated with this client.
 - `conditions`: The result of validations performed by a controller on these CRs will be written by the controller on
   the status.
+
+All `.spec` list fields (i.e. all of them) will be validated to confirm that they do not contain any duplicates and are
+non-empty.
 
 Some other settings are implied and will not be configurable:
 
@@ -170,470 +186,161 @@ Some other settings are implied and will not be configurable:
   the [`response_mode`](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest) at the authorization
   endpoint. This excludes clients from using `form_post`. We could consider allowing `form_post` in the future if it is
   desired.
-- Clients are not allowed to use JWT-based client auth. This could potentially be added as a feature in the future.
 
-##### Configuring clients via an aggregated API server (alternative data model to CRD)
-
-CRDs are convenient to use, however, they have one core limitation - they cannot represent non-CRUD semantics.  For
-example, the existing token credential request API could not be implemented using a CRD - it processes an incoming token
-and returns a client certificate without writing any data to etcd.  Aggregated APIs have no such limitation.
-
-An example of how the aggregated API would define a client:
+To provide a nice table output for this API, the following printer columns will be used:
 
 ```yaml
-apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
-kind: OIDCClient
-metadata:
-  name: my-webapp-client
-  namespace: pinniped-supervisor
-spec:
-  allowedRedirectURIs:
-    - https://my-webapp.example.com/callback
-  allowedGrantTypes:
-    - authorization_code
-    - refresh_token
-    - urn:ietf:params:oauth:grant-type:token-exchange
-  allowedScopes:
-    - openid
-    - offline_access
-    - pinniped:request-audience
-    - groups
+- additionalPrinterColumns:
+  # this client is "dangerous" because it has access to user tokens that are valid against the Kubernetes API server
+  - jsonPath: '{range .spec.allowedScopes[?(@ == "pinniped:request-audience")]}{true}{end}{false}'
+    name: Privileged
+    type: boolean
+  - jsonPath: .status.phase
+    name: Status
+    type: string
+  - jsonPath: .status.totalClientSecrets
+    name: Total
+    type: integer
+  - jsonPath: .metadata.creationTimestamp
+    name: Age
+    type: date
 ```
-
-Some key differences from the CRD based approach:
-
-- The `.status` field is omitted - validation is performed statically on every `create` and `update` operation - the
-  client object is always guaranteed to be valid.  The admin is notified directly via a validation error if they attempt
-  to create an incorrect object (for example, with `metadata.name` set to a value that includes a `:`).  Similarly, if
-  the `.spec.allowed*` fields include invalid data, the object will be rejected.  Consumers of this API, such as our
-  controllers, can rely on the data being valid, which simplifies their logic.
-- `.spec.secretNames` has been removed as the client secret is generated on the server after the client has already been
-  created.  This is handled via a `create` operation to the `secret` subresource (this is modeled after the Kubernetes
-  service account API's `token` subresource).  Just as the SA `token` subresource uses the `TokenRequest` API as the
-  input and output schema, the `secret` subresource would use a `SecretRequest` API as the input and output schema.
-  The response from this API is the only time that the plaintext client secret is made available.  Since rotation is not
-  part of this proposal, the `secret` API can only be invoked once per client - all subsequent requests will fail.  A
-  "hard" rotation can be performed by deleting and re-creating the client, followed by calling the `secret` API.  Note
-  that this purely an artificial limitation - it would not be difficult to allow multiple invocations of the `secret`
-  API (with each creating a new client secret).  `SecretRequestSpec` would need to be expanded with a `bool` field to
-  revoke old client secrets (all except the latest, a new client secret would not be generated for this call).  The
-  pinniped CLI would be enhanced with a subcommand to call the `SecretRequest` API.
-
-```go
-type SecretRequest struct {
-  metav1.TypeMeta   `json:",inline"`
-  metav1.ObjectMeta `json:"metadata,omitempty"`
-
-
-  Spec SecretRequestSpec     `json:"spec"`
-  Status SecretRequestStatus `json:"status"`
-}
-
-type SecretRequestSpec struct {}  // empty for now
-
-type SecretRequestStatus struct {
-  Secret string `json:"secret"`
-}
-```
-
-The bulk of the aggregated API server implementation would involve copy-pasting the concierge aggregated API server code
-and changing the API group strings.  The interesting part of the implementation would be the rest storage implementation
-of the `OIDCClient` API.  Normally this would be done via direct calls to etcd, but running etcd is onerous.  Instead we
-would follow the same model we use for the fosite storage layer - everything would be stored in Kubernetes secrets.  The
-Kubernetes API semantics such as resource version would be trivial to implement since we would simply passthrough the
-object meta information from the underlying secret (each client would have a 1:1 mapping with a secret).  The existing
-`crud.Storage` code can likely be re-used for this purpose with minor modifications.  Each secret would store a single
-JSON object with the following schema:
-
-```go
-type clientStorage struct {
-  Name string              `json:"name"`
-  Labels map[string]string `json:"labels"`
-  Client OIDCClientSpec    `json:"client"`
-  SecretHashes []string    `json:"hashes"`
-  Version string           `json:"version"`  // updating this would require some form of migration
-}
-```
-
-The `client` field would store the `.spec` provided by the user.  The `hashes` field would store the hash of the server
-generated client secret on calls to the `secret` subresource API.  The `name` field would store the `metadata.name` of
-the `OIDCClient` as the actual secret would be named `pinniped-storage-oidcclient-<base32(sha256Hash(metadata.name))>`
-to prevent any issues that could arise from giving the user control over the name (i.e. length issues, collision
-issues, validation issues, etc).  Similarly, the `labels` field would store the `metadata.labels` of the `OIDCClient` to
-prevent any collisions with our internal labels such as `storage.pinniped.dev/type`.  While the bulk of the object
-meta's fields such as `resourceVersion` and `creationTimestamp` would be a simple passthrough, others would not be
-supported such as `generateName` and `managedFields` (there is limited value in doing so, at least for the MVP).  All of
-the standard Kubernetes rest verbs would be implemented.
 
 ##### Configuring client secrets
 
-We wish to avoid storage of client secrets (passwords) in plain text. They should be stored encrypted or hashed.
+We wish to avoid storage of client secrets (passwords) in plaintext. They must be stored encrypted or hashed and must
+be generated by the server.
 
 Perhaps the most common approach for this is to use [bcrypt](https://en.wikipedia.org/wiki/Bcrypt) with a random salt
 and a sufficiently high input cost. The salt protects against rainbow tables, and the input cost provides some
 protection against brute force guessing when the hashed password is leaked or stolen. However, the input cost also makes
-it slower for users to authenticate. The cost should be balanced against the current compute power available to
-attackers versus the inconvenience to users caused by a long pause during a genuine login attempt. There is no "best"
-value for the input cost. Even when an administrator determines a value that works for them, they should reevaluate as
-Moore's Law (and the availability of specialized hardware) catches up to their choice later.
+it slower for users to authenticate. The cost must be balanced against the current compute power available to attackers
+versus the inconvenience to users caused by a long pause during a genuine login attempt.
 
-Client secrets should be decided by admins. Many OIDC Providers auto-generate client secrets and return the generated
-secret once (and only once) in their API or UI. This is good for ensuring that the secret contains a large amount of
-entropy by auto-generating long random strings using lots of possible characters. However, Pinniped has declarative
-configuration as a design goal. The configuration of Pinniped should be able to be known a priori (even before
-installing Pinniped) and should be easy to include in a Gitops workflow.
+Many OIDC Providers auto-generate client secrets and return the generated secret once (and only once) in their API or
+UI. This is good for ensuring that the secret contains a large amount of entropy by auto-generating long random strings
+using lots of possible characters.  We will follow this approach.
 
 Even if the client secrets are hashed with bcrypt, the hashed value is still very confidential, due to the opportunities
 for brute forcing provided by knowledge of the hashed value. Confidential data in Kubernetes should be stored in Secret
-resources. This makes it explicit that the data is confidential and many Kubernetes workflows are built on this
-assumption. For example, deployment tools will avoid showing the values in Secrets during an application deployment. As
-another example,
+resources. This makes it explicit that the data is confidential.
 [Kubernetes best practices suggest](https://kubernetes.io/docs/concepts/configuration/secret/#information-security-for-secrets)
 that admins should use authorization policies to restrict read permission to Secrets as much as possible. Additionally,
 some clusters may use the Kubernetes feature to
 [encrypt Secrets at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/), and thus reasonably expect
-that all confidential data is encrypted at rest.
+that all confidential data is encrypted at rest.  We will use Kubernetes secrets to store the client secret hash.
 
-###### Option 1: Providing client secrets already hashed
+CRDs are convenient to use, however, they have one core limitation - they cannot represent non-CRUD semantics.  For
+example, the existing token credential request API could not be implemented using a CRD - it processes an incoming token
+and returns a client certificate without writing any data to etcd.  Aggregated APIs have no such limitation.  We will
+use an aggregated API to handle generation of client secrets.
 
-An admin could run bcrypt themselves to hash their desired client secret. Then they could write the resulting value into
-a Secret.
+We will use the existing token credential request API as a model for the new OIDC client secret request API.  Only the
+`create` verb will be supported (but this resource will be part of the `pinniped` category and will have no-op `list`
+implementation just like token credential request to prevent `kubectl get pinniped -A` from returning an error).
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: my-webapp-client-secret-1
-  namespace: pinniped-supervisor
-type: secrets.pinniped.dev/oidc-client-secret-bcrypt
-stringData:
-  clientSecret: $2y$10$20UQo9UzqBzT.mgDRu9TwOC...EQSbS2
-```
+```go
+type OIDCClientSecretRequest struct {
+  metav1.TypeMeta   `json:",inline"`
+  metav1.ObjectMeta `json:"metadata,omitempty"`  // metadata.name must be set to the client ID
 
-Advantages:
 
-- Least implementation effort.
-- Admins choose their own preferred bcrypt input cost.
-- Confidential data is stored in a Secret.
+  Spec   OIDCClientSecretRequestSpec   `json:"spec"`
+  Status OIDCClientSecretRequestStatus `json:"status"`
+}
 
-Disadvantages:
+type OIDCClientSecretRequestSpec struct {
+  GenerateNewSecret bool `json:"generateNewSecret"`
+  RevokeOldSecrets  bool `json:"revokeOldSecrets"`
+}
 
-- Running bcrypt is an extra step for admins or admin process automation scripts. However, there are many CLI tools
-  available for running bcrypt, and every popular programming language has library support for bcrypt. For
-  example, `htpasswd` is pre-installed on all MacOS machines and many linux machines, and tools
-  like [Bitnami's bcrypt-cli](https://github.com/bitnami/bcrypt-cli) are readily available. E.g. the following command
-  generates and hashes a strong random password using an input cost of 12:
-  `p="$(openssl rand -hex 14)" && echo "$p" && echo -n "$p" | bcrypt-cli -c 12`.
-
-###### Option 2: Providing client secrets in plaintext and then automatically hashing them
-
-An admin could provide the plaintext client secrets on the `OIDCClient` CR, instead of listing references to Secrets. A
-[dynamic mutating admission webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/)
-could automatically run bcrypt on each incoming plaintext secret, store the results somewhere, and remove the plaintext
-passwords.
-
-There are several places that the hashed passwords could be stored by the webhook:
-
-- In the same field on the OIDCClient CR, by replacing the plaintext passwords with hashed passwords
-- In a different field on the OIDCClient CR, and deleting the plaintext passwords
-- In Secret resources, by deleting the plaintext passwords and adding `secretRefs` to the OIDCClient CR, and
-  creating/updating/deleting Secrets named with random suffixes
-
-Advantages:
-
-- The admin does not need to run bcrypt themselves.
-
-Disadvantages:
-
-- The development cost would be higher.
-    - Pinniped does not currently have any admission webhooks, and they are not the simplest API to implement correctly.
-    - Webhooks should use TLS, so Pinniped would need code to automatically provision a CA and TLS certs, and a
-      controller to update the webhook configuration to have the generated CA bundle.
-    - The webhook should also use mTLS (or a bearer token) to authenticate that requests are coming from the API server,
-      which is another additional amount of effort similar to TLS.
-    - The webhook should not be available outside the cluster, so it should be on a new listening port with a new
-      Service.
-- If the webhook goes down or has a bug, then all edits to the CR will fail while the issue is happening.
-- Confidential data should be stored in a Secret, making the options to store the hashed passwords on the OIDCClient CR
-  less desirable. Having an admission controller for Secrets would be putting Pinniped into the critical path for all
-  create/update operations of Secrets in the namespace, which is probably not desirable either, since the admin user
-  already creates lots of other Secrets in the namespace, and the Supervisor itself also creates many Secrets (e.g. for
-  user session storage). This only leaves the option of having the webhook create side effects by watching OIDCClient
-  CRs but mutating Secrets. The
-  [Kubernetes docs](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#side-effects)
-  explain several complications that must be handled by webhooks that cause side effects.
-- The desired semantics of this webhook's edit operations are not totally clear.
-    - If a user updates the passwords or updates some unrelated field, then how would the webhook know to avoid
-      regenerating the hashed passwords for unchanged passswords while updating/deleting the hashed passwords for those
-      that changed or were deleted? Passwords are hashed with a random salt, so the incoming plaintext password would
-      need to be compared against the hash using the same operation as when a user is attempting a login, which is
-      purposefully slow to defeat brute-force attacks.
-      [Webhooks must finish within 10-30 seconds](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#timeouts)
-      (10 seconds is the default timeout, and 30 seconds is the maximum configuration value for timeouts). In the event
-      that the webhook determines that it should hash the passwords to store them, that is another intentionally slow
-      operation. One can imagine that if there are three passwords and each takes 2 seconds to hash to determine which
-      need to change, and then those that need to be updated take another 2 seconds to actually update, then the
-      10-second limit could be easily exceeded.
-    - If a user reads the value of the CR (which never returns plaintext passwords) and writes back that value, does
-      that delete all the hashed passwords? It would appear to the webhook that the admin wants to remove all client
-      secrets.
-    - Note that the
-      [Kubernetes docs](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#reinvocation-policy)
-      say, "Mutating webhooks must be idempotent, able to successfully process an object they have already admitted and
-      potentially modified." So the webhook would need to somehow recognize that it does not need to perform any update
-      after it has already removed the plaintext passwords.
-- Pinniped would need to offer an additional configuration option for the bcrypt input cost. There is no "correct" value
-  to use unless it is determined by the admin user.
-- The
-  [Kubernetes docs](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#availability)
-  say, "It is recommended that admission webhooks should evaluate as quickly as possible, typically in milliseconds,
-  since they add to API request latency. It is encouraged to use a small timeout for webhooks." Evaluating in
-  milliseconds will not be possible due to the intentional slowness of bcrypt.
-- The
-  [Kubernetes docs](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#use-caution-when-authoring-and-installing-mutating-webhooks)
-  warn that current and future control loops may break when changing the value of fields. The docs say, "Built in
-  control loops may break when the objects they try to create are different when read back. Setting originally unset
-  fields is less likely to cause problems than overwriting fields set in the original request. Avoid doing the latter."
-  So removing or updating an incoming plaintext password field is not advised, although the advice is not very specific.
-
-###### Option 3: Aggregated API
-
-See the earlier section where an aggregated API is discussed.  Aggregated APIs solve both the data model and the secret
-provisioning problem.
-
-###### Option 4: Custom REST endpoint for secret provisioning
-
-This approach combines CRD based storage with the aggregated API subresource secret generation approach.  While CRDs do
-not support subresources today, this can be emulated by either creating an aggregated API or a custom rest endpoint.
-The aggregated API approach would be similar to the subresource approach described above, notably with the API server
-handling authentication.  The easier approach would be to implement the `SecretRequest` API as an endpoint on the
-supervisor such as `https://<supervisor_url>/secret_request_v1alpha1/<client_name>`.  Authentication would be handled in
-a similar way to the token exchange API - a pinniped access token would be used to validate the identity of the caller.
-Unlike the token exchange API, this endpoint would require authorization.  This would be handled by issuing a subject
-access review for the access token's identity (note that the virtual verb `request` is used to distinguish this API from
-regular Kubernetes rest APIs):
-
-```json
-{
-  "name": "my-webapp-client",
-  "namespace": "pinniped-supervisor",
-  "verb": "request",
-  "group": "oauth.supervisor.pinniped.dev",
-  "version": "*",
-  "resource": "oidcclients",
-  "subresource": "secretrequest"
+type OIDCClientSecretRequestStatus struct {
+  GeneratedSecret    string `json:"generatedSecret,omitempty"`
+  TotalClientSecrets int    `json:"totalClientSecrets"`
 }
 ```
 
-Calls to the `secret_request_v1alpha1` endpoint would, after successful auth, fetch the `client_name` OIDC client from
-the Kubernetes API (to validate that it exists and learn its UID), and then create a secret with an owner reference back
-to the OIDC client.  This secret would be named `pinniped-storage-oidcclientsecret-<base32(sha256Hash(client_name))>`
-and would store the hash of the server generated secret.  The details regarding rotation as mentioned for the aggregated
-subresource API implementation apply here as well.  There would always be at most one Kubernetes secret per OIDC client.
-Since the secret name is deterministic based on the client name, no reference field is required on the OIDC client.  The
-pinniped CLI would be enhanced with a subcommand to call the `secret_request_v1alpha1` endpoint.
+Unlike token credential request, OIDC client secret request will require that `metadata.name` be set (so that it can
+determine what OAuth client is being referred to).  When `.spec.generateNewSecret` is set to `true`, the response will
+provide the plaintext client secret via the `.status.generatedSecret` field.  This is the only time that the plaintext
+client secret is made available.  To aid in rotation, this API may be called multiple times with
+`.spec.generateNewSecret` set to `true` to cause the creation of a new client secret.  The response will include the
+total number of client secrets (including any newly generated ones) that exist for the OAuth client in the
+`.status.totalClientSecrets` field.  When the admin is ready, they may call the API with `.spec.revokeOldSecrets` set to
+`true` to cause all but the latest secret to be revoked.  In the event of a client secret disclosure, a "hard" rotation
+may be performed by setting both `.spec.generateNewSecret` and `.spec.revokeOldSecrets` to `true` (this will revoke all
+pre-existing client secrets and return a newly generated secret).  Leaving both of these fields set to `false` will
+simply return the number of existing client secrets via the `.status.totalClientSecrets` field (this same information is
+available via the `.status.totalClientSecrets` field of the `OIDCClient` resource).
 
-An example CRD:
+An admin would interact with this API by using standard `kubectl` commands:
 
 ```yaml
-apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
-kind: OIDCClient
+apiVersion: oauth.virtual.supervisor.pinniped.dev/v1alpha1  # different group to avoid collision with the CRD
+kind: OIDCClientSecretRequest
 metadata:
-  name: my-webapp-client
+  name: client.oauth.pinniped.dev-j77kz
   namespace: pinniped-supervisor
 spec:
-  allowedRedirectURIs:
-    - https://my-webapp.example.com/callback
-  allowedGrantTypes:
-    - authorization_code
-    - refresh_token
-    - urn:ietf:params:oauth:grant-type:token-exchange
-  allowedScopes:
-    - openid
-    - offline_access
-    - pinniped:request-audience
-    - groups
-status:
-  conditions:
-    - type: ClientIDValid
-      status: False
-      reason: InvalidCharacter
-      message: client IDs are not allowed to contain ':'
+  generateNewSecret: true
 ```
 
-The schema of the `secret_request_v1alpha1` endpoint is the same as the `SecretRequest` type defined above.
+Assuming the above yaml is stored in `file.yaml`, then running:
 
-###### Option 5: Asymmetric crypto to store client secret in status
+`kubectl create -f file.yaml`
 
-This approach proposes the use of asymmetric crypto, specifically RSA-OAEP with SHA-256, to allow the server to generate
-the secret and deliver it to the client without exposing the plaintext value.  `.spec.rsaPublicKey` is used to specify
-a PEM encoded RSA public key.  After the client has been created, the supervisor would use the public key to encrypt the
-client secret and store the ciphertext in the `.status.encryptedClientSecret` field.  As mentioned in earlier designs,
-the hash of the client secret would be stored in a Kubernetes secret.  The pinniped CLI would be enhanced with a
-subcommand to help generate a RSA key (or use an existing one) and decrypt the secret after it has been populated.  The
-supervisor will validate that the RSA key has a length of at least `3072` bits.  Note that `encryptedClientSecret` could
-instead be a pointer to a Kubernetes secret that holds the encrypted client secret, but that indirection does not
-provide any significant security benefit.
+would cause the server to respond with (note the custom columns in the table output):
 
-Example RSA code:
+```
+NAMESPACE               NAME                                SECRET     TOTAL
+pinniped-supervisor     client.oauth.pinniped.dev-j77kz     12..xz     2
+```
+
+All client secret hashes for an OAuth client will be stored in `pinniped-storage-oidcclientsecret-<metadata.uid>` where
+`metadata.uid` is the UID generated by the Kuberentes API server for the `OIDCClient` custom resource instance that
+represents the given OAuth client.  This secret will have an owner reference back to the `OIDCClient` to guarantee that
+it is automatically garbage collected if the `OIDCClient` is deleted.  As the client secret lookup is UID based, it is
+resilient against any vulnerabilities that arise from the client ID being re-used over time.  Using the UID also
+prevents any issues that could arise from giving the user control over the secret name (i.e. length issues, collision
+issues, validation issues, etc).  Each client will have a 1:1 mapping with a Kubernetes secret - there would always be
+at most one Kubernetes secret per client.  Since the secret name is deterministic based on the client UID, no reference
+field is required on the client.  Kubernetes secrets have a size limit of ~1 MB which is enough to hold many thousands
+of hashes.  This API will enforce a hard limit of 100 secrets per client (having this many client secrets is likely a
+configuration mistake).
+
+The bulk of the aggregated API server implementation would involve copy-pasting the concierge aggregated API server
+code and changing the API group strings. The interesting part of the implementation would be the rest storage
+implementation of the `OIDCClientSecretRequest` API. Normally this would be done via direct calls to etcd, but running
+etcd is onerous. Instead we would follow the same model we use for the fosite storage layer - the existing
+`crud.Storage` code will be re-used. Each Kubernetes secret would store a single JSON object with the following schema:
 
 ```go
-clientSecret := "..."  // base64.RawURLEncoding.EncodeToString(rand.Read(...))
-rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPublicKey, clientSecret, nil)
+type oidcClientSecretStorage struct {
+  // list of bcrypt hashes validated to have a cost of at least 15 (requires roughly a second to process)
+  SecretHashes [][]byte `json:"hashes"`
+  // set to "1" - updating this would require some form of migration
+  // this is not the same as crud.secretVersion which has remained at "1" for the lifetime of the project
+  // this is the first resource where we cannot simply bump the storage version and "drop" old data
+  Version string `json:"version"`
+}
 ```
 
-An example CRD:
+Since an aggregated API is indistinguishable from any other Kuberentes REST API, no explanation will be required in
+regards to how RBAC should be handled for this API.  Authentication is handled by the Kubernetes API server itself and
+the aggregated API server library code handles authorization automatically by delegating to the Kubernetes API server.
+We will need to manually invoke the `createValidation rest.ValidateObjectFunc` function that is provided to the rest
+storage because this is how admission is enforced (which would be required if the admin wanted to give a user the
+ability to create client secrets but only for specific clients - this limitation is because the name of a new object
+may not be known at authorization time).
 
-```yaml
-apiVersion: oauth.supervisor.pinniped.dev/v1alpha1
-kind: OIDCClient
-metadata:
-  name: my-webapp-client
-  namespace: pinniped-supervisor
-spec:
-  rsaPublicKey: |
-    -----BEGIN PUBLIC KEY-----
-    MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAlRuRnThUjU8/prwYxbty
-    ...
-    AIU+2GKjyT3iMuzZxxFxPFMCAwEAAQ==
-    -----END PUBLIC KEY-----
-  allowedRedirectURIs:
-    - https://my-webapp.example.com/callback
-  allowedGrantTypes:
-    - authorization_code
-    - refresh_token
-    - urn:ietf:params:oauth:grant-type:token-exchange
-  allowedScopes:
-    - openid
-    - offline_access
-    - pinniped:request-audience
-    - groups
-status:
-  conditions:
-    - type: ClientIDValid
-      status: False
-      reason: InvalidCharacter
-      message: client IDs are not allowed to contain ':'
-  encryptedClientSecret: 1..9
-```
-
-Note that RSA-OAEP with SHA-256 is used instead of
-[libsodium sealed box - nacl/box#SealAnonymous](https://pkg.go.dev/golang.org/x/crypto/nacl/box#SealAnonymous) because
-`nacl/box` relies on Curve25519, XSalsa20 and Poly1305 which are all not allowed in strict FIPS contexts.
-Cryptographically, `nacl/box` is modern and superior to RSA-OAEP in every way, but it would be painful to have
-different APIs in regular vs. FIPS mode (or to try and get exceptions for the use of `nacl/box`).  Before committing to
-RSA, we should validate that using `nacl/box` is truly not an option.  For example,
-[GitHub encrypted secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets) uses `nacl/box` to
-"ensure that secrets are encrypted before they reach GitHub and remain encrypted until [they are used] in a workflow."
-
-##### Configuring association between clients and issuers
-
-Each FederationDomain is a separate OIDC issuer. OIDC clients typically exist in a single OIDC issuer. Each OIDC client
-is effectively granted permission to learn about the users of that FederationDomain and to perform actions on behalf of
-the users of that FederationDomain. If the client is allowed by its configuration, then it may also perform actions
-against the Kubernetes APIs of all clusters associated with the FederationDomain.
-
-It seems desirable for an admin to explicitly choose which clients are associated with a FederationDomain. For example,
-if an admin has a FederationDomain for all the Kubernetes clusters used by the finance department, and another
-FederationDomain for all the clusters used by the HR department, then a webapp for the finance department developers
-should not necessarily be allowed to perform actions on the Kubernetes API of the HR department's clusters.
-
-###### Option 1: Explicitly associate specific clients with issuers
-
-Each FederationDomain could list which clients are allowed. For example:
-
-```yaml
-apiVersion: config.supervisor.pinniped.dev/v1alpha1
-kind: FederationDomain
-metadata:
-  namespace: pinniped-supervisor
-  name: my-domain
-spec:
-  issuer: https://my-issuer.pinniped.dev/issuer
-  # This is the new part...
-  clientRefs:
-    - "my-webapp-client"
-    - "my-other-webapp-client"
-```
-
-The `pinniped-cli` client does not need to be listed, since it only makes sense to allow `kubectl` access to all users
-of all FederationDomains. Additionally, the `pinniped-cli` can only redirect authcodes to localhost listeners,
-effectively only allowing users to log into their own accounts on their own computers.
-
-###### Option 2: Implicitly associate all clients with all issuers
-
-Rather than explicitly listing which clients are allowed on a FederationDomain, all FederationDomains could assume that
-all clients are available for use.
-
-Advantages:
-
-- Slightly less configuration for the user.
-- Slightly less implementation effort since the FederationDomain watching controller would not need to change to read
-  the list of `clientRefs`.
-
-Disadvantages:
-
-- Reusing the example scenario from above (finance and HR clusters), there would be no way to prevent a webapp for
-  finance developer users from performing operations against the clusters of HR developer users who log into the finance
-  webapp. This could be a serious security problem after the planned multiple identity providers feature is implemented
-  to allow for more differentiation between the users of the two FederationDomains. This problem is compounded by the
-  fact that many upstream OIDC providers use browser cookies to avoiding asking an active user to interactively log in
-  again, and also by the fact that we decided to punt implementing a user consent UI screen. Together, these imply that
-  an attacker from the finance department cluster which runs the client webapp would only need to trick an HR user into
-  clicking on a single link in their web browser or email client for the attacker to be able to gain access to the HR
-  clusters using the identity of the HR user, with no further interaction required by the HR user beyond just clicking
-  on the link.
-
-#### Upgrades
-
-The proposed CRD will be new, so there aren't any upgrade concerns for it. Potential changes to the FederationDomain
-resource are also new additions to an existing resource, so there are again no upgrade concerns there.
-
-The `pinniped-cli` client needs to continue to act as before for backwards compatibility with existing installations of
-the Pinniped CLI on user's machines. Therefore, it should be excluded from any new scope-based requirements which would
-restrict the group memberships from being returned. This will allow mixing of old CLIs with new Supervisors, and new
-CLIs with old Supervisors, in regard to the new Supervisor features proposed herein.
-
-#### Tests
-
-As usual, unit tests should be added for all new/changed code.
-
-Integration tests should be added to mimic the usage patterns of a webapp. Dynamic clients should be configured with
-various options to ensure that the options work as expected. Those clients should be used to perform the authcode flow,
-RFC8693 token exchanges, and TokenCredentialRequest calls. Negative tests should include validation failures on the new
-CRs, and failures to perform actions that are supposed to be disallowed on the client by its configuration.
-
-#### New Dependencies
-
-None are foreseen.
-
-#### Performance Considerations
-
-Some considerations were mentioned previously for client secret option 2 above. No other performance impact is foreseen.
-
-#### Observability Considerations
-
-None are foreseen, aside from the usual error messages and log statements for the new features similar to what is
-already implemented in the Supervisor.
-
-#### Security Considerations
-
-Some security considerations were already mentioned above. Here are a couple more.
-
-##### Ensuring reasonable client secrets
-
-During a login flow, when the client secret is presented in plaintext to the Supervisor’s token endpoint, it could
-potentially validate that the secret meets some minimum entropy requirements. For example, it could check that the
-secret has sufficient length, a sufficient number of unique characters, and a sufficient number of letter vs number
-characters. If we choose to use the plaintext passwords option then the Supervisor could potentially perform this
-validation in the mutating admission webhook before it hashes the passwords.
+The OIDC client secret request API will support open API schema docs to make sure commands such as `kubectl explain
+oidcclientsecretrequests.spec` work (this is not true for token credential request today).
 
 ##### Disallowing audience confusion
 
 Who decides the names of the dynamic client and the workload clusters?
 
-- The name of the dynamic client would be chosen by the admin of the Supervisor. We could put validations on the name if
-  we would like to limit the allowed names.
+- The name of the dynamic client would be chosen by the admin of the Supervisor.
 - The name of the workload cluster is chosen by the admin of the workload cluster (potentially a different person or
   automated process). We don’t currently limit the string which chooses the audience name for the workload cluster, so
   it can be any non-empty string. The Supervisor is not aware of these strings in advance.
@@ -644,167 +351,171 @@ Given that, there are two kinds of potential audience confusion for the token ex
    name of the dynamic client. If this client’s name happened to be the same name as the name of a workload cluster,
    then the client could potentially skip the token exchange and use the original ID token to access the workload
    cluster via the Concierge (acting as the user who logged in). These initial ID tokens were not meant to grant access
-   to any particular cluster.
-
-   If the admin always names the dynamic clients in a consistent way which will not collide with the names of any
-   workload cluster that they also name, then this won't happen unless another admin of a workload cluster breaks the
-   naming convention. In that case, the admin of the workload cluster has invited this kind of token misuse on their
-   cluster, possibly by accident. It is unlikely that it would be by accident if the naming convention of clusters
-   included any random element, which is what the Pinniped docs recommend. This could either be solved with
-   documentation advising against these naming collisions, or by adding code to make it impossible.
-
-   We could consider inventing a way to make this initial ID token more inert. One possibility would be to take
-   advantage of the
-   [`RequiredClaims` field](https://github.com/kubernetes/kubernetes/blob/a750d8054a6cb3167f495829ce3e77ab0ccca48e/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go#L117-L119)
-   of the JWT authenticator. The token exchange could be enhanced to always add a new custom claim to the JWTs that it
-   returns, such as `pinniped_allow_concierge_tcr: true`. The Concierge JWTAuthenticator could be enhanced to require
-   this claim by default, along with a configuration option to disable that requirement for users who are not using the
-   Supervisor. ID tokens returned during an initial login (authcode flow) would not include this claim, rendering them
-   unusable at the Concierge's TokenCredentialRequest endpoint. Docs could be updated to explain that users who
-   configure dynamic clients should upgrade to use the version of the Concierge which performs this new validation on
-   workload clusters, and that users who are using JWTAuthenticators for providers other than the Supervisor would need
-   to add config to disable the new validation when they upgrade.
+   to any particular cluster.  An admin may even deliberately try use dynamic clients to represent clusters as is
+   traditionally done with Dex.
 
 2. A user can use the public `pinniped-cli` client to log in and then to perform a token exchange to any audience value.
    They could even ask for an audience which matches the name of an existing dynamic client to get back an ID token that
    would appear as if it were issued to that dynamic client. Then they could try to find a way to use that ID token with
    a webapp which uses that dynamic client to authenticate its users (although that may not be possible depending on the
-   implementation of the webapp). This could be prevented by making this an error in the token exchange code. No token
-   exchange should be allowed if it requests that the new audience name be the name of any existing client in that
-   FederationDomain, to avoid this kind of purposeful audience confusion.
+   implementation of the webapp).
 
-###### Option 1: Add automatic prefix to the audience of ID tokens retrieved from token exchange
+To address all of these issues we will:
 
-The `audience` parameter passed into the token exchange API is directly used as the audience for the resulting ID token.
-This could instead be changed to automatically attach the prefix `client.oauth.pinniped.dev/token-exchange:` to the
-requested audience, i.e. if `audience=cluster-001` is passed, the resulting ID token will have an audience of
-`client.oauth.pinniped.dev/token-exchange:cluster-001`.  This is guaranteed never to conflict with the audience of an
-OAuth client because clients cannot include `:` in their name (since that is not allowed in basic auth).  Without
-further action, this is guaranteed to be a breaking change as existing `JWTAuthenticator` configurations will not work.
-Note in particular that some environments use old versions of the concierge with newer versions of the supervisor.  This
-is not an officially supported or tested config, but we may want to consider this scenario.
+- Require a static, reserved prefix (`client.oauth.pinniped.dev-`) for all dynamic OAuth client IDs
+- Require a static, reserved prefix (`token-exchange.oauth.pinniped.dev-`) for audiences requested via the token
+  exchange API
+- All ID tokens issued by the supervisor will contain the `azp` claim and its value will always be set to the client ID
+  of the client that was used for the initial login flow.  This is meant to prevent any information loss during flows
+  such as the token exchange API.
+- In the ID token retrieved from the authorization flow (and only this ID token), nest the `username` and `groups`
+  claims under a `pinniped` object and thus prevent the existing Kubernetes OIDC integration code from consuming this
+  data (this same code is used to implement the `JWTAuthenticator`).  Note that we must provide some mechanism for a
+  webapp to retrieve this information since it is commonly used to enrich UIs.
+- No changes are proposed for the `JWTAuthenticator` as it is meant to be interchangeable with the Kubernetes OIDC
+  server flags.  Some environments use old versions of the concierge with newer versions of the supervisor and thus we
+  cannot rely on changes to the concierge being rolled out to enforce security contracts.
+- Implicit behavioral changes to APIs are avoided as they can be difficult to understand and reason about.
 
-An approach that can help mitigate backwards compatibility issues:
+The validation associated with dynamic clients will be used to enforce that clients have `metadata.name` set to a value
+that starts with `client.oauth.pinniped.dev-`.  Thus while it will be possible to create a dynamic client with a name
+such as `pinniped-cli`, it will not be usable.  For the time being, the "magic" `pinniped-cli` client will not be
+represented in the CRD API (for a few reasons, i.e. it is a public client).
 
-When the access token passed via the `subject_token` parameter was issued for the `pinniped-cli` OAuth client, the
-resulting audience will be set to both `cluster-001` and `client.oauth.pinniped.dev/token-exchange:cluster-001`.  This
-will prevent `JWTAuthenticator` configs from rejecting `kubectl` based logins.  To use a new dynamic OAuth client, the
-`JWTAuthenticator` config will have to be updated to set `.spec.audience` to
-`client.oauth.pinniped.dev/token-exchange:cluster-001` instead of `cluster-001` (or an additional `JWTAuthenticator`
-can be created with the prefixed audience).  This will be a transient workaround - at some future release the
-`cluster-001` audience will no longer be automatically included for the `pinniped-cli` client.  The token credential
-request API will be updated to issue a warning when the `cluster-001` audience is used when the ID token is issued by a
-supervisor (this can be detected via the OIDC discovery document).  To limit the chance that `cluster-001` results in
-audience confusion during the transition period, the token exchange API would not include it for the `pinniped-cli` when
-a dynamic OAuth client is defined with that name (or even more strictly, if any dynamic OAuth client is defined - i.e.
-using the new dynamic OAuth client feature would force `JWTAuthenticator` config updates - we can detect if any dynamic
-OAuth client is defined via a live list call with limit=1).
+The token exchange API will always reject audience values that start with `client.oauth.pinniped.dev-` and will usually
+reject audience values that do not start with `token-exchange.oauth.pinniped.dev-` (described further below).  In a
+future release, this validation will be simplified to require that requested audiences always start with
+`token-exchange.oauth.pinniped.dev-`.
 
-###### Option 2: Require a static, reserved prefix for all dynamic OAuth client IDs
+To make the above changes backwards compatible:
 
-When a dynamic client is configured, the full name will not be configurable.  Instead, only the suffix will be
-configurable and the suffix will not be allowed to contain `--`.  The prefix will be always be
-`client.oauth.pinniped.dev--`.  Thus if the suffix is set to `fancy-client`, the ID for the client will be
-`client.oauth.pinniped.dev--fancy-client`.  The token exchange API will be updated to reject attempts to request an
-audience with this prefix. It may be prudent to rename the CLI OAuth client to `client.oauth.pinniped.dev--pinniped-cli`
-and prevent a token exchange for the `pinniped-cli` audience.  `JWTAuthenticator` will be updated to reject audiences
-with the `client.oauth.pinniped.dev--` prefix as well as `pinniped-cli` to disallow use of ID tokens issued during the
-authorization flow.  Users will need to understand this prefixing rule as they will need to configure their app to use
-`client.oauth.pinniped.dev--fancy-client` as the client ID.  Renaming the `pinniped-cli` would be phased effort with the
-old name being supported for some number of releases.  The supervisor would issue warnings to indicate that kubeconfigs
-need to be regenerated to use the new client name (dynamic clients would not be allowed to use this reserved name).
+If and only if there are no dynamic clients registered with the supervisor (as determined via a live list call with
+limit=1), and the access token passed via the `subject_token` parameter was issued for the `pinniped-cli` OAuth client,
+and the requested audience is not prefixed with `token-exchange.oauth.pinniped.dev-` or `client.oauth.pinniped.dev-`,
+then the audience validation rules are skipped and the resulting ID token will have its audience value set to both the
+requested value and `token-exchange.oauth.pinniped.dev-<requested_value>`.  When this legacy path is taken, a debug log
+statement will be generated to allow the admin to track if users have not updated their kubeconfigs yet.  If any of the
+conditions above are not met, then the requested audience must be prefixed with `token-exchange.oauth.pinniped.dev-`.
 
-###### Option 2.5: Some mix of Option 1 and 2
+Thus on an upgrade, existing kubeconfigs, pinniped CLIs, `JWTAuthenticator` configs, etc will keep working and `kubectl`
+based logins will not be disrupted.  However, using the new dynamic OAuth client feature would force `JWTAuthenticator`
+config updates and the regeneration and redistribution of kubeconfigs (non-admin users will not need to upgrade the CLI
+though).  The upgrade process would involve the following steps (the order is important):
 
-It is likely possible to use both options in conjunction.  Note that mixing old and new versions of the supervisor and
-concierge may still result in audience confusion as components may not enforce all checks.
+1. Admin upgrades their copy of the pinniped CLI
+2. Admin upgrades the supervisor
+3. Admin upgrades the concierge on all clusters (optional but recommended)
+4. Admin updates the `JWTAuthenticator` config for all clusters by prepending the new required prefix
+   `.spec.audience = token-exchange.oauth.pinniped.dev- + .spec.audience`
+5. Admin uses the new pinniped CLI to generate updated kubeconfigs
+6. Admin distributes the new kubeconfigs to all users
+7. Admin communicates to users that they need to update their kubeconfigs
+8. Before using the new dynamic client feature, admin checks the supervisor logs to confirm that the legacy token
+   exchange path is no longer in use
 
-###### Option 3: Break apart signing keys for dynamic OAuth clients
+On a new install with the latest components, we must ensure that admins are prevented from creating kubeconfigs that
+will need migration at a later date.  This requires us to make a backwards incompatible change to the `pinniped get
+kubeconfig` command.  This command will now refuse to generate a kubeconfig with a `--request-audience` flag set to a
+value that is not prefixed with `token-exchange.oauth.pinniped.dev-` (the flag can still be left unset).  The default
+scopes set by the `pinniped get kubeconfig` and `pinniped login oidc` commands will be updated to include the new
+`username` and `groups` scopes.  These changes ensure that newly generated kubeconfigs from the latest pinniped CLI have
+the correct behavior going forward.  Admins can always manually edit the resulting kubeconfig if they need to (or they
+could use an older pinniped CLI).
 
-Cryptographic isolation of signing keys is a guaranteed way to prevent any form of confusion between ID tokens issued
-by the authorization code flow and and ID tokens issued by the token exchange API.  At a high level, we could separate
-the single OIDC issuer into as many as four distinct issuers (authorization code vs. token exchange x static vs. dynamic
-OAuth client).  Consumers would be configured to trust the exact sub-issuer that they are expected to understand.  The
-OIDC discovery protocol makes this incredibly painful to express.  This technical specifics for this option have been
-mostly omitted as it does not seem viable.
+##### Client registry
 
-###### Option 4: Migrate to token webhook
+The supervisor's OIDC implementation currently performs live reads against the Kubernetes API (i.e. it does not use a
+cache).  No performance impact has been observed from this implementation.  A positive of this implementation is that
+the supervisor is always up to date with the latest state - i.e. if a session is deleted, it is immediately observed on
+the next API call that attempts to use that session.  The dynamic client registry must avoid using a cache based
+implementation to ensure that is always up to date with the current config.  Furthermore, the implementation must
+guarantee that deleting and recreating a client invalidates all sessions and client secrets associated with said client.
+Revocation of a client secret must invalidate all sessions that were authenticated using that client secret.
 
-The foundational reason that audience confusion is even possible is because pinniped misuses the audience field to
-represent a cluster ID and an OAuth client ID at the same time.  The ID token returned from the authorization code flow
-has no semantic relationship with the ID token returned by the token exchange API, but because they use the exact same
-structure and signing key, it is possible to get them confused.  Options 1 and 2 above are simply attempts to slice up
-the audience field in a way that the two use cases are less likely to collide.
+##### Configuring association between clients and issuers
 
-To remove the problem altogether, pinniped should move to a webhook based model for the token exchange API that uses
-semantically opaque tokens.  These tokens will have no meaning outside of the context of the webhook and token exchange
-API.  In particular, they will have meaning in an OAuth/OIDC context.
+There will be no configuration to associate a client with a particular issuer (i.e. federation domain).  Just as the
+`pinniped-cli` OAuth client is available for use with all federation domains, all dynamic clients will be available for
+use with all federation domains.
 
-We will define a new `requested_token_type` for this purpose: `urn:pinniped:params:oauth:token-type:cluster_token`.  The
-existing support for `urn:ietf:params:oauth:token-type:jwt` will be retained (at least for a while) but will explicitly
-be restricted to the `pinniped-cli` OAuth client.  Existing `JWTAuthenticator` semantics for the `pinniped-cli` will be
-retained for some period of time as well.  At some future point, support for `urn:ietf:params:oauth:token-type:jwt` will
-be dropped.
+#### Upgrades
 
-When the `cluster_token` type is used (by any client, including `pinniped-cli`), an opaque token will be returned after
-successful validation.  To avoid excessive writes to etcd, this opaque token will be a short lived encrypted JWT (JWE)
-that will encode the information necessary to validate it as a cluster scoped token.  The key used to encrypt this token
-will be a distinct key that is used only for this single purpose and it will not be published for external consumption.
-Some claims that would be relevant to include in the JWE: expiration, cluster ID, client ID, token version, username,
-groups, etc.  The webhook would implement the `v1` `TokenReview` API.  This endpoint would be unauthenticated as it will
-return the same information we encode today into the token exchange ID token (after validating that the token is
-encrypted using the correct key, it is not expired, the client still exists, the cluster ID matches, etc).  If it makes
-migrations easier, the webhook could also support validating ID tokens issued for the `pinniped-cli`.
+See the section about audience confusion above for the bulk of the discussion around upgrades.
 
-The `WebhookAuthenticator` config will simply set the `.spec.endpoint` to
-`https://<supervisor_url>/cluster_token_v1alpha1/<cluster_id>` (along with the CA bundle if needed).  Due to
-limitations of the upstream webhook code that we use today, we cannot encode query parameters into the URL.  The v1.24
-upstream changes to migrate the token webhook code to use a `rest.Config` as input may let us work around this
-limitation (which will make it easier to add extra parameters in the future).  Configuring the `WebhookAuthenticator`
-will be mandatory to use the dynamic OAuth client feature, and initially it will be optional for the `pinniped-cli`.
-Over time, we will migrate to fully using only the webhook based approach.
+No backwards incompatible changes to any existing Kuberentes API resource schema are proposed in this design.
 
-This approach is the preferred method for solving the audience confusion problem.
+The `pinniped-cli` client needs to continue to act as before for backwards compatibility with existing installations of
+the Pinniped CLI on user's machines. Therefore, it will temporarily be excluded from any new scope-based requirements
+which would restrict the username and group memberships from being returned.  When this exclusion is used, the
+supervisor will issue warnings and request that the user contact their admin for an updated kubeconfig.  This exclusion
+will be dropped in a future release.  Having this temporary exclusion will allow mixing of old CLIs with new
+supervisors, and new CLIs with old supervisors.  New CLIs will automatically include these new scopes in the kubeconfigs
+that they generate.
+
+#### Tests
+
+As usual, unit tests must be added for all new/changed code.
+
+Integration tests must be added to mimic the usage patterns of a webapp. Dynamic clients must be configured with
+various options to ensure that the options work as expected. Those clients must be used to perform the authcode flow,
+RFC8693 token exchanges, and TokenCredentialRequest calls. Negative tests must include validation failures on the new
+CRs, and failures to perform actions that are supposed to be disallowed on the client by its configuration. Integration
+tests will be used to mimic an upgrade scenario (with and without dynamic clients) to confirm that audience confusion is
+not possible.
+
+#### New Dependencies
+
+None are foreseen.
+
+#### Performance Considerations
+
+Extra calls will be made to the Kubernetes API to lookup dynamic OAuth clients.  No performance impact is foreseen.
+
+#### Observability Considerations
+
+See the audience confusion section for some logging requirements related to the legacy token exchange path.
+
+The usual error messages and log statements will be included for the new features similar to what is already
+implemented in the supervisor (along with the information present in the `.status` field of the `OIDCClient` resource).
+
+#### Security Considerations
+
+All flows performed against the token endpoint (code exchange, token exchange, etc) with a dynamic client must
+authenticate said client via client secret basic auth.
+
+The above section regarding the client registry implementation covers various security considerations.
+
+##### Ensuring reasonable client secrets
+
+Since the client secret is always generated by the supervisor, we can guarantee that it has the appropriate entropy.
+Furthermore, as the hash type and cost used is a server side implementation detail, we can change it over time (during login flows the client secret is presented in plaintext to the supervisor which allows for transparent hash upgrades).
 
 ##### Preventing web apps from caching identities without re-validation
 
 Even with opaque tokens, once a web app learns the identity of a user, it is free to ignore the expiration on a short
-lived token and cache that identity indefinitely.  Thus at a minimum, we should provide guidance to web apps to continue
+lived token and cache that identity indefinitely.  Thus at a minimum, we must provide guidance to web apps to continue
 to perform the refresh grant at regular intervals to allow for group memberships to be updated, sessions to be revoked, etc.
 
 #### Usability Considerations
 
-Some considerations were mentioned already in the API section above.
+None.
 
 #### Documentation Considerations
 
-The new CRD's API will be documented, along with any other changes to related CRDs.
+The new CRD's API will be documented, along with any other changes to related CRDs.  `kubectl explain` will be supported
+for all APIs, including aggregated APIs.
 
-A new documentation page could be provided to show an example of using these new features to setup auth for a webapp, if
-desired.
+A new documentation page will be provided to show an example of using these new features to setup auth for a webapp.
+Further documentation describing the token exchanges a webapp backend must perform to interact with the Kubernetes API
+will also be provided.  Best practices around frequent refreshing of the user's identity will also be documented.
 
 ### Other Approaches Considered
 
-- Instead of using a new CRD, the clients could be configured in the Supervisor's static ConfigMap.
-    - Advantages:
-        - Slightly less development effort because we wouldn't need a controller to watch the new CRD.
-    - Disadvantages:
-        - It would require restarting the pods upon each change, which is extra work and could be disruptive to end
-          users if not done well.
-        - Harder to integration test because it would be harder for the tests to dynamically configure and reconfigure
-          clients.
-        - Validation failures during Supervisor startup could prevent the Supervisor from starting, which would make the
-          cost of typos very high.
-        - Harder to use for the admin user compared to CRDs.
+Many other approaches were considered.  See the `git` history of this file for details.
 
 ## Open Questions
 
-- Which of the options presented above should we choose? Are there other options to consider?
-    - The author of this proposal doc would like to recommend that we choose:
-      - "Option 1: Providing client secrets already hashed", because of the trade-offs of advantages and disadvantages discussed above. And also because client secrets should be decided by admins (see paragraph about that above).
-      - And "Option 1: Explicitly associate specific clients with issuers", because it sets us up nicely for the upcoming multiple IDP feature. However, if the team does not have an appetite for doing this now, then we could choose "Option 2: Implicitly associate all clients with all issuers" for now and then reconsider when we implement the upcoming multiple IDPs feature. The security concerns raised above with Option 2 are especially important with multiple IDP support.
-- Should we make the initial ID token from an authorization flow more inert? (See the audience confusion section above
-  for more details.)
+None.
 
 ## Answered Questions
 

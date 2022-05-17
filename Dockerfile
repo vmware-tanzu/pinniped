@@ -5,8 +5,12 @@
 
 FROM golang:1.18.1 as build-env
 
+# TODO Do not commit. Copy the locally modified source code of fosite.
+COPY fosite /Users/ryan/workspace/fosite
+
 WORKDIR /work
-COPY . .
+# TODO Do not commit. Copy the local pinniped source code as usual, but assume that the build context is one directory up.
+COPY pinniped .
 ARG GOPROXY
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)

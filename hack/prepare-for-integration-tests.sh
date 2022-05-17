@@ -236,7 +236,8 @@ if [[ "$do_build" == "yes" ]]; then
   else
     log_note "Docker building the app..."
     # DOCKER_BUILDKIT=1 is optional on MacOS but required on linux.
-    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag"
+    # TODO Do not commit. Temporarily use the parent directory as the build context so we can copy the local fosite source into the build.
+    DOCKER_BUILDKIT=1 docker build -f Dockerfile --tag "$registry_repo_tag" ..
   fi
 fi
 

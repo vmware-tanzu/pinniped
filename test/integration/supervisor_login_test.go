@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -1825,7 +1826,7 @@ func testSupervisorLogin(
 		tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 		require.NoError(t, err)
 
-		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username", "groups"}
+		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username", "groups", "at_hash"}
 		verifyTokenResponse(t,
 			tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
 			expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
@@ -1861,7 +1862,7 @@ func testSupervisorLogin(
 		refreshedTokenResponse, err := refreshSource.Token()
 		require.NoError(t, err)
 
-		// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+		// When refreshing, do not expect a "nonce" claim.
 		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
 		verifyTokenResponse(t,
 			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
@@ -1982,6 +1983,21 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 	// Refresh tokens should start with the custom prefix "pin_rt_" to make them identifiable as refresh tokens when seen by a user out of context.
 	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
+
+	// The at_hash claim should be present and should be equal to the hash of the access token.
+	actualAccessTokenHashClaimValue := idTokenClaims["at_hash"]
+	require.NotEmpty(t, actualAccessTokenHashClaimValue)
+	require.Equal(t, hashAccessToken(tokenResponse.AccessToken), actualAccessTokenHashClaimValue)
+}
+
+func hashAccessToken(accessToken string) string {
+	// See https://openid.net/specs/openid-connect-core-1_0.html#CodeIDToken.
+	// "Access Token hash value. Its value is the base64url encoding of the left-most half of
+	// the hash of the octets of the ASCII representation of the access_token value, where the
+	// hash algorithm used is the hash algorithm used in the alg Header Parameter of the ID
+	// Token's JOSE Header."
+	b := sha256.Sum256([]byte(accessToken))
+	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {

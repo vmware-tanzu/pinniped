@@ -2807,8 +2807,6 @@ func TestRefreshGrant(t *testing.T) {
 				test.idps.RequireExactlyZeroCallsToValidateToken(t)
 			}
 
-			// The bug in fosite that prevents at_hash from appearing in the initial ID token does not impact the refreshed ID token
-			wantAtHashClaimInIDToken := true
 			// Refreshed ID tokens do not include the nonce from the original auth request
 			wantNonceValueInIDToken := false
 
@@ -2816,7 +2814,6 @@ func TestRefreshGrant(t *testing.T) {
 				test.refreshRequest.want,
 				test.authcodeExchange.want.wantGroups,   // the old groups from the initial login
 				test.authcodeExchange.customSessionData, // the old custom session data from the initial login
-				wantAtHashClaimInIDToken,
 				wantNonceValueInIDToken,
 				refreshResponse,
 				authCode,
@@ -2854,8 +2851,9 @@ func TestRefreshGrant(t *testing.T) {
 					err = secondIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfSecondIDToken)
 					require.NoError(t, err)
 
-					requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, claimsOfSecondIDToken) // JWT ID
-					requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, claimsOfSecondIDToken) // expires at
+					requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, claimsOfSecondIDToken)     // JWT ID
+					requireClaimsAreNotEqual(t, "at_hash", claimsOfFirstIDToken, claimsOfSecondIDToken) // access token hash
+					requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, claimsOfSecondIDToken)     // expires at
 					require.Greater(t, claimsOfSecondIDToken["exp"], claimsOfFirstIDToken["exp"])
 					requireClaimsAreNotEqual(t, "iat", claimsOfFirstIDToken, claimsOfSecondIDToken) // issued at
 					require.Greater(t, claimsOfSecondIDToken["iat"], claimsOfFirstIDToken["iat"])
@@ -2937,14 +2935,12 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 	t.Logf("response: %#v", rsp)
 	t.Logf("response body: %q", rsp.Body.String())
 
-	wantAtHashClaimInIDToken := false // due to a bug in fosite, the at_hash claim is not filled in during authcode exchange
-	wantNonceValueInIDToken := true   // ID tokens returned by the authcode exchange must include the nonce from the auth request (unliked refreshed ID tokens)
+	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unliked refreshed ID tokens)
 
 	requireTokenEndpointBehavior(t,
 		test.want,
 		goodGroups,             // the old groups from the initial login
 		test.customSessionData, // the old custom session data from the initial login
-		wantAtHashClaimInIDToken,
 		wantNonceValueInIDToken,
 		rsp,
 		authCode,
@@ -2961,7 +2957,6 @@ func requireTokenEndpointBehavior(
 	test tokenEndpointResponseExpectedValues,
 	oldGroups []string,
 	oldCustomSessionData *psession.CustomSessionData,
-	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
 	tokenEndpointResponse *httptest.ResponseRecorder,
 	authCode string,
@@ -2995,7 +2990,7 @@ func requireTokenEndpointBehavior(
 		expectedNumberOfIDSessionsStored := 0
 		if wantIDToken {
 			expectedNumberOfIDSessionsStored = 1
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, test.wantGroups, parsedResponseBody["access_token"].(string))
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantNonceValueInIDToken, test.wantGroups, parsedResponseBody["access_token"].(string))
 		}
 		if wantRefreshToken {
 			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets)
@@ -3518,7 +3513,6 @@ func requireValidIDToken(
 	t *testing.T,
 	body map[string]interface{},
 	jwtSigningKey *ecdsa.PrivateKey,
-	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
 	wantGroupsInIDToken []string,
 	actualAccessToken string,
@@ -3548,13 +3542,7 @@ func requireValidIDToken(
 		Username        string   `json:"username"`
 	}
 
-	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
-	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
-	// We can add a workaround for this later.
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "groups", "username"}
-	if wantAtHashClaimInIDToken {
-		idTokenFields = append(idTokenFields, "at_hash")
-	}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "at_hash", "groups", "username"}
 	if wantNonceValueInIDToken {
 		idTokenFields = append(idTokenFields, "nonce")
 	}
@@ -3590,12 +3578,8 @@ func requireValidIDToken(
 	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
 	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
 
-	if wantAtHashClaimInIDToken {
-		require.NotEmpty(t, actualAccessToken)
-		require.Equal(t, hashAccessToken(actualAccessToken), claims.AccessTokenHash)
-	} else {
-		require.Empty(t, claims.AccessTokenHash)
-	}
+	require.NotEmpty(t, actualAccessToken)
+	require.Equal(t, hashAccessToken(actualAccessToken), claims.AccessTokenHash)
 }
 
 func deepCopyRequestForm(r *http.Request) *http.Request {

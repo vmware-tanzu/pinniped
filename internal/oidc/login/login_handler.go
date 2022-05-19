@@ -94,6 +94,9 @@ func wrapSecurityHeaders(handler http.Handler) http.Handler {
 	})
 }
 
+// RedirectToLoginPage redirects to the GET /login page of the specified issuer.
+// The specified issuer should never end with a "/", which is validated by
+// provider.FederationDomainIssuer when the issuer string comes from that type.
 func RedirectToLoginPage(
 	r *http.Request,
 	w http.ResponseWriter,

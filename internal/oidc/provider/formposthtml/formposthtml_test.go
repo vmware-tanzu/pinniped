@@ -93,6 +93,6 @@ func TestContentSecurityPolicyHashes(t *testing.T) {
 }
 
 func TestHelpers(t *testing.T) {
-	require.Equal(t, "test", mustMinify("test", nil))
-	require.PanicsWithError(t, "some error", func() { mustMinify("", fmt.Errorf("some error")) })
+	require.Equal(t, "test", panicOnError("test", nil))
+	require.PanicsWithError(t, "some error", func() { panicOnError("", fmt.Errorf("some error")) })
 }

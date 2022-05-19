@@ -159,7 +159,7 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) error {
-	encodedStateParamValue, _, _, err := handleBrowserAuthRequest(
+	authRequestState, err := handleBrowserFlowAuthRequest(
 		r,
 		w,
 		oauthHelper,
@@ -174,11 +174,12 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 	if err != nil {
 		return err
 	}
-	if encodedStateParamValue == "" {
+	if authRequestState == nil {
+		// There was an error but handleBrowserFlowAuthRequest() already took care of writing the response for it.
 		return nil
 	}
 
-	return login.RedirectToLoginPage(r, w, downstreamIssuer, encodedStateParamValue, login.ShowNoError)
+	return login.RedirectToLoginPage(r, w, downstreamIssuer, authRequestState.encodedStateParam, login.ShowNoError)
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
@@ -255,7 +256,7 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) error {
-	encodedStateParamValue, pkceValue, nonceValue, err := handleBrowserAuthRequest(
+	authRequestState, err := handleBrowserFlowAuthRequest(
 		r,
 		w,
 		oauthHelper,
@@ -270,7 +271,8 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	if err != nil {
 		return err
 	}
-	if encodedStateParamValue == "" {
+	if authRequestState == nil {
+		// There was an error but handleBrowserFlowAuthRequest() already took care of writing the response for it.
 		return nil
 	}
 
@@ -284,9 +286,9 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	}
 
 	authCodeOptions := []oauth2.AuthCodeOption{
-		nonceValue.Param(),
-		pkceValue.Challenge(),
-		pkceValue.Method(),
+		authRequestState.nonce.Param(),
+		authRequestState.pkce.Challenge(),
+		authRequestState.pkce.Method(),
 	}
 
 	for key, val := range oidcUpstream.GetAdditionalAuthcodeParams() {
@@ -295,7 +297,7 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 
 	http.Redirect(w, r,
 		upstreamOAuthConfig.AuthCodeURL(
-			encodedStateParamValue,
+			authRequestState.encodedStateParam,
 			authCodeOptions...,
 		),
 		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
@@ -387,10 +389,21 @@ func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider
 	}
 }
 
-// handleBrowserAuthRequest performs the shared validations and setup between browser based auth requests
-// regardless of IDP type-- LDAP, Active Directory and OIDC.
+type browserFlowAuthRequestState struct {
+	encodedStateParam string
+	pkce              pkce.Code
+	nonce             nonce.Nonce
+}
+
+// handleBrowserFlowAuthRequest performs the shared validations and setup between browser based
+// auth requests regardless of IDP type-- LDAP, Active Directory and OIDC.
 // It generates the state param, sets the CSRF cookie, and validates the prompt param.
-func handleBrowserAuthRequest(
+// It returns an error when it encounters an error without handling it, leaving it to
+// the caller to decide how to handle it.
+// It returns nil with no error when it encounters an error and also has already handled writing
+// the error response to the ResponseWriter, in which case the caller should not also try to
+// write the error response.
+func handleBrowserFlowAuthRequest(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
@@ -401,10 +414,10 @@ func handleBrowserAuthRequest(
 	idpType psession.ProviderType,
 	cookieCodec oidc.Codec,
 	upstreamStateEncoder oidc.Encoder,
-) (string, pkce.Code, nonce.Nonce, error) {
+) (*browserFlowAuthRequestState, error) {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
 	if !created {
-		return "", "", "", nil
+		return nil, nil // already wrote the error response, don't return error
 	}
 
 	now := time.Now()
@@ -420,13 +433,13 @@ func handleBrowserAuthRequest(
 	})
 	if err != nil {
 		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
-		return "", "", "", nil
+		return nil, nil // already wrote the error response, don't return error
 	}
 
 	csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
 	if err != nil {
 		plog.Error("authorize generate error", err)
-		return "", "", "", err
+		return nil, err
 	}
 	csrfFromCookie := readCSRFCookie(r, cookieCodec)
 	if csrfFromCookie != "" {
@@ -444,13 +457,13 @@ func handleBrowserAuthRequest(
 	)
 	if err != nil {
 		plog.Error("authorize upstream state param error", err)
-		return "", "", "", err
+		return nil, err
 	}
 
 	promptParam := r.Form.Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
 		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
-		return "", "", "", nil
+		return nil, nil // already wrote the error response, don't return error
 	}
 
 	if csrfFromCookie == "" {
@@ -458,10 +471,15 @@ func handleBrowserAuthRequest(
 		err = addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
 		if err != nil {
 			plog.Error("error setting CSRF cookie", err)
-			return "", "", "", err
+			return nil, err
 		}
 	}
-	return encodedStateParamValue, pkceValue, nonceValue, nil
+
+	return &browserFlowAuthRequestState{
+		encodedStateParam: encodedStateParamValue,
+		pkce:              pkceValue,
+		nonce:             nonceValue,
+	}, nil
 }
 
 func generateValues(

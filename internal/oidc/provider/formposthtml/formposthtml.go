@@ -18,11 +18,11 @@ import (
 var (
 	//go:embed form_post.css
 	rawCSS      string
-	minifiedCSS = mustMinify(minify.CSS(rawCSS))
+	minifiedCSS = panicOnError(minify.CSS(rawCSS))
 
 	//go:embed form_post.js
 	rawJS      string
-	minifiedJS = mustMinify(minify.JS(rawJS))
+	minifiedJS = panicOnError(minify.JS(rawJS))
 
 	//go:embed form_post.gohtml
 	rawHTMLTemplate string
@@ -44,7 +44,7 @@ var cspValue = strings.Join([]string{
 	`frame-ancestors 'none'`,
 }, "; ")
 
-func mustMinify(s string, err error) string {
+func panicOnError(s string, err error) string {
 	if err != nil {
 		panic(err)
 	}

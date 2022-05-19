@@ -118,10 +118,6 @@ stringData:
   clientSecret: "<your-client-secret>"
 ```
 
-Note that the `metadata.name` of the OIDCIdentityProvider resource may be visible to end users at login prompts
-if you choose to enable `allowPasswordGrant`, so choose a name which will be understood by your end users.
-For example, if you work at Acme Corp, choose something like `acme-corporate-workspace-one` over `my-idp`.
-
 The following claims are returned by Workspace ONE Access.  The `group` scope is required to use the
 `group_ids` and `group_names` claims.  The `email` scope is required to use the `email` claim.  The
 remaining claims are always available.

@@ -18,7 +18,7 @@ import (
 var (
 	//go:embed login_form.css
 	rawCSS      string
-	minifiedCSS = mustMinify(minify.CSS(rawCSS))
+	minifiedCSS = panicOnError(minify.CSS(rawCSS))
 
 	//go:embed login_form.gohtml
 	rawHTMLTemplate string
@@ -26,7 +26,7 @@ var (
 
 // Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
 var parsedHTMLTemplate = template.Must(template.New("login_form.gohtml").Funcs(template.FuncMap{
-	"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) },
+	"minifiedCSS": func() template.CSS { return template.CSS(CSS()) },
 }).Parse(rawHTMLTemplate))
 
 // Generate the CSP header value once since it's effectively constant.
@@ -36,7 +36,7 @@ var cspValue = strings.Join([]string{
 	`frame-ancestors 'none'`,
 }, "; ")
 
-func mustMinify(s string, err error) string {
+func panicOnError(s string, err error) string {
 	if err != nil {
 		panic(err)
 	}

@@ -1305,7 +1305,8 @@ func TestGetKubeconfig(t *testing.T) {
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
 			},
 			wantLogs: func(_ string, _ string) []string {
-				return []string{"\"level\"=0 \"msg\"=\"multiple client flows found, selecting first value as default: cli_password\"  \"idpName\"=\"some-ldap-idp\" \"idpType\"=\"ldap\""}
+				return []string{`"level"=0 "msg"="multiple client flows found, selecting first value as default"  ` +
+					`"availableFlows"=["cli_password","flow2"] "idpName"="some-ldap-idp" "idpType"="ldap" "selectedFlow"="cli_password"`}
 			},
 		},
 		{

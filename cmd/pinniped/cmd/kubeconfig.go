@@ -922,7 +922,9 @@ func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, se
 		return discoveredIDPFlows[0], nil
 	default:
 		// The user did not specify a flow, and more than one was found.
-		log.Info("multiple client flows found, selecting first value as default: "+discoveredIDPFlows[0].String(), "idpName", selectedIDPName, "idpType", selectedIDPType)
+		log.Info("multiple client flows found, selecting first value as default",
+			"idpName", selectedIDPName, "idpType", selectedIDPType,
+			"selectedFlow", discoveredIDPFlows[0].String(), "availableFlows", discoveredIDPFlows)
 		return discoveredIDPFlows[0], nil
 	}
 }

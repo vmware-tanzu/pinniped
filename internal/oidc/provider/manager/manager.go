@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"go.pinniped.dev/internal/oidc/login"
-
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/oidc"
@@ -20,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc/dynamiccodec"
 	"go.pinniped.dev/internal/oidc/idpdiscovery"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
@@ -139,7 +138,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(
 			upstreamStateEncoder,
 			csrfCookieEncoder,
-			login.NewGetHandler(),
+			login.NewGetHandler(incomingProvider.IssuerPath()+oidc.PinnipedLoginPath),
 			login.NewPostHandler(issuer, m.upstreamIDPs, oauthHelperWithKubeStorage),
 		)
 

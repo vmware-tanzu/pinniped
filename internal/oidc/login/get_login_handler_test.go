@@ -96,7 +96,7 @@ func TestGetLogin(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := NewGetHandler()
+			handler := NewGetHandler(testPath)
 			target := testPath + "?state=" + tt.encodedState
 			if tt.errParam != "" {
 				target += "&err=" + tt.errParam

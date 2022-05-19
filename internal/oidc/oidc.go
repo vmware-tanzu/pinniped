@@ -43,6 +43,9 @@ const (
 	// Just in case we need to make a breaking change to the format of the upstream state param,
 	// we are including a format version number. This gives the opportunity for a future version of Pinniped
 	// to have the consumer of this format decide to reject versions that it doesn't understand.
+	//
+	// Version 1 was the original version.
+	// Version 2 added the UpstreamType field to the UpstreamStateParamData struct.
 	UpstreamStateParamFormatVersion = "2"
 
 	// The `name` passed to the encoder for encoding the upstream state param value. This name is short

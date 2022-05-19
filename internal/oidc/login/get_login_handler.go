@@ -15,12 +15,12 @@ const (
 	incorrectUsernameOrPasswordErrorMessage = "Incorrect username or password."
 )
 
-func NewGetHandler() HandlerFunc {
+func NewGetHandler(loginPath string) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		alertMessage, hasAlert := getAlert(r)
 
 		pageInputs := &loginhtml.PageData{
-			PostPath:      r.URL.Path, // the path for POST is the same as for GET
+			PostPath:      loginPath,
 			State:         encodedState,
 			IDPName:       decodedState.UpstreamName,
 			HasAlertError: hasAlert,

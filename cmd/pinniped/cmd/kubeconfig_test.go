@@ -2889,7 +2889,7 @@ func TestGetKubeconfig(t *testing.T) {
 			})
 			issuerEndpointPtr = &issuerEndpoint
 
-			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
 			cmd := kubeconfigCommand(kubeconfigDeps{
 				getPathToSelf: func() (string, error) {
 					if tt.getPathToSelfErr != nil {

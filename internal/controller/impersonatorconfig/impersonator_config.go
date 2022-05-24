@@ -45,6 +45,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -132,8 +133,8 @@ func NewImpersonatorConfigController(
 				impersonationSigningCertProvider:  impersonationSigningCertProvider,
 				impersonatorFunc:                  impersonatorFunc,
 				tlsServingCertDynamicCertProvider: dynamiccert.NewServingCert("impersonation-proxy-serving-cert"),
-				infoLog:                           log.V(2),
-				debugLog:                          log.V(4),
+				infoLog:                           log.V(plog.KlogLevelInfo),
+				debugLog:                          log.V(plog.KlogLevelDebug),
 			},
 		},
 		withInformer(credentialIssuerInformer,

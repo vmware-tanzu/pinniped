@@ -15,12 +15,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
-	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
@@ -35,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
@@ -100,7 +100,7 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 // Boot the aggregated API server, which will in turn boot the controllers.
 func (a *App) runServer(ctx context.Context) error {
 	// Read the server config file.
-	cfg, err := concierge.FromPath(a.configPath)
+	cfg, err := concierge.FromPath(ctx, a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
@@ -250,16 +250,20 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func main() error { // return an error instead of klog.Fatal to allow defer statements to run
-	logs.InitLogs()
-	defer logs.FlushLogs()
+func main() error { // return an error instead of plog.Fatal to allow defer statements to run
+	defer plog.Setup()()
 
 	// Dump out the time since compile (mostly useful for benchmarking our local development cycle latency).
 	var timeSinceCompile time.Duration
 	if buildDate, err := time.Parse(time.RFC3339, version.Get().BuildDate); err == nil {
 		timeSinceCompile = time.Since(buildDate).Round(time.Second)
 	}
-	klog.Infof("Running %s at %#v (%s since build)", rest.DefaultKubernetesUserAgent(), version.Get(), timeSinceCompile)
+
+	plog.Always("Running concierge",
+		"user-agent", rest.DefaultKubernetesUserAgent(),
+		"version", versionInfo(version.Get()),
+		"time-since-build", timeSinceCompile,
+	)
 
 	ctx := genericapiserver.SetupSignalContext()
 
@@ -268,6 +272,8 @@ func main() error { // return an error instead of klog.Fatal to allow defer stat
 
 func Main() {
 	if err := main(); err != nil {
-		klog.Fatal(err)
+		plog.Fatal(err)
 	}
 }
+
+type versionInfo apimachineryversion.Info // hide .String() method from plog

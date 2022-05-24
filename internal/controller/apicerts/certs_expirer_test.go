@@ -4,12 +4,15 @@
 package apicerts
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +27,7 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -101,6 +105,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 				withInformer.WithInformer,
 				0,  // renewBefore, not needed
 				"", // not needed
+				plog.TestLogger(t, io.Discard),
 			)
 
 			unrelated := corev1.Secret{}
@@ -125,10 +130,12 @@ func TestExpirerControllerSync(t *testing.T) {
 		fillSecretData      func(*testing.T, map[string][]byte)
 		configKubeAPIClient func(*kubernetesfake.Clientset)
 		wantDelete          bool
+		wantLog             string
 		wantError           string
 	}{
 		{
 			name:       "secret does not exist",
+			wantLog:    `{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"certs-expirer-controller","caller":"apicerts/certs_expirer.go:<line>$apicerts.(*certsExpirerController).Sync","message":"secret does not exist yet or was deleted","controller":"","namespace":"some-namespace","name":"some-resource-name","key":"some-awesome-key","renewBefore":"0s"}`,
 			wantDelete: false,
 		},
 		{
@@ -251,6 +258,8 @@ func TestExpirerControllerSync(t *testing.T) {
 				0,
 			)
 
+			var log bytes.Buffer
+
 			c := NewCertsExpirerController(
 				namespace,
 				certsSecretResourceName,
@@ -259,6 +268,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				controllerlib.WithInformer,
 				test.renewBefore,
 				fakeTestKey,
+				plog.TestLogger(t, &log),
 			)
 
 			// Must start informers before calling TestRunSynchronously().
@@ -268,6 +278,9 @@ func TestExpirerControllerSync(t *testing.T) {
 			err := controllerlib.TestSync(t, c, controllerlib.Context{
 				Context: ctx,
 			})
+			if len(test.wantLog) > 0 {
+				require.Equal(t, test.wantLog, strings.TrimSpace(log.String()))
+			}
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
 				return

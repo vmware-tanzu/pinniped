@@ -54,8 +54,14 @@ _: #@ template.replace(data.values.custom_labels)
 #@     "labels": labels(),
 #@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests
 #@   }
+#@   if data.values.log_level or data.values.deprecated_log_format:
+#@     config["log"] = {}
+#@   end
 #@   if data.values.log_level:
-#@     config["logLevel"] = getAndValidateLogLevel()
+#@     config["log"]["level"] = getAndValidateLogLevel()
+#@   end
+#@   if data.values.deprecated_log_format:
+#@     config["log"]["format"] = data.values.deprecated_log_format
 #@   end
 #@   if data.values.endpoints:
 #@     config["endpoints"] = data.values.endpoints

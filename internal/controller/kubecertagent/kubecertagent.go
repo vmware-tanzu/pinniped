@@ -28,7 +28,6 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/pointer"
 
@@ -39,6 +38,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -179,7 +179,7 @@ func NewAgentController(
 		dynamicCertProvider,
 		&clock.RealClock{},
 		cache.NewExpiring(),
-		klogr.New(),
+		plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 	)
 }
 

@@ -8,22 +8,23 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
 
-	concierge "go.pinniped.dev/internal/concierge/server"
 	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
+	concierge "go.pinniped.dev/internal/concierge/server"
 	_ "go.pinniped.dev/internal/crypto/ptls"
 	lua "go.pinniped.dev/internal/localuserauthenticator"
+	"go.pinniped.dev/internal/plog"
 	supervisor "go.pinniped.dev/internal/supervisor/server"
 )
 
-//nolint: gochecknoglobals // these are swapped during unit tests.
+// nolint: gochecknoglobals // these are swapped during unit tests.
 var (
-	fail        = klog.Fatalf
+	fail        = plog.Fatal
 	subcommands = map[string]func(){
 		"pinniped-concierge":       concierge.Main,
 		"pinniped-supervisor":      supervisor.Main,
@@ -33,11 +34,11 @@ var (
 
 func main() {
 	if len(os.Args) == 0 {
-		fail("missing os.Args")
+		fail(fmt.Errorf("missing os.Args"))
 	}
 	binary := filepath.Base(os.Args[0])
 	if subcommands[binary] == nil {
-		fail("must be invoked as one of %v, not %q", sets.StringKeySet(subcommands).List(), binary)
+		fail(fmt.Errorf("must be invoked as one of %v, not %q", sets.StringKeySet(subcommands).List(), binary))
 	}
 	subcommands[binary]()
 }

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -31,7 +32,6 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/apicerts"
@@ -339,10 +339,7 @@ func waitForSignal() os.Signal {
 	return <-signalCh
 }
 
-func run() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func run(ctx context.Context) error {
 	client, err := kubeclient.New()
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
@@ -359,7 +356,7 @@ func run() error {
 	startControllers(ctx, dynamicCertProvider, client.Kubernetes, kubeInformers)
 	plog.Debug("controllers are ready")
 
-	//nolint: gosec // Intentionally binding to all network interfaces.
+	// nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":8443")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
@@ -378,13 +375,35 @@ func run() error {
 	return nil
 }
 
-func Main() {
+func main() error { // return an error instead of plog.Fatal to allow defer statements to run
+	ctx := signalCtx()
+
 	// Hardcode the logging level to debug, since this is a test app and it is very helpful to have
 	// verbose logs to debug test failures.
-	if err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug); err != nil {
-		klog.Fatal(err)
+	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, plog.LogSpec{Level: plog.LevelDebug}); err != nil {
+		plog.Fatal(err)
 	}
-	if err := run(); err != nil {
-		klog.Fatal(err)
+
+	return run(ctx)
+}
+
+func Main() {
+	if err := main(); err != nil {
+		plog.Fatal(err)
 	}
+}
+
+func signalCtx() context.Context {
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer cancel()
+
+		s := <-signalCh
+		plog.Debug("saw signal", "signal", s)
+	}()
+
+	return ctx
 }

@@ -12,11 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/certauthority"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -139,6 +139,6 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not create secret: %w", err)
 	}
 
-	klog.Info("certsManagerController Sync successfully created secret")
+	plog.Info("certsManagerController Sync successfully created secret")
 	return nil
 }

@@ -20,7 +20,8 @@ import (
 	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
 
 	"k8s.io/apiserver/pkg/server/options"
-	"k8s.io/klog/v2"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 // Always use TLS 1.2 for FIPs
@@ -36,9 +37,7 @@ func init() {
 
 	// this init runs before we have parsed our config to determine our log level
 	// thus we must use a log statement that will always print instead of conditionally print
-	// for plog, that is only error and warning logs, neither of which seem appropriate here
-	// therefore, just use klog directly with no V level requirement
-	klog.InfoS("using boring crypto in fips only mode", "go version", runtime.Version())
+	plog.Always("using boring crypto in fips only mode", "go version", runtime.Version())
 }
 
 func Default(rootCAs *x509.CertPool) *tls.Config {

@@ -5,7 +5,6 @@
 package callback
 
 import (
-	"crypto/subtle"
 	"net/http"
 	"net/url"
 
@@ -14,7 +13,6 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
@@ -102,9 +100,9 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
 	}
 
-	csrfValue, err := readCSRFCookie(r, cookieDecoder)
+	_, decodedState, err := oidc.ReadStateParamAndValidateCSRFCookie(r, cookieDecoder, stateDecoder)
 	if err != nil {
-		plog.InfoErr("error reading CSRF cookie", err)
+		plog.InfoErr("state or CSRF error", err)
 		return nil, err
 	}
 
@@ -113,23 +111,7 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 		return nil, httperr.New(http.StatusBadRequest, "code param not found")
 	}
 
-	if r.FormValue("state") == "" {
-		plog.Info("state param not found")
-		return nil, httperr.New(http.StatusBadRequest, "state param not found")
-	}
-
-	state, err := readState(r, stateDecoder)
-	if err != nil {
-		plog.InfoErr("error reading state", err)
-		return nil, err
-	}
-
-	if subtle.ConstantTimeCompare([]byte(state.CSRFToken), []byte(csrfValue)) != 1 {
-		plog.InfoErr("CSRF value does not match", err)
-		return nil, httperr.Wrap(http.StatusForbidden, "CSRF value does not match", err)
-	}
-
-	return state, nil
+	return decodedState, nil
 }
 
 func findUpstreamIDPConfig(upstreamName string, upstreamIDPs oidc.UpstreamOIDCIdentityProvidersLister) provider.UpstreamOIDCIdentityProviderI {
@@ -139,37 +121,4 @@ func findUpstreamIDPConfig(upstreamName string, upstreamIDPs oidc.UpstreamOIDCId
 		}
 	}
 	return nil
-}
-
-func readCSRFCookie(r *http.Request, cookieDecoder oidc.Decoder) (csrftoken.CSRFToken, error) {
-	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
-	if err != nil {
-		// Error means that the cookie was not found
-		return "", httperr.Wrap(http.StatusForbidden, "CSRF cookie is missing", err)
-	}
-
-	var csrfFromCookie csrftoken.CSRFToken
-	err = cookieDecoder.Decode(oidc.CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
-	if err != nil {
-		return "", httperr.Wrap(http.StatusForbidden, "error reading CSRF cookie", err)
-	}
-
-	return csrfFromCookie, nil
-}
-
-func readState(r *http.Request, stateDecoder oidc.Decoder) (*oidc.UpstreamStateParamData, error) {
-	var state oidc.UpstreamStateParamData
-	if err := stateDecoder.Decode(
-		oidc.UpstreamStateParamEncodingName,
-		r.FormValue("state"),
-		&state,
-	); err != nil {
-		return nil, httperr.New(http.StatusBadRequest, "error reading state")
-	}
-
-	if state.FormatVersion != oidc.UpstreamStateParamFormatVersion {
-		return nil, httperr.New(http.StatusUnprocessableEntity, "state format version is invalid")
-	}
-
-	return &state, nil
 }

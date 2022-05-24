@@ -16,6 +16,7 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -59,6 +60,34 @@ func MakeDownstreamSession(subject string, username string, groups []string, cus
 		oidc.DownstreamGroupsClaim:   groups,
 	}
 	return openIDSession
+}
+
+func MakeDownstreamLDAPOrADCustomSessionData(
+	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	idpType psession.ProviderType,
+	authenticateResponse *authenticators.Response,
+) *psession.CustomSessionData {
+	customSessionData := &psession.CustomSessionData{
+		ProviderUID:  ldapUpstream.GetResourceUID(),
+		ProviderName: ldapUpstream.GetName(),
+		ProviderType: idpType,
+	}
+
+	if idpType == psession.ProviderTypeLDAP {
+		customSessionData.LDAP = &psession.LDAPSessionData{
+			UserDN:                 authenticateResponse.DN,
+			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
+		}
+	}
+
+	if idpType == psession.ProviderTypeActiveDirectory {
+		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
+			UserDN:                 authenticateResponse.DN,
+			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
+		}
+	}
+
+	return customSessionData
 }
 
 func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdentityProviderI, token *oidctypes.Token) (*psession.CustomSessionData, error) {
@@ -226,6 +255,11 @@ func ExtractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 	}
 
 	return valueAsString, nil
+}
+
+func DownstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
+	ldapURL := *ldapUpstream.GetURL()
+	return DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
 }
 
 func DownstreamLDAPSubject(uid string, ldapURL url.URL) string {

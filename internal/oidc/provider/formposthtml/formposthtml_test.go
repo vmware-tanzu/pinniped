@@ -93,10 +93,6 @@ func TestContentSecurityPolicyHashes(t *testing.T) {
 }
 
 func TestHelpers(t *testing.T) {
-	// These are silly tests but it's easy to we might as well have them.
-	require.Equal(t, "test", mustMinify("test", nil))
-	require.PanicsWithError(t, "some error", func() { mustMinify("", fmt.Errorf("some error")) })
-
-	// Example test vector from https://content-security-policy.com/hash/.
-	require.Equal(t, "sha256-RFWPLDbv2BY+rCkDzsE+0fr8ylGr2R2faWMhq4lfEQc=", cspHash("doSomething();"))
+	require.Equal(t, "test", panicOnError("test", nil))
+	require.PanicsWithError(t, "some error", func() { panicOnError("", fmt.Errorf("some error")) })
 }

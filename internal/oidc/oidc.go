@@ -1,20 +1,30 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by Pinniped.
 package oidc
 
 import (
+	"crypto/subtle"
+	"errors"
+	"fmt"
+	"net/http"
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/felixge/httpsnoop"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+	errorsx "github.com/pkg/errors"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
+	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -26,13 +36,17 @@ const (
 	CallbackEndpointPath      = "/callback"
 	JWKSEndpointPath          = "/jwks.json"
 	PinnipedIDPsPathV1Alpha1  = "/v1alpha1/pinniped_identity_providers"
+	PinnipedLoginPath         = "/login"
 )
 
 const (
 	// Just in case we need to make a breaking change to the format of the upstream state param,
 	// we are including a format version number. This gives the opportunity for a future version of Pinniped
 	// to have the consumer of this format decide to reject versions that it doesn't understand.
-	UpstreamStateParamFormatVersion = "1"
+	//
+	// Version 1 was the original version.
+	// Version 2 added the UpstreamType field to the UpstreamStateParamData struct.
+	UpstreamStateParamFormatVersion = "2"
 
 	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
 	// because it will be encoded into the upstream state param value and we're trying to keep that small.
@@ -93,6 +107,7 @@ type Codec interface {
 type UpstreamStateParamData struct {
 	AuthParams    string              `json:"p"`
 	UpstreamName  string              `json:"u"`
+	UpstreamType  string              `json:"t"`
 	Nonce         nonce.Nonce         `json:"n"`
 	CSRFToken     csrftoken.CSRFToken `json:"c"`
 	PKCECode      pkce.Code           `json:"k"`
@@ -294,4 +309,172 @@ func ScopeWasRequested(authorizeRequester fosite.AuthorizeRequester, scopeName s
 		}
 	}
 	return false
+}
+
+func ReadStateParamAndValidateCSRFCookie(r *http.Request, cookieDecoder Decoder, stateDecoder Decoder) (string, *UpstreamStateParamData, error) {
+	csrfValue, err := readCSRFCookie(r, cookieDecoder)
+	if err != nil {
+		return "", nil, err
+	}
+
+	encodedState, decodedState, err := readStateParam(r, stateDecoder)
+	if err != nil {
+		return "", nil, err
+	}
+
+	err = validateCSRFValue(decodedState, csrfValue)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return encodedState, decodedState, nil
+}
+
+func readCSRFCookie(r *http.Request, cookieDecoder Decoder) (csrftoken.CSRFToken, error) {
+	receivedCSRFCookie, err := r.Cookie(CSRFCookieName)
+	if err != nil {
+		// Error means that the cookie was not found
+		return "", httperr.Wrap(http.StatusForbidden, "CSRF cookie is missing", err)
+	}
+
+	var csrfFromCookie csrftoken.CSRFToken
+	err = cookieDecoder.Decode(CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
+	if err != nil {
+		return "", httperr.Wrap(http.StatusForbidden, "error reading CSRF cookie", err)
+	}
+
+	return csrfFromCookie, nil
+}
+
+func readStateParam(r *http.Request, stateDecoder Decoder) (string, *UpstreamStateParamData, error) {
+	encodedState := r.FormValue("state")
+
+	if encodedState == "" {
+		return "", nil, httperr.New(http.StatusBadRequest, "state param not found")
+	}
+
+	var state UpstreamStateParamData
+	if err := stateDecoder.Decode(
+		UpstreamStateParamEncodingName,
+		r.FormValue("state"),
+		&state,
+	); err != nil {
+		return "", nil, httperr.New(http.StatusBadRequest, "error reading state")
+	}
+
+	if state.FormatVersion != UpstreamStateParamFormatVersion {
+		return "", nil, httperr.New(http.StatusUnprocessableEntity, "state format version is invalid")
+	}
+
+	return encodedState, &state, nil
+}
+
+func validateCSRFValue(state *UpstreamStateParamData, csrfCookieValue csrftoken.CSRFToken) error {
+	if subtle.ConstantTimeCompare([]byte(state.CSRFToken), []byte(csrfCookieValue)) != 1 {
+		return httperr.New(http.StatusForbidden, "CSRF value does not match")
+	}
+	return nil
+}
+
+// FindUpstreamIDPByNameAndType finds the requested IDP by name and type, or returns an error.
+// Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
+func FindUpstreamIDPByNameAndType(
+	idpLister UpstreamIdentityProvidersLister,
+	upstreamName string,
+	upstreamType string,
+) (
+	provider.UpstreamOIDCIdentityProviderI,
+	provider.UpstreamLDAPIdentityProviderI,
+	psession.ProviderType,
+	error,
+) {
+	switch upstreamType {
+	case string(v1alpha1.IDPTypeOIDC):
+		for _, p := range idpLister.GetOIDCIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return p, nil, psession.ProviderTypeOIDC, nil
+			}
+		}
+	case string(v1alpha1.IDPTypeLDAP):
+		for _, p := range idpLister.GetLDAPIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return nil, p, psession.ProviderTypeLDAP, nil
+			}
+		}
+	case string(v1alpha1.IDPTypeActiveDirectory):
+		for _, p := range idpLister.GetActiveDirectoryIdentityProviders() {
+			if p.GetName() == upstreamName {
+				return nil, p, psession.ProviderTypeActiveDirectory, nil
+			}
+		}
+	}
+	return nil, nil, "", errors.New("provider not found")
+}
+
+// WriteAuthorizeError writes an authorization error as it should be returned by the authorization endpoint and other
+// similar endpoints that are the end of the downstream authcode flow. Errors responses are written in the usual fosite style.
+func WriteAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) {
+	if plog.Enabled(plog.LevelTrace) {
+		// When trace level logging is enabled, include the stack trace in the log message.
+		keysAndValues := FositeErrorForLog(err)
+		errWithStack := errorsx.WithStack(err)
+		keysAndValues = append(keysAndValues, "errWithStack")
+		// klog always prints error values using %s, which does not include stack traces,
+		// so convert the error to a string which includes the stack trace here.
+		keysAndValues = append(keysAndValues, fmt.Sprintf("%+v", errWithStack))
+		plog.Trace("authorize response error", keysAndValues...)
+	} else {
+		plog.Info("authorize response error", FositeErrorForLog(err)...)
+	}
+	if isBrowserless {
+		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
+	}
+	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+}
+
+// PerformAuthcodeRedirect successfully completes a downstream login by creating a session and
+// writing the authcode redirect response as it should be returned by the authorization endpoint and other
+// similar endpoints that are the end of the downstream authcode flow.
+func PerformAuthcodeRedirect(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	authorizeRequester fosite.AuthorizeRequester,
+	openIDSession *psession.PinnipedSession,
+	isBrowserless bool,
+) {
+	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+	if err != nil {
+		plog.WarningErr("error while generating and saving authcode", err)
+		WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
+		return
+	}
+	if isBrowserless {
+		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
+	}
+	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+}
+
+func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) http.ResponseWriter {
+	// rewrite http.StatusSeeOther to http.StatusFound for backwards compatibility with old pinniped CLIs.
+	// we can drop this in a few releases once we feel enough time has passed for users to update.
+	//
+	// WriteAuthorizeResponse/WriteAuthorizeError calls used to result in http.StatusFound until
+	// https://github.com/ory/fosite/pull/636 changed it to http.StatusSeeOther to address
+	// https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
+	// Safari has the bad behavior in the case of http.StatusFound and not just http.StatusTemporaryRedirect.
+	//
+	// in the browserless flows, the OAuth client is the pinniped CLI and it already has access to the user's
+	// password.  Thus there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
+	return httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(delegate httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(code int) {
+				if code == http.StatusSeeOther {
+					code = http.StatusFound
+				}
+				delegate(code)
+			}
+		},
+	})
 }

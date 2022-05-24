@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package idpdiscovery provides a handler for the upstream IDP discovery endpoint.
@@ -44,14 +44,14 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  v1alpha1.IDPTypeLDAP,
-			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword, v1alpha1.IDPFlowBrowserAuthcode},
 		})
 	}
 	for _, provider := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
 		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  v1alpha1.IDPTypeActiveDirectory,
-			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword, v1alpha1.IDPFlowBrowserAuthcode},
 		})
 	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {

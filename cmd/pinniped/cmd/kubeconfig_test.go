@@ -1261,13 +1261,52 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
-					{"name": "some-oidc-idp", "type": "oidc", "flows": ["flow1", "flow2"]}
+					{"name": "some-ldap-idp", "type": "ldap", "flows": ["cli_password", "flow2"]}
 				]
 			}`),
-			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: multiple client flows for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found, so the --upstream-identity-provider-flow flag must be specified.` +
-					` Found these flows: [flow1 flow2]` + "\n"
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  - --upstream-identity-provider-flow=cli_password
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+             for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+			wantLogs: func(_ string, _ string) []string {
+				return []string{`"level"=0 "msg"="multiple client flows found, selecting first value as default"  ` +
+					`"availableFlows"=["cli_password","flow2"] "idpName"="some-ldap-idp" "idpType"="ldap" "selectedFlow"="cli_password"`}
 			},
 		},
 		{

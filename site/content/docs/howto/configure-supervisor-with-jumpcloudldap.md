@@ -120,7 +120,6 @@ spec:
     secretName: "jumpcloudldap-bind-account"
 
 ---
-
 apiVersion: v1
 kind: Secret
 metadata:
@@ -137,6 +136,10 @@ stringData:
   # The password of your JumpCloud bind account.
   password: "YOUR_PASSWORD"
 ```
+
+Note that the `metadata.name` of the LDAPIdentityProvider resource may be visible to end users at login prompts,
+so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-ldap` over `my-idp`.
 
 If you've saved this into a file `jumpcloud.yaml`, then install it into your cluster using:
 

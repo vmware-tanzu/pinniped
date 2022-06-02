@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc/dynamiccodec"
 	"go.pinniped.dev/internal/oidc/idpdiscovery"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
@@ -132,6 +133,13 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
 			m.upstreamIDPs,
 			oauthHelperWithKubeStorage,
+		)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(
+			upstreamStateEncoder,
+			csrfCookieEncoder,
+			login.NewGetHandler(incomingProvider.IssuerPath()+oidc.PinnipedLoginPath),
+			login.NewPostHandler(issuer, m.upstreamIDPs, oauthHelperWithKubeStorage),
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)

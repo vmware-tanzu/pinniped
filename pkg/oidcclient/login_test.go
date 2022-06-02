@@ -20,10 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/net/phttp"
-
-	"go.pinniped.dev/internal/testutil/tlsserver"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -35,9 +31,12 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/mocks/mockupstreamoidcidentityprovider"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 	"go.pinniped.dev/internal/upstreamoidc"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -1891,7 +1890,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLogger := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
 			klog.SetLogger(testLogger.Logger)
 
 			tok, err := Login(tt.issuer, tt.clientID,
@@ -2334,7 +2333,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				logger:    testlogger.New(t).Logger,
+				logger:    plog.Logr(), // nolint: staticcheck  // old test with no log assertions
 				issuer:    "https://valid-issuer.com/with/some/path",
 			}
 			if tt.opt != nil {

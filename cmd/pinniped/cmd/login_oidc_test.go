@@ -10,18 +10,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-	"k8s.io/klog/v2"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -37,6 +39,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
 
 	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
+
+	now, err := time.Parse(time.RFC3339Nano, "2028-10-11T23:37:26.953313745Z")
+	require.NoError(t, err)
+	nowStr := now.Local().Format(time.RFC1123)
 
 	tests := []struct {
 		name             string
@@ -236,17 +242,29 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
+			name: "ldap upstream type with browser_authcode flow is allowed",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "ldap",
+				"--upstream-identity-provider-flow", "browser_authcode",
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantOptionsCount: 4,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+		},
+		{
 			name: "ldap upstream type with unsupported flow is an error",
 			args: []string{
 				"--issuer", "test-issuer",
 				"--client-id", "test-client-id",
 				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "browser_authcode", // "browser_authcode" is only supported for OIDC upstreams
+				"--upstream-identity-provider-flow", "foo",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-flow value not recognized for identity provider type "ldap": browser_authcode (supported values: [cli_password])
+				Error: --upstream-identity-provider-flow value not recognized for identity provider type "ldap": foo (supported values: cli_password, browser_authcode)
 			`),
 		},
 		{
@@ -262,17 +280,29 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
+			name: "active directory upstream type with browser_authcode is allowed",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "activedirectory",
+				"--upstream-identity-provider-flow", "browser_authcode",
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantOptionsCount: 4,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+		},
+		{
 			name: "active directory upstream type with unsupported flow is an error",
 			args: []string{
 				"--issuer", "test-issuer",
 				"--client-id", "test-client-id",
 				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "browser_authcode", // "browser_authcode" is only supported for OIDC upstreams
+				"--upstream-identity-provider-flow", "foo",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-flow value not recognized for identity provider type "activedirectory": browser_authcode (supported values: [cli_password])
+				Error: --upstream-identity-provider-flow value not recognized for identity provider type "activedirectory": foo (supported values: cli_password, browser_authcode)
 			`),
 		},
 		{
@@ -318,8 +348,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
-				"\"level\"=0 \"msg\"=\"Pinniped login: No concierge configured, skipping token credential exchange\"",
+				nowStr + `  pinniped-login  cmd/login_oidc.go:222  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:242  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -348,18 +378,20 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 11,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
-				"\"level\"=0 \"msg\"=\"Pinniped login: Exchanging token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1:1234/\"",
-				"\"level\"=0 \"msg\"=\"Pinniped login: Successfully exchanged token for cluster credential.\"",
-				"\"level\"=0 \"msg\"=\"Pinniped login: caching cluster credential for future use.\"",
+				nowStr + `  pinniped-login  cmd/login_oidc.go:222  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:232  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:240  Successfully exchanged token for cluster credential.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:247  caching cluster credential for future use.`,
 			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
-			klog.SetLogger(testLogger.Logger)
+			var buf bytes.Buffer
+			fakeClock := clocktesting.NewFakeClock(now)
+			ctx := plog.TestZapOverrides(context.Background(), t, &buf, nil, zap.WithClock(plog.ZapClock(fakeClock)))
+
 			var (
 				gotOptions []oidcclient.Option
 			)
@@ -404,7 +436,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			cmd.SetArgs(tt.args)
-			err := cmd.Execute()
+			err = cmd.ExecuteContext(ctx)
 			if tt.wantError {
 				require.Error(t, err)
 			} else {
@@ -414,7 +446,15 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 			require.Len(t, gotOptions, tt.wantOptionsCount)
 
-			require.Equal(t, tt.wantLogs, testLogger.Lines())
+			require.Equal(t, tt.wantLogs, logLines(buf.String()))
 		})
 	}
+}
+
+func logLines(logs string) []string {
+	if len(logs) == 0 {
+		return nil
+	}
+
+	return strings.Split(strings.TrimSpace(logs), "\n")
 }

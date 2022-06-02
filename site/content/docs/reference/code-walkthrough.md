@@ -206,6 +206,8 @@ The per-FederationDomain endpoints are:
   See [internal/oidc/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
   See [internal/oidc/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/idpdiscovery/idp_discovery_handler.go).
+- `<issuer_path>/login` is a login UI page to support the optional browser-based login flow for LDAP and Active Directory identity providers.
+  See [internal/oidc/login/login_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/login/login_handler.go).
 
 The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).
 

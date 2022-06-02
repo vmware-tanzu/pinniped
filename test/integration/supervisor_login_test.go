@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -38,17 +39,135 @@ import (
 	"go.pinniped.dev/test/testlib/browsertest"
 )
 
-// nolint:gocyclo
 func TestSupervisorLogin_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	skipNever := func(t *testing.T) {
+		// never need to skip this test
+	}
+
+	skipLDAPTests := func(t *testing.T) {
+		t.Helper()
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("LDAP integration test requires connectivity to an LDAP server")
+		}
+	}
+
+	skipActiveDirectoryTests := func(t *testing.T) {
+		t.Helper()
+		skipLDAPTests(t)
+		if env.SupervisorUpstreamActiveDirectory.Host == "" {
+			t.Skip("Active Directory hostname not specified")
+		}
+	}
+
+	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {
+		return idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}
+	}
+
+	createActiveDirectoryIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec)) (*idpv1alpha1.ActiveDirectoryIdentityProvider, *v1.Secret) {
+		t.Helper()
+
+		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+			map[string]string{
+				v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+				v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+			},
+		)
+
+		spec := idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+			Host: env.SupervisorUpstreamActiveDirectory.Host,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+			},
+			Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+				SecretName: secret.Name,
+			},
+		}
+
+		if edit != nil {
+			edit(&spec)
+		}
+
+		adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, spec, idpv1alpha1.ActiveDirectoryPhaseReady)
+
+		expectedMsg := fmt.Sprintf(
+			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+			spec.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+			secret.Name, secret.ResourceVersion,
+		)
+		requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+
+		return adIDP, secret
+	}
+
+	createLDAPIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.LDAPIdentityProviderSpec)) (*idpv1alpha1.LDAPIdentityProvider, *v1.Secret) {
+		t.Helper()
+
+		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+			map[string]string{
+				v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+				v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+			},
+		)
+
+		spec := idpv1alpha1.LDAPIdentityProviderSpec{
+			Host: env.SupervisorUpstreamLDAP.Host,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+			},
+			Bind: idpv1alpha1.LDAPIdentityProviderBind{
+				SecretName: secret.Name,
+			},
+			UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+				Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+				Filter: "",
+				Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+					Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+					UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+				},
+			},
+			GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+				Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+				Filter: "",
+				Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+					GroupName: "dn",
+				},
+			},
+		}
+
+		if edit != nil {
+			edit(&spec)
+		}
+
+		ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, spec, idpv1alpha1.LDAPPhaseReady)
+
+		expectedMsg := fmt.Sprintf(
+			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+			spec.Host, env.SupervisorUpstreamLDAP.BindUsername,
+			secret.Name, secret.ResourceVersion,
+		)
+		requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+
+		return ldapIDP, secret
+	}
 
 	tests := []struct {
 		name                                 string
 		maybeSkip                            func(t *testing.T)
 		createTestUser                       func(t *testing.T) (string, string)
 		deleteTestUser                       func(t *testing.T, username string)
-		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
+		requestAuthorization                 func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
 		createIDP                            func(t *testing.T) string
+		wantLocalhostCallbackToNeverHappen   bool
 		wantDownstreamIDTokenSubjectToMatch  string
 		wantDownstreamIDTokenUsernameToMatch func(username string) string
 		wantDownstreamIDTokenGroups          []string
@@ -63,24 +182,12 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
 	}{
 		{
-			name: "oidc with default username and groups claim settings",
-			maybeSkip: func(t *testing.T) {
-				// never need to skip this test
-			},
+			name:      "oidc with default username and groups claim settings",
+			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-					Issuer: env.SupervisorUpstreamOIDC.Issuer,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
-					},
-					Client: idpv1alpha1.OIDCClient{
-						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
-					},
-				}, idpv1alpha1.PhaseReady)
-				return oidcIDP.Name
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				pinnipedSessionData := pinnipedSession.Custom
 				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
@@ -91,31 +198,20 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
 		{
-			name: "oidc with custom username and groups claim settings",
-			maybeSkip: func(t *testing.T) {
-				// never need to skip this test
-			},
+			name:      "oidc with custom username and groups claim settings",
+			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-					Issuer: env.SupervisorUpstreamOIDC.Issuer,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
-					},
-					Client: idpv1alpha1.OIDCClient{
-						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
-					},
-					Claims: idpv1alpha1.OIDCClaims{
-						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
-						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
-					},
-					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-						AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
-					},
-				}, idpv1alpha1.PhaseReady)
-				return oidcIDP.Name
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
@@ -134,12 +230,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 		},
 		{
-			name: "oidc without refresh token",
-			maybeSkip: func(t *testing.T) {
-				// never need to skip this test
-			},
+			name:      "oidc without refresh token",
+			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
 				var additionalScopes []string
 				// keep all the scopes except for offline access so we can test the access token based refresh flow.
 				if len(env.ToolsNamespace) == 0 {
@@ -151,25 +244,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 						}
 					}
 				}
-				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-					Issuer: env.SupervisorUpstreamOIDC.Issuer,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
-					},
-					Client: idpv1alpha1.OIDCClient{
-						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
-					},
-					Claims: idpv1alpha1.OIDCClaims{
-						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
-						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
-					},
-					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-						AdditionalScopes: additionalScopes,
-					},
-				}, idpv1alpha1.PhaseReady)
-				return oidcIDP.Name
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: additionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlow,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
@@ -179,27 +264,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
-			name: "oidc with CLI password flow",
-			maybeSkip: func(t *testing.T) {
-				// never need to skip this test
-			},
+			name:      "oidc with CLI password flow",
+			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-					Issuer: env.SupervisorUpstreamOIDC.Issuer,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
-					},
-					Client: idpv1alpha1.OIDCClient{
-						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
-					},
-					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-						AllowPasswordGrant: true, // allow the CLI password flow for this OIDCIdentityProvider
-					},
-				}, idpv1alpha1.PhaseReady)
-				return oidcIDP.Name
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AllowPasswordGrant: true, // allow the CLI password flow for this OIDCIdentityProvider
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamOIDC.Username, // username to present to server during login
@@ -220,54 +294,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
 		{
-			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -302,55 +335,95 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap skip group refresh",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap with browser flow",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-						SkipGroupRefresh: true,
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			createTestUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap with browser flow with wrong password",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					"this is the wrong password" // password to present to server during login
+			},
+			requestAuthorization:               requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentials,
+			wantLocalhostCallbackToNeverHappen: true, // we should have been sent back to the login page to retry login
+		},
+		{
+			name:      "ldap with browser flow with wrong username",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return "this is the wrong username", // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization:               requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentials,
+			wantLocalhostCallbackToNeverHappen: true, // we should have been sent back to the login page to retry login
+		},
+		{
+			name:      "ldap with browser flow with wrong password and then correct password",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createTestUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentialsAndThenGoodCredentials,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap skip group refresh",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					spec.GroupSearch.SkipGroupRefresh = true
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -388,10 +461,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		{
 			name: "ldap with email as username and group search base that doesn't return anything, and using an LDAP provider which supports TLS",
 			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
+				skipLDAPTests(t)
 				if env.SupervisorUpstreamLDAP.UserSearchBase == env.SupervisorUpstreamLDAP.GroupSearchBase {
 					// This test relies on using the user search base as the group search base, to simulate
 					// searching for groups and not finding any.
@@ -401,46 +471,12 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}
 			},
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase, // groups not stored at the user search base
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					spec.GroupSearch.Base = env.SupervisorUpstreamLDAP.UserSearchBase // groups not stored at the user search base
+				})
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -475,54 +511,18 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: []string{},
 		},
 		{
-			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.StartTLSOnlyHost,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "cn={}", // try using a non-default search filter
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: "dn", // try using the user's DN as the downstream username
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "cn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.StartTLSOnlyHost, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					spec.Host = env.SupervisorUpstreamLDAP.StartTLSOnlyHost
+					spec.UserSearch.Filter = "cn={}"           // try using a non-default search filter
+					spec.UserSearch.Attributes.Username = "dn" // try using the user's DN as the downstream username
+					spec.GroupSearch.Attributes.GroupName = "cn"
+				})
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserCN,       // username to present to server during login
@@ -549,54 +549,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs,
 		},
 		{
-			name: "logging in to ldap with the wrong password fails",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "logging in to ldap with the wrong password fails",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -609,47 +568,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantErrorType:        "access_denied",
 		},
 		{
-			name: "ldap login still works after updating bind secret",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap login still works after updating bind secret",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				t.Helper()
-
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				secretName := secret.Name
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secretName,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
+				idp, secret := createLDAPIdentityProvider(t, nil)
 
 				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
 				// update that secret, which will cause the cache to recheck tls and search base values
@@ -668,13 +591,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					ldapIDP, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
-				return ldapIDP.Name
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -702,53 +625,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap login still works after deleting and recreating the bind secret",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap login still works after deleting and recreating the bind secret",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				t.Helper()
-
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				secretName := secret.Name
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secretName,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
+				idp, secret := createLDAPIdentityProvider(t, nil)
 
 				// delete, then recreate that secret, which will cause the cache to recheck tls and search base values
 				client := testlib.NewKubernetesClientset(t)
 				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
 				defer deleteCancel()
-				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secret.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 
 				// create the secret again
@@ -756,7 +643,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				defer recreateCancel()
 				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
+						Name:      secret.Name,
 						Namespace: env.SupervisorNamespace,
 					},
 					Type: v1.SecretTypeBasicAuth,
@@ -775,13 +662,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					ldapIDP, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, ldapIDP.Name, metav1.GetOptions{})
+					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, ldapIDP, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
-				return ldapIDP.Name
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -809,42 +696,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "activedirectory with all default options",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory with all default options",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -871,57 +729,30 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
-		}, {
-			name: "activedirectory with custom options",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+		},
+		{
+			name:      "active directory with custom options",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch{
+				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
+					spec.UserSearch = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch{
 						Base:   env.SupervisorUpstreamActiveDirectory.UserSearchBase,
 						Filter: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName + "={}",
 						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{
 							Username: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName,
 						},
-					},
-					GroupSearch: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch{
+					}
+					spec.GroupSearch = idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch{
 						Filter: "member={}", // excluding nested groups
 						Base:   env.SupervisorUpstreamActiveDirectory.GroupSearchBase,
 						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{
 							GroupName: "dn",
 						},
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+					}
+				})
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue, // username to present to server during login
@@ -950,35 +781,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "active directory login still works after updating bind secret",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory login still works after updating bind secret",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
 				t.Helper()
-
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				secretName := secret.Name
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secretName,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				idp, secret := createActiveDirectoryIdentityProvider(t, nil)
 
 				secret.Annotations = map[string]string{"pinniped.dev/test": "", "another-label": "another-key"}
 				// update that secret, which will cause the cache to recheck tls and search base values
@@ -997,13 +804,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					adIDP, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
-				return adIDP.Name
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -1031,41 +838,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
 		{
-			name: "active directory login still works after deleting and recreating bind secret",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory login still works after deleting and recreating bind secret",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
 				t.Helper()
-
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				secretName := secret.Name
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secretName,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				idp, secret := createActiveDirectoryIdentityProvider(t, nil)
 
 				// delete the secret
 				client := testlib.NewKubernetesClientset(t)
 				deleteCtx, deleteCancel := context.WithTimeout(context.Background(), time.Minute)
 				defer deleteCancel()
-				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+				err := client.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secret.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 
 				// create the secret again
@@ -1073,7 +856,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				defer recreateCancel()
 				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      secretName,
+						Name:      secret.Name,
 						Namespace: env.SupervisorNamespace,
 					},
 					Type: v1.SecretTypeBasicAuth,
@@ -1093,13 +876,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
-					adIDP, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, adIDP.Name, metav1.GetOptions{})
+					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, adIDP, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
 				}, time.Minute, 500*time.Millisecond)
-				return adIDP.Name
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
@@ -1127,40 +910,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
 		{
-			name: "active directory login fails after the user password is changed",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory login fails after the user password is changed",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
 			},
 			createTestUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
@@ -1168,7 +922,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1189,40 +943,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: []string{}, // none for now.
 		},
 		{
-			name: "active directory login fails after the user is deactivated",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory login fails after the user is deactivated",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
 			},
 			createTestUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
@@ -1230,7 +955,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1251,40 +976,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: []string{}, // none for now.
 		},
 		{
-			name: "active directory login fails after the user is locked",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "active directory login fails after the user is locked",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
 			},
 			createTestUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
@@ -1292,7 +988,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			deleteTestUser: func(t *testing.T, username string) {
 				testlib.DeleteTestADUser(t, env, username)
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					testUserName,     // username to present to server during login
@@ -1313,42 +1009,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: []string{},
 		},
 		{
-			name: "logging in to activedirectory with a deactivated user fails",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-				if env.SupervisorUpstreamActiveDirectory.Host == "" {
-					t.Skip("Active Directory hostname not specified")
-				}
-			},
+			name:      "logging in to active directory with a deactivated user fails",
+			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
-					},
-				)
-				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamActiveDirectory.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
-					},
-					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-				}, idpv1alpha1.ActiveDirectoryPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
-				return adIDP.Name
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamActiveDirectory.TestDeactivatedUserSAMAccountNameValue, // username to present to server during login
@@ -1362,54 +1029,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantErrorType:           "access_denied",
 		},
 		{
-			name: "ldap refresh fails when username changes from email as username to dn as username",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap refresh fails when username changes from email as username to dn as username",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secret.Name,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				expectedMsg := fmt.Sprintf(
-					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
-					secret.Name, secret.ResourceVersion,
-				)
-				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -1446,50 +1072,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap refresh updates groups to be empty after deleting the group search base",
-			maybeSkip: func(t *testing.T) {
-				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-					t.Skip("LDAP integration test requires connectivity to an LDAP server")
-				}
-			},
+			name:      "ldap refresh updates groups to be empty after deleting the group search base",
+			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-				t.Helper()
-
-				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
-					map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-					},
-				)
-				secretName := secret.Name
-				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBind{
-						SecretName: secretName,
-					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-						},
-					},
-					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-							GroupName: "dn",
-						},
-					},
-				}, idpv1alpha1.LDAPPhaseReady)
-				return ldapIDP.Name
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
 			},
-			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
@@ -1539,6 +1128,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.breakRefreshSessionData,
 				tt.createTestUser,
 				tt.deleteTestUser,
+				tt.wantLocalhostCallbackToNeverHappen,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
@@ -1573,6 +1163,7 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 		{"LDAPConnectionValid", "True", "Success"},
 	}, conditionsSummary)
 }
+
 func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
 	require.Len(t, adIDP.Status.Conditions, 4)
 
@@ -1669,11 +1260,12 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
-	requestAuthorization func(t *testing.T, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
+	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
 	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
+	wantLocalhostCallbackToNeverHappen bool,
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
@@ -1769,7 +1361,9 @@ func testSupervisorLogin(
 	username, password := "", ""
 	if createTestUser != nil {
 		username, password = createTestUser(t)
-		defer deleteTestUser(t, username)
+		if deleteTestUser != nil {
+			defer deleteTestUser(t, username)
+		}
 	}
 
 	// Perform OIDC discovery for our downstream.
@@ -1784,6 +1378,9 @@ func testSupervisorLogin(
 	localCallbackServer := startLocalCallbackServer(t)
 
 	// Form the OAuth2 configuration corresponding to our CLI client.
+	// Note that this is not using response_type=form_post, so the Supervisor will redirect to the callback endpoint
+	// directly, without using the Javascript form_post HTML page to POST back to the callback endpoint. The e2e
+	// tests which use the Pinniped CLI are testing the form_post part of the flow, so that is covered elsewhere.
 	downstreamOAuth2Config := oauth2.Config{
 		// This is the hardcoded public client that the supervisor supports.
 		ClientID:    "pinniped-cli",
@@ -1807,10 +1404,20 @@ func testSupervisorLogin(
 	)
 
 	// Perform parameterized auth code acquisition.
-	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
+	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
 
 	// Expect that our callback handler was invoked.
-	callback := localCallbackServer.waitForCallback(10 * time.Second)
+	callback, err := localCallbackServer.waitForCallback(10 * time.Second)
+	if wantLocalhostCallbackToNeverHappen {
+		require.Error(t, err)
+		// When we want the localhost callback to have never happened, then this is the end of the test. The login was
+		// unable to finish so there is nothing to assert about what should have happened with the callback, and there
+		// won't be any error sent to the callback either.
+		return
+	}
+	// Else, no error.
+	require.NoError(t, err)
+
 	t.Logf("got callback request: %s", testlib.MaskTokens(callback.URL.String()))
 	if wantErrorType == "" {
 		require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
@@ -1984,7 +1591,7 @@ func verifyTokenResponse(
 	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
 }
 
-func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 	t.Helper()
 	env := testlib.IntegrationEnv(t)
 
@@ -1992,12 +1599,7 @@ func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthor
 	defer cancelFunc()
 
 	// Make the authorize request once "manually" so we can check its response security headers.
-	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
-	require.NoError(t, err)
-	authorizeResp, err := httpClient.Do(authorizeRequest)
-	require.NoError(t, err)
-	require.NoError(t, authorizeResp.Body.Close())
-	expectSecurityHeaders(t, authorizeResp, false)
+	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
 
 	// Open the web browser and navigate to the downstream authorize URL.
 	page := browsertest.Open(t)
@@ -2005,12 +1607,78 @@ func requestAuthorizationUsingBrowserAuthcodeFlow(t *testing.T, downstreamAuthor
 	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
 	browsertest.WaitForURL(t, page, callbackURLPattern)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client) {
+	t.Helper()
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelFunc()
+
+	// Make the authorize request once "manually" so we can check its response security headers.
+	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, password)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentials(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, _, username, password string, _ *http.Client) {
+	t.Helper()
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// This functions assumes that it has been passed either a bad username or a bad password, and submits the
+	// provided credentials. Expect to be redirected to the upstream provider and attempt to log in.
+	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, password)
+
+	// After failing login expect to land back on the login page again with an error message.
+	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, page, downstreamIssuer)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentialsAndThenGoodCredentials(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, _, username, password string, _ *http.Client) {
+	t.Helper()
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect to be redirected to the upstream provider and attempt to log in.
+	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, "this is the wrong password!")
+
+	// After failing login expect to land back on the login page again with an error message.
+	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, page, downstreamIssuer)
+
+	// Already at the login page, so this time can directly submit it using the provided username and password.
+	browsertest.SubmitUpstreamLDAPLoginForm(t, page, username, password)
+}
+
+func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *testing.T, downstreamAuthorizeURL string, httpClient *http.Client) {
+	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
+	require.NoError(t, err)
+	authorizeResp, err := httpClient.Do(authorizeRequest)
+	require.NoError(t, err)
+	require.NoError(t, authorizeResp.Body.Close())
+	expectSecurityHeaders(t, authorizeResp, false)
 }
 
 func requestAuthorizationUsingCLIPasswordFlow(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client, wantErr bool) {
@@ -2091,13 +1759,12 @@ type localCallbackServer struct {
 	callbacks <-chan *http.Request
 }
 
-func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Request {
+func (s *localCallbackServer) waitForCallback(timeout time.Duration) (*http.Request, error) {
 	select {
 	case callback := <-s.callbacks:
-		return callback
+		return callback, nil
 	case <-time.After(timeout):
-		require.Fail(s.t, "timed out waiting for callback request")
-		return nil
+		return nil, errors.New("timed out waiting for callback request")
 	}
 }
 

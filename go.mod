@@ -45,6 +45,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.3
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/stdr v1.2.2
+	github.com/go-logr/zapr v1.2.3
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.8
@@ -64,6 +65,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/tdewolff/minify/v2 v2.11.2
 	go.uber.org/atomic v1.9.0
+	go.uber.org/zap v1.21.0
 	golang.org/x/crypto v0.0.0-20220427172511-eb4f295cb31f
 	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
@@ -168,7 +170,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.6.3 // indirect
 	go.opentelemetry.io/proto/otlp v0.15.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect

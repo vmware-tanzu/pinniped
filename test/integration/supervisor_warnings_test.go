@@ -448,7 +448,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)

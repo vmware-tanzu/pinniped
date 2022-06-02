@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,7 +21,7 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
-//nolint: gochecknoinits
+// nolint: gochecknoinits
 func init() {
 	loginCmd.AddCommand(staticLoginCommand(staticLoginRealDeps()))
 }
@@ -75,7 +74,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd, deps, flags) }
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 	mustMarkHidden(cmd, "concierge-namespace")
@@ -83,8 +82,9 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	return cmd
 }
 
-func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
-	pLogger, err := SetLogLevel(deps.lookupEnv)
+func runStaticLogin(cmd *cobra.Command, deps staticLoginDeps, flags staticLoginParams) error {
+	out := cmd.OutOrStdout()
+	pLogger, err := SetLogLevel(cmd.Context(), deps.lookupEnv)
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}

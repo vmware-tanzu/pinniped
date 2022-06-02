@@ -13,7 +13,7 @@ import (
 	_ "go.pinniped.dev/internal/crypto/ptls"
 )
 
-//nolint: gochecknoinits
+// nolint: gochecknoinits
 func init() {
 	// browsers like chrome like to write to our std out which breaks our JSON ExecCredential output
 	// thus we redirect the browser's std out to our std err
@@ -21,5 +21,7 @@ func init() {
 }
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

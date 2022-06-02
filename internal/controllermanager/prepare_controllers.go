@@ -11,7 +11,6 @@ import (
 
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/clock"
 
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -34,6 +33,7 @@ import (
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -197,6 +197,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				controllerlib.WithInformer,
 				c.ServingCertRenewBefore,
 				apicerts.TLSCertificateChainSecretKey,
+				plog.New(),
 			),
 			singletonWorker,
 		).
@@ -222,7 +223,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				agentConfig,
 				client,
 				informers.installationNamespaceK8s.Core().V1().Pods(),
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -232,7 +233,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -240,7 +241,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 			jwtcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -249,7 +250,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -275,7 +276,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -303,6 +304,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				controllerlib.WithInformer,
 				365*24*time.Hour-time.Hour, // 1 year minus 1 hour hard coded value (i.e. wait until the last moment to break the signer)
 				apicerts.CACertificateSecretKey,
+				plog.New(),
 			),
 			singletonWorker,
 		)

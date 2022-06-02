@@ -6,6 +6,7 @@
 package concierge
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -41,7 +42,7 @@ const (
 // Note! The Config file should contain base64-encoded WebhookCABundle data.
 // This function will decode that base64-encoded data to PEM bytes to be stored
 // in the Config.
-func FromPath(path string) (*Config, error) {
+func FromPath(ctx context.Context, path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
@@ -78,7 +79,8 @@ func FromPath(path string) (*Config, error) {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
 
-	if err := plog.ValidateAndSetLogLevelGlobally(config.LogLevel); err != nil {
+	plog.MaybeSetDeprecatedLogLevel(config.LogLevel, &config.Log)
+	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, config.Log); err != nil {
 		return nil, fmt.Errorf("validate log level: %w", err)
 	}
 

@@ -24,14 +24,14 @@ type Logger struct {
 	buffer syncBuffer
 }
 
-// New returns a new test Logger.  Use this for all new tests.
+// Deprecated: Use plog.TestLogger or plog.TestZapr instead.  This is meant for old tests only.
 func New(t *testing.T) *Logger {
 	res := Logger{t: t}
 	res.Logger = stdr.New(log.New(&res.buffer, "", 0))
 	return &res
 }
 
-// Deprecated: NewLegacy returns a new test Logger.  Use this for old tests if necessary.
+// Deprecated: Use plog.TestLogger or plog.TestZapr instead.  This is meant for old tests only.
 func NewLegacy(t *testing.T) *Logger {
 	res := New(t)
 	res.Logger = newStdLogger(log.New(&res.buffer, "", 0))

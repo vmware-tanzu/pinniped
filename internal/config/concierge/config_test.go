@@ -4,6 +4,7 @@
 package concierge
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -90,8 +91,185 @@ func TestFromPath(t *testing.T) {
 					Image:            pointer.StringPtr("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
-				LogLevel: plog.LevelDebug,
+				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
+				Log: plog.LogSpec{
+					Level: plog.LevelDebug,
+				},
 			},
+		},
+		{
+			name: "Fully filled out new log struct",
+			yaml: here.Doc(`
+				---
+				discovery:
+				  url: https://some.discovery/url
+				api:
+				  servingCertificate:
+					durationSeconds: 3600
+					renewBeforeSeconds: 2400
+				apiGroupSuffix: some.suffix.com
+				aggregatedAPIServerPort: 12345
+				impersonationProxyServerPort: 4242
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  kubeCertAgentPrefix: kube-cert-agent-prefix
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  extraName: extraName-value
+				labels:
+				  myLabelKey1: myLabelValue1
+				  myLabelKey2: myLabelValue2
+				kubeCertAgent:
+				  namePrefix: kube-cert-agent-name-prefix-
+				  image: kube-cert-agent-image
+				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
+				log:
+				  level: all
+				  format: json
+			`),
+			wantConfig: &Config{
+				DiscoveryInfo: DiscoveryInfoSpec{
+					URL: pointer.StringPtr("https://some.discovery/url"),
+				},
+				APIConfig: APIConfigSpec{
+					ServingCertificateConfig: ServingCertificateConfigSpec{
+						DurationSeconds:    pointer.Int64Ptr(3600),
+						RenewBeforeSeconds: pointer.Int64Ptr(2400),
+					},
+				},
+				APIGroupSuffix:               pointer.StringPtr("some.suffix.com"),
+				AggregatedAPIServerPort:      pointer.Int64Ptr(12345),
+				ImpersonationProxyServerPort: pointer.Int64Ptr(4242),
+				NamesConfig: NamesConfigSpec{
+					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
+					CredentialIssuer:                  "pinniped-config",
+					APIService:                        "pinniped-api",
+					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
+					ImpersonationClusterIPService:     "impersonationClusterIPService-value",
+					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
+					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
+					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
+					AgentServiceAccount:               "agentServiceAccount-value",
+				},
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
+				KubeCertAgentConfig: KubeCertAgentSpec{
+					NamePrefix:       pointer.StringPtr("kube-cert-agent-name-prefix-"),
+					Image:            pointer.StringPtr("kube-cert-agent-image"),
+					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
+				},
+				Log: plog.LogSpec{
+					Level:  plog.LevelAll,
+					Format: plog.FormatJSON,
+				},
+			},
+		},
+		{
+			name: "Fully filled out old log and new log struct",
+			yaml: here.Doc(`
+				---
+				discovery:
+				  url: https://some.discovery/url
+				api:
+				  servingCertificate:
+					durationSeconds: 3600
+					renewBeforeSeconds: 2400
+				apiGroupSuffix: some.suffix.com
+				aggregatedAPIServerPort: 12345
+				impersonationProxyServerPort: 4242
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  kubeCertAgentPrefix: kube-cert-agent-prefix
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  extraName: extraName-value
+				labels:
+				  myLabelKey1: myLabelValue1
+				  myLabelKey2: myLabelValue2
+				kubeCertAgent:
+				  namePrefix: kube-cert-agent-name-prefix-
+				  image: kube-cert-agent-image
+				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
+				logLevel: debug
+				log:
+				  level: all
+				  format: json
+			`),
+			wantConfig: &Config{
+				DiscoveryInfo: DiscoveryInfoSpec{
+					URL: pointer.StringPtr("https://some.discovery/url"),
+				},
+				APIConfig: APIConfigSpec{
+					ServingCertificateConfig: ServingCertificateConfigSpec{
+						DurationSeconds:    pointer.Int64Ptr(3600),
+						RenewBeforeSeconds: pointer.Int64Ptr(2400),
+					},
+				},
+				APIGroupSuffix:               pointer.StringPtr("some.suffix.com"),
+				AggregatedAPIServerPort:      pointer.Int64Ptr(12345),
+				ImpersonationProxyServerPort: pointer.Int64Ptr(4242),
+				NamesConfig: NamesConfigSpec{
+					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
+					CredentialIssuer:                  "pinniped-config",
+					APIService:                        "pinniped-api",
+					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
+					ImpersonationClusterIPService:     "impersonationClusterIPService-value",
+					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
+					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
+					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
+					AgentServiceAccount:               "agentServiceAccount-value",
+				},
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
+				KubeCertAgentConfig: KubeCertAgentSpec{
+					NamePrefix:       pointer.StringPtr("kube-cert-agent-name-prefix-"),
+					Image:            pointer.StringPtr("kube-cert-agent-image"),
+					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
+				},
+				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
+				Log: plog.LogSpec{
+					Level:  plog.LevelDebug,
+					Format: plog.FormatJSON,
+				},
+			},
+		},
+		{
+			name: "invalid log format",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				log:
+				  level: all
+				  format: snorlax
+			`),
+			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string, json and text",
 		},
 		{
 			name: "When only the required fields are present, causes other fields to be defaulted",
@@ -404,6 +582,8 @@ func TestFromPath(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			// this is a serial test because it sets the global logger
+
 			// Write yaml to temp file
 			f, err := ioutil.TempFile("", "pinniped-test-config-yaml-*")
 			require.NoError(t, err)
@@ -417,7 +597,9 @@ func TestFromPath(t *testing.T) {
 			require.NoError(t, err)
 
 			// Test FromPath()
-			config, err := FromPath(f.Name())
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			config, err := FromPath(ctx, f.Name())
 
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)

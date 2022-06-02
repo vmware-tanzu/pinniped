@@ -16,7 +16,6 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -86,8 +85,8 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 					// want our middleware to be opinionated so that it can be really good at a specific task
 					// and give us specific feedback when it can't do that specific task
 					return fmt.Errorf(
-						"cannot replace token credential request %q without authenticator API group",
-						plog.KObj(obj),
+						"cannot replace token credential request %s/%s without authenticator API group",
+						obj.GetNamespace(), obj.GetName(),
 					)
 				}
 
@@ -95,8 +94,8 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 				if !ok {
 					// see comment above about specificity of middleware
 					return fmt.Errorf(
-						"cannot replace token credential request %q authenticator API group %q with group suffix %q",
-						plog.KObj(obj),
+						"cannot replace token credential request %s/%s authenticator API group %q with group suffix %q",
+						obj.GetNamespace(), obj.GetName(),
 						*tokenCredentialRequest.Spec.Authenticator.APIGroup,
 						apiGroupSuffix,
 					)
@@ -176,7 +175,7 @@ func Unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 // makes sure that the provided apiGroupSuffix is a valid DNS-1123 subdomain with at least one dot,
 // to match Kubernetes behavior.
 func Validate(apiGroupSuffix string) error {
-	var errs []error //nolint: prealloc
+	var errs []error // nolint: prealloc
 
 	if len(strings.Split(apiGroupSuffix, ".")) < 2 {
 		errs = append(errs, constable.Error("must contain '.'"))

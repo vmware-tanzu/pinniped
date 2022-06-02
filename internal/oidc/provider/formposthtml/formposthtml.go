@@ -6,23 +6,23 @@
 package formposthtml
 
 import (
-	"crypto/sha256"
 	_ "embed" // Needed to trigger //go:embed directives below.
-	"encoding/base64"
 	"html/template"
 	"strings"
 
 	"github.com/tdewolff/minify/v2/minify"
+
+	"go.pinniped.dev/internal/oidc/provider/csp"
 )
 
 var (
 	//go:embed form_post.css
 	rawCSS      string
-	minifiedCSS = mustMinify(minify.CSS(rawCSS))
+	minifiedCSS = panicOnError(minify.CSS(rawCSS))
 
 	//go:embed form_post.js
 	rawJS      string
-	minifiedJS = mustMinify(minify.JS(rawJS))
+	minifiedJS = panicOnError(minify.JS(rawJS))
 
 	//go:embed form_post.gohtml
 	rawHTMLTemplate string
@@ -37,28 +37,23 @@ var parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(te
 // Generate the CSP header value once since it's effectively constant.
 var cspValue = strings.Join([]string{
 	`default-src 'none'`,
-	`script-src '` + cspHash(minifiedJS) + `'`,
-	`style-src '` + cspHash(minifiedCSS) + `'`,
+	`script-src '` + csp.Hash(minifiedJS) + `'`,
+	`style-src '` + csp.Hash(minifiedCSS) + `'`,
 	`img-src data:`,
 	`connect-src *`,
 	`frame-ancestors 'none'`,
 }, "; ")
 
-func mustMinify(s string, err error) string {
+func panicOnError(s string, err error) string {
 	if err != nil {
 		panic(err)
 	}
 	return s
 }
 
-func cspHash(s string) string {
-	hashBytes := sha256.Sum256([]byte(s))
-	return "sha256-" + base64.StdEncoding.EncodeToString(hashBytes[:])
-}
-
 // ContentSecurityPolicy returns the Content-Security-Policy header value to make the Template() operate correctly.
 //
-// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/default-src#:~:text=%27%3Chash-algorithm%3E-%3Cbase64-value%3E%27.
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy.
 func ContentSecurityPolicy() string { return cspValue }
 
 // Template returns the html/template.Template for rendering the response_type=form_post response page.

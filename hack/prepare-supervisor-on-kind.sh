@@ -25,11 +25,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+function log_error() {
+  RED='\033[0;31m'
+  NC='\033[0m'
+  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
+    echo -e "🙁${RED} Error: $* ${NC}"
+  else
+    echo ":( Error: $*"
+  fi
+}
+
 use_oidc_upstream=no
 use_ldap_upstream=no
 use_ad_upstream=no
+use_flow=""
 while (("$#")); do
   case "$1" in
+  --flow)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--flow requires a flow name to be specified (e.g. cli_password or browser_authcode"
+      exit 1
+    fi
+    if [[ "$1" != "browser_authcode" && "$1" != "cli_password" ]]; then
+      log_error "--flow must be cli_password or browser_authcode"
+      exit 1
+    fi
+    use_flow=$1
+    shift
+    ;;
   --ldap)
     use_ldap_upstream=yes
     shift
@@ -56,7 +81,7 @@ while (("$#")); do
 done
 
 if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_upstream" == "no" ]]; then
-  echo "Error: Please use --oidc, --ldap, or --ad to specify which type of upstream identity provider(s) you would like"
+  log_error "Error: Please use --oidc, --ldap, or --ad to specify which type of upstream identity provider(s) you would like"
   exit 1
 fi
 
@@ -127,6 +152,7 @@ spec:
     certificateAuthorityData: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE"
   authorizationConfig:
     additionalScopes: [ ${PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES} ]
+    allowPasswordGrant: true
   claims:
     username: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM"
     groups: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM"
@@ -196,7 +222,7 @@ EOF
 fi
 
 if [[ "$use_ad_upstream" == "yes" ]]; then
-  # Make an ActiveDirectoryIdentityProvider.
+  # Make an ActiveDirectoryIdentityProvider. Needs to be pointed to a real AD server by env vars.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: ActiveDirectoryIdentityProvider
@@ -256,7 +282,11 @@ while [[ -z "$(kubectl get credentialissuer pinniped-concierge-config -o=jsonpat
 done
 
 # Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for logins.
-https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped get kubeconfig --oidc-skip-browser >kubeconfig
+flow_arg=""
+if [[ -n "$use_flow" ]]; then
+  flow_arg="--upstream-identity-provider-flow $use_flow"
+fi
+https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped get kubeconfig --oidc-skip-browser $flow_arg >kubeconfig
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
 rm -f "$HOME/.config/pinniped/sessions.yaml"
@@ -265,25 +295,27 @@ rm -f "$HOME/.config/pinniped/credentials.yaml"
 echo
 echo "Ready! 🚀"
 
-if [[ "$use_oidc_upstream" == "yes" ]]; then
+if [[ "$use_oidc_upstream" == "yes" || "$use_flow" == "browser_authcode" ]]; then
   echo
   echo "To be able to access the login URL shown below, start Chrome like this:"
   echo "    open -a \"Google Chrome\" --args --proxy-server=\"$PINNIPED_TEST_PROXY\""
-  echo "Then use these credentials at the Dex login page:"
+  echo "Note that Chrome must be fully quit before being started with --proxy-server."
+  echo "Then open the login URL shown below in that new Chrome window."
+  echo
+  echo "When prompted for username and password, use these values:"
+fi
+
+if [[ "$use_oidc_upstream" == "yes" ]]; then
   echo "    Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
   echo "    Password: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"
 fi
 
 if [[ "$use_ldap_upstream" == "yes" ]]; then
-  echo
-  echo "When prompted for username and password by the CLI, use these values:"
   echo "    Username: $PINNIPED_TEST_LDAP_USER_CN"
   echo "    Password: $PINNIPED_TEST_LDAP_USER_PASSWORD"
 fi
 
 if [[ "$use_ad_upstream" == "yes" ]]; then
-  echo
-  echo "When prompted for username and password by the CLI, use these values:"
   echo "    Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
   echo "    Password: $PINNIPED_TEST_AD_USER_PASSWORD"
 fi

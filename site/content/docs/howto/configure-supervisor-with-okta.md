@@ -97,6 +97,7 @@ spec:
   # application's client credentials (created below).
   client:
     secretName: okta-client-credentials
+
 ---
 apiVersion: v1
 kind: Secret
@@ -112,6 +113,10 @@ stringData:
   # The "Client secret" that you got from Okta.
   clientSecret: "<your-client-secret>"
 ```
+
+Note that the `metadata.name` of the OIDCIdentityProvider resource may be visible to end users at login prompts
+if you choose to enable `allowPasswordGrant`, so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-okta` over `my-idp`.
 
 Once your OIDCIdentityProvider has been created, you can validate your configuration by running:
 

@@ -6,6 +6,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -28,7 +29,7 @@ const (
 // FromPath loads an Config from a provided local file path, inserts any
 // defaults (from the Config documentation), and verifies that the config is
 // valid (Config documentation).
-func FromPath(path string) (*Config, error) {
+func FromPath(ctx context.Context, path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
@@ -53,7 +54,8 @@ func FromPath(path string) (*Config, error) {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
 
-	if err := plog.ValidateAndSetLogLevelGlobally(config.LogLevel); err != nil {
+	plog.MaybeSetDeprecatedLogLevel(config.LogLevel, &config.Log)
+	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, config.Log); err != nil {
 		return nil, fmt.Errorf("validate log level: %w", err)
 	}
 

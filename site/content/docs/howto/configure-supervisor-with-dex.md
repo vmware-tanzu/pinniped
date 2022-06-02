@@ -104,19 +104,21 @@ spec:
     # to the "username" claim in downstream tokens minted by the Supervisor.
     username: email
 
-    # Specify the name of the claim in your Dex ID token that represents the groups
-    # that the user belongs to. This matches what you specified above
+    # Specify the name of the claim in your Dex ID token that represents the
+    # groups to which the user belongs. This matches what you specified above
     # with the Groups claim filter.
     # Note that the group claims from Github are in the format of "org:team".
-    # To query for the group scope, you should set the organization you want Dex to
-    # search against in its configuration, otherwise your group claim would be empty.
-    # An example config can be found at - https://dexidp.io/docs/connectors/github/#configuration
+    # To query for the group scope, you should set the organization you
+    # want Dex to search against in its configuration, otherwise your group
+    # claim would be empty. An example config can be found at
+    # https://dexidp.io/docs/connectors/github/#configuration
     groups: groups
 
   # Specify the name of the Kubernetes Secret that contains your Dex
   # application's client credentials (created below).
   client:
     secretName: dex-client-credentials
+
 ---
 apiVersion: v1
 kind: Secret
@@ -125,12 +127,18 @@ metadata:
   name: dex-client-credentials
 type: secrets.pinniped.dev/oidc-client
 stringData:
-  # The "Client ID" that you set in Dex. For example, in our case this is "pinniped-supervisor"
+  # The "Client ID" that you set in Dex. For example, in our case
+  # this is "pinniped-supervisor".
   clientID: "<your-client-id>"
 
-  # The "Client secret" that you set in Dex. For example, in our case this is "pinniped-supervisor-secret"
+  # The "Client secret" that you set in Dex. For example, in our
+  # case this is "pinniped-supervisor-secret".
   clientSecret: "<your-client-secret>"
 ```
+
+Note that the `metadata.name` of the OIDCIdentityProvider resource may be visible to end users at login prompts
+if you choose to enable `allowPasswordGrant`, so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-ldap` over `my-idp`.
 
 Once your OIDCIdentityProvider resource has been created, you can validate your configuration by running:
 

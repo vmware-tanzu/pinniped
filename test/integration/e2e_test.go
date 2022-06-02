@@ -53,6 +53,15 @@ import (
 func TestE2EFullIntegration_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
+	// Avoid allowing PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW to interfere with these tests.
+	originalFlowEnvVarValue, flowOverrideEnvVarSet := os.LookupEnv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW")
+	if flowOverrideEnvVarSet {
+		require.NoError(t, os.Unsetenv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW"))
+		t.Cleanup(func() {
+			require.NoError(t, os.Setenv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW", originalFlowEnvVarValue))
+		})
+	}
+
 	topSetupCtx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
@@ -1001,6 +1010,66 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
 		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamActiveDirectory.TestUserPassword)
+
+		formpostExpectSuccessState(t, page)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+
+	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the env var to choose the browser flow.
+	t.Run("with Supervisor LDAP upstream IDP and browser flow selected by env var override with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
+		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+
+		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Override the --upstream-identity-provider-flow flag from the kubeconfig using the env var.
+		require.NoError(t, os.Setenv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW", "browser_authcode"))
+		t.Cleanup(func() {
+			require.NoError(t, os.Unsetenv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW"))
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+
+		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, page)
 

@@ -14,6 +14,7 @@ import (
 	config "go.pinniped.dev/generated/1.23/client/supervisor/informers/externalversions/config"
 	idp "go.pinniped.dev/generated/1.23/client/supervisor/informers/externalversions/idp"
 	internalinterfaces "go.pinniped.dev/generated/1.23/client/supervisor/informers/externalversions/internalinterfaces"
+	oauth "go.pinniped.dev/generated/1.23/client/supervisor/informers/externalversions/oauth"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -162,6 +163,7 @@ type SharedInformerFactory interface {
 
 	Config() config.Interface
 	IDP() idp.Interface
+	Oauth() oauth.Interface
 }
 
 func (f *sharedInformerFactory) Config() config.Interface {
@@ -170,4 +172,8 @@ func (f *sharedInformerFactory) Config() config.Interface {
 
 func (f *sharedInformerFactory) IDP() idp.Interface {
 	return idp.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Oauth() oauth.Interface {
+	return oauth.New(f, f.namespace, f.tweakListOptions)
 }

@@ -18,9 +18,6 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: '{range .spec.allowedScopes[?(@ == "pinniped:request-audience")]}{true}{end}{false}'
-      name: Privileged
-      type: boolean
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -60,7 +57,6 @@ spec:
                   type: string
                 minItems: 1
                 type: array
-                uniqueItems: true
               allowedRedirectURIs:
                 description: allowedRedirectURIs is a list of the allowed redirect_uri
                   param values that should be accepted during OIDC flows with this
@@ -70,7 +66,6 @@ spec:
                   type: string
                 minItems: 1
                 type: array
-                uniqueItems: true
               allowedScopes:
                 description: "allowedScopes is a list of the allowed scopes param
                   values that should be accepted during OIDC flows with this client.
@@ -97,7 +92,6 @@ spec:
                   type: string
                 minItems: 1
                 type: array
-                uniqueItems: true
             required:
             - allowedGrantTypes
             - allowedRedirectURIs

@@ -12,7 +12,6 @@ type OIDCClientSpec struct {
 	// allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this
 	// client. Any other uris will be rejected.
 	// Must be https, unless it is a loopback.
-	// +kubebuilder:validation:UniqueItems=true
 	// +kubebuilder:validation:MinItems=1
 	AllowedRedirectURIs []string `json:"allowedRedirectURIs"`
 
@@ -27,7 +26,6 @@ type OIDCClientSpec struct {
 	// - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange,
 	//   which is a step in the process to be able to get a cluster credential for the user.
 	//   This grant must be listed if allowedScopes lists pinniped:request-audience.
-	// +kubebuilder:validation:UniqueItems=true
 	// +kubebuilder:validation:MinItems=1
 	AllowedGrantTypes []string `json:"allowedGrantTypes"`
 
@@ -47,7 +45,6 @@ type OIDCClientSpec struct {
 	// - groups: The client is allowed to request that ID tokens contain the user's group membership,
 	//   if their group membership is discoverable by the Supervisor.
 	//   Without the groups scope being requested and allowed, the ID token will not contain groups.
-	// +kubebuilder:validation:UniqueItems=true
 	// +kubebuilder:validation:MinItems=1
 	AllowedScopes []string `json:"allowedScopes"`
 }
@@ -60,7 +57,6 @@ type OIDCClientStatus struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped
-// +kubebuilder:printcolumn:name="Privileged",type=boolean,JSONPath=`{range .spec.allowedScopes[?(@ == "pinniped:request-audience")]}{true}{end}{false}`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:subresource:status
 type OIDCClient struct {

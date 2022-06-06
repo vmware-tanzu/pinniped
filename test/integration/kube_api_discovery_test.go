@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -53,6 +53,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
+	oauthSupervisorGV := makeGV("oauth", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -138,6 +139,39 @@ func TestGetAPIResourceList(t *testing.T) {
 						Name:       "federationdomains/status",
 						Namespaced: true,
 						Kind:       "FederationDomain",
+						Verbs:      []string{"get", "patch", "update"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
+				Name: oauthSupervisorGV.Group,
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: oauthSupervisorGV.String(),
+						Version:      oauthSupervisorGV.Version,
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: oauthSupervisorGV.String(),
+					Version:      oauthSupervisorGV.Version,
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				oauthSupervisorGV.String(): {
+					{
+						Name:         "oidcclients",
+						SingularName: "oidcclient",
+						Namespaced:   true,
+						Kind:         "OIDCClient",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						Categories:   []string{"pinniped"},
+					},
+					{
+						Name:       "oidcclients/status",
+						Namespaced: true,
+						Kind:       "OIDCClient",
 						Verbs:      []string{"get", "patch", "update"},
 					},
 				},
@@ -484,10 +518,15 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
+		addSuffix("oidcclients.oauth.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
 	}
 
 	actualPinnipedCRDCount := 0
-	expectedPinnipedCRDCount := 7 // the current number of CRDs that we ship as part of Pinniped
+	expectedPinnipedCRDCount := 8 // the current number of CRDs that we ship as part of Pinniped
 
 	for _, crd := range crdList.Items {
 		if !strings.Contains(crd.Spec.Group, env.APIGroupSuffix) {

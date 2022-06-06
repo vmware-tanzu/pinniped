@@ -10,6 +10,7 @@ import (
 
 	v1alpha1 "go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/supervisor/idp/v1alpha1"
+	oauthv1alpha1 "go.pinniped.dev/generated/1.18/apis/supervisor/oauth/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -51,6 +52,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().LDAPIdentityProviders().Informer()}, nil
 	case idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().OIDCIdentityProviders().Informer()}, nil
+
+		// Group=oauth.supervisor.pinniped.dev, Version=v1alpha1
+	case oauthv1alpha1.SchemeGroupVersion.WithResource("oidcclients"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Oauth().V1alpha1().OIDCClients().Informer()}, nil
 
 	}
 

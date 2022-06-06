@@ -9,6 +9,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -80,7 +81,7 @@ func (mr *MockDynamicCertPrivateMockRecorder) Name() *gomock.Call {
 }
 
 // Run mocks base method.
-func (m *MockDynamicCertPrivate) Run(arg0 int, arg1 <-chan struct{}) {
+func (m *MockDynamicCertPrivate) Run(arg0 context.Context, arg1 int) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Run", arg0, arg1)
 }
@@ -92,17 +93,17 @@ func (mr *MockDynamicCertPrivateMockRecorder) Run(arg0, arg1 interface{}) *gomoc
 }
 
 // RunOnce mocks base method.
-func (m *MockDynamicCertPrivate) RunOnce() error {
+func (m *MockDynamicCertPrivate) RunOnce(arg0 context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunOnce")
+	ret := m.ctrl.Call(m, "RunOnce", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RunOnce indicates an expected call of RunOnce.
-func (mr *MockDynamicCertPrivateMockRecorder) RunOnce() *gomock.Call {
+func (mr *MockDynamicCertPrivateMockRecorder) RunOnce(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOnce", reflect.TypeOf((*MockDynamicCertPrivate)(nil).RunOnce))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOnce", reflect.TypeOf((*MockDynamicCertPrivate)(nil).RunOnce), arg0)
 }
 
 // SetCertKeyContent mocks base method.

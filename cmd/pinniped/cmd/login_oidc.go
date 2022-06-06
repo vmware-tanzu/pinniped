@@ -32,6 +32,15 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
+const (
+	// The user may override the flow selection made by `--upstream-identity-provider-flow` using an env var.
+	// This allows the user to override their default flow selected inside their Pinniped-compatible kubeconfig file.
+	// A user might want to use this env var, for example, to choose the "browser_authcode" flow when using a kubeconfig
+	// which specifies "cli_password" when using an IDE plugin where there is no interactive CLI available. This allows
+	// the user to use one kubeconfig file for both flows.
+	upstreamIdentityProviderFlowEnvVarName = "PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW"
+)
+
 // nolint: gochecknoinits
 func init() {
 	loginCmd.AddCommand(oidcLoginCommand(oidcLoginCommandRealDeps()))
@@ -165,6 +174,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	flowOpts, err := flowOptions(
 		idpdiscoveryv1alpha1.IDPType(flags.upstreamIdentityProviderType),
 		idpdiscoveryv1alpha1.IDPFlow(flags.upstreamIdentityProviderFlow),
+		deps,
 	)
 	if err != nil {
 		return err
@@ -250,8 +260,20 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 }
 
-func flowOptions(requestedIDPType idpdiscoveryv1alpha1.IDPType, requestedFlow idpdiscoveryv1alpha1.IDPFlow) ([]oidcclient.Option, error) {
+func flowOptions(
+	requestedIDPType idpdiscoveryv1alpha1.IDPType,
+	requestedFlow idpdiscoveryv1alpha1.IDPFlow,
+	deps oidcLoginCommandDeps,
+) ([]oidcclient.Option, error) {
 	useCLIFlow := []oidcclient.Option{oidcclient.WithCLISendingCredentials()}
+
+	// If the env var is set to override the --upstream-identity-provider-type flag, then override it.
+	flowOverride, hasFlowOverride := deps.lookupEnv(upstreamIdentityProviderFlowEnvVarName)
+	flowSource := "--upstream-identity-provider-flow"
+	if hasFlowOverride {
+		requestedFlow = idpdiscoveryv1alpha1.IDPFlow(flowOverride)
+		flowSource = upstreamIdentityProviderFlowEnvVarName
+	}
 
 	switch requestedIDPType {
 	case idpdiscoveryv1alpha1.IDPTypeOIDC:
@@ -262,19 +284,21 @@ func flowOptions(requestedIDPType idpdiscoveryv1alpha1.IDPType, requestedFlow id
 			return nil, nil // browser authcode flow is the default Option, so don't need to return an Option here
 		default:
 			return nil, fmt.Errorf(
-				"--upstream-identity-provider-flow value not recognized for identity provider type %q: %s (supported values: %s)",
-				requestedIDPType, requestedFlow, strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String(), idpdiscoveryv1alpha1.IDPFlowCLIPassword.String()}, ", "))
+				"%s value not recognized for identity provider type %q: %s (supported values: %s)",
+				flowSource, requestedIDPType, requestedFlow,
+				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String(), idpdiscoveryv1alpha1.IDPFlowCLIPassword.String()}, ", "))
 		}
 	case idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword, "":
 			return useCLIFlow, nil
 		case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
-			return nil, nil
+			return nil, nil // browser authcode flow is the default Option, so don't need to return an Option here
 		default:
 			return nil, fmt.Errorf(
-				"--upstream-identity-provider-flow value not recognized for identity provider type %q: %s (supported values: %s)",
-				requestedIDPType, requestedFlow, strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
+				"%s value not recognized for identity provider type %q: %s (supported values: %s)",
+				flowSource, requestedIDPType, requestedFlow,
+				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
 		}
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236

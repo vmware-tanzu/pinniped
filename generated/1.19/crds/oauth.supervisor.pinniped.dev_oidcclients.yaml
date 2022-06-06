@@ -39,7 +39,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: Spec of the OIDC provider.
+            description: Spec of the OIDC client.
             properties:
               allowedGrantTypes:
                 description: "allowedGrantTypes is a list of the allowed grant_type
@@ -98,7 +98,7 @@ spec:
             - allowedScopes
             type: object
           status:
-            description: Status of the OIDC provider.
+            description: Status of the OIDC client.
             type: object
         required:
         - spec

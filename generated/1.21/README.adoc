@@ -1356,8 +1356,8 @@ OIDCClient describes the configuration of an OIDC client.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-oauth-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC provider.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-oauth-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-oauth-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC client.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-oauth-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC client.
 |===
 
 

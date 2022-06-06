@@ -63,10 +63,10 @@ type OIDCClient struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec of the OIDC provider.
+	// Spec of the OIDC client.
 	Spec OIDCClientSpec `json:"spec"`
 
-	// Status of the OIDC provider.
+	// Status of the OIDC client.
 	Status OIDCClientStatus `json:"status,omitempty"`
 }
 

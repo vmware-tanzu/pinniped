@@ -83,12 +83,12 @@ func (in *OIDCClientSpec) DeepCopyInto(out *OIDCClientSpec) {
 	}
 	if in.AllowedGrantTypes != nil {
 		in, out := &in.AllowedGrantTypes, &out.AllowedGrantTypes
-		*out = make([]string, len(*in))
+		*out = make([]GrantType, len(*in))
 		copy(*out, *in)
 	}
 	if in.AllowedScopes != nil {
 		in, out := &in.AllowedScopes, &out.AllowedScopes
-		*out = make([]string, len(*in))
+		*out = make([]Scope, len(*in))
 		copy(*out, *in)
 	}
 	return

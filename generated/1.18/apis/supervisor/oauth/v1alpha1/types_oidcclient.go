@@ -7,6 +7,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:validation:Enum="authorization_code";"refresh_token";"urn:ietf:params:oauth:grant-type:token-exchange"
+type GrantType string
+
+// +kubebuilder:validation:Enum="openid";"offline_access";"username";"groups";"pinniped:request-audience"
+type Scope string
+
 // OIDCClientSpec is a struct that describes an OIDC Client.
 type OIDCClientSpec struct {
 	// allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this
@@ -27,7 +33,7 @@ type OIDCClientSpec struct {
 	//   which is a step in the process to be able to get a cluster credential for the user.
 	//   This grant must be listed if allowedScopes lists pinniped:request-audience.
 	// +kubebuilder:validation:MinItems=1
-	AllowedGrantTypes []string `json:"allowedGrantTypes"`
+	AllowedGrantTypes []GrantType `json:"allowedGrantTypes"`
 
 	// allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client.
 	//
@@ -46,7 +52,7 @@ type OIDCClientSpec struct {
 	//   if their group membership is discoverable by the Supervisor.
 	//   Without the groups scope being requested and allowed, the ID token will not contain groups.
 	// +kubebuilder:validation:MinItems=1
-	AllowedScopes []string `json:"allowedScopes"`
+	AllowedScopes []Scope `json:"allowedScopes"`
 }
 
 // OIDCClientStatus is a struct that describes the actual state of an OIDC Client.

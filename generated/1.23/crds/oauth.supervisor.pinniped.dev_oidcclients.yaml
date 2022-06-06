@@ -54,6 +54,10 @@ spec:
                   step in the process to be able to get a cluster credential for the
                   user. This grant must be listed if allowedScopes lists pinniped:request-audience."
                 items:
+                  enum:
+                  - authorization_code
+                  - refresh_token
+                  - urn:ietf:params:oauth:grant-type:token-exchange
                   type: string
                 minItems: 1
                 type: array
@@ -89,6 +93,12 @@ spec:
                   the groups scope being requested and allowed, the ID token will
                   not contain groups."
                 items:
+                  enum:
+                  - openid
+                  - offline_access
+                  - username
+                  - groups
+                  - pinniped:request-audience
                   type: string
                 minItems: 1
                 type: array

@@ -125,6 +125,11 @@ will depend on which type of identity provider was configured.
   Unlike the optional flow for OIDC providers described above, this optional flow does not need to be configured in
   the LDAPIdentityProvider or ActiveDirectoryIdentityProvider resource, so it is always available for end-users.
 
+The flow selected by the `--upstream-identity-provider-flow` CLI flag may be overridden by using the
+`PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW` environment variable for the CLI at runtime. This environment variable
+may be set to the same values as the CLI flag (`browser_authcode` or `cli_password`). This allows a user to switch
+flows based on their needs without editing their kubeconfig file.
+
 Once the user completes authentication, the `kubectl` command will automatically continue and complete the user's requested command.
 For the example above, `kubectl` would list the cluster's namespaces.
 

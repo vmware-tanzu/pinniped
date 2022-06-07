@@ -5,6 +5,8 @@ package pkce
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -52,6 +54,15 @@ func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature st
 		return err
 	}
 
+	// detect PKCE code replay
+	hash := sha256.Sum256([]byte(request.Form.Get("code_challenge")))
+	if _, err := a.storage.Create(ctx, base64.RawURLEncoding.EncodeToString(hash[:]), nil, nil); err != nil {
+		if errors.IsAlreadyExists(err) {
+			return fosite.ErrInvalidRequest.WithWrap(err).WithDebug(err.Error())
+		}
+		return err
+	}
+
 	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: pkceStorageVersion}, nil)
 	return err
 }
@@ -67,7 +78,7 @@ func (a *pkceStorage) GetPKCERequestSession(ctx context.Context, signature strin
 }
 
 func (a *pkceStorage) DeletePKCERequestSession(ctx context.Context, signature string) error {
-	return a.storage.Delete(ctx, signature)
+	return a.storage.Delete(ctx, signature) // we defer to the GC to handle the codeChallenge records
 }
 
 func (a *pkceStorage) getSession(ctx context.Context, signature string) (*session, string, error) {

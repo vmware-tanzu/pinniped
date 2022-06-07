@@ -195,7 +195,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 		IDTokenLifespan:                         accessTokenLifespan,
 		RefreshTokenLifespan:                    refreshTokenLifespan,
 		AuthorizationCodeSessionStorageLifetime: authorizationCodeLifespan + refreshTokenLifespan,
-		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
+		PKCESessionStorageLifetime:              authorizationCodeLifespan + refreshTokenLifespan, // keep these around for replay detection
 		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
 		AccessTokenSessionStorageLifetime:       refreshTokenLifespan + accessTokenLifespan,
 		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,

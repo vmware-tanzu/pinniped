@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.18.0: With User-Friendly features such as JSON formatted logs, LDAP/ActiveDirectory UI Support"
 slug: formatted-logs-ui-based-ldap-logins
-date: 2022-06-01
+date: 2022-06-08
 author: Anjali Telang
 image: https://images.unsplash.com/photo-1587738972117-c12f8389f1d4?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1752&q=80
 excerpt: "With v0.18.0 you get cool new features like nicely formatted JSON logs, UI to login to your LDAP or ActiveDirectory Identity Provider, and more"

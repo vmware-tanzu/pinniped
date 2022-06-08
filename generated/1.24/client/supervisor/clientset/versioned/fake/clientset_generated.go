@@ -11,6 +11,8 @@ import (
 	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/clientset/versioned/typed/config/v1alpha1/fake"
 	idpv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
 	fakeidpv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/clientset/versioned/typed/idp/v1alpha1/fake"
+	oauthv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/clientset/versioned/typed/oauth/v1alpha1"
+	fakeoauthv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/clientset/versioned/typed/oauth/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -76,4 +78,9 @@ func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 // IDPV1alpha1 retrieves the IDPV1alpha1Client
 func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
 	return &fakeidpv1alpha1.FakeIDPV1alpha1{Fake: &c.Fake}
+}
+
+// OauthV1alpha1 retrieves the OauthV1alpha1Client
+func (c *Clientset) OauthV1alpha1() oauthv1alpha1.OauthV1alpha1Interface {
+	return &fakeoauthv1alpha1.FakeOauthV1alpha1{Fake: &c.Fake}
 }

@@ -1809,7 +1809,15 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 
 func expectSecurityHeaders(t *testing.T, response *http.Response, expectFositeToOverrideSome bool) {
 	h := response.Header
-	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", h.Get("Content-Security-Policy"))
+
+	cspHeader := h.Get("Content-Security-Policy")
+	require.Contains(t, cspHeader, "script-src '") // loose assertion
+	require.Contains(t, cspHeader, "style-src '")  // loose assertion
+	require.Contains(t, cspHeader, "img-src data:")
+	require.Contains(t, cspHeader, "connect-src *")
+	require.Contains(t, cspHeader, "default-src 'none'")
+	require.Contains(t, cspHeader, "frame-ancestors 'none'")
+
 	assert.Equal(t, "DENY", h.Get("X-Frame-Options"))
 	assert.Equal(t, "1; mode=block", h.Get("X-XSS-Protection"))
 	assert.Equal(t, "nosniff", h.Get("X-Content-Type-Options"))

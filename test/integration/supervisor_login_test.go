@@ -48,17 +48,12 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 	skipLDAPTests := func(t *testing.T) {
 		t.Helper()
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("LDAP integration test requires connectivity to an LDAP server")
-		}
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
 	}
 
 	skipActiveDirectoryTests := func(t *testing.T) {
 		t.Helper()
-		skipLDAPTests(t)
-		if env.SupervisorUpstreamActiveDirectory.Host == "" {
-			t.Skip("Active Directory hostname not specified")
-		}
+		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 	}
 
 	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {

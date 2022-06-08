@@ -634,14 +634,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
 	// by interacting with the CLI's username and password prompts.
 	t.Run("with Supervisor LDAP upstream IDP using username and password prompts", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
-
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("LDAP integration test requires connectivity to an LDAP server")
-		}
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -696,14 +694,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
 	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
 	t.Run("with Supervisor LDAP upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
-
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("LDAP integration test requires connectivity to an LDAP server")
-		}
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -770,17 +766,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
 	// by interacting with the CLI's username and password prompts.
 	t.Run("with Supervisor ActiveDirectory upstream IDP using username and password prompts", func(t *testing.T) {
+		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
-
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
-		}
-		if env.SupervisorUpstreamActiveDirectory.Host == "" {
-			t.Skip("Active Directory hostname not specified")
-		}
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -835,18 +826,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Add an ActiveDirectory upstream IDP and try using it to authenticate during kubectl commands
 	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
 	t.Run("with Supervisor ActiveDirectory upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
-
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("ActiveDirectory integration test requires connectivity to an LDAP server")
-		}
-
-		if env.SupervisorUpstreamActiveDirectory.Host == "" {
-			t.Skip("Active Directory hostname not specified")
-		}
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -912,6 +897,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
 	t.Run("with Supervisor LDAP upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
@@ -966,6 +953,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
 	t.Run("with Supervisor Active Directory upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
@@ -973,13 +962,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		page := browsertest.Open(t)
-
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("Active Directory integration test requires connectivity to an LDAP server")
-		}
-		if env.SupervisorUpstreamActiveDirectory.Host == "" {
-			t.Skip("Active Directory hostname not specified")
-		}
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -1027,6 +1009,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the env var to choose the browser flow.
 	t.Run("with Supervisor LDAP upstream IDP and browser flow selected by env var override with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 

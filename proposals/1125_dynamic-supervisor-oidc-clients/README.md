@@ -187,6 +187,11 @@ Some other settings are implied and will not be configurable:
   endpoint. This excludes clients from using `form_post`. We could consider allowing `form_post` in the future if it is
   desired.
 
+The default scopes set by the `pinniped get kubeconfig` and `pinniped login oidc` commands will be updated to include
+the new `username` and `groups` scopes. These changes ensure that newly generated kubeconfigs from the latest pinniped
+CLI have the correct behavior going forward. Admins can always manually edit the resulting kubeconfig if they need to
+(or they could use an older pinniped CLI).
+
 To provide a nice table output for this API, the following printer columns will be used:
 
 ```yaml
@@ -351,8 +356,7 @@ Given that, there are two kinds of potential audience confusion for the token ex
    name of the dynamic client. If this client’s name happened to be the same name as the name of a workload cluster,
    then the client could potentially skip the token exchange and use the original ID token to access the workload
    cluster via the Concierge (acting as the user who logged in). These initial ID tokens were not meant to grant access
-   to any particular cluster.  An admin may even deliberately try use dynamic clients to represent clusters as is
-   traditionally done with Dex.
+   to any particular cluster.
 
 2. A user can use the public `pinniped-cli` client to log in and then to perform a token exchange to any audience value.
    They could even ask for an audience which matches the name of an existing dynamic client to get back an ID token that
@@ -362,65 +366,40 @@ Given that, there are two kinds of potential audience confusion for the token ex
 
 To address all of these issues we will:
 
-- Require a static, reserved prefix (`client.oauth.pinniped.dev-`) for all dynamic OAuth client IDs
-- Require a static, reserved prefix (`token-exchange.oauth.pinniped.dev-`) for audiences requested via the token
-  exchange API
+- Require a static, reserved prefix (`client.oauth.pinniped.dev-`) for all dynamic OAuth client IDs.
+- Disallow that prefix (`client.oauth.pinniped.dev-`) for audiences requested via the token exchange API.
+- Disallow the string `pinniped-cli` (the name of the static client) for audiences requested via the token exchange API.
+- Reserve a substring (`.oauth.pinniped.dev`) for audiences requested via the token exchange API for potential future
+  use. Any token exchange requesting an audience with that substring will be rejected. This leaves room to create other
+  categories of audience values in case that is needed in the future, e.g.
+  `static-client.oauth.pinniped.dev-some-client`.
 - All ID tokens issued by the supervisor will contain the `azp` claim and its value will always be set to the client ID
   of the client that was used for the initial login flow.  This is meant to prevent any information loss during flows
   such as the token exchange API.
-- In the ID token retrieved from the authorization flow (and only this ID token), nest the `username` and `groups`
-  claims under a `pinniped` object and thus prevent the existing Kubernetes OIDC integration code from consuming this
-  data (this same code is used to implement the `JWTAuthenticator`).  Note that we must provide some mechanism for a
-  webapp to retrieve this information since it is commonly used to enrich UIs.
 - No changes are proposed for the `JWTAuthenticator` as it is meant to be interchangeable with the Kubernetes OIDC
   server flags.  Some environments use old versions of the concierge with newer versions of the supervisor and thus we
   cannot rely on changes to the concierge being rolled out to enforce security contracts.
 - Implicit behavioral changes to APIs are avoided as they can be difficult to understand and reason about.
 
 The validation associated with dynamic clients will be used to enforce that clients have `metadata.name` set to a value
-that starts with `client.oauth.pinniped.dev-`.  Thus while it will be possible to create a dynamic client with a name
-such as `pinniped-cli`, it will not be usable.  For the time being, the "magic" `pinniped-cli` client will not be
-represented in the CRD API (for a few reasons, i.e. it is a public client).
+that starts with `client.oauth.pinniped.dev-`.  Thus while it will be possible to create a dynamic client CR with a name
+such as `pinniped-cli`, it will not be valid and will not be usable.  For the time being, the "magic" `pinniped-cli`
+client will not be represented in the CRD API (for a few reasons, i.e. it is a public client).
 
-The token exchange API will always reject audience values that start with `client.oauth.pinniped.dev-` and will usually
-reject audience values that do not start with `token-exchange.oauth.pinniped.dev-` (described further below).  In a
-future release, this validation will be simplified to require that requested audiences always start with
-`token-exchange.oauth.pinniped.dev-`.
+This design subdivides all possible token exchange requested audience strings into several categories. A requested
+audience string may be either the word `pinniped-cli` (rejected), may contain the substring `.oauth.pinniped.dev`
+representing a dynamic client or other future reserved meaning (also rejected), or may be any other string representing
+a workload cluster (allowed). This categorization is backwards compatible because it allows pre-existing workload
+clusters which have pre-existing JWTAuthenticators to continue to work after upgrade with no migration or intervention
+required by the operator (as long as their audience values did not contain the substring `.oauth.pinniped.dev`,
+which would be highly unlikely in practice).
 
-To make the above changes backwards compatible:
-
-If and only if there are no dynamic clients registered with the supervisor (as determined via a live list call with
-limit=1), and the access token passed via the `subject_token` parameter was issued for the `pinniped-cli` OAuth client,
-and the requested audience is not prefixed with `token-exchange.oauth.pinniped.dev-` or `client.oauth.pinniped.dev-`,
-then the audience validation rules are skipped and the resulting ID token will have its audience value set to both the
-requested value and `token-exchange.oauth.pinniped.dev-<requested_value>`.  When this legacy path is taken, a debug log
-statement will be generated to allow the admin to track if users have not updated their kubeconfigs yet.  If any of the
-conditions above are not met, then the requested audience must be prefixed with `token-exchange.oauth.pinniped.dev-`.
-
-Thus on an upgrade, existing kubeconfigs, pinniped CLIs, `JWTAuthenticator` configs, etc will keep working and `kubectl`
-based logins will not be disrupted.  However, using the new dynamic OAuth client feature would force `JWTAuthenticator`
-config updates and the regeneration and redistribution of kubeconfigs (non-admin users will not need to upgrade the CLI
-though).  The upgrade process would involve the following steps (the order is important):
-
-1. Admin upgrades their copy of the pinniped CLI
-2. Admin upgrades the supervisor
-3. Admin upgrades the concierge on all clusters (optional but recommended)
-4. Admin updates the `JWTAuthenticator` config for all clusters by prepending the new required prefix
-   `.spec.audience = token-exchange.oauth.pinniped.dev- + .spec.audience`
-5. Admin uses the new pinniped CLI to generate updated kubeconfigs
-6. Admin distributes the new kubeconfigs to all users
-7. Admin communicates to users that they need to update their kubeconfigs
-8. Before using the new dynamic client feature, admin checks the supervisor logs to confirm that the legacy token
-   exchange path is no longer in use
-
-On a new install with the latest components, we must ensure that admins are prevented from creating kubeconfigs that
-will need migration at a later date.  This requires us to make a backwards incompatible change to the `pinniped get
-kubeconfig` command.  This command will now refuse to generate a kubeconfig with a `--request-audience` flag set to a
-value that is not prefixed with `token-exchange.oauth.pinniped.dev-` (the flag can still be left unset).  The default
-scopes set by the `pinniped get kubeconfig` and `pinniped login oidc` commands will be updated to include the new
-`username` and `groups` scopes.  These changes ensure that newly generated kubeconfigs from the latest pinniped CLI have
-the correct behavior going forward.  Admins can always manually edit the resulting kubeconfig if they need to (or they
-could use an older pinniped CLI).
+We can help operators avoid accidentally using the reserved substring `.oauth.pinniped.dev` in their `JWTAuthenticator`
+audience values by enhancing the `pinniped get kubeconfig` command to treat this as an error. If the operator used an
+old version of the pinniped CLI to generate the kubeconfig in this scenario, the kubeconfig would generate but then
+logins using that kubeconfig would fail due to the token exchange API rejecting their requests. Enhancing the CLI to
+make it an error is for the convenience of providing faster feedback on a misconfigured system, although it is highly
+unlikely that any operator would accidentally choose such an audience name in practice.
 
 ##### Client registry
 
@@ -439,8 +418,6 @@ There will be no configuration to associate a client with a particular issuer (i
 use with all federation domains.
 
 #### Upgrades
-
-See the section about audience confusion above for the bulk of the discussion around upgrades.
 
 No backwards incompatible changes to any existing Kuberentes API resource schema are proposed in this design.
 
@@ -473,8 +450,6 @@ Extra calls will be made to the Kubernetes API to lookup dynamic OAuth clients. 
 
 #### Observability Considerations
 
-See the audience confusion section for some logging requirements related to the legacy token exchange path.
-
 The usual error messages and log statements will be included for the new features similar to what is already
 implemented in the supervisor (along with the information present in the `.status` field of the `OIDCClient` resource).
 
@@ -488,7 +463,8 @@ The above section regarding the client registry implementation covers various se
 ##### Ensuring reasonable client secrets
 
 Since the client secret is always generated by the supervisor, we can guarantee that it has the appropriate entropy.
-Furthermore, as the hash type and cost used is a server side implementation detail, we can change it over time (during login flows the client secret is presented in plaintext to the supervisor which allows for transparent hash upgrades).
+Furthermore, as the hash type and cost used is a server side implementation detail, we can change it over time (during
+login flows the client secret is presented in plaintext to the supervisor which allows for transparent hash upgrades).
 
 ##### Preventing web apps from caching identities without re-validation
 

@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	someClusterName = "some cluster name"
+	someUID = "some fake UID"
 )
 
 var (
@@ -115,13 +115,13 @@ func TestKubeclient(t *testing.T) {
 				require.EqualError(t, err, `couldn't find object for path "/api/v1/namespaces/good-namespace/pods/this-pod-does-not-exist"`)
 
 				// update
-				goodPodWithAnnotationsAndLabelsAndClusterName := with(goodPod, annotations(), labels(), clusterName()).(*corev1.Pod)
+				goodPodWithAnnotationsAndLabelsAndUID := with(goodPod, annotations(), labels(), uid()).(*corev1.Pod)
 				pod, err = c.Kubernetes.
 					CoreV1().
 					Pods(pod.Namespace).
-					Update(context.Background(), goodPodWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
+					Update(context.Background(), goodPodWithAnnotationsAndLabelsAndUID, metav1.UpdateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodPodWithAnnotationsAndLabelsAndClusterName, pod)
+				require.Equal(t, goodPodWithAnnotationsAndLabelsAndUID, pod)
 
 				// delete
 				err = c.Kubernetes.
@@ -135,14 +135,14 @@ func TestKubeclient(t *testing.T) {
 					with(goodPod, gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
-					with(goodPod, annotations(), labels(), clusterName(), gvk(podGVK)),
+					with(goodPod, annotations(), labels(), uid(), gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
 				},
 				{
 					with(goodPod, annotations(), gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
-					with(goodPod, annotations(), labels(), clusterName(), gvk(podGVK)),
+					with(goodPod, annotations(), labels(), uid(), gvk(podGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(podGVK)),
 				},
 			},
@@ -150,12 +150,12 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodPod, annotations(), labels(), gvk(podGVK)),
 					with(goodPod, annotations(), labels(), gvk(podGVK)),
-					with(goodPod, annotations(), labels(), clusterName(), gvk(podGVK)),
+					with(goodPod, annotations(), labels(), uid(), gvk(podGVK)),
 				},
 				{
 					with(goodPod, emptyAnnotations(), labels(), gvk(podGVK)),
 					with(goodPod, annotations(), labels(), gvk(podGVK)),
-					with(goodPod, annotations(), labels(), clusterName(), gvk(podGVK)),
+					with(goodPod, annotations(), labels(), uid(), gvk(podGVK)),
 				},
 			},
 		},
@@ -217,13 +217,13 @@ func TestKubeclient(t *testing.T) {
 				require.Equal(t, with(goodAPIService, annotations(), labels()), apiService)
 
 				// update
-				goodAPIServiceWithAnnotationsAndLabelsAndClusterName := with(goodAPIService, annotations(), labels(), clusterName()).(*apiregistrationv1.APIService)
+				goodAPIServiceWithAnnotationsAndLabelsAndUID := with(goodAPIService, annotations(), labels(), uid()).(*apiregistrationv1.APIService)
 				apiService, err = c.Aggregation.
 					ApiregistrationV1().
 					APIServices().
-					Update(context.Background(), goodAPIServiceWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
+					Update(context.Background(), goodAPIServiceWithAnnotationsAndLabelsAndUID, metav1.UpdateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodAPIServiceWithAnnotationsAndLabelsAndClusterName, apiService)
+				require.Equal(t, goodAPIServiceWithAnnotationsAndLabelsAndUID, apiService)
 
 				// delete
 				err = c.Aggregation.
@@ -236,13 +236,13 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodAPIService, gvk(apiServiceGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(apiServiceGVK)),
-					with(goodAPIService, annotations(), labels(), clusterName(), gvk(apiServiceGVK)),
+					with(goodAPIService, annotations(), labels(), uid(), gvk(apiServiceGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(apiServiceGVK)),
 				},
 				{
 					with(goodAPIService, annotations(), gvk(apiServiceGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(apiServiceGVK)),
-					with(goodAPIService, annotations(), labels(), clusterName(), gvk(apiServiceGVK)),
+					with(goodAPIService, annotations(), labels(), uid(), gvk(apiServiceGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(apiServiceGVK)),
 				},
 			},
@@ -250,12 +250,12 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodAPIService, annotations(), labels(), gvk(apiServiceGVK)),
 					with(goodAPIService, annotations(), labels(), gvk(apiServiceGVK)),
-					with(goodAPIService, annotations(), labels(), clusterName(), gvk(apiServiceGVK)),
+					with(goodAPIService, annotations(), labels(), uid(), gvk(apiServiceGVK)),
 				},
 				{
 					with(goodAPIService, emptyAnnotations(), labels(), gvk(apiServiceGVK)),
 					with(goodAPIService, annotations(), labels(), gvk(apiServiceGVK)),
-					with(goodAPIService, annotations(), labels(), clusterName(), gvk(apiServiceGVK)),
+					with(goodAPIService, annotations(), labels(), uid(), gvk(apiServiceGVK)),
 				},
 			},
 		},
@@ -282,13 +282,13 @@ func TestKubeclient(t *testing.T) {
 				require.Equal(t, with(goodCredentialIssuer, annotations(), labels()), tokenCredentialRequest)
 
 				// update
-				goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName := with(goodCredentialIssuer, annotations(), labels(), clusterName()).(*conciergeconfigv1alpha1.CredentialIssuer)
+				goodCredentialIssuerWithAnnotationsAndLabelsAndUID := with(goodCredentialIssuer, annotations(), labels(), uid()).(*conciergeconfigv1alpha1.CredentialIssuer)
 				tokenCredentialRequest, err = c.PinnipedConcierge.
 					ConfigV1alpha1().
 					CredentialIssuers().
-					Update(context.Background(), goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
+					Update(context.Background(), goodCredentialIssuerWithAnnotationsAndLabelsAndUID, metav1.UpdateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName, tokenCredentialRequest)
+				require.Equal(t, goodCredentialIssuerWithAnnotationsAndLabelsAndUID, tokenCredentialRequest)
 
 				// delete
 				err = c.PinnipedConcierge.
@@ -301,13 +301,13 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodCredentialIssuer, gvk(credentialIssuerGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
-					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), uid(), gvk(credentialIssuerGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
 				},
 				{
 					with(goodCredentialIssuer, annotations(), gvk(credentialIssuerGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
-					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), uid(), gvk(credentialIssuerGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
 				},
 			},
@@ -315,12 +315,12 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
 					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
-					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), uid(), gvk(credentialIssuerGVK)),
 				},
 				{
 					with(goodCredentialIssuer, emptyAnnotations(), labels(), gvk(credentialIssuerGVK)),
 					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
-					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), uid(), gvk(credentialIssuerGVK)),
 				},
 			},
 		},
@@ -347,13 +347,13 @@ func TestKubeclient(t *testing.T) {
 				require.Equal(t, with(goodFederationDomain, annotations(), labels()), federationDomain)
 
 				// update
-				goodFederationDomainWithAnnotationsAndLabelsAndClusterName := with(goodFederationDomain, annotations(), labels(), clusterName()).(*supervisorconfigv1alpha1.FederationDomain)
+				goodFederationDomainWithAnnotationsAndLabelsAndUID := with(goodFederationDomain, annotations(), labels(), uid()).(*supervisorconfigv1alpha1.FederationDomain)
 				federationDomain, err = c.PinnipedSupervisor.
 					ConfigV1alpha1().
 					FederationDomains(federationDomain.Namespace).
-					Update(context.Background(), goodFederationDomainWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
+					Update(context.Background(), goodFederationDomainWithAnnotationsAndLabelsAndUID, metav1.UpdateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodFederationDomainWithAnnotationsAndLabelsAndClusterName, federationDomain)
+				require.Equal(t, goodFederationDomainWithAnnotationsAndLabelsAndUID, federationDomain)
 
 				// delete
 				err = c.PinnipedSupervisor.
@@ -366,13 +366,13 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodFederationDomain, gvk(federationDomainGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
-					with(goodFederationDomain, annotations(), labels(), clusterName(), gvk(federationDomainGVK)),
+					with(goodFederationDomain, annotations(), labels(), uid(), gvk(federationDomainGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
 				},
 				{
 					with(goodFederationDomain, annotations(), gvk(federationDomainGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
-					with(goodFederationDomain, annotations(), labels(), clusterName(), gvk(federationDomainGVK)),
+					with(goodFederationDomain, annotations(), labels(), uid(), gvk(federationDomainGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
 				},
 			},
@@ -380,12 +380,12 @@ func TestKubeclient(t *testing.T) {
 				{
 					with(goodFederationDomain, annotations(), labels(), gvk(federationDomainGVK)),
 					with(goodFederationDomain, annotations(), labels(), gvk(federationDomainGVK)),
-					with(goodFederationDomain, annotations(), labels(), clusterName(), gvk(federationDomainGVK)),
+					with(goodFederationDomain, annotations(), labels(), uid(), gvk(federationDomainGVK)),
 				},
 				{
 					with(goodFederationDomain, emptyAnnotations(), labels(), gvk(federationDomainGVK)),
 					with(goodFederationDomain, annotations(), labels(), gvk(federationDomainGVK)),
-					with(goodFederationDomain, annotations(), labels(), clusterName(), gvk(federationDomainGVK)),
+					with(goodFederationDomain, annotations(), labels(), uid(), gvk(federationDomainGVK)),
 				},
 			},
 		},
@@ -428,7 +428,7 @@ func TestKubeclient(t *testing.T) {
 					FederationDomains(goodFederationDomain.Namespace).
 					Create(context.Background(), goodFederationDomain, metav1.CreateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, with(goodFederationDomain, clusterName()), federationDomain)
+				require.Equal(t, with(goodFederationDomain, uid()), federationDomain)
 
 				// read
 				federationDomain, err = c.PinnipedSupervisor.
@@ -436,7 +436,7 @@ func TestKubeclient(t *testing.T) {
 					FederationDomains(federationDomain.Namespace).
 					Get(context.Background(), federationDomain.Name, metav1.GetOptions{})
 				require.NoError(t, err)
-				require.Equal(t, with(goodFederationDomain, clusterName()), federationDomain)
+				require.Equal(t, with(goodFederationDomain, uid()), federationDomain)
 			},
 			wantMiddlewareReqs: [][]Object{
 				{
@@ -444,7 +444,7 @@ func TestKubeclient(t *testing.T) {
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
 				},
 				{
-					with(goodFederationDomain, clusterName(), gvk(federationDomainGVK)),
+					with(goodFederationDomain, uid(), gvk(federationDomainGVK)),
 					with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK)),
 				},
 			},
@@ -502,7 +502,7 @@ func TestKubeclient(t *testing.T) {
 					name: "non-pertinent mutater",
 					t:    t,
 					mutateReq: func(rt RoundTrip, obj Object) error {
-						clusterName()(obj)
+						uid()(obj)
 						return nil
 					},
 				}}
@@ -728,7 +728,7 @@ func newSimpleMiddleware(t *testing.T, hasMutateReqFunc, mutatedReq, hasMutateRe
 		m.mutateReq = func(rt RoundTrip, obj Object) error {
 			if mutatedReq {
 				if rt.Verb() == VerbCreate {
-					obj.SetClusterName(someClusterName)
+					obj.SetUID(someUID)
 				}
 			}
 			return nil
@@ -916,9 +916,9 @@ func labels() withFunc {
 	}
 }
 
-func clusterName() withFunc {
+func uid() withFunc {
 	return func(obj Object) {
-		obj.SetClusterName(someClusterName)
+		obj.SetUID(someUID)
 	}
 }
 

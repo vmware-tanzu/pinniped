@@ -24,6 +24,7 @@ import (
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -46,7 +47,7 @@ func NewHandler(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) http.Handler {
-	return securityheader.Wrap(httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+	handler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
 			// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
 			// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
@@ -105,7 +106,12 @@ func NewHandler(
 			upstreamStateEncoder,
 			cookieCodec,
 		)
-	}))
+	})
+
+	// During a response_mode=form_post auth request using the browser flow, the custom form_post html page may
+	// be used to post certain errors back to the CLI from this handler's response, so allow the form_post
+	// page's CSS and JS to run.
+	return securityheader.WrapWithCustomCSP(handler, formposthtml.ContentSecurityPolicy())
 }
 
 func handleAuthRequestForLDAPUpstreamCLIFlow(

@@ -521,6 +521,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		wantStatus                             int
 		wantContentType                        string
 		wantBodyString                         string
+		wantBodyRegex                          string
 		wantBodyJSON                           string
 		wantCSRFValueInCookieHeader            string
 		wantBodyStringWithLocationInHref       bool
@@ -1536,6 +1537,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:      jsonContentType,
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
 			wantBodyString:       "",
+		},
+		{
+			name:            "form_post page is used to send errors to client using OIDC upstream browser flow with response_mode=form_post",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			generateCSRF:    happyCSRFGenerator,
+			generatePKCE:    happyPKCEGenerator,
+			generateNonce:   happyNonceGenerator,
+			stateEncoder:    happyStateEncoder,
+			cookieEncoder:   happyCookieEncoder,
+			method:          http.MethodGet,
+			path:            modifiedHappyGetRequestPath(map[string]string{"response_mode": "form_post", "scope": "openid profile email tuna"}),
+			wantStatus:      http.StatusOK,
+			wantContentType: htmlContentType,
+			wantBodyRegex:   `<input type="hidden" name="encoded_params" value="error=invalid_scope&amp;error_description=The&#43;requested&#43;scope&#43;is&#43;invalid`,
 		},
 		{
 			name:                 "downstream scopes do not match what is configured for client using LDAP upstream",
@@ -2578,7 +2593,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 		require.Equal(t, test.wantStatus, rsp.Code)
 		testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
-		testutil.RequireSecurityHeadersWithoutCustomCSPs(t, rsp)
+
+		// Use form_post page's CSPs because sometimes errors are sent to the client via the form_post page.
+		testutil.RequireSecurityHeadersWithFormPostPageCSPs(t, rsp)
 
 		if test.wantPasswordGrantCall != nil {
 			test.wantPasswordGrantCall.args.Ctx = reqContext
@@ -2645,6 +2662,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			default:
 				t.Errorf("unexpected response code: %v", code)
 			}
+		case test.wantBodyRegex != "":
+			require.Regexp(t, test.wantBodyRegex, rsp.Body.String())
 		default:
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
 		}

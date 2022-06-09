@@ -13,6 +13,8 @@
 - xref:{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1[$$idp.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-oauth-supervisor-pinniped-dev-v1alpha1[$$oauth.supervisor.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-oauth[$$oauth.virtual.supervisor.pinniped.dev/oauth$$]
+- xref:{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-v1alpha1[$$oauth.virtual.supervisor.pinniped.dev/v1alpha1$$]
 
 
 [id="{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1"]
@@ -1384,5 +1386,97 @@ OIDCClientSpec is a struct that describes an OIDC Client.
 |===
 
 
+
+
+
+[id="{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-oauth"]
+=== oauth.virtual.supervisor.pinniped.dev/oauth
+
+Package oauth is the internal version of the Pinniped virtual oauth API.
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | 
+| *`revokeOldSecrets`* __boolean__ | 
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | 
+| *`totalClientSecrets`* __integer__ | 
+|===
+
+
+
+[id="{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-v1alpha1"]
+=== oauth.virtual.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped virtual oauth API.
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | 
+| *`revokeOldSecrets`* __boolean__ | 
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | 
+| *`totalClientSecrets`* __integer__ | 
+|===
 
 

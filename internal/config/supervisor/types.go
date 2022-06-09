@@ -24,6 +24,7 @@ type Config struct {
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.
 type NamesConfigSpec struct {
 	DefaultTLSCertificateSecret string `json:"defaultTLSCertificateSecret"`
+	APIService                  string `json:"apiService"`
 }
 
 type Endpoints struct {

@@ -54,6 +54,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
 	oauthSupervisorGV := makeGV("oauth", "supervisor")
+	oauthVirtualSupervisorGV := makeGV("oauth.virtual", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -107,6 +108,32 @@ func TestGetAPIResourceList(t *testing.T) {
 						Verbs:      []string{"create", "list"},
 						Namespaced: false,
 						Categories: []string{"pinniped"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
+				Name: oauthVirtualSupervisorGV.Group,
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: oauthVirtualSupervisorGV.String(),
+						Version:      oauthVirtualSupervisorGV.Version,
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: oauthVirtualSupervisorGV.String(),
+					Version:      oauthVirtualSupervisorGV.Version,
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				oauthVirtualSupervisorGV.String(): {
+					{
+						Name:       "oidcclientsecretrequests",
+						Kind:       "OIDCClientSecretRequest",
+						Verbs:      []string{"create"},
+						Namespaced: true,
+						Categories: nil,
 					},
 				},
 			},
@@ -347,6 +374,11 @@ func TestGetAPIResourceList(t *testing.T) {
 				if strings.HasSuffix(a.Name, "/status") {
 					continue
 				}
+				if a.Name == "oidcclientsecretrequests" {
+					// OIDCClientSecretRequest does not implement list,
+					// so it doesn't make sense for it to belong to a category.
+					continue
+				}
 				assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)
 				assert.NotContainsf(t, a.Categories, "all", "expected resource %q not to be in the 'all' category", a.Name)
 			}
@@ -373,7 +405,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("every API has a status subresource", func(t *testing.T) {
 		t.Parallel()
 
-		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests")
+		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests", "oidcclientsecretrequests")
 
 		var regular, status []string
 

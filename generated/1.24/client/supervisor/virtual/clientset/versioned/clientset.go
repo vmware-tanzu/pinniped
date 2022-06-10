@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
-	oauthv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/virtual/clientset/versioned/typed/oauth/v1alpha1"
+	oauthv1alpha1 "go.pinniped.dev/generated/1.24/client/supervisor/virtual/clientset/versioned/typed/oauth/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

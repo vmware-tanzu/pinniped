@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -34,6 +34,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	virtualsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/virtual/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 
@@ -84,6 +85,18 @@ func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
+}
+
+func NewAnonymousVirtualSupervisorClientset(t *testing.T) virtualsupervisorclientset.Interface {
+	t.Helper()
+
+	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedSupervisorVirtual
+}
+
+func NewVirtualSupervisorClientset(t *testing.T) virtualsupervisorclientset.Interface {
+	t.Helper()
+
+	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisorVirtual
 }
 
 func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {

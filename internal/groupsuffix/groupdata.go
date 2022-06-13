@@ -8,7 +8,7 @@ import (
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	oauthv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/virtual/oauth/v1alpha1"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 )
 
 type GroupData schema.GroupVersion
@@ -34,15 +34,15 @@ func ConciergeAggregatedGroups(apiGroupSuffix string) (login, identity GroupData
 		}
 }
 
-func SupervisorAggregatedGroups(apiGroupSuffix string) (oauth GroupData) {
-	oauthVirtualSupervisorAPIGroup, ok1 := Replace(oauthv1alpha1.GroupName, apiGroupSuffix)
+func SupervisorAggregatedGroups(apiGroupSuffix string) (clientSecret GroupData) {
+	clientSecretVirtualSupervisorAPIGroup, ok1 := Replace(clientsecretv1alpha1.GroupName, apiGroupSuffix)
 
 	if !ok1 {
 		panic("static group input is invalid")
 	}
 
 	return GroupData{
-		Group:   oauthVirtualSupervisorAPIGroup,
-		Version: oauthv1alpha1.SchemeGroupVersion.Version,
+		Group:   clientSecretVirtualSupervisorAPIGroup,
+		Version: clientsecretv1alpha1.SchemeGroupVersion.Version,
 	}
 }

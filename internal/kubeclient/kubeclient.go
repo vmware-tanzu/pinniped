@@ -23,17 +23,14 @@ import (
 	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
 	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
-	pinnipedsupervisorvirtualclientset "go.pinniped.dev/generated/latest/client/supervisor/virtual/clientset/versioned"
-	pinnipedsupervisorvirtualclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/virtual/clientset/versioned/scheme"
 	"go.pinniped.dev/internal/crypto/ptls"
 )
 
 type Client struct {
-	Kubernetes                kubernetes.Interface
-	Aggregation               aggregatorclient.Interface
-	PinnipedConcierge         pinnipedconciergeclientset.Interface
-	PinnipedSupervisor        pinnipedsupervisorclientset.Interface
-	PinnipedSupervisorVirtual pinnipedsupervisorvirtualclientset.Interface
+	Kubernetes         kubernetes.Interface
+	Aggregation        aggregatorclient.Interface
+	PinnipedConcierge  pinnipedconciergeclientset.Interface
+	PinnipedSupervisor pinnipedsupervisorclientset.Interface
 
 	JSONConfig, ProtoConfig *restclient.Config
 }
@@ -93,17 +90,11 @@ func New(opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("could not initialize pinniped client: %w", err)
 	}
 
-	// Connect to the pinniped supervisor aggregated API.
-	pinnipedSupervisorVirtualClient, err := pinnipedsupervisorvirtualclientset.NewForConfig(configWithWrapper(jsonKubeConfig, pinnipedsupervisorvirtualclientsetscheme.Scheme, pinnipedsupervisorvirtualclientsetscheme.Codecs, c.middlewares, c.transportWrapper))
-	if err != nil {
-		return nil, fmt.Errorf("could not initialize pinniped client: %w", err)
-	}
 	return &Client{
-		Kubernetes:                k8sClient,
-		Aggregation:               aggregatorClient,
-		PinnipedConcierge:         pinnipedConciergeClient,
-		PinnipedSupervisor:        pinnipedSupervisorClient,
-		PinnipedSupervisorVirtual: pinnipedSupervisorVirtualClient,
+		Kubernetes:         k8sClient,
+		Aggregation:        aggregatorClient,
+		PinnipedConcierge:  pinnipedConciergeClient,
+		PinnipedSupervisor: pinnipedSupervisorClient,
 
 		JSONConfig:  jsonKubeConfig,
 		ProtoConfig: protoKubeConfig,

@@ -16,6 +16,7 @@ import (
 type ConfigV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	FederationDomainsGetter
+	OIDCClientsGetter
 }
 
 // ConfigV1alpha1Client is used to interact with features provided by the config.supervisor.pinniped.dev group.
@@ -25,6 +26,10 @@ type ConfigV1alpha1Client struct {
 
 func (c *ConfigV1alpha1Client) FederationDomains(namespace string) FederationDomainInterface {
 	return newFederationDomains(c, namespace)
+}
+
+func (c *ConfigV1alpha1Client) OIDCClients(namespace string) OIDCClientInterface {
+	return newOIDCClients(c, namespace)
 }
 
 // NewForConfig creates a new ConfigV1alpha1Client for the given config.

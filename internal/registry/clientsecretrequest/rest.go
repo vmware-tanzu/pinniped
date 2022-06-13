@@ -14,7 +14,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	oauthapi "go.pinniped.dev/generated/latest/apis/supervisor/virtual/oauth"
+	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
 )
 
 func NewREST() *REST {
@@ -33,7 +33,7 @@ var _ interface {
 } = (*REST)(nil)
 
 func (*REST) New() runtime.Object {
-	return &oauthapi.OIDCClientSecretRequest{}
+	return &clientsecretapi.OIDCClientSecretRequest{}
 }
 
 func (*REST) NamespaceScoped() bool {
@@ -57,16 +57,16 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return nil, err
 	}
 
-	return &oauthapi.OIDCClientSecretRequest{
-		Status: oauthapi.OIDCClientSecretRequestStatus{
+	return &clientsecretapi.OIDCClientSecretRequest{
+		Status: clientsecretapi.OIDCClientSecretRequestStatus{
 			GeneratedSecret:    "not-a-real-secret",
 			TotalClientSecrets: 20,
 		},
 	}, nil
 }
 
-func validateRequest(obj runtime.Object, t *trace.Trace) (*oauthapi.OIDCClientSecretRequest, error) {
-	clientSecretRequest, ok := obj.(*oauthapi.OIDCClientSecretRequest)
+func validateRequest(obj runtime.Object, t *trace.Trace) (*clientsecretapi.OIDCClientSecretRequest, error) {
+	clientSecretRequest, ok := obj.(*clientsecretapi.OIDCClientSecretRequest)
 	if !ok {
 		traceValidationFailure(t, "not an OIDCClientSecretRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))

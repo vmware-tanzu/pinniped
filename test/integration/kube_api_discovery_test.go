@@ -53,8 +53,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
-	oauthSupervisorGV := makeGV("oauth", "supervisor")
-	oauthVirtualSupervisorGV := makeGV("oauth.virtual", "supervisor")
+	oauthVirtualSupervisorGV := makeGV("clientsecret", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -168,25 +167,6 @@ func TestGetAPIResourceList(t *testing.T) {
 						Kind:       "FederationDomain",
 						Verbs:      []string{"get", "patch", "update"},
 					},
-				},
-			},
-		},
-		{
-			group: metav1.APIGroup{
-				Name: oauthSupervisorGV.Group,
-				Versions: []metav1.GroupVersionForDiscovery{
-					{
-						GroupVersion: oauthSupervisorGV.String(),
-						Version:      oauthSupervisorGV.Version,
-					},
-				},
-				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: oauthSupervisorGV.String(),
-					Version:      oauthSupervisorGV.Version,
-				},
-			},
-			resourceByVersion: map[string][]metav1.APIResource{
-				oauthSupervisorGV.String(): {
 					{
 						Name:         "oidcclients",
 						SingularName: "oidcclient",
@@ -550,7 +530,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
-		addSuffix("oidcclients.oauth.supervisor"): {
+		addSuffix("oidcclients.config.supervisor"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},

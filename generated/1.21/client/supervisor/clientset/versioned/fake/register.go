@@ -6,9 +6,9 @@
 package fake
 
 import (
+	clientsecretv1alpha1 "go.pinniped.dev/generated/1.21/apis/supervisor/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.21/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.21/apis/supervisor/idp/v1alpha1"
-	oauthv1alpha1 "go.pinniped.dev/generated/1.21/apis/supervisor/oauth/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,9 +20,9 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
+	clientsecretv1alpha1.AddToScheme,
 	configv1alpha1.AddToScheme,
 	idpv1alpha1.AddToScheme,
-	oauthv1alpha1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

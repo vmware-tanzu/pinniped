@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/virtual/oauth/v1alpha1"
+	"go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -21,9 +21,9 @@ func TestOIDCClientSecretRequest_HappyPath_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	client := testlib.NewVirtualSupervisorClientset(t)
+	client := testlib.NewSupervisorClientset(t)
 
-	response, err := client.OauthV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
+	response, err := client.ClientsecretV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
 		&v1alpha1.OIDCClientSecretRequest{
 			Spec: v1alpha1.OIDCClientSecretRequestSpec{
 				GenerateNewSecret: true,
@@ -41,9 +41,9 @@ func TestOIDCClientSecretRequest_Unauthenticated_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	client := testlib.NewAnonymousVirtualSupervisorClientset(t)
+	client := testlib.NewAnonymousSupervisorClientset(t)
 
-	_, err := client.OauthV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
+	_, err := client.ClientsecretV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
 		&v1alpha1.OIDCClientSecretRequest{
 			Spec: v1alpha1.OIDCClientSecretRequestSpec{
 				GenerateNewSecret: true,

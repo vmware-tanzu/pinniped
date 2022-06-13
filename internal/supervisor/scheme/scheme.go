@@ -8,8 +8,8 @@ package scheme
 import (
 	"fmt"
 
-	oauthapi "go.pinniped.dev/generated/latest/apis/supervisor/virtual/oauth"
-	oauthv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/virtual/oauth/v1alpha1"
+	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,21 +31,21 @@ func New(apiGroupSuffix string) (_ *runtime.Scheme, oauth schema.GroupVersion) {
 	// nothing fancy is required if using the standard group suffix
 	if apiGroupSuffix == groupsuffix.PinnipedDefaultSuffix {
 		schemeBuilder := runtime.NewSchemeBuilder(
-			oauthv1alpha1.AddToScheme,
-			oauthapi.AddToScheme,
+			clientsecretv1alpha1.AddToScheme,
+			clientsecretapi.AddToScheme,
 		)
 		utilruntime.Must(schemeBuilder.AddToScheme(scheme))
-		return scheme, oauthv1alpha1.SchemeGroupVersion
+		return scheme, clientsecretv1alpha1.SchemeGroupVersion
 	}
 
 	oauthVirtualSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(apiGroupSuffix)
 
-	addToSchemeAtNewGroup(scheme, oauthv1alpha1.GroupName, oauthVirtualSupervisorGroupData.Group, oauthv1alpha1.AddToScheme, oauthapi.AddToScheme)
+	addToSchemeAtNewGroup(scheme, clientsecretv1alpha1.GroupName, oauthVirtualSupervisorGroupData.Group, clientsecretv1alpha1.AddToScheme, clientsecretapi.AddToScheme)
 
 	// manually register conversions and defaulting into the correct scheme since we cannot directly call AddToScheme
 	schemeBuilder := runtime.NewSchemeBuilder(
-		oauthv1alpha1.RegisterConversions,
-		oauthv1alpha1.RegisterDefaults,
+		clientsecretv1alpha1.RegisterConversions,
+		clientsecretv1alpha1.RegisterDefaults,
 	)
 	utilruntime.Must(schemeBuilder.AddToScheme(scheme))
 
@@ -53,9 +53,9 @@ func New(apiGroupSuffix string) (_ *runtime.Scheme, oauth schema.GroupVersion) {
 	// today, but we may have some in the future.  Calling AddTypeDefaultingFunc overwrites
 	// any previously registered defaulting function.  Thus to make sure that we catch
 	// a situation where we add a defaulting func, we attempt to call it here with a nil
-	// *oauthv1alpha1.OIDCClientSecretRequest.  This will do nothing when there is no
+	// *clientsecretv1alpha1.OIDCClientSecretRequest.  This will do nothing when there is no
 	// defaulting func registered, but it will almost certainly panic if one is added.
-	scheme.Default((*oauthv1alpha1.OIDCClientSecretRequest)(nil))
+	scheme.Default((*clientsecretv1alpha1.OIDCClientSecretRequest)(nil))
 
 	return scheme, schema.GroupVersion(oauthVirtualSupervisorGroupData)
 }

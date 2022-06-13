@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// FederationDomains returns a FederationDomainInformer.
 	FederationDomains() FederationDomainInformer
+	// OIDCClients returns a OIDCClientInformer.
+	OIDCClients() OIDCClientInformer
 }
 
 type version struct {
@@ -29,4 +31,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // FederationDomains returns a FederationDomainInformer.
 func (v *version) FederationDomains() FederationDomainInformer {
 	return &federationDomainInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// OIDCClients returns a OIDCClientInformer.
+func (v *version) OIDCClients() OIDCClientInformer {
+	return &oIDCClientInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

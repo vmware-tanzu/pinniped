@@ -6,15 +6,14 @@
 
 .Packages
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-clientsecret-supervisor-pinniped-dev-clientsecret[$$clientsecret.supervisor.pinniped.dev/clientsecret$$]
+- xref:{anchor_prefix}-clientsecret-supervisor-pinniped-dev-v1alpha1[$$clientsecret.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-identity-concierge-pinniped-dev-identity[$$identity.concierge.pinniped.dev/identity$$]
 - xref:{anchor_prefix}-identity-concierge-pinniped-dev-v1alpha1[$$identity.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1[$$idp.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-oauth-supervisor-pinniped-dev-v1alpha1[$$oauth.supervisor.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-oauth[$$oauth.virtual.supervisor.pinniped.dev/oauth$$]
-- xref:{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-v1alpha1[$$oauth.virtual.supervisor.pinniped.dev/v1alpha1$$]
 
 
 [id="{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1"]
@@ -209,6 +208,98 @@ Status of a webhook authenticator.
 |===
 | Field | Description
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+
+[id="{anchor_prefix}-clientsecret-supervisor-pinniped-dev-clientsecret"]
+=== clientsecret.supervisor.pinniped.dev/clientsecret
+
+Package clientsecret is the internal version of the Pinniped client secret API.
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | 
+| *`revokeOldSecrets`* __boolean__ | 
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | 
+| *`totalClientSecrets`* __integer__ | 
+|===
+
+
+
+[id="{anchor_prefix}-clientsecret-supervisor-pinniped-dev-v1alpha1"]
+=== clientsecret.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped client secret API.
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | 
+| *`revokeOldSecrets`* __boolean__ | 
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | 
+| *`totalClientSecrets`* __integer__ | 
 |===
 
 
@@ -544,6 +635,51 @@ FederationDomainTLSSpec is a struct that describes the TLS configuration for an 
  SecretName is not required when you would like to use only the HTTP endpoints (e.g. when the HTTP listener is configured to listen on loopback interfaces or UNIX domain sockets for traffic from a service mesh sidecar). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
  When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
 |===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclient"]
+==== OIDCClient 
+
+OIDCClient describes the configuration of an OIDC client.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclientlist[$$OIDCClientList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC client.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC client.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclientspec"]
+==== OIDCClientSpec 
+
+OIDCClientSpec is a struct that describes an OIDC Client.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`allowedRedirectURIs`* __string array__ | allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this client. Any other uris will be rejected. Must be https, unless it is a loopback.
+| *`allowedGrantTypes`* __GrantType array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this client. 
+ Must only contain the following values: - authorization_code: allows the client to perform the authorization code grant flow, i.e. allows the webapp to   authenticate users. This grant must always be listed. - refresh_token: allows the client to perform refresh grants for the user to extend the user's session.   This grant must be listed if allowedScopes lists offline_access. - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange,   which is a step in the process to be able to get a cluster credential for the user.   This grant must be listed if allowedScopes lists pinniped:request-audience.
+| *`allowedScopes`* __Scope array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. 
+ Must only contain the following values: - openid: The client is allowed to request ID tokens. ID tokens only include the required claims by default (iss, sub, aud, exp, iat).   This scope must always be listed. - offline_access: The client is allowed to request an initial refresh token during the authorization code grant flow.   This scope must be listed if allowedGrantTypes lists refresh_token. - pinniped:request-audience: The client is allowed to request a new audience value during a RFC8693 token exchange,   which is a step in the process to be able to get a cluster credential for the user.   openid, username and groups scopes must be listed when this scope is present.   This scope must be listed if allowedGrantTypes lists urn:ietf:params:oauth:grant-type:token-exchange. - username: The client is allowed to request that ID tokens contain the user's username.   Without the username scope being requested and allowed, the ID token will not contain the user's username. - groups: The client is allowed to request that ID tokens contain the user's group membership,   if their group membership is discoverable by the Supervisor.   Without the groups scope being requested and allowed, the ID token will not contain groups.
+|===
+
+
 
 
 
@@ -1332,151 +1468,6 @@ TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned
 | Field | Description
 | *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
 | *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
-|===
-
-
-
-[id="{anchor_prefix}-oauth-supervisor-pinniped-dev-v1alpha1"]
-=== oauth.supervisor.pinniped.dev/v1alpha1
-
-Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor oauth API.
-
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclient"]
-==== OIDCClient 
-
-OIDCClient describes the configuration of an OIDC client.
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclientlist[$$OIDCClientList$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
-
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC client.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC client.
-|===
-
-
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclientspec"]
-==== OIDCClientSpec 
-
-OIDCClientSpec is a struct that describes an OIDC Client.
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-oauth-v1alpha1-oidcclient[$$OIDCClient$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`allowedRedirectURIs`* __string array__ | allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this client. Any other uris will be rejected. Must be https, unless it is a loopback.
-| *`allowedGrantTypes`* __GrantType array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this client. 
- Must only contain the following values: - authorization_code: allows the client to perform the authorization code grant flow, i.e. allows the webapp to   authenticate users. This grant must always be listed. - refresh_token: allows the client to perform refresh grants for the user to extend the user's session.   This grant must be listed if allowedScopes lists offline_access. - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange,   which is a step in the process to be able to get a cluster credential for the user.   This grant must be listed if allowedScopes lists pinniped:request-audience.
-| *`allowedScopes`* __Scope array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. 
- Must only contain the following values: - openid: The client is allowed to request ID tokens. ID tokens only include the required claims by default (iss, sub, aud, exp, iat).   This scope must always be listed. - offline_access: The client is allowed to request an initial refresh token during the authorization code grant flow.   This scope must be listed if allowedGrantTypes lists refresh_token. - pinniped:request-audience: The client is allowed to request a new audience value during a RFC8693 token exchange,   which is a step in the process to be able to get a cluster credential for the user.   openid, username and groups scopes must be listed when this scope is present.   This scope must be listed if allowedGrantTypes lists urn:ietf:params:oauth:grant-type:token-exchange. - username: The client is allowed to request that ID tokens contain the user's username.   Without the username scope being requested and allowed, the ID token will not contain the user's username. - groups: The client is allowed to request that ID tokens contain the user's group membership,   if their group membership is discoverable by the Supervisor.   Without the groups scope being requested and allowed, the ID token will not contain groups.
-|===
-
-
-
-
-
-[id="{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-oauth"]
-=== oauth.virtual.supervisor.pinniped.dev/oauth
-
-Package oauth is the internal version of the Pinniped virtual oauth API.
-
-
-
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-oidcclientsecretrequestspec"]
-==== OIDCClientSecretRequestSpec 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`generateNewSecret`* __boolean__ | 
-| *`revokeOldSecrets`* __boolean__ | 
-|===
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-oidcclientsecretrequeststatus"]
-==== OIDCClientSecretRequestStatus 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`generatedSecret`* __string__ | 
-| *`totalClientSecrets`* __integer__ | 
-|===
-
-
-
-[id="{anchor_prefix}-oauth-virtual-supervisor-pinniped-dev-v1alpha1"]
-=== oauth.virtual.supervisor.pinniped.dev/v1alpha1
-
-Package v1alpha1 is the v1alpha1 version of the Pinniped virtual oauth API.
-
-
-
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequestspec"]
-==== OIDCClientSecretRequestSpec 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`generateNewSecret`* __boolean__ | 
-| *`revokeOldSecrets`* __boolean__ | 
-|===
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequeststatus"]
-==== OIDCClientSecretRequestStatus 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-virtual-oauth-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`generatedSecret`* __string__ | 
-| *`totalClientSecrets`* __integer__ | 
 |===
 
 

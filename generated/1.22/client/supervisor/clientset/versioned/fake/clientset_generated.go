@@ -7,12 +7,12 @@ package fake
 
 import (
 	clientset "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1"
+	fakeclientsecretv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1/fake"
 	configv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/config/v1alpha1/fake"
 	idpv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
 	fakeidpv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/idp/v1alpha1/fake"
-	oauthv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/oauth/v1alpha1"
-	fakeoauthv1alpha1 "go.pinniped.dev/generated/1.22/client/supervisor/clientset/versioned/typed/oauth/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -70,6 +70,11 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
+// ClientsecretV1alpha1 retrieves the ClientsecretV1alpha1Client
+func (c *Clientset) ClientsecretV1alpha1() clientsecretv1alpha1.ClientsecretV1alpha1Interface {
+	return &fakeclientsecretv1alpha1.FakeClientsecretV1alpha1{Fake: &c.Fake}
+}
+
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
 func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 	return &fakeconfigv1alpha1.FakeConfigV1alpha1{Fake: &c.Fake}
@@ -78,9 +83,4 @@ func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 // IDPV1alpha1 retrieves the IDPV1alpha1Client
 func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
 	return &fakeidpv1alpha1.FakeIDPV1alpha1{Fake: &c.Fake}
-}
-
-// OauthV1alpha1 retrieves the OauthV1alpha1Client
-func (c *Clientset) OauthV1alpha1() oauthv1alpha1.OauthV1alpha1Interface {
-	return &fakeoauthv1alpha1.FakeOauthV1alpha1{Fake: &c.Fake}
 }

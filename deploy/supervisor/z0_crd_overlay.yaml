@@ -41,11 +41,11 @@ metadata:
 spec:
   group: #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
 
-#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"oidcclients.oauth.supervisor.pinniped.dev"}}), expects=1
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"oidcclients.config.supervisor.pinniped.dev"}}), expects=1
 ---
 metadata:
   #@overlay/match missing_ok=True
   labels: #@ labels()
-  name: #@ pinnipedDevAPIGroupWithPrefix("oidcclients.oauth.supervisor")
+  name: #@ pinnipedDevAPIGroupWithPrefix("oidcclients.config.supervisor")
 spec:
-  group: #@ pinnipedDevAPIGroupWithPrefix("oauth.supervisor")
+  group: #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")

@@ -10,7 +10,6 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
-	oauthv1alpha1 "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/typed/oauth/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -20,7 +19,6 @@ type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface
 	IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface
-	OauthV1alpha1() oauthv1alpha1.OauthV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -29,7 +27,6 @@ type Clientset struct {
 	*discovery.DiscoveryClient
 	configV1alpha1 *configv1alpha1.ConfigV1alpha1Client
 	iDPV1alpha1    *idpv1alpha1.IDPV1alpha1Client
-	oauthV1alpha1  *oauthv1alpha1.OauthV1alpha1Client
 }
 
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
@@ -40,11 +37,6 @@ func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 // IDPV1alpha1 retrieves the IDPV1alpha1Client
 func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
 	return c.iDPV1alpha1
-}
-
-// OauthV1alpha1 retrieves the OauthV1alpha1Client
-func (c *Clientset) OauthV1alpha1() oauthv1alpha1.OauthV1alpha1Interface {
-	return c.oauthV1alpha1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -76,10 +68,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	cs.oauthV1alpha1, err = oauthv1alpha1.NewForConfig(&configShallowCopy)
-	if err != nil {
-		return nil, err
-	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -94,7 +82,6 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.configV1alpha1 = configv1alpha1.NewForConfigOrDie(c)
 	cs.iDPV1alpha1 = idpv1alpha1.NewForConfigOrDie(c)
-	cs.oauthV1alpha1 = oauthv1alpha1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -105,7 +92,6 @@ func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.configV1alpha1 = configv1alpha1.New(c)
 	cs.iDPV1alpha1 = idpv1alpha1.New(c)
-	cs.oauthV1alpha1 = oauthv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

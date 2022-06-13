@@ -20,6 +20,7 @@ if [[ -z "${CONTAINED:-}" ]]; then
 
         echo "generating code for ${kubeVersion} using ${CODEGEN_IMAGE}..."
         docker run --rm \
+            --pull always \
             --env CONTAINED=1 \
             --env CODEGEN_LOG_LEVEL="$debug_level" \
             --volume "${ROOT}:/work" \

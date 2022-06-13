@@ -1124,7 +1124,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
 			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			requestTokenExchangeAud: "contains-disallowed-substring.oauth.pinniped.dev-something", // .oauth.pinniped.dev substring is not allowed
+			requestTokenExchangeAud: "contains-disallowed-substring.pinniped.dev-something", // .pinniped.dev substring is not allowed
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
@@ -1134,7 +1134,28 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.Equal(t,
 					`{"error":"invalid_request","error_description":"The request is missing a required parameter, `+
 						`includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. `+
-						`requested audience cannot contain '.oauth.pinniped.dev'"}`,
+						`requested audience cannot contain '.pinniped.dev'"}`,
+					body)
+			},
+		},
+		{
+			name:      "disallowed requested audience using specific reserved name of a dynamic client on token exchange results in token exchange error",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud: "client.oauth.pinniped.dev-client-name", // OIDC dynamic client name is not allowed
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"invalid_request","error_description":"The request is missing a required parameter, `+
+						`includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. `+
+						`requested audience cannot contain '.pinniped.dev'"}`,
 					body)
 			},
 		},
@@ -1846,6 +1867,7 @@ func doTokenExchange(
 
 	resp, err := httpClient.Do(req)
 	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
 
 	// If a function was passed, call it, so it can make the desired assertions.
 	if wantTokenExchangeResponse != nil {
@@ -1858,7 +1880,6 @@ func doTokenExchange(
 	// Else, want a successful response.
 	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	defer func() { _ = resp.Body.Close() }()
 	var respBody struct {
 		AccessToken     string `json:"access_token"`
 		IssuedTokenType string `json:"issued_token_type"`

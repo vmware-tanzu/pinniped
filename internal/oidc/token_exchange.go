@@ -131,16 +131,16 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 	// Validate that the requested audience is not one of the reserved strings. All possible requested audience strings
 	// are subdivided into these classifications:
 	// 1. pinniped-cli is reserved for the statically defined OAuth client, which is disallowed for this token exchange.
-	// 2. clients.oauth.pinniped.dev-* is reserved to be the names of user-defined dynamic OAuth clients, which is also
+	// 2. client.oauth.pinniped.dev-* is reserved to be the names of user-defined dynamic OAuth clients, which is also
 	//    disallowed for this token exchange.
-	// 3. Anything else matching *.oauth.pinniped.dev* is reserved for future use, in case we want to create more
-	//    buckets of names some day, e.g. something.oauth.pinniped.dev/*. These names are also disallowed for this
+	// 3. Anything else matching *.pinniped.dev* is reserved for future use, in case we want to create more
+	//    buckets of names some day, e.g. something.pinniped.dev/*. These names are also disallowed for this
 	//    token exchange.
 	// 4. Any other string is reserved to conceptually mean the name of a workload cluster (technically, it's the
 	//    configured audience of its Concierge JWTAuthenticator or other OIDC JWT validator). These are the only
 	//    allowed values for this token exchange.
-	if strings.Contains(result.requestedAudience, ".oauth.pinniped.dev") {
-		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot contain '.oauth.pinniped.dev'")
+	if strings.Contains(result.requestedAudience, ".pinniped.dev") {
+		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot contain '.pinniped.dev'")
 	}
 	if result.requestedAudience == "pinniped-cli" {
 		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot equal 'pinniped-cli'")

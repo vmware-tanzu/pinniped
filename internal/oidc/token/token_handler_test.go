@@ -671,14 +671,14 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			authcodeExchange:         doValidAuthCodeExchange,
 			requestedAudience:        "client.oauth.pinniped.dev-some-client-abc123",
 			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "requested audience cannot contain '.oauth.pinniped.dev'",
+			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
 		},
 		{
-			name:                     "bad requested audience when it contains the substring .oauth.pinniped.dev because it is reserved for potential future usage",
+			name:                     "bad requested audience when it contains the substring .pinniped.dev because it is reserved for potential future usage",
 			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "something.oauth.pinniped.dev/some_aud",
+			requestedAudience:        "something.pinniped.dev/some_aud",
 			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "requested audience cannot contain '.oauth.pinniped.dev'",
+			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
 		},
 		{
 			name:                     "bad requested audience when it is the same name as the static public client pinniped-cli",

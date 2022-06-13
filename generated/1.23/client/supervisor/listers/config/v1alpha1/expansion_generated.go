@@ -12,3 +12,11 @@ type FederationDomainListerExpansion interface{}
 // FederationDomainNamespaceListerExpansion allows custom methods to be added to
 // FederationDomainNamespaceLister.
 type FederationDomainNamespaceListerExpansion interface{}
+
+// OIDCClientListerExpansion allows custom methods to be added to
+// OIDCClientLister.
+type OIDCClientListerExpansion interface{}
+
+// OIDCClientNamespaceListerExpansion allows custom methods to be added to
+// OIDCClientNamespaceLister.
+type OIDCClientNamespaceListerExpansion interface{}

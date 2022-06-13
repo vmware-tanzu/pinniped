@@ -124,7 +124,7 @@ echo "generating API-related code for our public API groups..."
         "deepcopy" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/oauth:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
+        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-api > |"
 )
 
@@ -160,7 +160,7 @@ echo "generating client code for our public API groups..."
         "client,lister,informer" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/oauth:v1alpha1" \
+        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-client > |"
 )
 
@@ -181,7 +181,6 @@ crd-ref-docs \
 (cd apis &&
     controller-gen paths=./supervisor/config/v1alpha1 crd output:crd:artifacts:config=../crds &&
     controller-gen paths=./supervisor/idp/v1alpha1 crd output:crd:artifacts:config=../crds &&
-    controller-gen paths=./supervisor/oauth/v1alpha1 crd output:crd:artifacts:config=../crds &&
     controller-gen paths=./concierge/config/v1alpha1 crd output:crd:artifacts:config=../crds &&
     controller-gen paths=./concierge/authentication/v1alpha1 crd output:crd:artifacts:config=../crds
 )

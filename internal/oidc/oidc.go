@@ -229,6 +229,9 @@ func FositeOauth2Helper(
 
 		// Use the fosite default to make it more likely that off the shelf OIDC clients can work with the supervisor.
 		MinParameterEntropy: fosite.MinParameterEntropy,
+
+		// do not allow custom scheme redirects, only https and http (on loopback)
+		RedirectSecureChecker: fosite.IsRedirectURISecureStrict,
 	}
 
 	provider := compose.Compose(

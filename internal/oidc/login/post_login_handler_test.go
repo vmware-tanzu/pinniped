@@ -82,8 +82,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 		}
 	)
 
-	happyDownstreamScopesRequested := []string{"openid"}
-	happyDownstreamScopesGranted := []string{"openid"}
+	happyDownstreamScopesRequested := []string{"openid", "groups"}
+	happyDownstreamScopesGranted := []string{"openid", "groups"}
 
 	happyDownstreamRequestParamsQuery := url.Values{
 		"response_type":         []string{"code"},
@@ -211,7 +211,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
+	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState
 
 	happyUsernamePasswordFormParams := url.Values{userParam: []string{happyLDAPUsername}, passParam: []string{happyLDAPPassword}}
 
@@ -348,7 +348,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusSeeOther,
 			wantContentType:                   htmlContentType,
 			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
@@ -405,6 +405,31 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name: "happy LDAP login when groups scope is not requested",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(&upstreamLDAPIdentityProvider). // should pick this one
+				WithActiveDirectory(&erroringUpstreamLDAPIdentityProvider),
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				query := copyOfHappyDownstreamRequestParamsQuery()
+				query["scope"] = []string{"openid"}
+				data.AuthParams = query.Encode()
+			}),
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamRequestedScopes:     []string{"openid"},
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       []string{"openid"},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,

@@ -170,6 +170,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -256,6 +257,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -381,6 +383,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -514,6 +517,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
@@ -594,6 +598,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get --raw /healthz" which should trigger a browser-less CLI prompt login via the plugin.
@@ -655,6 +660,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
@@ -715,6 +721,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Set up the username and password env vars to avoid the interactive prompts.
@@ -787,6 +794,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
@@ -847,6 +855,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Set up the username and password env vars to avoid the interactive prompts.
@@ -924,6 +933,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -980,6 +990,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -1036,6 +1047,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Override the --upstream-identity-provider-flow flag from the kubeconfig using the env var.
@@ -1311,7 +1323,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 		require.NoError(t, err)
 	}))
 
-	downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+	downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"}
 	sort.Strings(downstreamScopes)
 	token := cache.GetToken(oidcclient.SessionCacheKey{
 		Issuer:      downstream.Spec.Issuer,
@@ -1326,12 +1338,16 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	idTokenClaims := token.IDToken.Claims
 	require.Equal(t, expectedUsername, idTokenClaims[oidc.DownstreamUsernameClaim])
 
-	// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
-	expectedGroupsAsEmptyInterfaces := make([]interface{}, 0, len(expectedGroups))
-	for _, g := range expectedGroups {
-		expectedGroupsAsEmptyInterfaces = append(expectedGroupsAsEmptyInterfaces, g)
+	if expectedGroups == nil {
+		require.Nil(t, idTokenClaims[oidc.DownstreamGroupsClaim])
+	} else {
+		// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
+		expectedGroupsAsEmptyInterfaces := make([]interface{}, 0, len(expectedGroups))
+		for _, g := range expectedGroups {
+			expectedGroupsAsEmptyInterfaces = append(expectedGroupsAsEmptyInterfaces, g)
+		}
+		require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims[oidc.DownstreamGroupsClaim])
 	}
-	require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims[oidc.DownstreamGroupsClaim])
 
 	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)
 	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clientregistry
@@ -50,7 +50,7 @@ func TestPinnipedCLI(t *testing.T) {
 	require.Equal(t, []string{"http://127.0.0.1/callback"}, c.GetRedirectURIs())
 	require.Equal(t, fosite.Arguments{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"}, c.GetGrantTypes())
 	require.Equal(t, fosite.Arguments{"code"}, c.GetResponseTypes())
-	require.Equal(t, fosite.Arguments{oidc.ScopeOpenID, oidc.ScopeOfflineAccess, "profile", "email", "pinniped:request-audience"}, c.GetScopes())
+	require.Equal(t, fosite.Arguments{oidc.ScopeOpenID, oidc.ScopeOfflineAccess, "profile", "email", "pinniped:request-audience", "groups"}, c.GetScopes())
 	require.True(t, c.IsPublic())
 	require.Nil(t, c.GetAudience())
 	require.Nil(t, c.GetRequestURIs())
@@ -82,7 +82,8 @@ func TestPinnipedCLI(t *testing.T) {
 			"offline_access",
 			"profile",
 			"email",
-			"pinniped:request-audience"
+			"pinniped:request-audience",
+			"groups"
 		  ],
 		  "audience": null,
 		  "public": true,

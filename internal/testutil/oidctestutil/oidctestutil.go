@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/strings/slices"
+
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
@@ -1063,10 +1065,16 @@ func validateAuthcodeStorage(
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
 	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
-	require.Len(t, actualClaims.Extra, 2)
-	actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
-	require.NotNil(t, actualDownstreamIDTokenGroups)
-	require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
+	if slices.Contains(wantDownstreamGrantedScopes, "groups") {
+		require.Len(t, actualClaims.Extra, 2)
+		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
+		require.NotNil(t, actualDownstreamIDTokenGroups)
+		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
+	} else {
+		require.Len(t, actualClaims.Extra, 1)
+		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
+		require.Nil(t, actualDownstreamIDTokenGroups)
+	}
 
 	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
 	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)

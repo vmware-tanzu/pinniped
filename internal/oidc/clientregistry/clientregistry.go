@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package clientregistry defines Pinniped's OAuth2/OIDC clients.
@@ -85,6 +85,7 @@ func PinnipedCLI() *Client {
 					"profile",
 					"email",
 					"pinniped:request-audience",
+					"groups",
 				},
 				Audience: nil,
 				Public:   true,

@@ -375,8 +375,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return urlToReturn
 	}
 
-	happyDownstreamScopesRequested := []string{"openid", "profile", "email"}
-	happyDownstreamScopesGranted := []string{"openid"}
+	happyDownstreamScopesRequested := []string{"openid", "profile", "email", "groups"}
+	happyDownstreamScopesGranted := []string{"openid", "groups"}
 
 	happyGetRequestQueryMap := map[string]string{
 		"response_type":         "code",
@@ -495,7 +495,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyState
+	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState
 
 	incomingCookieCSRFValue := "csrf-value-from-cookie"
 	encodedIncomingCookieCSRFValue, err := happyCookieEncoder.Encode("csrf", incomingCookieCSRFValue)
@@ -957,7 +957,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
+			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
@@ -980,7 +980,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
+			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,

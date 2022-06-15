@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -44,8 +46,8 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester)
+		// Automatically grant the openid, offline_access, pinniped:request-audience and groups scopes, but only if they were requested.
+		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 		// Get the username and password form params from the POST body.
 		username := r.PostFormValue(usernameParamName)
@@ -80,7 +82,7 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		username = authenticateResponse.User.GetName()
 		groups := authenticateResponse.User.GetGroups()
 		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse)
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)
 
 		return nil

@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/utils/strings/slices"
-
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
@@ -27,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crud"

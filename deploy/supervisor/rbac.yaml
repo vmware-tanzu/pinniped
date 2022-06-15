@@ -92,18 +92,6 @@ roleRef:
   name: extension-apiserver-authentication-reader
   apiGroup: rbac.authorization.k8s.io
 
-#! Give permission to list and watch ConfigMaps in kube-public
----
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: #@ defaultResourceNameWithSuffix("cluster-info-lister-watcher")
-  namespace: kube-public
-  labels: #@ labels()
-rules:
-  - apiGroups: [ "" ]
-    resources: [ configmaps ]
-    verbs: [ list, watch ]
 #! Give permissions for subjectaccessreviews, tokenreview that is needed by aggregated api servers
 ---
 kind: ClusterRoleBinding
@@ -118,21 +106,6 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: system:auth-delegator
-  apiGroup: rbac.authorization.k8s.io
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: #@ defaultResourceNameWithSuffix("cluster-info-lister-watcher")
-  namespace: kube-public
-  labels: #@ labels()
-subjects:
-  - kind: ServiceAccount
-    name: #@ defaultResourceName()
-    namespace: #@ namespace()
-roleRef:
-  kind: Role
-  name: #@ defaultResourceNameWithSuffix("cluster-info-lister-watcher")
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permission to various cluster-scoped objects

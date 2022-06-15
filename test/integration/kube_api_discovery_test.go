@@ -53,7 +53,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
-	oauthVirtualSupervisorGV := makeGV("clientsecret", "supervisor")
+	clientSecretSupervisorGV := makeGV("clientsecret", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -113,26 +113,26 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: oauthVirtualSupervisorGV.Group,
+				Name: clientSecretSupervisorGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: oauthVirtualSupervisorGV.String(),
-						Version:      oauthVirtualSupervisorGV.Version,
+						GroupVersion: clientSecretSupervisorGV.String(),
+						Version:      clientSecretSupervisorGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: oauthVirtualSupervisorGV.String(),
-					Version:      oauthVirtualSupervisorGV.Version,
+					GroupVersion: clientSecretSupervisorGV.String(),
+					Version:      clientSecretSupervisorGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				oauthVirtualSupervisorGV.String(): {
+				clientSecretSupervisorGV.String(): {
 					{
 						Name:       "oidcclientsecretrequests",
 						Kind:       "OIDCClientSecretRequest",
-						Verbs:      []string{"create"},
+						Verbs:      []string{"create", "list"},
 						Namespaced: true,
-						Categories: nil,
+						Categories: []string{"pinniped"},
 					},
 				},
 			},
@@ -352,11 +352,6 @@ func TestGetAPIResourceList(t *testing.T) {
 			}
 			for _, a := range r.APIResources {
 				if strings.HasSuffix(a.Name, "/status") {
-					continue
-				}
-				if a.Name == "oidcclientsecretrequests" {
-					// OIDCClientSecretRequest does not implement list,
-					// so it doesn't make sense for it to belong to a category.
 					continue
 				}
 				assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)

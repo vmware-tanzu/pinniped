@@ -38,9 +38,9 @@ func New(apiGroupSuffix string) (_ *runtime.Scheme, oauth schema.GroupVersion) {
 		return scheme, clientsecretv1alpha1.SchemeGroupVersion
 	}
 
-	oauthVirtualSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(apiGroupSuffix)
+	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(apiGroupSuffix)
 
-	addToSchemeAtNewGroup(scheme, clientsecretv1alpha1.GroupName, oauthVirtualSupervisorGroupData.Group, clientsecretv1alpha1.AddToScheme, clientsecretapi.AddToScheme)
+	addToSchemeAtNewGroup(scheme, clientsecretv1alpha1.GroupName, clientSecretSupervisorGroupData.Group, clientsecretv1alpha1.AddToScheme, clientsecretapi.AddToScheme)
 
 	// manually register conversions and defaulting into the correct scheme since we cannot directly call AddToScheme
 	schemeBuilder := runtime.NewSchemeBuilder(
@@ -57,7 +57,7 @@ func New(apiGroupSuffix string) (_ *runtime.Scheme, oauth schema.GroupVersion) {
 	// defaulting func registered, but it will almost certainly panic if one is added.
 	scheme.Default((*clientsecretv1alpha1.OIDCClientSecretRequest)(nil))
 
-	return scheme, schema.GroupVersion(oauthVirtualSupervisorGroupData)
+	return scheme, schema.GroupVersion(clientSecretSupervisorGroupData)
 }
 
 func addToSchemeAtNewGroup(scheme *runtime.Scheme, oldGroup, newGroup string, funcs ...func(*runtime.Scheme) error) {

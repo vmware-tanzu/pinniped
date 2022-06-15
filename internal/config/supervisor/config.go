@@ -24,6 +24,12 @@ const (
 	NetworkDisabled = "disabled"
 	NetworkUnix     = "unix"
 	NetworkTCP      = "tcp"
+
+	// Use 10250 because it happens to be the same port on which the Kubelet listens, so some cluster types
+	// are more permissive with servers that run on this port. For example, GKE private clusters do not
+	// allow traffic from the control plane to most ports, but do allow traffic to port 10250. This allows
+	// the Concierge to work without additional configuration on these types of clusters.
+	aggregatedAPIServerPortDefault = 10250
 )
 
 // FromPath loads an Config from a provided local file path, inserts any
@@ -48,6 +54,12 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 
 	if err := validateAPIGroupSuffix(*config.APIGroupSuffix); err != nil {
 		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
+	}
+
+	maybeSetAggregatedAPIServerPortDefaults(&config.AggregatedAPIServerPort)
+
+	if err := validateServerPort(config.AggregatedAPIServerPort); err != nil {
+		return nil, fmt.Errorf("validate aggregatedAPIServerPort: %w", err)
 	}
 
 	if err := validateNames(&config.NamesConfig); err != nil {
@@ -103,6 +115,12 @@ func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 
 func validateAPIGroupSuffix(apiGroupSuffix string) error {
 	return groupsuffix.Validate(apiGroupSuffix)
+}
+
+func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
+	if *port == nil {
+		*port = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
+	}
 }
 
 func validateNames(names *NamesConfigSpec) error {
@@ -192,4 +210,12 @@ func addrIsOnlyOnLoopback(addr string) bool {
 		return false
 	}
 	return ip.IsLoopback()
+}
+
+func validateServerPort(port *int64) error {
+	// It cannot be below 1024 because the container is not running as root.
+	if *port < 1024 || *port > 65535 {
+		return constable.Error("must be within range 1024 to 65535")
+	}
+	return nil
 }

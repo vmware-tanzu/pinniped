@@ -9,19 +9,24 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
 )
 
-func NewREST() *REST {
-	return &REST{}
+func NewREST(resource schema.GroupResource) *REST {
+	return &REST{
+		tableConvertor: rest.NewDefaultTableConvertor(resource),
+	}
 }
 
 type REST struct {
+	tableConvertor rest.TableConvertor
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -30,10 +35,30 @@ var _ interface {
 	rest.NamespaceScopedStrategy
 	rest.Scoper
 	rest.Storage
+	rest.CategoriesProvider
+	rest.Lister
+	rest.TableConvertor
 } = (*REST)(nil)
 
 func (*REST) New() runtime.Object {
 	return &clientsecretapi.OIDCClientSecretRequest{}
+}
+
+func (*REST) NewList() runtime.Object {
+	return &clientsecretapi.OIDCClientSecretRequestList{}
+}
+
+func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
+	return &clientsecretapi.OIDCClientSecretRequestList{
+		ListMeta: metav1.ListMeta{
+			ResourceVersion: "0", // this resource version means "from the API server cache"
+		},
+		Items: []clientsecretapi.OIDCClientSecretRequest{}, // avoid sending nil items list
+	}, nil
+}
+
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions)
 }
 
 func (*REST) NamespaceScoped() bool {
@@ -41,8 +66,7 @@ func (*REST) NamespaceScoped() bool {
 }
 
 func (*REST) Categories() []string {
-	// because we haven't implemented lister, adding it to categories breaks things.
-	return []string{}
+	return []string{"pinniped"}
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {

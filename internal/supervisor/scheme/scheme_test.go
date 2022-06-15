@@ -44,10 +44,10 @@ func TestNew(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                  string
-		apiGroupSuffix        string
-		want                  map[schema.GroupVersionKind]reflect.Type
-		wantOAuthGroupVersion schema.GroupVersion
+		name                         string
+		apiGroupSuffix               string
+		want                         map[schema.GroupVersionKind]reflect.Type
+		wantClientSecretGroupVersion schema.GroupVersion
 	}{
 		{
 			name:           "regular api group",
@@ -55,9 +55,11 @@ func TestNew(t *testing.T) {
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
-				regularClientSecretGV.WithKind("OIDCClientSecretRequest"): reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequest{}).Elem(),
+				regularClientSecretGV.WithKind("OIDCClientSecretRequest"):     reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequest{}).Elem(),
+				regularClientSecretGV.WithKind("OIDCClientSecretRequestList"): reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequestList{}).Elem(),
 
-				regularClientSecretGVInternal.WithKind("OIDCClientSecretRequest"): reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequest{}).Elem(),
+				regularClientSecretGVInternal.WithKind("OIDCClientSecretRequest"):     reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequest{}).Elem(),
+				regularClientSecretGVInternal.WithKind("OIDCClientSecretRequestList"): reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequestList{}).Elem(),
 
 				regularClientSecretGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
 				regularClientSecretGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
@@ -86,7 +88,7 @@ func TestNew(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
-			wantOAuthGroupVersion: regularClientSecretGV,
+			wantClientSecretGroupVersion: regularClientSecretGV,
 		},
 		{
 			name:           "other api group",
@@ -94,9 +96,11 @@ func TestNew(t *testing.T) {
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
-				otherClientSecretGV.WithKind("OIDCClientSecretRequest"): reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequest{}).Elem(),
+				otherClientSecretGV.WithKind("OIDCClientSecretRequest"):     reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequest{}).Elem(),
+				otherClientSecretGV.WithKind("OIDCClientSecretRequestList"): reflect.TypeOf(&clientsecretv1alpha1.OIDCClientSecretRequestList{}).Elem(),
 
-				otherClientSecretGVInternal.WithKind("OIDCClientSecretRequest"): reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequest{}).Elem(),
+				otherClientSecretGVInternal.WithKind("OIDCClientSecretRequest"):     reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequest{}).Elem(),
+				otherClientSecretGVInternal.WithKind("OIDCClientSecretRequestList"): reflect.TypeOf(&clientsecretapi.OIDCClientSecretRequestList{}).Elem(),
 
 				otherClientSecretGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
 				otherClientSecretGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
@@ -125,15 +129,15 @@ func TestNew(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
-			wantOAuthGroupVersion: otherClientSecretGV,
+			wantClientSecretGroupVersion: otherClientSecretGV,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			scheme, oauthGV := New(tt.apiGroupSuffix)
+			scheme, clientSecretGV := New(tt.apiGroupSuffix)
 			require.Equal(t, tt.want, scheme.AllKnownTypes())
-			require.Equal(t, tt.wantOAuthGroupVersion, oauthGV)
+			require.Equal(t, tt.wantClientSecretGroupVersion, clientSecretGV)
 		})
 	}
 }

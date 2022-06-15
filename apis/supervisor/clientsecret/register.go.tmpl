@@ -32,6 +32,7 @@ var (
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&OIDCClientSecretRequest{},
+		&OIDCClientSecretRequestList{},
 	)
 	return nil
 }

@@ -138,7 +138,8 @@ func prepareControllers(
 	leaderElector controllerinit.RunnerWrapper,
 	podInfo *downward.PodInfo,
 ) controllerinit.RunnerBuilder {
-	oauthSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
+	const certificateName string = "pinniped-supervisor-api-tls-serving-certificate"
+	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
@@ -310,14 +311,14 @@ func prepareControllers(
 		WithController(
 			apicerts.NewCertsManagerController(
 				podInfo.Namespace,
-				"pinniped-supervisor-api-tls-serving-certificate",
+				certificateName,
 				cfg.Labels,
 				kubeClient,
 				secretInformer,
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
-				31536000*time.Second,
-				"Pinniped Aggregation CA",
+				365*24*time.Hour, // about one year
+				"Pinniped Supervisor Aggregation CA",
 				cfg.NamesConfig.APIService,
 			),
 			singletonWorker,
@@ -325,8 +326,8 @@ func prepareControllers(
 		WithController(
 			apicerts.NewAPIServiceUpdaterController(
 				podInfo.Namespace,
-				"pinniped-supervisor-api-tls-serving-certificate",
-				oauthSupervisorGroupData.APIServiceName(),
+				certificateName,
+				clientSecretSupervisorGroupData.APIServiceName(),
 				aggregatorClient,
 				secretInformer,
 				controllerlib.WithInformer,
@@ -336,7 +337,7 @@ func prepareControllers(
 		WithController(
 			apicerts.NewCertsObserverController(
 				podInfo.Namespace,
-				"pinniped-supervisor-api-tls-serving-certificate",
+				certificateName,
 				dynamicServingCertProvider,
 				secretInformer,
 				controllerlib.WithInformer,
@@ -346,11 +347,11 @@ func prepareControllers(
 		WithController(
 			apicerts.NewCertsExpirerController(
 				podInfo.Namespace,
-				"pinniped-supervisor-api-tls-serving-certificate",
+				certificateName,
 				kubeClient,
 				secretInformer,
 				controllerlib.WithInformer,
-				23328000*time.Second,
+				9*30*24*time.Hour, // about 9 months
 				apicerts.TLSCertificateChainSecretKey,
 				plog.New(),
 			),
@@ -363,9 +364,9 @@ func prepareControllers(
 //nolint:funlen
 func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	serverInstallationNamespace := podInfo.Namespace
-	oauthSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
+	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 
-	apiServiceRef, err := apiserviceref.New(oauthSupervisorGroupData.APIServiceName())
+	apiServiceRef, err := apiserviceref.New(clientSecretSupervisorGroupData.APIServiceName())
 	if err != nil {
 		return fmt.Errorf("cannot create API service ref: %w", err)
 	}
@@ -429,9 +430,9 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 	)
 
-	// Get the "real" name of the oauth virtual supervisor API group (i.e., the API group name with the
+	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the
 	// injected suffix).
-	scheme, oauthGV := supervisorscheme.New(*cfg.APIGroupSuffix)
+	scheme, clientSecretGV := supervisorscheme.New(*cfg.APIGroupSuffix)
 
 	buildControllersFunc := prepareControllers(
 		cfg,
@@ -458,9 +459,9 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		dynamicServingCertProvider,
 		buildControllersFunc,
 		*cfg.APIGroupSuffix,
-		10250,
+		*cfg.AggregatedAPIServerPort,
 		scheme,
-		oauthGV,
+		clientSecretGV,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -561,16 +562,16 @@ func getAggregatedAPIServerConfig(
 	apiGroupSuffix string,
 	aggregatedAPIServerPort int64,
 	scheme *runtime.Scheme,
-	oauthVirtualSupervisorGroupVersion schema.GroupVersion,
+	clientSecretSupervisorGroupVersion schema.GroupVersion,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
 	// this is unused for now but it is a safe value that we could use in the future
-	defaultEtcdPathPrefix := fmt.Sprintf("/pinniped-concierge-registry/%s", apiGroupSuffix)
+	defaultEtcdPathPrefix := fmt.Sprintf("/pinniped-supervisor-registry/%s", apiGroupSuffix)
 
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		codecs.LegacyCodec(oauthVirtualSupervisorGroupVersion),
+		codecs.LegacyCodec(clientSecretSupervisorGroupVersion),
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
@@ -605,7 +606,7 @@ func getAggregatedAPIServerConfig(
 			BuildControllersPostStartHook:      buildControllers,
 			Scheme:                             scheme,
 			NegotiatedSerializer:               codecs,
-			OauthVirtualSupervisorGroupVersion: oauthVirtualSupervisorGroupVersion,
+			ClientSecretSupervisorGroupVersion: clientSecretSupervisorGroupVersion,
 		},
 	}
 	return apiServerConfig, nil

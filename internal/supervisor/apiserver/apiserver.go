@@ -30,7 +30,7 @@ type ExtraConfig struct {
 	BuildControllersPostStartHook      controllerinit.RunnerBuilder
 	Scheme                             *runtime.Scheme
 	NegotiatedSerializer               runtime.NegotiatedSerializer
-	OauthVirtualSupervisorGroupVersion schema.GroupVersion
+	ClientSecretSupervisorGroupVersion schema.GroupVersion
 }
 
 type PinnipedServer struct {
@@ -74,8 +74,8 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	var errs []error //nolint: prealloc
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
-			clientSecretReqGVR := c.ExtraConfig.OauthVirtualSupervisorGroupVersion.WithResource("oidcclientsecretrequests")
-			clientSecretReqStorage := clientsecretrequest.NewREST()
+			clientSecretReqGVR := c.ExtraConfig.ClientSecretSupervisorGroupVersion.WithResource("oidcclientsecretrequests")
+			clientSecretReqStorage := clientsecretrequest.NewREST(clientSecretReqGVR.GroupResource())
 			return clientSecretReqGVR, clientSecretReqStorage
 		},
 	} {

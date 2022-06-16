@@ -217,7 +217,7 @@ func (in *OIDCClientSpec) DeepCopyInto(out *OIDCClientSpec) {
 	*out = *in
 	if in.AllowedRedirectURIs != nil {
 		in, out := &in.AllowedRedirectURIs, &out.AllowedRedirectURIs
-		*out = make([]string, len(*in))
+		*out = make([]RedirectURI, len(*in))
 		copy(*out, *in)
 	}
 	if in.AllowedGrantTypes != nil {

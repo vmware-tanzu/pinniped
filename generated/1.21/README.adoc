@@ -6,6 +6,8 @@
 
 .Packages
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-clientsecret-supervisor-pinniped-dev-clientsecret[$$clientsecret.supervisor.pinniped.dev/clientsecret$$]
+- xref:{anchor_prefix}-clientsecret-supervisor-pinniped-dev-v1alpha1[$$clientsecret.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-identity-concierge-pinniped-dev-identity[$$identity.concierge.pinniped.dev/identity$$]
@@ -206,6 +208,138 @@ Status of a webhook authenticator.
 |===
 | Field | Description
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+
+[id="{anchor_prefix}-clientsecret-supervisor-pinniped-dev-clientsecret"]
+=== clientsecret.supervisor.pinniped.dev/clientsecret
+
+Package clientsecret is the internal version of the Pinniped client secret API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequest"]
+==== OIDCClientSecretRequest 
+
+OIDCClientSecretRequest can be used to update the client secrets associated with an OIDCClient.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | Request a new client secret to for the OIDCClient referenced by the metadata.name field.
+| *`revokeOldSecrets`* __boolean__ | Revoke the old client secrets associated with the OIDCClient referenced by the metadata.name field.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | The unencrypted OIDC Client Secret. This will only be shared upon creation and cannot be recovered if you lose it.
+| *`totalClientSecrets`* __integer__ | The total number of client secrets associated with the OIDCClient referenced by the metadata.name field.
+|===
+
+
+
+[id="{anchor_prefix}-clientsecret-supervisor-pinniped-dev-v1alpha1"]
+=== clientsecret.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped client secret API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest"]
+==== OIDCClientSecretRequest 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec"]
+==== OIDCClientSecretRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generateNewSecret`* __boolean__ | 
+| *`revokeOldSecrets`* __boolean__ | 
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus"]
+==== OIDCClientSecretRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`generatedSecret`* __string__ | 
+| *`totalClientSecrets`* __integer__ | 
 |===
 
 

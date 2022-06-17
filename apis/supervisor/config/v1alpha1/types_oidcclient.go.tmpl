@@ -3,8 +3,19 @@
 
 package v1alpha1
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+type OIDCClientPhase string
+
+const (
+	// PhasePending is the default phase for newly-created OIDCClient resources.
+	PhasePending OIDCClientPhase = "Pending"
+
+	// PhaseReady is the phase for an OIDCClient resource in a healthy state.
+	PhaseReady OIDCClientPhase = "Ready"
+
+	// PhaseError is the phase for an OIDCClient in an unhealthy state.
+	PhaseError OIDCClientPhase = "Error"
 )
 
 // +kubebuilder:validation:Pattern=`^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/`
@@ -62,8 +73,19 @@ type OIDCClientSpec struct {
 	AllowedScopes []Scope `json:"allowedScopes"`
 }
 
-// OIDCClientStatus is a struct that describes the actual state of an OIDC Client.
+// OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 type OIDCClientStatus struct {
+	// Phase summarizes the overall status of the OIDCClient.
+	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase OIDCClientPhase `json:"phase,omitempty"`
+
+	// Represents the observations of an OIDCClient's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // OIDCClient describes the configuration of an OIDC client.

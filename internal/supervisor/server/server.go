@@ -46,6 +46,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
+	"go.pinniped.dev/internal/controller/supervisorconfig/oidcclientwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerinit"
@@ -141,6 +142,7 @@ func prepareControllers(
 	const certificateName string = "pinniped-supervisor-api-tls-serving-certificate"
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
+	oidcClientInformer := pinnipedInformers.Config().V1alpha1().OIDCClients()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
 	// Create controller manager.
@@ -354,6 +356,15 @@ func prepareControllers(
 				9*30*24*time.Hour, // about 9 months
 				apicerts.TLSCertificateChainSecretKey,
 				plog.New(),
+			),
+			singletonWorker,
+		).
+		WithController(
+			oidcclientwatcher.NewOIDCClientWatcherController(
+				pinnipedClient,
+				secretInformer,
+				oidcClientInformer,
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		)

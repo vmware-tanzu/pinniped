@@ -25,6 +25,14 @@ rules:
     resources: [federationdomains/status]
     verbs: [get, patch, update]
   - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
+    resources: [oidcclients]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
+    resources: [oidcclients/status]
+    verbs: [get, patch, update]
+  - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
     resources: [oidcidentityproviders]
     verbs: [get, list, watch]

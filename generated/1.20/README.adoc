@@ -575,6 +575,28 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor configuratio
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-condition"]
+==== Condition 
+
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+| *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+| *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+| *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomain"]
 ==== FederationDomain 
 
@@ -720,6 +742,22 @@ OIDCClientSpec is a struct that describes an OIDC Client.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-oidcclientstatus"]
+==== OIDCClientStatus 
+
+OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`phase`* __OIDCClientPhase__ | Phase summarizes the overall status of the OIDCClient.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of an OIDCClient's current state.
+|===
 
 
 

@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
@@ -463,4 +464,206 @@ func makeErrFix(reallyOld bool) []string {
 	}
 
 	return out
+}
+
+func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	t.Cleanup(cancel)
+
+	secrets := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+	oidcClients := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+
+	tests := []struct {
+		name           string
+		client         *supervisorconfigv1alpha1.OIDCClient
+		secret         *corev1.Secret
+		wantPhase      string
+		wantConditions []supervisorconfigv1alpha1.Condition
+	}{
+		{
+			name: "invalid AllowedGrantTypes and AllowedScopes (missing minimum required values), with no Secret",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "client.oauth.pinniped.dev-",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"https://some-redirect-url.test.pinniped.dev/some/path"},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"refresh_token"}, // needs to have authorization_code
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"username"},          // needs to have openid
+				},
+			},
+			wantPhase: "Error",
+			wantConditions: []supervisorconfigv1alpha1.Condition{
+				{
+					Type:    "AllowedGrantTypesValid",
+					Status:  "False",
+					Reason:  "MissingRequiredValue",
+					Message: `"authorization_code" must always be included in "allowedGrantTypes"`,
+				},
+				{
+					Type:    "AllowedScopesValid",
+					Status:  "False",
+					Reason:  "MissingRequiredValue",
+					Message: `"openid" must always be included in "allowedScopes"`,
+				},
+				{
+					Type:    "ClientSecretExists",
+					Status:  "False",
+					Reason:  "NoClientSecretFound",
+					Message: `no client secret found (no Secret storage found)`,
+				},
+			},
+		},
+		{
+			name: "minimal valid AllowedGrantTypes and AllowedScopes, with Secret that contains empty list of client secrets",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "client.oauth.pinniped.dev-",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"https://some-redirect-url.test.pinniped.dev/some/path"},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid"},
+				},
+			},
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"storage.pinniped.dev/type": "oidc-client-secret"},
+				},
+				Type: "storage.pinniped.dev/oidc-client-secret",
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"version":"1","hashes":[]}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+			},
+			wantPhase: "Error",
+			wantConditions: []supervisorconfigv1alpha1.Condition{
+				{
+					Type:    "AllowedGrantTypesValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: `"allowedGrantTypes" is valid`,
+				},
+				{
+					Type:    "AllowedScopesValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: `"allowedScopes" is valid`,
+				},
+				{
+					Type:    "ClientSecretExists",
+					Status:  "False",
+					Reason:  "NoClientSecretFound",
+					Message: `no client secret found (empty list in storage)`,
+				},
+			},
+		},
+		{
+			name: "happy path example with one client secret stored and all possible AllowedGrantTypes and AllowedScopes",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "client.oauth.pinniped.dev-",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"https://some-redirect-url.test.pinniped.dev/some/path"},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				},
+			},
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"storage.pinniped.dev/type": "oidc-client-secret"},
+				},
+				Type: "storage.pinniped.dev/oidc-client-secret",
+				Data: map[string][]byte{
+					"pinniped-storage-data":    []byte(`{"version":"1","hashes":["$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m"]}`),
+					"pinniped-storage-version": []byte("1"),
+				},
+			},
+			wantPhase: "Ready",
+			wantConditions: []supervisorconfigv1alpha1.Condition{
+				{
+					Type:    "AllowedGrantTypesValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: `"allowedGrantTypes" is valid`,
+				},
+				{
+					Type:    "AllowedScopesValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: `"allowedScopes" is valid`,
+				},
+				{
+					Type:    "ClientSecretExists",
+					Status:  "True",
+					Reason:  "Success",
+					Message: `1 client secret(s) found`,
+				},
+			},
+		},
+		// Note: there are many more possible combinations of these settings, but they are covered by the controller's
+		// unit tests. This test ensures that everything is wired up correctly in regard to this controller, enough to
+		// allow the controller to work correctly.
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, err := oidcClients.Create(ctx, tt.client, metav1.CreateOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				t.Logf("cleaning up test OIDCClient %s/%s", client.Namespace, client.Name)
+				err := oidcClients.Delete(ctx, client.Name, metav1.DeleteOptions{})
+				require.NoError(t, err)
+			})
+
+			if tt.secret != nil {
+				// Force the Secret's name to match the client created above.
+				tt.secret.Name = oidcclientsecretstorage.New(nil, nil).GetName(client.UID)
+				secret, err := secrets.Create(ctx, tt.secret, metav1.CreateOptions{})
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					t.Logf("cleaning up test Secret %s/%s", secret.Namespace, secret.Name)
+					err := secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
+					require.NoError(t, err)
+				})
+			}
+
+			// Wait for the OIDCClient to enter the expected phase (or time out).
+			testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+				var err error
+				updatedClient, err := oidcClients.Get(ctx, client.Name, metav1.GetOptions{})
+				requireEventually.NoErrorf(err, "error while getting OIDCClient %s/%s", client.Namespace, client.Name)
+				requireEventually.Equalf(supervisorconfigv1alpha1.OIDCClientPhase(tt.wantPhase), updatedClient.Status.Phase,
+					"OIDCClient is not in phase %s: %v", tt.wantPhase, testlib.Sdump(updatedClient))
+			}, 1*time.Minute, 2*time.Second, "expected the OIDCClient to go into phase %s", tt.wantPhase)
+
+			// Wait for the controller to converge to the expected Conditions list. It may take several passes of the
+			// controller running, since the Secret is created after the OIDCClient is created, potentially causing
+			// the controller to Sync at least twice.
+			testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+				var err error
+				updatedClient, err := oidcClients.Get(ctx, client.Name, metav1.GetOptions{})
+				requireEventually.NoErrorf(err, "error while getting OIDCClient %s/%s", client.Namespace, client.Name)
+
+				// Note that the controller sorts the conditions by type name,
+				// so we can assume that ordering in the test expectations for this test.
+				requireEventually.Len(updatedClient.Status.Conditions, len(tt.wantConditions))
+				for i, want := range tt.wantConditions {
+					actual := updatedClient.Status.Conditions[i]
+					requireEventually.Equal(want.Type, actual.Type)
+					requireEventually.Equal(want.Status, actual.Status)
+					requireEventually.Equal(want.Reason, actual.Reason)
+					requireEventually.Equal(want.Message, actual.Message)
+					requireEventually.Equal(updatedClient.Generation, actual.ObservedGeneration)
+					requireEventually.NotEmpty(actual.LastTransitionTime)
+				}
+			}, 1*time.Minute, 2*time.Second, "expected the OIDCClient to to have conditions %v", tt.wantConditions)
+		})
+	}
 }

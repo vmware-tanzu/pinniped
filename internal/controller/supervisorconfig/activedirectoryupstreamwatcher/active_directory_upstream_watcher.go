@@ -362,7 +362,7 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.Merge(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
 
 	updated.Status.Phase = v1alpha1.ActiveDirectoryPhaseReady
 	if hadErrorCondition {

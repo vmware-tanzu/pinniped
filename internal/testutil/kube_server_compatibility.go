@@ -4,6 +4,8 @@
 package testutil
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,4 +29,18 @@ func KubeServerSupportsCertificatesV1API(t *testing.T, discoveryClient discovery
 		continue
 	}
 	return false
+}
+
+func KubeServerMinorVersionInBetweenInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min, max int) bool {
+	t.Helper()
+
+	version, err := discoveryClient.ServerVersion()
+	require.NoError(t, err)
+
+	require.Equal(t, "1", version.Major)
+
+	minor, err := strconv.Atoi(strings.TrimSuffix(version.Minor, "+"))
+	require.NoError(t, err)
+
+	return minor >= min && minor <= max
 }

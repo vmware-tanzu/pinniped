@@ -17,18 +17,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
 
 func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
+	adminClient := testlib.NewKubernetesClientset(t)
+
+	needsErrFix := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 23)
+	reallyOld := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 19)
+	noSets := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 17)
+
 	groupFix := strings.NewReplacer(".supervisor.pinniped.dev", ".supervisor."+env.APIGroupSuffix)
+	errFix := strings.NewReplacer(makeErrFix(reallyOld)...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
 
-	namespaceClient := testlib.NewKubernetesClientset(t).CoreV1().Namespaces()
+	namespaceClient := adminClient.CoreV1().Namespaces()
 
 	ns, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -48,6 +56,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 		client  *supervisorconfigv1alpha1.OIDCClient
 		fixWant func(t *testing.T, err error, want string) string
 		wantErr string
+		skip    bool
 	}{
 		{
 			name: "bad name",
@@ -116,6 +125,9 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				end := strings.Index(gotErr, `"`)
 				require.Equal(t, end, 5)
 				gotErr = gotErr[:end]
+				if reallyOld { // these servers do not show the actual invalid value
+					want = strings.Replace(want, `Invalid value: "snorlax-RAND"`, `Invalid value: ""`, 1)
+				}
 				return strings.Replace(want, "RAND", gotErr, 2)
 			},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "snorlax-RAND" is invalid: metadata.name: Invalid value: "snorlax-RAND": metadata.name in body should match '^client\.oauth\.pinniped\.dev-'`,
@@ -189,6 +201,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 			name:    "empty unset all",
 			client:  &supervisorconfigv1alpha1.OIDCClient{},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "" is invalid: [metadata.name: Required value: name or generateName is required, spec.allowedGrantTypes: Required value, spec.allowedRedirectURIs: Required value, spec.allowedScopes: Required value]`,
+			skip:    reallyOld, // the error is both different and has unstable order on older servers
 		},
 		{
 			name: "empty uris",
@@ -264,6 +277,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				},
 			},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-red-1" is invalid: spec.allowedRedirectURIs[1]: Duplicate value: "http://127.0.0.1/callback"`,
+			skip:    noSets, // needs v1.18+ for x-kubernetes-list-type: set
 		},
 		{
 			name: "duplicate grants",
@@ -285,6 +299,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				},
 			},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-red-2" is invalid: spec.allowedGrantTypes[1]: Duplicate value: "refresh_token"`,
+			skip:    noSets, // needs v1.18+ for x-kubernetes-list-type: set
 		},
 		{
 			name: "duplicate scopes",
@@ -306,6 +321,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				},
 			},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-red-3" is invalid: spec.allowedScopes[1]: Duplicate value: "username"`,
+			skip:    noSets, // needs v1.18+ for x-kubernetes-list-type: set
 		},
 		{
 			name: "bad everything",
@@ -375,6 +391,10 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip()
+			}
+
 			t.Parallel()
 
 			client, err := oidcClients.Create(ctx, tt.client, metav1.CreateOptions{})
@@ -391,6 +411,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				client.ManagedFields = nil
 				client.CreationTimestamp = metav1.Time{}
 				client.Generation = 0
+				client.SelfLink = "" // nolint: staticcheck  // old API servers still set this field
 
 				require.Equal(t, tt.client, client)
 				return
@@ -402,7 +423,44 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 
 			want = groupFix.Replace(want)
 
+			// old API servers have slightly different error messages
+			if needsErrFix && !strings.Contains(want, "Duplicate value:") {
+				want = errFix.Replace(want)
+			}
+
 			require.EqualError(t, err, want)
 		})
 	}
+}
+
+func makeErrFix(reallyOld bool) []string {
+	const total = 10                  // should be enough indexes
+	out := make([]string, 0, total*6) // good enough allocation
+
+	// these servers do not show the actual index of where the error occurred
+	for i := 0; i < total; i++ {
+		idx := fmt.Sprintf("[%d]", i)
+		out = append(out, idx+":", ":")
+		out = append(out, idx+" ", " ")
+	}
+
+	if reallyOld {
+		// these servers display empty values differently
+		out = append(out, "0:", `"":`)
+
+		// these servers do not show the actual invalid value
+		for _, s := range []string{
+			"of",
+			"oob",
+			"zone",
+			"panda",
+			"client0oauth1pinniped2dev-regex",
+		} {
+			out = append(out,
+				fmt.Sprintf(`Invalid value: "%s"`, s),
+				`Invalid value: ""`)
+		}
+	}
+
+	return out
 }

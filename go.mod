@@ -62,7 +62,7 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.7.4
 	github.com/tdewolff/minify/v2 v2.11.9
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.21.0

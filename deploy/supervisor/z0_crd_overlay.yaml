@@ -49,3 +49,15 @@ metadata:
   name: #@ pinnipedDevAPIGroupWithPrefix("oidcclients.config.supervisor")
 spec:
   group: #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
+  versions:
+    #@overlay/match by=overlay.all, expects="1+"
+    - schema:
+        openAPIV3Schema:
+          #@overlay/match by=overlay.subset({"metadata":{"type":"object"}}), expects=1
+          properties:
+            metadata:
+              #@overlay/match missing_ok=True
+              properties:
+                name:
+                  pattern: ^client\.oauth\.pinniped\.dev-
+                  type: string

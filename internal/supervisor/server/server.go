@@ -22,22 +22,31 @@ import (
 	"github.com/joshlf/go-acl"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/supervisor"
+	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
+	"go.pinniped.dev/internal/controller/supervisorconfig/oidcclientwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerinit"
@@ -45,6 +54,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
@@ -53,6 +63,8 @@ import (
 	"go.pinniped.dev/internal/oidc/provider/manager"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/secret"
+	"go.pinniped.dev/internal/supervisor/apiserver"
+	supervisorscheme "go.pinniped.dev/internal/supervisor/scheme"
 )
 
 const (
@@ -116,15 +128,21 @@ func prepareControllers(
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
 	dynamicUpstreamIDPProvider provider.DynamicUpstreamIDPProvider,
+	dynamicServingCertProvider dynamiccert.Private,
 	secretCache *secret.Cache,
 	supervisorDeployment *appsv1.Deployment,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
+	aggregatorClient aggregatorclient.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 	leaderElector controllerinit.RunnerWrapper,
+	podInfo *downward.PodInfo,
 ) controllerinit.RunnerBuilder {
+	const certificateName string = "pinniped-supervisor-api-tls-serving-certificate"
+	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
+	oidcClientInformer := pinnipedInformers.Config().V1alpha1().OIDCClients()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
 	// Create controller manager.
@@ -291,30 +309,78 @@ func prepareControllers(
 				secretInformer,
 				controllerlib.WithInformer,
 			),
-			singletonWorker)
+			singletonWorker).
+		WithController(
+			apicerts.NewCertsManagerController(
+				podInfo.Namespace,
+				certificateName,
+				cfg.Labels,
+				kubeClient,
+				secretInformer,
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				365*24*time.Hour, // about one year
+				"Pinniped Supervisor Aggregation CA",
+				cfg.NamesConfig.APIService,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewAPIServiceUpdaterController(
+				podInfo.Namespace,
+				certificateName,
+				clientSecretSupervisorGroupData.APIServiceName(),
+				aggregatorClient,
+				secretInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsObserverController(
+				podInfo.Namespace,
+				certificateName,
+				dynamicServingCertProvider,
+				secretInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsExpirerController(
+				podInfo.Namespace,
+				certificateName,
+				kubeClient,
+				secretInformer,
+				controllerlib.WithInformer,
+				9*30*24*time.Hour, // about 9 months
+				apicerts.TLSCertificateChainSecretKey,
+				plog.New(),
+			),
+			singletonWorker,
+		).
+		WithController(
+			oidcclientwatcher.NewOIDCClientWatcherController(
+				pinnipedClient,
+				secretInformer,
+				oidcClientInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		)
 
 	return controllerinit.Prepare(controllerManager.Start, leaderElector, kubeInformers, pinnipedInformers)
-}
-
-func startControllers(ctx context.Context, shutdown *sync.WaitGroup, buildControllers controllerinit.RunnerBuilder) error {
-	runControllers, err := buildControllers(ctx)
-	if err != nil {
-		return fmt.Errorf("cannot create run controller func: %w", err)
-	}
-
-	shutdown.Add(1)
-	go func() {
-		defer shutdown.Done()
-
-		runControllers(ctx)
-	}()
-
-	return nil
 }
 
 //nolint:funlen
 func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	serverInstallationNamespace := podInfo.Namespace
+	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
+
+	apiServiceRef, err := apiserviceref.New(clientSecretSupervisorGroupData.APIServiceName())
+	if err != nil {
+		return fmt.Errorf("cannot create API service ref: %w", err)
+	}
 
 	dref, supervisorDeployment, supervisorPod, err := deploymentref.New(podInfo)
 	if err != nil {
@@ -323,6 +389,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 
 	opts := []kubeclient.Option{
 		dref,
+		apiServiceRef,
 		kubeclient.WithMiddleware(groupsuffix.New(*cfg.APIGroupSuffix)),
 	}
 
@@ -358,6 +425,8 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		_, _ = writer.Write([]byte("ok"))
 	}))
 
+	dynamicServingCertProvider := dynamiccert.NewServingCert("supervisor-serving-cert")
+
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
 	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
 	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
@@ -372,25 +441,47 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 	)
 
+	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the
+	// injected suffix).
+	scheme, clientSecretGV := supervisorscheme.New(*cfg.APIGroupSuffix)
+
 	buildControllersFunc := prepareControllers(
 		cfg,
 		oidProvidersManager,
 		dynamicJWKSProvider,
 		dynamicTLSCertProvider,
 		dynamicUpstreamIDPProvider,
+		dynamicServingCertProvider,
 		&secretCache,
 		supervisorDeployment,
 		client.Kubernetes,
 		client.PinnipedSupervisor,
+		client.Aggregation,
 		kubeInformers,
 		pinnipedInformers,
 		leaderElector,
+		podInfo,
 	)
 
 	shutdown := &sync.WaitGroup{}
 
-	if err := startControllers(ctx, shutdown, buildControllersFunc); err != nil {
-		return err
+	// Get the aggregated API server config.
+	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
+		dynamicServingCertProvider,
+		buildControllersFunc,
+		*cfg.APIGroupSuffix,
+		*cfg.AggregatedAPIServerPort,
+		scheme,
+		clientSecretGV,
+	)
+	if err != nil {
+		return fmt.Errorf("could not configure aggregated API server: %w", err)
+	}
+
+	// Complete the aggregated API server config and make a server instance.
+	server, err := aggregatedAPIServerConfig.Complete().New()
+	if err != nil {
+		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
 
 	if e := cfg.Endpoints.HTTP; e.Network != supervisor.NetworkDisabled {
@@ -465,9 +556,71 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 	plog.Debug("supervisor started")
 	defer plog.Debug("supervisor exiting")
 
+	// Run the server. Its post-start hook will start the controllers.
+	err = server.GenericAPIServer.PrepareRun().Run(ctx.Done())
+	if err != nil {
+		return err
+	}
 	shutdown.Wait()
 
 	return nil
+}
+
+// Create a configuration for the aggregated API server.
+func getAggregatedAPIServerConfig(
+	dynamicCertProvider dynamiccert.Private,
+	buildControllers controllerinit.RunnerBuilder,
+	apiGroupSuffix string,
+	aggregatedAPIServerPort int64,
+	scheme *runtime.Scheme,
+	clientSecretSupervisorGroupVersion schema.GroupVersion,
+) (*apiserver.Config, error) {
+	codecs := serializer.NewCodecFactory(scheme)
+
+	// this is unused for now but it is a safe value that we could use in the future
+	defaultEtcdPathPrefix := fmt.Sprintf("/pinniped-supervisor-registry/%s", apiGroupSuffix)
+
+	recommendedOptions := genericoptions.NewRecommendedOptions(
+		defaultEtcdPathPrefix,
+		codecs.LegacyCodec(clientSecretSupervisorGroupVersion),
+	)
+	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
+	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
+
+	// This port is configurable. It should be safe to cast because the config reader already validated it.
+	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
+
+	// secure TLS for connections coming from and going to the Kube API server
+	// this is best effort because not all options provide the right hooks to override TLS config
+	// since our only client is the Kube API server, this uses the most secure TLS config
+	if err := ptls.SecureRecommendedOptions(recommendedOptions, kubeclient.Secure); err != nil {
+		return nil, fmt.Errorf("failed to secure recommended options: %w", err)
+	}
+
+	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+	// Note that among other things, this ApplyTo() function copies
+	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
+	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`
+	// the cert provider for the running server. The provider will be called
+	// by the API machinery periodically. When the provider returns nil certs,
+	// the API server will return "the server is currently unable to
+	// handle the request" error responses for all incoming requests.
+	// If the provider later starts returning certs, then the API server
+	// will use them to handle the incoming requests successfully.
+	if err := recommendedOptions.ApplyTo(serverConfig); err != nil {
+		return nil, fmt.Errorf("failed to apply recommended options: %w", err)
+	}
+
+	apiServerConfig := &apiserver.Config{
+		GenericConfig: serverConfig,
+		ExtraConfig: apiserver.ExtraConfig{
+			BuildControllersPostStartHook:      buildControllers,
+			Scheme:                             scheme,
+			NegotiatedSerializer:               codecs,
+			ClientSecretSupervisorGroupVersion: clientSecretSupervisorGroupVersion,
+		},
+	}
+	return apiServerConfig, nil
 }
 
 func maybeSetupUnixPerms(endpoint *supervisor.Endpoint, pod *corev1.Pod) func() error {

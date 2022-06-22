@@ -50,6 +50,7 @@ _: #@ template.replace(data.values.custom_labels)
 #@     "apiGroupSuffix": data.values.api_group_suffix,
 #@     "names": {
 #@       "defaultTLSCertificateSecret": defaultResourceNameWithSuffix("default-tls-certificate"),
+#@       "apiService": defaultResourceNameWithSuffix("api"),
 #@     },
 #@     "labels": labels(),
 #@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests

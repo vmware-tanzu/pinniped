@@ -3,9 +3,23 @@
 
 package v1alpha1
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+type OIDCClientPhase string
+
+const (
+	// PhasePending is the default phase for newly-created OIDCClient resources.
+	PhasePending OIDCClientPhase = "Pending"
+
+	// PhaseReady is the phase for an OIDCClient resource in a healthy state.
+	PhaseReady OIDCClientPhase = "Ready"
+
+	// PhaseError is the phase for an OIDCClient in an unhealthy state.
+	PhaseError OIDCClientPhase = "Error"
 )
+
+// +kubebuilder:validation:Pattern=`^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/`
+type RedirectURI string
 
 // +kubebuilder:validation:Enum="authorization_code";"refresh_token";"urn:ietf:params:oauth:grant-type:token-exchange"
 type GrantType string
@@ -17,9 +31,11 @@ type Scope string
 type OIDCClientSpec struct {
 	// allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this
 	// client. Any other uris will be rejected.
-	// Must be https, unless it is a loopback.
+	// Must be a URI with the https scheme, unless the hostname is 127.0.0.1 or ::1 which may use the http scheme.
+	// Port numbers are not required for 127.0.0.1 or ::1 and are ignored when checking for a matching redirect_uri.
+	// +listType=set
 	// +kubebuilder:validation:MinItems=1
-	AllowedRedirectURIs []string `json:"allowedRedirectURIs"`
+	AllowedRedirectURIs []RedirectURI `json:"allowedRedirectURIs"`
 
 	// allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this
 	// client.
@@ -32,6 +48,7 @@ type OIDCClientSpec struct {
 	// - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange,
 	//   which is a step in the process to be able to get a cluster credential for the user.
 	//   This grant must be listed if allowedScopes lists pinniped:request-audience.
+	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	AllowedGrantTypes []GrantType `json:"allowedGrantTypes"`
 
@@ -51,12 +68,24 @@ type OIDCClientSpec struct {
 	// - groups: The client is allowed to request that ID tokens contain the user's group membership,
 	//   if their group membership is discoverable by the Supervisor.
 	//   Without the groups scope being requested and allowed, the ID token will not contain groups.
+	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	AllowedScopes []Scope `json:"allowedScopes"`
 }
 
-// OIDCClientStatus is a struct that describes the actual state of an OIDC Client.
+// OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 type OIDCClientStatus struct {
+	// Phase summarizes the overall status of the OIDCClient.
+	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase OIDCClientPhase `json:"phase,omitempty"`
+
+	// Represents the observations of an OIDCClient's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // OIDCClient describes the configuration of an OIDC client.

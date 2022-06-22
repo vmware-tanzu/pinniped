@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -84,6 +84,12 @@ func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
+}
+
+func NewAnonymousSupervisorClientset(t *testing.T) supervisorclientset.Interface {
+	t.Helper()
+
+	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedSupervisor
 }
 
 func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {

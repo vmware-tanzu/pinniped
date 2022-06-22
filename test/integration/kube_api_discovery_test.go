@@ -53,6 +53,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
+	clientSecretSupervisorGV := makeGV("clientsecret", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -105,6 +106,32 @@ func TestGetAPIResourceList(t *testing.T) {
 						Kind:       "WhoAmIRequest",
 						Verbs:      []string{"create", "list"},
 						Namespaced: false,
+						Categories: []string{"pinniped"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
+				Name: clientSecretSupervisorGV.Group,
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: clientSecretSupervisorGV.String(),
+						Version:      clientSecretSupervisorGV.Version,
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: clientSecretSupervisorGV.String(),
+					Version:      clientSecretSupervisorGV.Version,
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				clientSecretSupervisorGV.String(): {
+					{
+						Name:       "oidcclientsecretrequests",
+						Kind:       "OIDCClientSecretRequest",
+						Verbs:      []string{"create", "list"},
+						Namespaced: true,
 						Categories: []string{"pinniped"},
 					},
 				},
@@ -353,7 +380,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("every API has a status subresource", func(t *testing.T) {
 		t.Parallel()
 
-		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests")
+		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests", "oidcclientsecretrequests")
 
 		var regular, status []string
 

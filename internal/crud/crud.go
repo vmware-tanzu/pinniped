@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -45,6 +45,7 @@ type Storage interface {
 	Update(ctx context.Context, signature, resourceVersion string, data JSON) (newResourceVersion string, err error)
 	Delete(ctx context.Context, signature string) error
 	DeleteByLabel(ctx context.Context, labelName string, labelValue string) error
+	GetName(signature string) string
 }
 
 type JSON interface{} // document that we need valid JSON types
@@ -80,7 +81,7 @@ func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON
 }
 
 func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (string, error) {
-	secret, err := s.secrets.Get(ctx, s.getName(signature), metav1.GetOptions{})
+	secret, err := s.secrets.Get(ctx, s.GetName(signature), metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get %s for signature %s: %w", s.resource, signature, err)
 	}
@@ -109,7 +110,7 @@ func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion 
 }
 
 func (s *secretsStorage) Delete(ctx context.Context, signature string) error {
-	if err := s.secrets.Delete(ctx, s.getName(signature), metav1.DeleteOptions{}); err != nil {
+	if err := s.secrets.Delete(ctx, s.GetName(signature), metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete %s for signature %s: %w", s.resource, signature, err)
 	}
 	return nil
@@ -171,7 +172,7 @@ func validateSecret(resource string, secret *corev1.Secret) error {
 //nolint: gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-func (s *secretsStorage) getName(signature string) string {
+func (s *secretsStorage) GetName(signature string) string {
 	// try to decode base64 signatures to prevent double encoding of binary data
 	signatureBytes := maybeBase64Decode(signature)
 	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
@@ -182,7 +183,7 @@ func (s *secretsStorage) getName(signature string) string {
 func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string) (*corev1.Secret, error) {
 	buf, err := json.Marshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.getName(signature), err)
+		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.GetName(signature), err)
 	}
 
 	labelsToAdd := map[string]string{
@@ -194,7 +195,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            s.getName(signature),
+			Name:            s.GetName(signature),
 			ResourceVersion: resourceVersion,
 			Labels:          labelsToAdd,
 			Annotations: map[string]string{

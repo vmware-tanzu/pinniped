@@ -6,6 +6,7 @@
 package scheme
 
 import (
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,7 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
+	clientsecretv1alpha1.AddToScheme,
 	configv1alpha1.AddToScheme,
 	idpv1alpha1.AddToScheme,
 }

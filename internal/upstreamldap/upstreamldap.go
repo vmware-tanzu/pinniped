@@ -16,19 +16,17 @@ import (
 	"strings"
 	"time"
 
-	"go.pinniped.dev/internal/oidc"
-
-	"k8s.io/utils/strings/slices"
-
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/utils/strings/slices"
 	"k8s.io/utils/trace"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"

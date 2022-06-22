@@ -303,9 +303,12 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return err
 	}
 	subject := session.Fosite.Claims.Subject
-	oldGroups, err := getDownstreamGroupsFromPinnipedSession(session)
-	if err != nil {
-		return err
+	var oldGroups []string
+	if slices.Contains(grantedScopes, oidc.DownstreamGroupsScope) {
+		oldGroups, err = getDownstreamGroupsFromPinnipedSession(session)
+		if err != nil {
+			return err
+		}
 	}
 
 	s := session.Custom
@@ -410,7 +413,7 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 	}
 	downstreamGroupsInterface := extra[oidc.DownstreamGroupsClaim]
 	if downstreamGroupsInterface == nil {
-		return nil, nil
+		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]interface{})
 	if !ok {

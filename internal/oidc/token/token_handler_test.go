@@ -681,6 +681,27 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantResponseBodyContains: "missing audience parameter",
 		},
 		{
+			name:                     "bad requested audience when it looks like the name of an OIDCClient CR",
+			authcodeExchange:         doValidAuthCodeExchange,
+			requestedAudience:        "client.oauth.pinniped.dev-some-client-abc123",
+			wantStatus:               http.StatusBadRequest,
+			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
+		},
+		{
+			name:                     "bad requested audience when it contains the substring .pinniped.dev because it is reserved for potential future usage",
+			authcodeExchange:         doValidAuthCodeExchange,
+			requestedAudience:        "something.pinniped.dev/some_aud",
+			wantStatus:               http.StatusBadRequest,
+			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
+		},
+		{
+			name:                     "bad requested audience when it is the same name as the static public client pinniped-cli",
+			authcodeExchange:         doValidAuthCodeExchange,
+			requestedAudience:        "pinniped-cli",
+			wantStatus:               http.StatusBadRequest,
+			wantResponseBodyContains: "requested audience cannot equal 'pinniped-cli'",
+		},
+		{
 			name:              "missing subject_token",
 			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",

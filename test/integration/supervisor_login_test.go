@@ -163,6 +163,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		deleteTestUser                       func(t *testing.T, username string)
 		requestAuthorization                 func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
 		createIDP                            func(t *testing.T) string
+		requestTokenExchangeAud              string
 		downstreamScopes                     []string
 		wantLocalhostCallbackToNeverHappen   bool
 		wantDownstreamIDTokenSubjectToMatch  string
@@ -170,6 +171,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		wantDownstreamIDTokenGroups          []string
 		wantErrorDescription                 string
 		wantErrorType                        string
+		wantTokenExchangeResponse            func(t *testing.T, status int, body string)
 
 		// Either revoke the user's session on the upstream provider, or manipulate the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
@@ -1161,6 +1163,69 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
+		{
+			name:      "disallowed requested audience using reserved substring on token exchange results in token exchange error",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud: "contains-disallowed-substring.pinniped.dev-something", // .pinniped.dev substring is not allowed
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"invalid_request","error_description":"The request is missing a required parameter, `+
+						`includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. `+
+						`requested audience cannot contain '.pinniped.dev'"}`,
+					body)
+			},
+		},
+		{
+			name:      "disallowed requested audience using specific reserved name of a dynamic client on token exchange results in token exchange error",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud: "client.oauth.pinniped.dev-client-name", // OIDC dynamic client name is not allowed
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"invalid_request","error_description":"The request is missing a required parameter, `+
+						`includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. `+
+						`requested audience cannot contain '.pinniped.dev'"}`,
+					body)
+			},
+		},
+		{
+			name:      "disallowed requested audience pinniped-cli on token exchange results in token exchange error",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud: "pinniped-cli", // pinniped-cli is not allowed
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"invalid_request","error_description":"The request is missing a required parameter, `+
+						`includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. `+
+						`requested audience cannot equal 'pinniped-cli'"}`,
+					body)
+			},
+		},
 	}
 	for _, test := range tests {
 		tt := test
@@ -1175,12 +1240,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.createTestUser,
 				tt.deleteTestUser,
 				tt.downstreamScopes,
+				tt.requestTokenExchangeAud,
 				tt.wantLocalhostCallbackToNeverHappen,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
 				tt.wantErrorDescription,
 				tt.wantErrorType,
+				tt.wantTokenExchangeResponse,
 			)
 		})
 	}
@@ -1313,12 +1380,14 @@ func testSupervisorLogin(
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
 	downstreamScopes []string,
+	requestTokenExchangeAud string,
 	wantLocalhostCallbackToNeverHappen bool,
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
 	wantErrorDescription string,
 	wantErrorType string,
+	wantTokenExchangeResponse func(t *testing.T, status int, body string),
 ) {
 	env := testlib.IntegrationEnv(t)
 
@@ -1493,7 +1562,10 @@ func testSupervisorLogin(
 			expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
 
 		// token exchange on the original token
-		doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
+		if requestTokenExchangeAud == "" {
+			requestTokenExchangeAud = "some-cluster-123" // use a default test value
+		}
+		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
 
 		refreshedGroups := wantDownstreamIDTokenGroups
 		if editRefreshSessionDataWithoutBreaking != nil {
@@ -1537,7 +1609,7 @@ func testSupervisorLogin(
 		require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
 
 		// token exchange on the refreshed token
-		doTokenExchange(t, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery)
+		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
 
 		// Now that we have successfully performed a refresh, let's test what happens when an
 		// upstream refresh fails during the next downstream refresh.
@@ -1826,14 +1898,22 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) (*http.Requ
 	}
 }
 
-func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *coreosoidc.Provider) {
+func doTokenExchange(
+	t *testing.T,
+	requestTokenExchangeAud string,
+	config *oauth2.Config,
+	tokenResponse *oauth2.Token,
+	httpClient *http.Client,
+	provider *coreosoidc.Provider,
+	wantTokenExchangeResponse func(t *testing.T, status int, body string),
+) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// Form the HTTP POST request with the parameters specified by RFC8693.
 	reqBody := strings.NewReader(url.Values{
 		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
-		"audience":             []string{"cluster-1234"},
+		"audience":             []string{requestTokenExchangeAud},
 		"client_id":            []string{config.ClientID},
 		"subject_token":        []string{tokenResponse.AccessToken},
 		"subject_token_type":   []string{"urn:ietf:params:oauth:token-type:access_token"},
@@ -1845,8 +1925,19 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 
 	resp, err := httpClient.Do(req)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
 	defer func() { _ = resp.Body.Close() }()
+
+	// If a function was passed, call it, so it can make the desired assertions.
+	if wantTokenExchangeResponse != nil {
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		wantTokenExchangeResponse(t, resp.StatusCode, string(body))
+		return // the above call should have made all desired assertions about the response, so return
+	}
+
+	// Else, want a successful response.
+	require.Equal(t, resp.StatusCode, http.StatusOK)
+
 	var respBody struct {
 		AccessToken     string `json:"access_token"`
 		IssuedTokenType string `json:"issued_token_type"`
@@ -1854,7 +1945,7 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&respBody))
 
-	var clusterVerifier = provider.Verifier(&coreosoidc.Config{ClientID: "cluster-1234"})
+	var clusterVerifier = provider.Verifier(&coreosoidc.Config{ClientID: requestTokenExchangeAud})
 	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
 	require.NoError(t, err)
 

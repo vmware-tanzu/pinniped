@@ -181,7 +181,7 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 	}
 
 	groupsScope := slices.Contains(grantedScopes, oidc.DownstreamGroupsScope)
-	if groupsScope {
+	if groupsScope { //nolint:nestif
 		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
 		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
 		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
@@ -333,12 +333,13 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 	// run PerformRefresh
-	groups, err := p.PerformRefresh(ctx, provider.StoredRefreshAttributes{
+	groups, err := p.PerformRefresh(ctx, provider.RefreshAttributes{
 		Username:             username,
 		Subject:              subject,
 		DN:                   dn,
 		Groups:               oldGroups,
 		AdditionalAttributes: additionalAttributes,
+		GrantedScopes:        grantedScopes,
 	})
 	if err != nil {
 		return errUpstreamRefreshError().WithHint(

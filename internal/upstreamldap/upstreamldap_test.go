@@ -638,8 +638,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -676,8 +676,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -1167,7 +1167,7 @@ func TestEndUserAuthentication(t *testing.T) {
 
 			ldapProvider := New(*tt.providerConfig)
 
-			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password)
+			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, []string{"groups"})
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1199,7 +1199,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
 
-			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username)
+			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, []string{"groups"})
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1318,7 +1318,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				Filter:             testGroupSearchFilter,
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
 			},
-			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
 				pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
 			},
 		}
@@ -1772,11 +1772,12 @@ func TestUpstreamRefresh(t *testing.T) {
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*tt.providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
-			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
+			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.RefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,
 				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
+				GrantedScopes:        []string{"groups"},
 			})
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -2149,7 +2150,7 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			initialValRawEncoded := base64.RawURLEncoding.EncodeToString([]byte(initialVal))
-			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.StoredRefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
+			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.RefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

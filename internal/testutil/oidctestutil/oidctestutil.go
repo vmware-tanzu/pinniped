@@ -92,7 +92,7 @@ type ValidateTokenAndMergeWithUserInfoArgs struct {
 type ValidateRefreshArgs struct {
 	Ctx              context.Context
 	Tok              *oauth2.Token
-	StoredAttributes provider.StoredRefreshAttributes
+	StoredAttributes provider.RefreshAttributes
 }
 
 type TestUpstreamLDAPIdentityProvider struct {
@@ -116,7 +116,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
+func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*authenticators.Response, bool, error) {
 	return u.AuthenticateFunc(ctx, username, password)
 }
 
@@ -124,7 +124,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) ([]string, error) {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.RefreshAttributes) ([]string, error) {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}

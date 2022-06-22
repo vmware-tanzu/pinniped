@@ -60,7 +60,7 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		}
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password)
+		authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
 		if err != nil {
 			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 			// There was some problem during authentication with the upstream, aside from bad username/password.

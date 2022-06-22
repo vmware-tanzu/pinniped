@@ -131,7 +131,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return nil
 	}
 
-	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password)
+	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")

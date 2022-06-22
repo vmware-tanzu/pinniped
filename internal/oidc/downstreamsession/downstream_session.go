@@ -10,12 +10,11 @@ import (
 	"net/url"
 	"time"
 
-	"k8s.io/utils/strings/slices"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/constable"

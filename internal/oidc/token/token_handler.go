@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/warning"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -106,19 +107,21 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 
+	grantedScopes := accessRequest.GetGrantedScopes()
+
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, session, providerCache)
+		return upstreamOIDCRefresh(ctx, session, providerCache, grantedScopes)
 	case psession.ProviderTypeLDAP:
-		return upstreamLDAPRefresh(ctx, providerCache, session)
+		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes)
 	case psession.ProviderTypeActiveDirectory:
-		return upstreamLDAPRefresh(ctx, providerCache, session)
+		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 }
 
-func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister) error {
+func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister, grantedScopes []string) error {
 	s := session.Custom
 	if s.OIDC == nil {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -177,30 +180,33 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 		return err
 	}
 
-	// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
-	// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
-	// claim name. It could also be missing because the claim was originally found in the ID token during login, but
-	// now we might not have a refreshed ID token.
-	// If the claim is found, then use it to update the user's group membership in the session.
-	// If the claim is not found, then we have no new information about groups, so skip updating the group membership
-	// and let any old groups memberships in the session remain.
-	refreshedGroups, err := downstreamsession.GetGroupsFromUpstreamIDToken(p, mergedClaims)
-	if err != nil {
-		return errUpstreamRefreshError().WithHintf(
-			"Upstream refresh error while extracting groups claim.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-	if refreshedGroups != nil {
-		oldGroups, err := getDownstreamGroupsFromPinnipedSession(session)
+	groupsScope := slices.Contains(grantedScopes, oidc.DownstreamGroupsScope)
+	if groupsScope {
+		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
+		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
+		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
+		// now we might not have a refreshed ID token.
+		// If the claim is found, then use it to update the user's group membership in the session.
+		// If the claim is not found, then we have no new information about groups, so skip updating the group membership
+		// and let any old groups memberships in the session remain.
+		refreshedGroups, err := downstreamsession.GetGroupsFromUpstreamIDToken(p, mergedClaims)
 		if err != nil {
-			return err
+			return errUpstreamRefreshError().WithHintf(
+				"Upstream refresh error while extracting groups claim.").WithTrace(err).
+				WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
 		}
-		username, err := getDownstreamUsernameFromPinnipedSession(session)
-		if err != nil {
-			return err
+		if refreshedGroups != nil {
+			oldGroups, err := getDownstreamGroupsFromPinnipedSession(session)
+			if err != nil {
+				return err
+			}
+			username, err := getDownstreamUsernameFromPinnipedSession(session)
+			if err != nil {
+				return err
+			}
+			warnIfGroupsChanged(ctx, oldGroups, refreshedGroups, username)
+			session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups
 		}
-		warnIfGroupsChanged(ctx, oldGroups, refreshedGroups, username)
-		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups
 	}
 
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
@@ -291,7 +297,7 @@ func findOIDCProviderByNameAndValidateUID(
 		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 }
 
-func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentityProvidersLister, session *psession.PinnipedSession) error {
+func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentityProvidersLister, session *psession.PinnipedSession, grantedScopes []string) error {
 	username, err := getDownstreamUsernameFromPinnipedSession(session)
 	if err != nil {
 		return err
@@ -339,10 +345,13 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 			"Upstream refresh failed.").WithTrace(err).
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
 	}
-	// Replace the old value with the new value.
-	session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
+	groupsScope := slices.Contains(grantedScopes, oidc.DownstreamGroupsScope)
+	if groupsScope {
+		// Replace the old value with the new value.
+		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 
-	warnIfGroupsChanged(ctx, oldGroups, groups, username)
+		warnIfGroupsChanged(ctx, oldGroups, groups, username)
+	}
 
 	return nil
 }
@@ -400,7 +409,7 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 	}
 	downstreamGroupsInterface := extra[oidc.DownstreamGroupsClaim]
 	if downstreamGroupsInterface == nil {
-		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
+		return nil, nil
 	}
 	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]interface{})
 	if !ok {

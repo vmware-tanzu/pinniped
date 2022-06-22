@@ -25,6 +25,7 @@ import (
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -162,6 +163,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		deleteTestUser                       func(t *testing.T, username string)
 		requestAuthorization                 func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
 		createIDP                            func(t *testing.T) string
+		downstreamScopes                     []string
 		wantLocalhostCallbackToNeverHappen   bool
 		wantDownstreamIDTokenSubjectToMatch  string
 		wantDownstreamIDTokenUsernameToMatch func(username string) string
@@ -328,6 +330,55 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap without requesting groups scope",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			downstreamScopes: []string{"openid", "pinniped:request-audience", "offline_access"},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: []string{},
+		},
+		{
+			name:      "oidc without requesting groups scope",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			downstreamScopes:                     []string{"openid", "pinniped:request-audience", "offline_access"},
+			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
+			wantDownstreamIDTokenGroups:          nil,
 		},
 		{
 			name:      "ldap with browser flow",
@@ -1123,6 +1174,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.breakRefreshSessionData,
 				tt.createTestUser,
 				tt.deleteTestUser,
+				tt.downstreamScopes,
 				tt.wantLocalhostCallbackToNeverHappen,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
@@ -1260,6 +1312,7 @@ func testSupervisorLogin(
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
+	downstreamScopes []string,
 	wantLocalhostCallbackToNeverHappen bool,
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
@@ -1372,6 +1425,10 @@ func testSupervisorLogin(
 	// Start a callback server on localhost.
 	localCallbackServer := startLocalCallbackServer(t)
 
+	if downstreamScopes == nil {
+		downstreamScopes = []string{"openid", "pinniped:request-audience", "offline_access", "groups"}
+	}
+
 	// Form the OAuth2 configuration corresponding to our CLI client.
 	// Note that this is not using response_type=form_post, so the Supervisor will redirect to the callback endpoint
 	// directly, without using the Javascript form_post HTML page to POST back to the callback endpoint. The e2e
@@ -1381,7 +1438,7 @@ func testSupervisorLogin(
 		ClientID:    "pinniped-cli",
 		Endpoint:    discovery.Endpoint(),
 		RedirectURL: localCallbackServer.URL,
-		Scopes:      []string{"openid", "pinniped:request-audience", "offline_access", "groups"},
+		Scopes:      downstreamScopes,
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -1414,9 +1471,9 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	t.Logf("got callback request: %s", testlib.MaskTokens(callback.URL.String()))
-	if wantErrorType == "" {
+	if wantErrorType == "" { // nolint:nestif
 		require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-		require.ElementsMatch(t, []string{"openid", "pinniped:request-audience", "offline_access", "groups"}, strings.Split(callback.URL.Query().Get("scope"), " "))
+		require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
 		authcode := callback.URL.Query().Get("code")
 		require.NotEmpty(t, authcode)
 
@@ -1427,7 +1484,10 @@ func testSupervisorLogin(
 		tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 		require.NoError(t, err)
 
-		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username", "groups"}
+		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
+		if slices.Contains(downstreamScopes, "groups") {
+			expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
+		}
 		verifyTokenResponse(t,
 			tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
 			expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
@@ -1464,7 +1524,10 @@ func testSupervisorLogin(
 		require.NoError(t, err)
 
 		// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
-		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
+		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
+		if slices.Contains(downstreamScopes, "groups") {
+			expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
+		}
 		verifyTokenResponse(t,
 			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
 			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)

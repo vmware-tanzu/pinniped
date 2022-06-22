@@ -111,6 +111,8 @@ type UpstreamLDAPIdentityProviderI interface {
 	PerformRefresh(ctx context.Context, storedRefreshAttributes StoredRefreshAttributes) (groups []string, err error)
 }
 
+// StoredRefreshAttributes contains information about the user from the original login request
+// and previous refreshes.
 type StoredRefreshAttributes struct {
 	Username             string
 	Subject              string

@@ -200,7 +200,7 @@ var (
 	happyAuthRequest = &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
-			"scope":                 {"openid profile email"},
+			"scope":                 {"openid profile email groups"},
 			"client_id":             {goodClient},
 			"state":                 {"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
 			"nonce":                 {goodNonce},
@@ -268,11 +268,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 		{
 			name: "request is valid and tokens are issued",
 			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
-					wantRequestedScopes:   []string{"openid", "profile", "email"},
-					wantGrantedScopes:     []string{"openid"},
+					wantRequestedScopes:   []string{"openid", "profile", "email", "groups"},
+					wantGrantedScopes:     []string{"openid", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -299,7 +300,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in", "refresh_token"}, // all possible tokens
 					wantRequestedScopes:   []string{"openid", "offline_access"},
 					wantGrantedScopes:     []string{"openid", "offline_access"},
-					wantGroups:            goodGroups,
+					wantGroups:            nil,
 				},
 			},
 		},
@@ -312,6 +313,19 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in", "refresh_token"}, // no id token
 					wantRequestedScopes:   []string{"offline_access"},
 					wantGrantedScopes:     []string{"offline_access"},
+					wantGroups:            goodGroups,
+				},
+			},
+		},
+		{
+			name: "groups scope is requested",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email groups") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "profile", "email", "groups"},
+					wantGrantedScopes:     []string{"openid", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -566,12 +580,12 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 		{
 			name: "authcode exchange succeeds once and then fails when the same authcode is used again",
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access profile email") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access profile email groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access", "profile", "email"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "profile", "email", "groups"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -630,14 +644,14 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 	successfulAuthCodeExchange := tokenEndpointResponseExpectedValues{
 		wantStatus:            http.StatusOK,
 		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-		wantRequestedScopes:   []string{"openid", "pinniped:request-audience"},
-		wantGrantedScopes:     []string{"openid", "pinniped:request-audience"},
+		wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "groups"},
+		wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "groups"},
 		wantGroups:            goodGroups,
 	}
 
 	doValidAuthCodeExchange := authcodeExchangeInputs{
 		modifyAuthRequest: func(authRequest *http.Request) {
-			authRequest.Form.Set("scope", "openid pinniped:request-audience")
+			authRequest.Form.Set("scope", "openid pinniped:request-audience groups")
 		},
 		want: successfulAuthCodeExchange,
 	}
@@ -732,13 +746,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			name: "access token missing pinniped:request-audience scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid")
+					authRequest.Form.Set("scope", "openid groups")
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid"},
-					wantGrantedScopes:     []string{"openid"},
+					wantRequestedScopes:   []string{"openid", "groups"},
+					wantGrantedScopes:     []string{"openid", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -750,13 +764,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			name: "access token missing openid scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "pinniped:request-audience")
+					authRequest.Form.Set("scope", "pinniped:request-audience groups")
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"pinniped:request-audience"},
-					wantGrantedScopes:     []string{"pinniped:request-audience"},
+					wantRequestedScopes:   []string{"pinniped:request-audience", "groups"},
+					wantGrantedScopes:     []string{"pinniped:request-audience", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -765,10 +779,27 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantResponseBodyContains: `missing the 'openid' scope`,
 		},
 		{
-			name: "token minting failure",
+			name: "access token missing groups scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
 					authRequest.Form.Set("scope", "openid pinniped:request-audience")
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope", "id_token"},
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience"},
+					wantGroups:            nil,
+				},
+			},
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
+		},
+		{
+			name: "token minting failure",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					authRequest.Form.Set("scope", "openid pinniped:request-audience groups")
 				},
 				// Fail to fetch a JWK signing key after the authcode exchange has happened.
 				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
@@ -845,7 +876,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
 
 			// Make sure that these are the only fields in the token.
-			idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "groups", "username"}
+			idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "username"}
+			if test.authcodeExchange.want.wantGroups != nil {
+				idTokenFields = append(idTokenFields, "groups")
+			}
 			require.ElementsMatch(t, idTokenFields, getMapKeys(tokenClaims))
 
 			// Assert that the returned token has expected claims values.
@@ -859,7 +893,11 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
 			require.Equal(t, goodUsername, tokenClaims["username"])
-			require.Equal(t, toSliceOfInterface(test.authcodeExchange.want.wantGroups), tokenClaims["groups"])
+			if test.authcodeExchange.want.wantGroups != nil {
+				require.Equal(t, toSliceOfInterface(test.authcodeExchange.want.wantGroups), tokenClaims["groups"])
+			} else {
+				require.Nil(t, tokenClaims["groups"])
+			}
 
 			// Also assert that some are the same as the original downstream ID token.
 			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
@@ -1003,8 +1041,8 @@ func TestRefreshGrant(t *testing.T) {
 		want := tokenEndpointResponseExpectedValues{
 			wantStatus:                  http.StatusOK,
 			wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-			wantRequestedScopes:         []string{"openid", "offline_access"},
-			wantGrantedScopes:           []string{"openid", "offline_access"},
+			wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
+			wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
 			wantCustomSessionDataStored: wantCustomSessionDataStored,
 			wantGroups:                  goodGroups,
 		}
@@ -1090,7 +1128,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1114,7 +1152,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1142,15 +1180,15 @@ func TestRefreshGrant(t *testing.T) {
 					}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCAccessTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCAccessTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"refresh_token", "id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "groups"},
 					wantGroups:            goodGroups,
 					wantUpstreamOIDCValidateTokenCall: &expectedUpstreamValidateTokens{
 						oidcUpstreamName,
@@ -1207,15 +1245,15 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access"},
-					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
 					wantGroups:                        goodGroups,
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
@@ -1236,15 +1274,15 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access"},
-					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
@@ -1265,15 +1303,15 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access"},
-					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
@@ -1294,15 +1332,15 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access"},
-					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
 					wantGroups:                        []string{}, // the user no longer belongs to any groups
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
@@ -1323,15 +1361,15 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access"},
-					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
 					wantGroups:                        goodGroups, // the same groups as from the initial login
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
@@ -1348,7 +1386,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -1358,8 +1396,8 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:         []string{"openid", "offline_access"},
-					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
 					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"},
 					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
@@ -1375,7 +1413,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshGroups: []string{},
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -1385,9 +1423,120 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
+					wantGroups:                  []string{},
+					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+				},
+			},
+		},
+		{
+			name: "ldap refresh grant when the upstream refresh when groups scope not requested on original request or refresh",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:                 ldapUpstreamName,
+				ResourceUID:          ldapUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: []string{},
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access"},
 					wantGrantedScopes:           []string{"openid", "offline_access"},
-					wantGroups:                  []string{},
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+					wantGroups:                  nil,
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid offline_access").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access"},
+					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantGroups:                  nil,
+					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+				},
+			},
+		},
+		{
+			name: "oidc refresh grant when the upstream refresh when groups scope not requested on original request or refresh",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access"},
+					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+					wantGroups:                  nil,
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid offline_access").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        nil,
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			// fosite does not look at the scopes provided in refresh requests, although it is a valid parameter.
+			// even if 'groups' is not sent in the refresh request, we will send groups all the same.
+			name: "refresh grant when the upstream refresh when groups scope requested on original request but not refresh refresh",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
+				Name:                 ldapUpstreamName,
+				ResourceUID:          ldapUpstreamResourceUID,
+				URL:                  ldapUpstreamURL,
+				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
+			}),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
+				customSessionData: happyLDAPCustomSessionData,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
+					wantCustomSessionDataStored: happyLDAPCustomSessionData,
+					wantGroups:                  goodGroups,
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid offline_access").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
+					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"}, // groups are updated even though the scope was not included
 					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 				},
@@ -1406,7 +1555,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1430,7 +1579,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDTokenWithoutRefreshToken()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1452,7 +1601,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1477,12 +1626,12 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:         []string{"openid", "offline_access", "pinniped:request-audience"},
-					wantGrantedScopes:           []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
 					wantGroups:                  goodGroups,
 					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				},
@@ -1494,8 +1643,8 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
 					wantSuccessBodyFields:             []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience"},
-					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
 					wantGroups:                        goodGroups,
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
@@ -1515,7 +1664,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1605,7 +1754,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: nil, // this should not happen in practice
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(nil),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1625,7 +1774,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: oidcUpstreamType,
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: "", // this should not happen in practice
@@ -1652,7 +1801,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: oidcUpstreamType,
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1679,7 +1828,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: "", // this should not happen in practice
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1706,7 +1855,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: "not-an-allowed-provider-type", // this should not happen in practice
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1733,7 +1882,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: oidcUpstreamType,
 					OIDC:         nil, // this should not happen in practice
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1763,7 +1912,7 @@ func TestRefreshGrant(t *testing.T) {
 						UpstreamAccessToken:  "",
 					},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1793,7 +1942,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: oidcUpstreamType,
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
@@ -1825,7 +1974,7 @@ func TestRefreshGrant(t *testing.T) {
 					ProviderType: oidcUpstreamType,
 					OIDC:         &psession.OIDCSessionData{UpstreamRefreshToken: oidcUpstreamInitialRefreshToken},
 				},
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
 						ProviderName: oidcUpstreamName,
@@ -1853,7 +2002,7 @@ func TestRefreshGrant(t *testing.T) {
 				WithPerformRefreshError(errors.New("some upstream refresh error")).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1878,7 +2027,7 @@ func TestRefreshGrant(t *testing.T) {
 				Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1910,7 +2059,7 @@ func TestRefreshGrant(t *testing.T) {
 				Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1939,7 +2088,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -1970,7 +2119,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -2001,7 +2150,7 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
 			},
 			refreshRequest: refreshRequestInputs{
@@ -2027,7 +2176,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshGroups: goodGroups,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2048,7 +2197,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshGroups: goodGroups,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2068,7 +2217,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: &psession.CustomSessionData{
 					ProviderUID:  ldapUpstreamResourceUID,
 					ProviderName: ldapUpstreamName,
@@ -2104,7 +2253,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: &psession.CustomSessionData{
 					ProviderUID:     activeDirectoryUpstreamResourceUID,
 					ProviderName:    activeDirectoryUpstreamName,
@@ -2140,7 +2289,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: &psession.CustomSessionData{
 					ProviderUID:  ldapUpstreamResourceUID,
 					ProviderName: ldapUpstreamName,
@@ -2180,7 +2329,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: &psession.CustomSessionData{
 					ProviderUID:  ldapUpstreamResourceUID,
 					ProviderName: ldapUpstreamName,
@@ -2221,7 +2370,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2249,7 +2398,7 @@ func TestRefreshGrant(t *testing.T) {
 				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2272,7 +2421,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "upstream ldap idp not found",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2294,7 +2443,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "upstream active directory idp not found",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2320,7 +2469,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2357,7 +2506,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				//fositeSessionData: &openid.DefaultSession{},
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
@@ -2399,7 +2548,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				//fositeSessionData: &openid.DefaultSession{},
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
@@ -2441,7 +2590,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				//fositeSessionData: &openid.DefaultSession{},
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
@@ -2483,7 +2632,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2509,7 +2658,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2531,7 +2680,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "upstream ldap idp not found",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2553,7 +2702,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "upstream active directory idp not found",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2579,7 +2728,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2616,7 +2765,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2657,7 +2806,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2696,7 +2845,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyLDAPCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyLDAPCustomSessionData,
@@ -2722,7 +2871,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					happyActiveDirectoryCustomSessionData,
@@ -2942,7 +3091,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 
 	requireTokenEndpointBehavior(t,
 		test.want,
-		goodGroups,             // the old groups from the initial login
+		test.want.wantGroups,   // the old groups from the initial login
 		test.customSessionData, // the old custom session data from the initial login
 		wantAtHashClaimInIDToken,
 		wantNonceValueInIDToken,
@@ -3174,7 +3323,6 @@ func simulateAuthEndpointHavingAlreadyRun(
 				AuthTime:    goodAuthTime,
 				Extra: map[string]interface{}{
 					oidc.DownstreamUsernameClaim: goodUsername,
-					oidc.DownstreamGroupsClaim:   goodGroups,
 				},
 			},
 			Subject:  "", // not used, note that callback_handler.go does not set this
@@ -3192,6 +3340,10 @@ func simulateAuthEndpointHavingAlreadyRun(
 	}
 	if strings.Contains(authRequest.Form.Get("scope"), "pinniped:request-audience") {
 		authRequester.GrantScope("pinniped:request-audience")
+	}
+	if strings.Contains(authRequest.Form.Get("scope"), "groups") {
+		authRequester.GrantScope("groups")
+		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = goodGroups
 	}
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)
@@ -3429,10 +3581,13 @@ func requireValidStoredRequest(
 		require.Equal(t, goodSubject, claims.Subject)
 
 		// Our custom claims from the authorize endpoint should still be set.
-		require.Equal(t, map[string]interface{}{
+		expectedExtra := map[string]interface{}{
 			"username": goodUsername,
-			"groups":   toSliceOfInterface(wantGroups),
-		}, claims.Extra)
+		}
+		if wantGroups != nil {
+			expectedExtra["groups"] = toSliceOfInterface(wantGroups)
+		}
+		require.Equal(t, expectedExtra, claims.Extra)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
 		// sentinel test value is set correctly.
@@ -3551,12 +3706,15 @@ func requireValidIDToken(
 	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
 	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
 	// We can add a workaround for this later.
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "groups", "username"}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "username"}
 	if wantAtHashClaimInIDToken {
 		idTokenFields = append(idTokenFields, "at_hash")
 	}
 	if wantNonceValueInIDToken {
 		idTokenFields = append(idTokenFields, "nonce")
+	}
+	if wantGroupsInIDToken != nil {
+		idTokenFields = append(idTokenFields, "groups")
 	}
 
 	// make sure that these are the only fields in the token

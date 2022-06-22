@@ -77,8 +77,7 @@ There will be very few user-facing configuration options for audit logging in th
 found to be needed, more configuration could be added in future versions.
 
 This proposal recommends adding a single on/off install-time configuration option for disabling audit logs. By default,
-audit logs will be enabled. An admin user who is concerned about logging identities, for example because usernames may
-be considered PII, may disable audit logging.
+audit logs will be disabled. Usernames may be considered PII, so disabled by default avoids potentially logging PII.
 
 Like other install-time configuration options, this option would appear in the values.yaml file of the Supervisor and
 Concierge deployment directories. The selected value would be rendered into the "static" ConfigMap, and read by the
@@ -106,20 +105,23 @@ The Supervisor's audit logs would include events such as:
 - Downstream login (started, succeeded, failed)
 - Downstream token exchange (succeeded, failed)
 - Session expired
-- Maybe: The equivalent of access log events for all Supervisor endpoints, since there is no other component providing
+- The equivalent of access log events for all Supervisor endpoints, since there is no other component providing
   access logs. This would include logging things like calls to the Supervisor's OIDC well-known discovery endpoint.
   These logs could help an investigator determine more about the usage pattern of a suspicious client.
-- Maybe: Newly authenticated user is associated with “admin” RBAC. Note that the Supervisor is not directly aware of
-  RBAC, so determining this would require otherwise unnecessary calls to the Kubernetes API server, which would degrade
-  the performance of the Supervisor. It's also not clear what would constitute "admin" level access, since RBAC is
-  configurable at a very fine-grained level. On the other hand, the Supervisor is directly aware of the user's group
-  memberships, which could be logged.
+- The identity (username, group memberships) of newly authenticated users
+- Newly authenticated user is associated with “admin-like” RBAC. Any user that is allowed to perform
+  `verbs=* groups=* resources=*` according to a subject access review API call shall be considered "admin-like".
+  This would only indicate that the user has "admin-like" permissions on the Supervisor cluster itself, not on other
+  workload clusters, since the Supervisor is not aware of the RBAC settings on the workload clusters.
 
 The Concierge's audit logs would include events such as:
 
-- Token credential request (succeeded, failed, maybe maps to admin RBAC). While already captured by the API server audit
+- Token credential request (succeeded, failed, maps to admin RBAC). While already captured by the API server audit
   logs, those should likely be set to metadata. Duplicating the event allows for more controlled capture & management of
   data.
+  - Similar to the Supervisor, the TCR endpoint could log when an authenticated user is associated with “admin-like”
+    RBAC. Any user that is allowed to perform `verbs=* groups=* resources=*` according to a subject access review API
+    call shall be considered "admin-like".
 - WhoAmI Request. While already captured by the API server audit logs, duplicating the event allows for more controlled
   capture & management of data.
 
@@ -140,7 +142,8 @@ might lose a few lines of logs. A normal pod shutdown should be able to flush th
 will be added to both the Concierge and Supervisor apps Deployments' Pods. These containers will tail those audit logs
 to stdout, thus effectively moving those log lines from files on the Pod to Kubernetes container logs. Those sidecar
 container images can be minimal with just enough in the image to support the unix `tail` command (or similar Go binary,
-such as [hpcloud/tail](https://github.com/hpcloud/tail)).
+such as [hpcloud/tail](https://github.com/hpcloud/tail), although that particular example library may not be maintained
+anymore).
 
 Kubernetes will take care of concerns such as log rotation for the container logs. For the files on the Pod's disk
 output by the Supervisor and Concierge apps, we should research whether Pinniped should have code to avoid allowing
@@ -189,7 +192,7 @@ action type may be added. All keys should be included in documentation for the a
 
 Every event should include these keys:
 
-- `time`: the timestamp of the event
+- `timestamp`: the timestamp of the event
 - `event`: the event type, which is a brief description of what happened, with no string interpolation, so it will
   always be the same for a given event type (e.g. `upstream refresh succeeded`)
 - `v`: a number specifying the format version of the event type, starting with `1`, to give us flexibility to make
@@ -198,7 +201,7 @@ Every event should include these keys:
 
 Depending on the event type, an event might include other keys, such as:
 
-- `msg`: a freeform warning or error message meant to be read by a human (e.g. the error message that was returned by an
+- `message`: a freeform warning or error message meant to be read by a human (e.g. the error message that was returned by an
   upstream IDP during a failed login attempt)
 - `requestID`: a unique ID for the request, if the event is related to an API request
 - `requestURI`: the path of the endpoint, if the event is related to an API request
@@ -209,7 +212,8 @@ Depending on the event type, an event might include other keys, such as:
   there is one
 
 The names of many of these keys are purposefully similar to the names of the keys used by Kubernetes audit events to
-make them feel familiar.
+make them feel familiar. Also, where it makes sense, the key names should be similar to
+[those used in the Pinniped Pod logs](https://github.com/vmware-tanzu/pinniped/blob/main/internal/plog/zap.go#L104-L120).
 
 The details of these additional keys will be worked out as the details of the specific events are being worked out,
 during implementation of this proposal.
@@ -233,7 +237,7 @@ It would be desirable for a timestamp to:
 2. Be easily parsable by log parsers, especially fluentbit
 3. Be expressed in UTC time
 4. Use at least millisecond precision
-5. Use the consistent JSON key name `time`
+5. Use the consistent JSON key name `timestamp`
 
 Golang's standard library's [interpretation](https://pkg.go.dev/time#pkg-constants) of RFC 3339 with nanosecond
 precision defines a timestamp format which meets the above goals. An example timestamp in this format, printed
@@ -247,7 +251,7 @@ Given this timestamp format, the following fluentbit configuration could be used
     [PARSER]
       Name   json
       Format json
-      Time_Key time
+      Time_Key timestamp
       Time_Format %Y-%m-%dT%H:%M:%S.%LZ
 ```
 
@@ -319,12 +323,13 @@ None yet.
 
 ## Open Questions
 
-- Should we output events that can function similar to access logs for the Supervisor endoints?
-- Should we try to somehow detect that a user is "root-like"?
+None.
 
 ## Answered Questions
 
-None yet.
+- Should we output events that can function similar to access logs for the Supervisor endpoints?
+  Yes (paragraphs above updated).
+- Should we try to somehow detect that a user is "root-like"? Yes (paragraphs above updated).
 
 ## Implementation Plan
 

@@ -338,7 +338,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){
 			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
 		},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
 			pwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(pwdLastSetAttribute),
 			userAccountControlAttribute:         validUserAccountControl,
 			userAccountControlComputedAttribute: validComputedUserAccountControl,
@@ -437,7 +437,7 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 	return strings.Join(domainComponents[1:], "."), nil
 }
 
-func validUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+func validUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
@@ -450,7 +450,7 @@ func validUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttribut
 	return nil
 }
 
-func validComputedUserAccountControl(entry *ldap.Entry, _ provider.StoredRefreshAttributes) error {
+func validComputedUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err

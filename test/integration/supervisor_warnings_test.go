@@ -119,6 +119,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
@@ -171,7 +172,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,
@@ -262,6 +263,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
@@ -405,6 +407,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 			"--credential-cache", credentialCachePath,
 		})
 

@@ -10,11 +10,11 @@ import (
 	"net/url"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/constable"
@@ -40,7 +40,7 @@ const (
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(subject string, username string, groups []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
+func MakeDownstreamSession(subject string, username string, groups []string, grantedScopes []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
@@ -57,7 +57,9 @@ func MakeDownstreamSession(subject string, username string, groups []string, cus
 	}
 	openIDSession.IDTokenClaims().Extra = map[string]interface{}{
 		oidc.DownstreamUsernameClaim: username,
-		oidc.DownstreamGroupsClaim:   groups,
+	}
+	if slices.Contains(grantedScopes, oidc.DownstreamGroupsScope) {
+		openIDSession.IDTokenClaims().Extra[oidc.DownstreamGroupsClaim] = groups
 	}
 	return openIDSession
 }
@@ -147,10 +149,10 @@ func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdent
 }
 
 // GrantScopesIfRequested auto-grants the scopes for which we do not require end-user approval, if they were requested.
-func GrantScopesIfRequested(authorizeRequester fosite.AuthorizeRequester) {
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
-	oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
+func GrantScopesIfRequested(authorizeRequester fosite.AuthorizeRequester, scopes []string) {
+	for _, scope := range scopes {
+		oidc.GrantScopeIfRequested(authorizeRequester, scope)
+	}
 }
 
 // GetDownstreamIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.

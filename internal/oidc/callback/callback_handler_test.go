@@ -62,8 +62,8 @@ const (
 
 var (
 	oidcUpstreamGroupMembership    = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
-	happyDownstreamScopesRequested = []string{"openid"}
-	happyDownstreamScopesGranted   = []string{"openid"}
+	happyDownstreamScopesRequested = []string{"openid", "groups"}
+	happyDownstreamScopesGranted   = []string{"openid", "groups"}
 
 	happyDownstreamRequestParamsQuery = url.Values{
 		"response_type":         []string{"code"},
@@ -133,7 +133,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
+	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState
 
 	tests := []struct {
 		name string
@@ -231,6 +231,38 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamAccessTokenCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:   "form_post happy path with no groups scope requested",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"response_mode": "form_post",
+							"scope":         "openid",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusOK,
+			wantContentType:                   "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamRequestedScopes:     []string{"openid"},
+			wantDownstreamGrantedScopes:       []string{"openid"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -686,6 +718,33 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().
 				WithState(
 					happyUpstreamStateParam().
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "profile email groups"}).Encode()).
+						Build(t, happyStateCodec),
+				).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=groups&state=` + happyDownstreamState,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamRequestedScopes:     []string{"profile", "email", "groups"},
+			wantDownstreamGrantedScopes:       []string{"groups"},
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:   "state's downstream auth params does not contain openid or groups scope",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().
+				WithState(
+					happyUpstreamStateParam().
 						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode()).
 						Build(t, happyStateCodec),
 				).String(),
@@ -695,7 +754,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
-			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamGrantedScopes:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -712,16 +771,16 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().
 				WithState(
 					happyUpstreamStateParam().
-						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "openid offline_access"}).Encode()).
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "openid offline_access groups"}).Encode()).
 						Build(t, happyStateCodec),
 				).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
-			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
-			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "groups"},
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "groups"},
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,

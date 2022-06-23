@@ -131,7 +131,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return nil
 	}
 
-	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password)
+	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
@@ -146,7 +146,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
 	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse)
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
 	return nil
@@ -243,7 +243,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
 
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
@@ -334,7 +334,7 @@ func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fos
 	// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
 	// There don't seem to be any validations inside `NewAuthorizeResponse` related to the offline_access scope
 	// at this time, however we will temporarily grant the scope just in case that changes in a future release of fosite.
-	downstreamsession.GrantScopesIfRequested(authorizeRequester)
+	downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 	return authorizeRequester, true
 }

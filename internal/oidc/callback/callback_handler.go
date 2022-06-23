@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -52,7 +53,7 @@ func NewHandler(
 		}
 
 		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester)
+		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -76,7 +77,7 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {

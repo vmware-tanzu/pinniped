@@ -76,6 +76,14 @@ const (
 	// information.
 	DownstreamGroupsClaim = "groups"
 
+	// DownstreamGroupsScope is a custom scope that determines whether the
+	// groups claim will be returned in ID tokens.
+	DownstreamGroupsScope = "groups"
+
+	// RequestAudienceScope is a custom scope that determines whether a RFC8693 token
+	// exchange is allowed to request a different audience.
+	RequestAudienceScope = "pinniped:request-audience"
+
 	// CSRFCookieLifespan is the length of time that the CSRF cookie is valid. After this time, the
 	// Supervisor's authorization endpoint should give the browser a new CSRF cookie. We set it to
 	// a week so that it is unlikely to expire during a login.

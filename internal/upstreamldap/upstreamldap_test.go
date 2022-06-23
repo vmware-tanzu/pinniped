@@ -174,6 +174,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		name                       string
 		username                   string
 		password                   string
+		grantedScopes              []string
 		providerConfig             *ProviderConfig
 		searchMocks                func(conn *mockldapconn.MockConn)
 		bindEndUserMocks           func(conn *mockldapconn.MockConn)
@@ -284,6 +285,25 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
 				info := r.User.(*user.DefaultInfo)
 				info.Groups = []string{}
+			}),
+		},
+		{
+			name:           "when groups scope isn't granted, don't do group search",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			grantedScopes:  []string{},
+			providerConfig: providerConfig(nil),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Groups = nil
 			}),
 		},
 		{
@@ -638,8 +658,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -676,8 +696,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.StoredRefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -1167,7 +1187,11 @@ func TestEndUserAuthentication(t *testing.T) {
 
 			ldapProvider := New(*tt.providerConfig)
 
-			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password)
+			if tt.grantedScopes == nil {
+				tt.grantedScopes = []string{"groups"}
+			}
+
+			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, tt.grantedScopes)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1199,7 +1223,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
 
-			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username)
+			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, tt.grantedScopes)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
@@ -1318,7 +1342,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				Filter:             testGroupSearchFilter,
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
 			},
-			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.StoredRefreshAttributes) error{
+			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
 				pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
 			},
 		}
@@ -1331,6 +1355,7 @@ func TestUpstreamRefresh(t *testing.T) {
 	tests := []struct {
 		name           string
 		providerConfig *ProviderConfig
+		grantedScopes  []string
 		setupMocks     func(conn *mockldapconn.MockConn)
 		refreshUserDN  string
 		dialError      error
@@ -1464,6 +1489,17 @@ func TestUpstreamRefresh(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantGroups: nil, // do not update groups
+		},
+		{
+			name:           "happy path where group search is configured but groups scope isn't included",
+			providerConfig: providerConfig(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			grantedScopes: []string{},
+			wantGroups:    nil,
 		},
 		{
 			name:           "error where dial fails",
@@ -1769,14 +1805,18 @@ func TestUpstreamRefresh(t *testing.T) {
 				tt.refreshUserDN = testUserSearchResultDNValue // default for all tests
 			}
 
+			if tt.grantedScopes == nil {
+				tt.grantedScopes = []string{"groups"}
+			}
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*tt.providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
-			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.StoredRefreshAttributes{
+			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.RefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,
 				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
+				GrantedScopes:        tt.grantedScopes,
 			})
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -2149,7 +2189,7 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			initialValRawEncoded := base64.RawURLEncoding.EncodeToString([]byte(initialVal))
-			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.StoredRefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
+			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.RefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

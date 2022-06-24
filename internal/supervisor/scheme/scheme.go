@@ -1,8 +1,7 @@
 // Copyright 2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package scheme contains code to construct a proper runtime.Scheme for the Concierge aggregated
-// API.
+// Package scheme contains code to construct a proper runtime.Scheme for the Supervisor aggregated API.
 package scheme
 
 import (

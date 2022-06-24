@@ -485,7 +485,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,

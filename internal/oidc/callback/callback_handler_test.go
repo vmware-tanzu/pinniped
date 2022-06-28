@@ -48,7 +48,7 @@ const (
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
 	happyDownstreamNonce        = "test-nonce"
-	happyDownstreamStateVersion = "1"
+	happyDownstreamStateVersion = "2"
 
 	downstreamIssuer              = "https://my-downstream-issuer.com/path"
 	downstreamRedirectURI         = "http://127.0.0.1/callback"
@@ -1034,7 +1034,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
 
-			testutil.RequireSecurityHeaders(t, rsp)
+			testutil.RequireSecurityHeadersWithFormPostPageCSPs(t, rsp)
 
 			if test.wantAuthcodeExchangeCall != nil {
 				test.wantAuthcodeExchangeCall.args.Ctx = reqContext
@@ -1156,48 +1156,16 @@ func (r *requestPath) String() string {
 	return path + params.Encode()
 }
 
-type upstreamStateParamBuilder oidctestutil.ExpectedUpstreamStateParamFormat
-
-func happyUpstreamStateParam() *upstreamStateParamBuilder {
-	return &upstreamStateParamBuilder{
+func happyUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
+	return &oidctestutil.UpstreamStateParamBuilder{
 		U: happyUpstreamIDPName,
 		P: happyDownstreamRequestParams,
+		T: "oidc",
 		N: happyDownstreamNonce,
 		C: happyDownstreamCSRF,
 		K: happyDownstreamPKCE,
 		V: happyDownstreamStateVersion,
 	}
-}
-
-func (b upstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) string {
-	state, err := stateEncoder.Encode("s", b)
-	require.NoError(t, err)
-	return state
-}
-
-func (b *upstreamStateParamBuilder) WithAuthorizeRequestParams(params string) *upstreamStateParamBuilder {
-	b.P = params
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithNonce(nonce string) *upstreamStateParamBuilder {
-	b.N = nonce
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithCSRF(csrf string) *upstreamStateParamBuilder {
-	b.C = csrf
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithPKCVE(pkce string) *upstreamStateParamBuilder {
-	b.K = pkce
-	return b
-}
-
-func (b *upstreamStateParamBuilder) WithStateVersion(version string) *upstreamStateParamBuilder {
-	b.V = version
-	return b
 }
 
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {

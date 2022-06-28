@@ -71,8 +71,8 @@ func TestCreate(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			ctrl = gomock.NewController(t)
-			logger = testutil.NewTranscriptLogger(t)
-			klog.SetLogger(logr.New(logger)) // this is unfortunately a global logger, so can't run these tests in parallel :(
+			logger = testutil.NewTranscriptLogger(t) // nolint: staticcheck  // old test with lots of log statements
+			klog.SetLogger(logr.New(logger))         // this is unfortunately a global logger, so can't run these tests in parallel :(
 		})
 
 		it.After(func() {

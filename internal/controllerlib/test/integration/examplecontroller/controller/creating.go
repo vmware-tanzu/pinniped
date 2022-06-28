@@ -14,10 +14,10 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/events"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
+	"go.pinniped.dev/internal/plog"
 )
 
 //nolint:funlen
@@ -59,7 +59,7 @@ func NewExampleCreatingController(
 	}
 
 	generateSecret := func(service *corev1.Service) error {
-		klog.V(4).InfoS("generating new secret for service", "namespace", service.Namespace, "name", service.Name)
+		plog.Debug("generating new secret for service", "namespace", service.Namespace, "name", service.Name)
 
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +97,7 @@ func NewExampleCreatingController(
 				return nil // drop from queue because we cannot safely update this secret
 			}
 
-			klog.V(4).InfoS("updating data in existing secret", "namespace", secret.Namespace, "name", secret.Name)
+			plog.Debug("updating data in existing secret", "namespace", secret.Namespace, "name", secret.Name)
 			// Actually update the secret in the regeneration case (the secret already exists but we want to update to new secretData).
 			_, updateErr := secretClient.Secrets(secret.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
 			return updateErr
@@ -169,7 +169,7 @@ func NewExampleCreatingController(
 					utilruntime.HandleError(fmt.Errorf("unable to get service %s/%s: %w", secret.Namespace, serviceName, err))
 					return false
 				}
-				klog.V(4).InfoS("recreating secret", "namespace", service.Namespace, "name", service.Name)
+				plog.Debug("recreating secret", "namespace", service.Namespace, "name", service.Name)
 				return true
 			},
 		}, controllerlib.InformerOption{}),

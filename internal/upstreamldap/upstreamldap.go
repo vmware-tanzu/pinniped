@@ -715,7 +715,9 @@ func (p *Provider) groupSearchRequestedAttributes() []string {
 }
 
 func (p *Provider) userSearchFilter(username string) string {
-	safeUsername := p.escapeUsernameForSearchFilter(username)
+	// The username is end user input, so it should be escaped before being included in a search to prevent
+	// query injection.
+	safeUsername := p.escapeForSearchFilter(username)
 	if len(p.c.UserSearch.Filter) == 0 {
 		return fmt.Sprintf("(%s=%s)", p.c.UserSearch.UsernameAttribute, safeUsername)
 	}
@@ -723,10 +725,14 @@ func (p *Provider) userSearchFilter(username string) string {
 }
 
 func (p *Provider) groupSearchFilter(userDN string) string {
+	// The DN can contain characters that are considered special characters by LDAP searches, so it should be
+	// escaped before being included in the search filter to prevent bad search syntax.
+	// E.g. for the DN `CN=My User (Admin),OU=Users,OU=my,DC=my,DC=domain` we must escape the parens.
+	safeUserDN := p.escapeForSearchFilter(userDN)
 	if len(p.c.GroupSearch.Filter) == 0 {
-		return fmt.Sprintf("(member=%s)", userDN)
+		return fmt.Sprintf("(member=%s)", safeUserDN)
 	}
-	return interpolateSearchFilter(p.c.GroupSearch.Filter, userDN)
+	return interpolateSearchFilter(p.c.GroupSearch.Filter, safeUserDN)
 }
 
 func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) string {
@@ -737,9 +743,8 @@ func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) 
 	return "(" + filter + ")"
 }
 
-func (p *Provider) escapeUsernameForSearchFilter(username string) string {
-	// The username is end user input, so it should be escaped before being included in a search to prevent query injection.
-	return ldap.EscapeFilter(username)
+func (p *Provider) escapeForSearchFilter(s string) string {
+	return ldap.EscapeFilter(s)
 }
 
 // Returns the (potentially) binary data of the attribute's value, base64 URL encoded.

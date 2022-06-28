@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
@@ -24,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/cache"
+	"k8s.io/apimachinery/pkg/util/sets"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -36,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
 
@@ -67,7 +67,7 @@ const (
 )
 
 var (
-	disallowedAdditionalAuthorizeParameters = map[string]bool{ //nolint: gochecknoglobals
+	disallowedAdditionalAuthorizeParameters = map[string]bool{ // nolint: gochecknoglobals
 		// Reject these AdditionalAuthorizeParameters to avoid allowing the user's config to overwrite the parameters
 		// that are always used by Pinniped in authcode authorization requests. The OIDC library used would otherwise
 		// happily treat the user's config as an override. Users can already set the "client_id" and "scope" params
@@ -331,8 +331,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
-			const klogLevelTrace = 6
-			c.log.V(klogLevelTrace).WithValues(
+			c.log.V(plog.KlogLevelTrace).WithValues(
 				"namespace", upstream.Namespace,
 				"name", upstream.Name,
 				"issuer", upstream.Spec.Issuer,

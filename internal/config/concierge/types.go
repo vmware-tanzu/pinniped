@@ -15,7 +15,9 @@ type Config struct {
 	NamesConfig                  NamesConfigSpec   `json:"names"`
 	KubeCertAgentConfig          KubeCertAgentSpec `json:"kubeCertAgent"`
 	Labels                       map[string]string `json:"labels"`
-	LogLevel                     plog.LogLevel     `json:"logLevel"`
+	// Deprecated: use log.level instead
+	LogLevel *plog.LogLevel `json:"logLevel"`
+	Log      plog.LogSpec   `json:"log"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

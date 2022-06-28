@@ -1,9 +1,10 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -148,10 +149,10 @@ func (p *provider) AddListener(listener dynamiccertificates.Listener) {
 	p.listeners = append(p.listeners, listener)
 }
 
-func (p *provider) RunOnce() error {
+func (p *provider) RunOnce(_ context.Context) error {
 	return nil // no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
 }
 
-func (p *provider) Run(workers int, stopCh <-chan struct{}) {
+func (p *provider) Run(_ context.Context, workers int) {
 	// no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
 }

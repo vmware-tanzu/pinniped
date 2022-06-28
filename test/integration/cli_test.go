@@ -338,7 +338,7 @@ func runPinnipedLoginOIDC(
 	require.NoError(t, page.Navigate(loginURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.CLIUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, page, env.CLIUpstreamOIDC)
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")

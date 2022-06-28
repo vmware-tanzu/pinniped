@@ -24,6 +24,7 @@ type TranscriptLogMessage struct {
 	Message string
 }
 
+// Deprecated: Use plog.TestLogger or plog.TestZapr instead.  This is meant for old tests only.
 func NewTranscriptLogger(t *testing.T) *TranscriptLogger {
 	return &TranscriptLogger{t: t}
 }

@@ -27,8 +27,8 @@ Create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinn
 ### ActiveDirectoryIdentityProvider with default options
 
 This ActiveDirectoryIdentityProvider uses all the default configuration options.
-
-Learn more about the default configuration [here]({{< ref "../reference/active-directory-configuration">}})
+The default configuration options are documented in the
+[Active Directory configuration reference]({{< ref "../reference/active-directory-configuration">}}).
 
 ```yaml
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
@@ -41,14 +41,13 @@ spec:
   # Specify the host of the Active Directory server.
   host: "activedirectory.example.com:636"
 
-  # Specify the name of the Kubernetes Secret that contains your Active Directory
-  # bind account credentials. This service account will be used by the
-  # Supervisor to perform LDAP user and group searches.
+  # Specify the name of the Kubernetes Secret that contains your Active
+  # Directory bind account credentials. This service account will be
+  # used by the Supervisor to perform LDAP user and group searches.
   bind:
     secretName: "active-directory-bind-account"
 
 ---
-
 apiVersion: v1
 kind: Secret
 metadata:
@@ -63,6 +62,10 @@ stringData:
   # The password of your Active Directory bind account.
   password: "YOUR_PASSWORD"
 ```
+
+Note that the `metadata.name` of the ActiveDirectoryIdentityProvider resource may be visible to end users at login prompts,
+so choose a name which will be understood by your end users.
+For example, if you work at Acme Corp, choose something like `acme-corporate-active-directory` over `my-idp`.
 
 If you've saved this into a file `activedirectory.yaml`, then install it into your cluster using:
 
@@ -140,12 +143,15 @@ spec:
       # successful authentication.
       groupName: "dn"
 
-  # Specify the name of the Kubernetes Secret that contains your Active Directory
-  # bind account credentials. This service account will be used by the
-  # Supervisor to perform LDAP user and group searches.
+  # Specify the name of the Kubernetes Secret that contains your Active
+  # Directory bind account credentials. This service account will be
+  # used by the Supervisor to perform LDAP user and group searches.
   bind:
     secretName: "active-directory-bind-account"
 ```
+
+More information about the defaults for these configuration options can be found in
+the [Active Directory configuration reference]({{< ref "../reference/active-directory-configuration">}}).
 
 ## Next steps
 

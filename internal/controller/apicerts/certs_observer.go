@@ -8,11 +8,11 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2"
 
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/plog"
 )
 
 type certsObserverController struct {
@@ -55,7 +55,7 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
-		klog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")
+		plog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")
 		// The secret does not exist yet or was deleted.
 		c.dynamicCertProvider.UnsetCertKeyContent()
 		return nil
@@ -66,6 +66,6 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 		return fmt.Errorf("failed to set serving cert/key content from secret %s/%s: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 
-	klog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
+	plog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
 	return nil
 }

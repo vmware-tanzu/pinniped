@@ -29,6 +29,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
@@ -78,7 +79,6 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
-			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
 			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
@@ -91,7 +91,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				testLog.Logger,
+				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
 				withInformer.WithInformer,
 			)
 
@@ -1400,7 +1400,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
-			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
 			cache := provider.NewDynamicUpstreamIDPProvider()
 			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},

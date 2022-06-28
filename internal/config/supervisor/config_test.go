@@ -4,6 +4,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 )
 
 func TestFromPath(t *testing.T) {
@@ -40,6 +42,7 @@ func TestFromPath(t *testing.T) {
 				    network: tcp
 					address: 127.0.0.1:1234
 				insecureAcceptExternalUnencryptedHttpRequests: false
+				logLevel: trace
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -61,7 +64,121 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP: false,
+				LogLevel:          func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelTrace),
+				Log: plog.LogSpec{
+					Level: plog.LevelTrace,
+				},
 			},
+		},
+		{
+			name: "Happy with new log field",
+			yaml: here.Doc(`
+				---
+				apiGroupSuffix: some.suffix.com
+				labels:
+				  myLabelKey1: myLabelValue1
+				  myLabelKey2: myLabelValue2
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: unix
+				    address: :1234
+				  http:
+				    network: tcp
+				    address: 127.0.0.1:1234
+				insecureAcceptExternalUnencryptedHttpRequests: false
+				log:
+				  level: info
+				  format: text
+			`),
+			wantConfig: &Config{
+				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "unix",
+						Address: ":1234",
+					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: "127.0.0.1:1234",
+					},
+				},
+				AllowExternalHTTP: false,
+				Log: plog.LogSpec{
+					Level:  plog.LevelInfo,
+					Format: plog.FormatText,
+				},
+			},
+		},
+		{
+			name: "Happy with old and new log field",
+			yaml: here.Doc(`
+				---
+				apiGroupSuffix: some.suffix.com
+				labels:
+				  myLabelKey1: myLabelValue1
+				  myLabelKey2: myLabelValue2
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: unix
+				    address: :1234
+				  http:
+				    network: tcp
+				    address: 127.0.0.1:1234
+				insecureAcceptExternalUnencryptedHttpRequests: false
+				logLevel: trace
+				log:
+				  level: info
+				  format: text
+			`),
+			wantConfig: &Config{
+				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "unix",
+						Address: ":1234",
+					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: "127.0.0.1:1234",
+					},
+				},
+				AllowExternalHTTP: false,
+				LogLevel:          func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelTrace),
+				Log: plog.LogSpec{
+					Level:  plog.LevelTrace,
+					Format: plog.FormatText,
+				},
+			},
+		},
+		{
+			name: "bad log format",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				log:
+				  level: info
+				  format: cli
+			`),
+			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string, json and text",
 		},
 		{
 			name: "When only the required fields are present, causes other fields to be defaulted",
@@ -307,7 +424,7 @@ func TestFromPath(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
+			// this is a serial test because it sets the global logger
 
 			// Write yaml to temp file
 			f, err := ioutil.TempFile("", "pinniped-test-config-yaml-*")
@@ -322,7 +439,9 @@ func TestFromPath(t *testing.T) {
 			require.NoError(t, err)
 
 			// Test FromPath()
-			config, err := FromPath(f.Name())
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			config, err := FromPath(ctx, f.Name())
 
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)

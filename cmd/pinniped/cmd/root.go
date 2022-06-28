@@ -4,12 +4,14 @@
 package cmd
 
 import (
-	"os"
+	"context"
 
 	"github.com/spf13/cobra"
+
+	"go.pinniped.dev/internal/plog"
 )
 
-//nolint: gochecknoglobals
+// nolint: gochecknoglobals
 var rootCmd = &cobra.Command{
 	Use:          "pinniped",
 	Short:        "pinniped",
@@ -19,8 +21,11 @@ var rootCmd = &cobra.Command{
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+func Execute() error {
+	defer plog.Setup()()
+	// the context does not matter here because it is unused when CLI formatting is provided
+	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(context.Background(), plog.LogSpec{Format: plog.FormatCLI}); err != nil {
+		return err
 	}
+	return rootCmd.Execute()
 }

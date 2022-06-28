@@ -22,14 +22,12 @@ import (
 	"github.com/joshlf/go-acl"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
-	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -272,7 +270,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				klogr.New(),
+				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
 				controllerlib.WithInformer,
 			),
 			singletonWorker).
@@ -315,7 +313,7 @@ func startControllers(ctx context.Context, shutdown *sync.WaitGroup, buildContro
 }
 
 //nolint:funlen
-func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	serverInstallationNamespace := podInfo.Namespace
 
 	dref, supervisorDeployment, supervisorPod, err := deploymentref.New(podInfo)
@@ -389,7 +387,6 @@ func runSupervisor(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		leaderElector,
 	)
 
-	ctx := signalCtx()
 	shutdown := &sync.WaitGroup{}
 
 	if err := startControllers(ctx, shutdown, buildControllersFunc); err != nil {
@@ -504,12 +501,14 @@ func maybeSetupUnixPerms(endpoint *supervisor.Endpoint, pod *corev1.Pod) func() 
 	}
 }
 
-func main() error { // return an error instead of klog.Fatal to allow defer statements to run
-	logs.InitLogs()
-	defer logs.FlushLogs()
+func main() error { // return an error instead of plog.Fatal to allow defer statements to run
+	defer plog.Setup()()
 
-	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
-	klog.Infof("Command-line arguments were: %s %s %s", os.Args[0], os.Args[1], os.Args[2])
+	plog.Always("Running supervisor",
+		"user-agent", rest.DefaultKubernetesUserAgent(),
+		"version", versionInfo(version.Get()),
+		"arguments", os.Args,
+	)
 
 	// Discover in which namespace we are installed.
 	podInfo, err := downward.Load(os.Args[1])
@@ -517,17 +516,21 @@ func main() error { // return an error instead of klog.Fatal to allow defer stat
 		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
 
+	ctx := signalCtx()
+
 	// Read the server config file.
-	cfg, err := supervisor.FromPath(os.Args[2])
+	cfg, err := supervisor.FromPath(ctx, os.Args[2])
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
-	return runSupervisor(podInfo, cfg)
+	return runSupervisor(ctx, podInfo, cfg)
 }
 
 func Main() {
 	if err := main(); err != nil {
-		klog.Fatal(err)
+		plog.Fatal(err)
 	}
 }
+
+type versionInfo apimachineryversion.Info // hide .String() method from plog

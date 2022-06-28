@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	webhookutil "k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -118,7 +119,28 @@ func newWebhookAuthenticator(
 	// custom proxy stuff used by the API server.
 	var customDial net.DialFunc
 
+	// TODO refactor this code to directly construct the rest.Config
+	//  ideally we would keep rest config generation contained to the kubeclient package
+	//  but this will require some form of a new WithTLSConfigFunc kubeclient.Option
+	//  ex:
+	//  _, caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
+	//  ...
+	//  restConfig := &rest.Config{
+	//    Host:            spec.Endpoint,
+	//    TLSClientConfig: rest.TLSClientConfig{CAData: caBundle},
+	//    // copied from k8s.io/apiserver/pkg/util/webhook
+	//    Timeout: 30 * time.Second,
+	//    QPS:     -1,
+	//  }
+	//  client, err := kubeclient.New(kubeclient.WithConfig(restConfig), kubeclient.WithTLSConfigFunc(ptls.Default))
+	//  ...
+	//  then use client.JSONConfig as clientConfig
+	clientConfig, err := webhookutil.LoadKubeconfig(temp.Name(), customDial)
+	if err != nil {
+		return nil, err
+	}
+
 	// this uses a http client that does not honor our TLS config
 	// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106155
-	return webhook.New(temp.Name(), version, implicitAuds, *webhook.DefaultRetryBackoff(), customDial)
+	return webhook.New(clientConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
 }

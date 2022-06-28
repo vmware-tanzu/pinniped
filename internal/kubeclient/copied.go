@@ -39,9 +39,9 @@ func glogBody(prefix string, body []byte) {
 		if bytes.IndexFunc(body, func(r rune) bool {
 			return r < 0x0a
 		}) != -1 {
-			plog.Debug(prefix, "body", hex.Dump(body))
+			plog.All(prefix, "body", hex.Dump(body))
 		} else {
-			plog.Debug(prefix, "body", string(body))
+			plog.All(prefix, "body", string(body))
 		}
 	}
 }

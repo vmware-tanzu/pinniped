@@ -8,7 +8,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
-	"k8s.io/klog/v2"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 var _ events.EventRecorder = klogRecorder{}
@@ -16,7 +17,7 @@ var _ events.EventRecorder = klogRecorder{}
 type klogRecorder struct{}
 
 func (n klogRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
-	klog.V(4).InfoS("recording event",
+	plog.Debug("recording event",
 		"regarding", regarding,
 		"related", related,
 		"eventtype", eventtype,

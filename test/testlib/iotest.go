@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -36,7 +36,7 @@ func (l *testlogReader) Read(p []byte) (n int, err error) {
 }
 
 // MaskTokens makes a best-effort attempt to mask out things that look like secret tokens in test output.
-// The goal is more to have readable test output than for any security reason.
+// Provides more readable test output, but also obscures sensitive state params and authcodes from public test output.
 func MaskTokens(in string) string {
 	var tokenLike = regexp.MustCompile(`(?mi)[a-zA-Z0-9._-]{30,}|[a-zA-Z0-9]{20,}`)
 	return tokenLike.ReplaceAllStringFunc(in, func(t string) string {

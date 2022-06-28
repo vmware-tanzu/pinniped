@@ -86,8 +86,14 @@ data:
       imagePullSecrets:
         - image-pull-secret
       (@ end @)
-    (@ if data.values.log_level: @)
-    logLevel: (@= getAndValidateLogLevel() @)
+    (@ if data.values.log_level or data.values.deprecated_log_format: @)
+    log:
+      (@ if data.values.log_level: @)
+      level: (@= getAndValidateLogLevel() @)
+      (@ end @)
+      (@ if data.values.deprecated_log_format: @)
+      format: (@= data.values.deprecated_log_format @)
+      (@ end @)
     (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":

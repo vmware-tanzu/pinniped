@@ -11,10 +11,12 @@ import (
 
 // Config contains knobs to setup an instance of the Pinniped Supervisor.
 type Config struct {
-	APIGroupSuffix    *string            `json:"apiGroupSuffix,omitempty"`
-	Labels            map[string]string  `json:"labels"`
-	NamesConfig       NamesConfigSpec    `json:"names"`
-	LogLevel          plog.LogLevel      `json:"logLevel"`
+	APIGroupSuffix *string           `json:"apiGroupSuffix,omitempty"`
+	Labels         map[string]string `json:"labels"`
+	NamesConfig    NamesConfigSpec   `json:"names"`
+	// Deprecated: use log.level instead
+	LogLevel          *plog.LogLevel     `json:"logLevel"`
+	Log               plog.LogSpec       `json:"log"`
 	Endpoints         *Endpoints         `json:"endpoints"`
 	AllowExternalHTTP stringOrBoolAsBool `json:"insecureAcceptExternalUnencryptedHttpRequests"`
 }

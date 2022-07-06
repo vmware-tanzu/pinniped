@@ -117,8 +117,8 @@ spec:
             description: Status of the OIDC client.
             properties:
               conditions:
-                description: Represents the observations of an OIDCClient's current
-                  state.
+                description: conditions represent the observations of an OIDCClient's
+                  current state.
                 items:
                   description: Condition status of a resource (mirrored from the metav1.Condition
                     type added in Kubernetes 1.19). In a future API version we can
@@ -185,12 +185,18 @@ spec:
                 x-kubernetes-list-type: map
               phase:
                 default: Pending
-                description: Phase summarizes the overall status of the OIDCClient.
+                description: phase summarizes the overall status of the OIDCClient.
                 enum:
                 - Pending
                 - Ready
                 - Error
                 type: string
+              totalClientSecrets:
+                description: totalClientSecrets is the current number of client secrets
+                  that are detected for this OIDCClient.
+                type: integer
+            required:
+            - totalClientSecrets
             type: object
         required:
         - spec

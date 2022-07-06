@@ -724,7 +724,7 @@ OIDCClient describes the configuration of an OIDC client.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-oidcclientspec"]
 ==== OIDCClientSpec 
 
-OIDCClientSpec is a struct that describes an OIDC Client.
+OIDCClientSpec is a struct that describes an OIDCClient.
 
 .Appears In:
 ****
@@ -755,8 +755,9 @@ OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __OIDCClientPhase__ | Phase summarizes the overall status of the OIDCClient.
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of an OIDCClient's current state.
+| *`phase`* __OIDCClientPhase__ | phase summarizes the overall status of the OIDCClient.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-condition[$$Condition$$] array__ | conditions represent the observations of an OIDCClient's current state.
+| *`totalClientSecrets`* __integer__ | totalClientSecrets is the current number of client secrets that are detected for this OIDCClient.
 |===
 
 

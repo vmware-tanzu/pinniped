@@ -76,6 +76,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	})
 	defer t.Log()
 
+	// TODO
+
 	_, err := validateRequest(obj, t)
 	if err != nil {
 		return nil, err

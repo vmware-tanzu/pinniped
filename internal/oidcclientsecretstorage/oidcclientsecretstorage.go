@@ -4,14 +4,17 @@
 package oidcclientsecretstorage
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
-	"time"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 )
@@ -28,9 +31,9 @@ type OIDCClientSecretStorage struct {
 	storage crud.Storage
 }
 
-// StoredClientSecret defines the format of the content of a client's secrets when stored in a Secret
+// storedClientSecret defines the format of the content of a client's secrets when stored in a Secret
 // as a JSON string value.
-type StoredClientSecret struct {
+type storedClientSecret struct {
 	// List of bcrypt hashes.
 	SecretHashes []string `json:"hashes"`
 	// The format version. Take care when updating. We cannot simply bump the storage version and drop/ignore old data.
@@ -38,30 +41,79 @@ type StoredClientSecret struct {
 	Version string `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface, clock func() time.Time) *OIDCClientSecretStorage {
-	// TODO make lifetime = 0 mean that it does not get annotated with any garbage collection annotation
-	return &OIDCClientSecretStorage{storage: crud.New(TypeLabelValue, secrets, clock, 0)}
+func New(secrets corev1client.SecretInterface) *OIDCClientSecretStorage {
+	return &OIDCClientSecretStorage{storage: crud.New(TypeLabelValue, secrets, nil, 0)}
 }
 
-// TODO expose other methods as needed for get, create, update, etc.
+func (s *OIDCClientSecretStorage) Get(ctx context.Context, oidcClientUID types.UID) ([]string, error) {
+	secret := &storedClientSecret{}
+	_, err := s.storage.Get(ctx, uidToName(oidcClientUID), secret)
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
+	}
+
+	return secret.SecretHashes, nil
+}
+
+func (s *OIDCClientSecretStorage) Set(ctx context.Context, oidcClientName string, oidcClientUID types.UID, secretHashes []string) error {
+	secret := &storedClientSecret{
+		SecretHashes: secretHashes,
+		Version:      oidcClientSecretStorageVersion,
+	}
+	name := uidToName(oidcClientUID)
+
+	rv, err := s.storage.Get(ctx, name, &storedClientSecret{})
+	if errors.IsNotFound(err) {
+		ownerReferences := []metav1.OwnerReference{
+			{
+				APIVersion:         configv1alpha1.SchemeGroupVersion.String(), // TODO uh API group suffix?
+				Kind:               "OIDCClient",
+				Name:               oidcClientName,
+				UID:                oidcClientUID,
+				Controller:         nil, // TODO should this be true?
+				BlockOwnerDeletion: nil,
+			},
+		}
+		_, err := s.storage.Create(ctx, name, secret, nil, ownerReferences)
+		if err != nil {
+			return fmt.Errorf("failed to create client secret for uid %s: %w", oidcClientUID, err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
+	}
+
+	_, err = s.storage.Update(ctx, name, rv, secret)
+	if err != nil {
+		return fmt.Errorf("failed to update client secret for uid %s: %w", oidcClientUID, err)
+	}
+	return nil
+}
 
 // GetName returns the name of the Secret which would be used to store data for the given signature.
 func (s *OIDCClientSecretStorage) GetName(oidcClientUID types.UID) string {
-	// Avoid having s.storage.GetName() base64 decode something that wasn't ever encoded by encoding it here.
-	b64encodedUID := base64.RawURLEncoding.EncodeToString([]byte(oidcClientUID))
-	return s.storage.GetName(b64encodedUID)
+	return s.storage.GetName(uidToName(oidcClientUID))
 }
 
-// ReadFromSecret reads the contents of a Secret as a StoredClientSecret.
-func ReadFromSecret(secret *v1.Secret) (*StoredClientSecret, error) {
-	storedClientSecret := &StoredClientSecret{}
-	err := crud.FromSecret(TypeLabelValue, secret, storedClientSecret)
+func uidToName(oidcClientUID types.UID) string {
+	// Avoid having s.storage.GetName() base64 decode something that wasn't ever encoded by encoding it here.
+	return base64.RawURLEncoding.EncodeToString([]byte(oidcClientUID))
+}
+
+// ReadFromSecret reads the contents of a Secret as a storedClientSecret.
+func ReadFromSecret(s *corev1.Secret) (*storedClientSecret, error) {
+	secret := &storedClientSecret{}
+	err := crud.FromSecret(TypeLabelValue, s, secret)
 	if err != nil {
 		return nil, err
 	}
-	if storedClientSecret.Version != oidcClientSecretStorageVersion {
+	if secret.Version != oidcClientSecretStorageVersion {
 		return nil, fmt.Errorf("%w: OIDC client secret storage has version %s instead of %s",
-			ErrOIDCClientSecretStorageVersion, storedClientSecret.Version, oidcClientSecretStorageVersion)
+			ErrOIDCClientSecretStorageVersion, secret.Version, oidcClientSecretStorageVersion)
 	}
-	return storedClientSecret, nil
+	return secret, nil
 }

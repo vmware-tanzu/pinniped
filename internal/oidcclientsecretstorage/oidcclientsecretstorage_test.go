@@ -28,7 +28,7 @@ func TestReadFromSecret(t *testing.T) {
 	tests := []struct {
 		name       string
 		secret     *corev1.Secret
-		wantStored *StoredClientSecret
+		wantStored *storedClientSecret
 		wantErr    string
 	}{
 		{
@@ -47,7 +47,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/oidc-client-secret",
 			},
-			wantStored: &StoredClientSecret{
+			wantStored: &storedClientSecret{
 				Version:      "1",
 				SecretHashes: []string{"first-hash", "second-hash"},
 			},

@@ -107,7 +107,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 	// We're only going to use storage to call GetName(), which happens to not need the constructor params.
 	// This is because we can read the Secrets from the informer cache here, instead of doing live reads.
-	storage := oidcclientsecretstorage.New(nil, nil)
+	storage := oidcclientsecretstorage.New(nil)
 
 	for _, oidcClient := range oidcClients {
 		// Skip the OIDCClients that we are not trying to observe.

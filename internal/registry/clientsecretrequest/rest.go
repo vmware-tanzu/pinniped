@@ -6,8 +6,12 @@ package clientsecretrequest
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
 
+	"golang.org/x/crypto/bcrypt"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,16 +21,27 @@ import (
 	"k8s.io/utils/trace"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
+	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
+	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
-func NewREST(resource schema.GroupResource) *REST {
+const cost = 15 // a good bcrypt cost for 2022, should take about a second to validate
+
+func NewREST(resource schema.GroupResource, client *kubeclient.Client, namespace string) *REST {
 	return &REST{
 		tableConvertor: rest.NewDefaultTableConvertor(resource),
+		secretStorage:  oidcclientsecretstorage.New(client.Kubernetes.CoreV1().Secrets(namespace)),
+		clients:        client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(namespace),
+		rand:           rand.Reader,
 	}
 }
 
 type REST struct {
 	tableConvertor rest.TableConvertor
+	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
+	clients        configv1alpha1clientset.OIDCClientInterface
+	rand           io.Reader
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -48,6 +63,9 @@ func (*REST) NewList() runtime.Object {
 	return &clientsecretapi.OIDCClientSecretRequestList{}
 }
 
+// support `kubectl get pinniped`
+// to make sure all resources are in the pinniped category and
+// avoid kubectl errors when kubectl lists you must support the list verb
 func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
 	return &clientsecretapi.OIDCClientSecretRequestList{
 		ListMeta: metav1.ListMeta{
@@ -76,17 +94,51 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	})
 	defer t.Log()
 
-	// TODO
-
-	_, err := validateRequest(obj, t)
+	req, err := validateRequest(obj, t)
 	if err != nil {
 		return nil, err
 	}
 
+	oidcClient, err := r.clients.Get(ctx, req.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err // TODO obfuscate
+	}
+
+	hashes, err := r.secretStorage.Get(ctx, oidcClient.UID)
+	if err != nil {
+		return nil, err // TODO obfuscate
+	}
+
+	var secret string
+	if req.Spec.GenerateNewSecret {
+		secret, err = generateSecret(r.rand)
+		if err != nil {
+			return nil, err // TODO obfuscate
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(secret), cost)
+		if err != nil {
+			return nil, err // TODO obfuscate
+		}
+
+		hashes = append([]string{string(hash)}, hashes...)
+
+		err = r.secretStorage.Set(ctx, oidcClient.Name, oidcClient.UID, hashes)
+		if err != nil {
+			return nil, err // TODO obfuscate
+		}
+	}
+
+	if req.Spec.RevokeOldSecrets && len(hashes) > 0 {
+		hashes = []string{hashes[0]}
+	}
+
+	// do not let them have more than 100? secrets
+
 	return &clientsecretapi.OIDCClientSecretRequest{
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{
-			GeneratedSecret:    "not-a-real-secret",
-			TotalClientSecrets: 20,
+			GeneratedSecret:    secret,
+			TotalClientSecrets: len(hashes), // TODO what about validation of hashes??
 		},
 	}, nil
 }
@@ -106,4 +158,12 @@ func traceValidationFailure(t *trace.Trace, msg string) {
 		trace.Field{Key: "failureType", Value: "request validation"},
 		trace.Field{Key: "msg", Value: msg},
 	)
+}
+
+func generateSecret(rand io.Reader) (string, error) {
+	var buf [32]byte
+	if _, err := io.ReadFull(rand, buf[:]); err != nil {
+		return "", fmt.Errorf("could not generate client secret: %w", err)
+	}
+	return hex.EncodeToString(buf[:]), nil
 }

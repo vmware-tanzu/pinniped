@@ -88,7 +88,7 @@ type OIDCClientStatus struct {
 	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// totalClientSecrets is the current number of client secrets that are detected for this OIDCClient.
-	TotalClientSecrets int `json:"totalClientSecrets"`
+	TotalClientSecrets int32 `json:"totalClientSecrets,omitempty"`
 }
 
 // OIDCClient describes the configuration of an OIDC client.

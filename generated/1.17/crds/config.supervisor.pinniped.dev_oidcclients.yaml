@@ -194,9 +194,8 @@ spec:
               totalClientSecrets:
                 description: totalClientSecrets is the current number of client secrets
                   that are detected for this OIDCClient.
+                format: int32
                 type: integer
-            required:
-            - totalClientSecrets
             type: object
         required:
         - spec

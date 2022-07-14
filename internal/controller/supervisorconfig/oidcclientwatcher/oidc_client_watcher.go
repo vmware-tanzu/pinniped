@@ -344,7 +344,7 @@ func (c *oidcClientWatcherController) updateStatus(
 		updated.Status.Phase = v1alpha1.PhaseError
 	}
 
-	updated.Status.TotalClientSecrets = totalClientSecrets
+	updated.Status.TotalClientSecrets = int32(totalClientSecrets)
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
 		return nil

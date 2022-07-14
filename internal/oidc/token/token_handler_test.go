@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
@@ -3068,10 +3069,11 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 
 	client := fake.NewSimpleClientset()
 	secrets = client.CoreV1().Secrets("some-namespace")
+	oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
 
 	var oauthHelper fosite.OAuth2Provider
 
-	oauthStore = oidc.NewKubeStorage(secrets, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthStore = oidc.NewKubeStorage(secrets, oidcClientsClient, oidc.DefaultOIDCTimeoutsConfiguration())
 	if test.makeOathHelper != nil {
 		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore, test.customSessionData)
 	} else {

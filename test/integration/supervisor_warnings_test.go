@@ -186,9 +186,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// using the refresh token signature contained in the cache, get the refresh token session
 		// out of kube secret storage.
-		kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration())
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
-		oauthStore := oidc.NewKubeStorage(kubeClient.Secrets(env.SupervisorNamespace), oidc.DefaultOIDCTimeoutsConfiguration())
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)
 
@@ -246,9 +247,6 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 
 		expectedUsername, password := testlib.CreateFreshADTestUser(t, env)
-		t.Cleanup(func() {
-			testlib.DeleteTestADUser(t, env, expectedUsername)
-		})
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
@@ -308,9 +306,6 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// create an active directory group, and add our user to it.
 		groupName := testlib.CreateFreshADTestGroup(t, env)
-		t.Cleanup(func() {
-			testlib.DeleteTestADUser(t, env, groupName)
-		})
 		testlib.AddTestUserToGroup(t, env, groupName, expectedUsername)
 
 		// remove the credential cache, which includes the cached cert, so it won't be reused and the refresh flow will be triggered.
@@ -499,9 +494,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// using the refresh token signature contained in the cache, get the refresh token session
 		// out of kube secret storage.
-		kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration())
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
-		oauthStore := oidc.NewKubeStorage(kubeClient.Secrets(env.SupervisorNamespace), oidc.DefaultOIDCTimeoutsConfiguration())
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)
 

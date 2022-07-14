@@ -52,7 +52,9 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
+		// Automatically grant the openid, offline_access, pinniped:request-audience, and groups scopes, but only if they were requested.
+		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
+		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(

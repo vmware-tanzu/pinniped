@@ -16,17 +16,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
-
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -36,6 +36,7 @@ import (
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.
@@ -378,6 +379,89 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	)
 }
 
+func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expectedPhase configv1alpha1.OIDCClientPhase) (string, string) {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	oidcClientClient := client.ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+
+	// Create the OIDCClient using GenerateName to get a random name.
+	created, err := oidcClientClient.Create(ctx, &configv1alpha1.OIDCClient{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "client.oauth.pinniped.dev-test-", // use the required name prefix
+			Labels:       map[string]string{"pinniped.dev/test": ""},
+			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Spec: spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test OIDCClient %s/%s", created.Namespace, created.Name)
+		err := oidcClientClient.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test OIDCClient %s", created.Name)
+
+	// Create a client secret for the new OIDCClient.
+	clientSecret := createOIDCClientSecret(t, created)
+
+	// Wait for the OIDCClient to enter the expected phase (or time out).
+	var result *configv1alpha1.OIDCClient
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		var err error
+		result, err = oidcClientClient.Get(ctx, created.Name, metav1.GetOptions{})
+		requireEventually.NoErrorf(err, "error while getting OIDCClient %s/%s", created.Namespace, created.Name)
+		requireEventually.Equal(expectedPhase, result.Status.Phase)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCClient to go into phase %s, OIDCClient was: %s", expectedPhase, Sdump(result))
+
+	return created.Name, clientSecret
+}
+
+func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClient) string {
+	// TODO Replace this with a call to the real Supervisor API for creating client secrets after that gets implemented.
+	//   For now, just manually create a Secret with the right format so the tests can work.
+	t.Helper()
+	env := IntegrationEnv(t)
+	kubeClient := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	var buf [32]byte
+	_, err := io.ReadFull(rand.Reader, buf[:])
+	require.NoError(t, err)
+	randomSecret := hex.EncodeToString(buf[:])
+	hashedRandomSecret, err := bcrypt.GenerateFromPassword([]byte(randomSecret), 15)
+	require.NoError(t, err)
+
+	created, err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Create(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        oidcclientsecretstorage.New(nil, nil).GetName(forOIDCClient.UID), // use the required name
+			Labels:      map[string]string{"storage.pinniped.dev/type": "oidc-client-secret", "pinniped.dev/test": ""},
+			Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Type: "storage.pinniped.dev/oidc-client-secret",
+		Data: map[string][]byte{
+			"pinniped-storage-data":    []byte(`{"version":"1","hashes":["` + string(hashedRandomSecret) + `"]}`),
+			"pinniped-storage-version": []byte("1"),
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
+		err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+
+	t.Logf("created test Secret %s", created.Name)
+	return randomSecret
+}
+
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
 	env := IntegrationEnv(t)
@@ -385,9 +469,9 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 
+	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
 		Spec:       spec,
@@ -420,9 +504,9 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the LDAPIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace)
 
+	// Create the LDAPIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.LDAPIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-ldap-idp"),
 		Spec:       spec,
@@ -461,9 +545,9 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace)
 
+	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.ActiveDirectoryIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-ad-idp"),
 		Spec:       spec,
@@ -501,9 +585,9 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	// Create the ClusterRoleBinding using GenerateName to get a random name.
 	clusterRoles := client.RbacV1().ClusterRoleBindings()
 
+	// Create the ClusterRoleBinding using GenerateName to get a random name.
 	created, err := clusterRoles.Create(ctx, &rbacv1.ClusterRoleBinding{
 		ObjectMeta: testObjectMeta(t, "cluster-role"),
 		Subjects:   []rbacv1.Subject{subject},

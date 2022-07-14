@@ -4,11 +4,14 @@
 package oidcclientsecretstorage
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -26,6 +29,7 @@ const (
 
 type OIDCClientSecretStorage struct {
 	storage crud.Storage
+	secrets corev1client.SecretInterface
 }
 
 // StoredClientSecret defines the format of the content of a client's secrets when stored in a Secret
@@ -39,11 +43,26 @@ type StoredClientSecret struct {
 }
 
 func New(secrets corev1client.SecretInterface, clock func() time.Time) *OIDCClientSecretStorage {
-	// TODO make lifetime = 0 mean that it does not get annotated with any garbage collection annotation
-	return &OIDCClientSecretStorage{storage: crud.New(TypeLabelValue, secrets, clock, 0)}
+	return &OIDCClientSecretStorage{
+		storage: crud.New(TypeLabelValue, secrets, clock, 0),
+		secrets: secrets,
+	}
 }
 
 // TODO expose other methods as needed for get, create, update, etc.
+
+// GetStorageSecret gets the corev1.Secret which is used to store the client secrets for the given client.
+// Returns nil,nil when the corev1.Secret was not found, as this is not an error for a client to not have any secrets yet.
+func (s *OIDCClientSecretStorage) GetStorageSecret(ctx context.Context, oidcClientUID types.UID) (*corev1.Secret, error) {
+	secret, err := s.secrets.Get(ctx, s.GetName(oidcClientUID), metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
 
 // GetName returns the name of the Secret which would be used to store data for the given signature.
 func (s *OIDCClientSecretStorage) GetName(oidcClientUID types.UID) string {
@@ -53,7 +72,7 @@ func (s *OIDCClientSecretStorage) GetName(oidcClientUID types.UID) string {
 }
 
 // ReadFromSecret reads the contents of a Secret as a StoredClientSecret.
-func ReadFromSecret(secret *v1.Secret) (*StoredClientSecret, error) {
+func ReadFromSecret(secret *corev1.Secret) (*StoredClientSecret, error) {
 	storedClientSecret := &StoredClientSecret{}
 	err := crud.FromSecret(TypeLabelValue, secret, storedClientSecret)
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/psession"
@@ -1072,11 +1073,12 @@ func TestCallbackEndpoint(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset()
 			secrets := client.CoreV1().Secrets("some-namespace")
+			oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
-			oauthStore := oidc.NewKubeStorage(secrets, timeoutsConfiguration)
+			oauthStore := oidc.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()

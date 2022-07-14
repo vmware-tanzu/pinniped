@@ -15,18 +15,18 @@ import (
 	"strings"
 	"testing"
 
-	"go.pinniped.dev/internal/secret"
-
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/client-go/kubernetes/fake"
 
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -271,6 +271,7 @@ func TestManager(t *testing.T) {
 
 			kubeClient = fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
+			oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
 
 			cache := secret.Cache{}
 			cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret"))
@@ -283,7 +284,7 @@ func TestManager(t *testing.T) {
 			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
 			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient)
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient, oidcClientsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {

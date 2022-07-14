@@ -10,6 +10,7 @@ import (
 
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
 	"go.pinniped.dev/internal/oidc/callback"
@@ -39,6 +40,7 @@ type Manager struct {
 	upstreamIDPs        oidc.UpstreamIdentityProvidersLister // in-memory cache of upstream IDPs
 	secretCache         *secret.Cache                        // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
+	oidcClientsClient   v1alpha1.OIDCClientInterface
 }
 
 // NewManager returns an empty Manager.
@@ -51,6 +53,7 @@ func NewManager(
 	upstreamIDPs oidc.UpstreamIdentityProvidersLister,
 	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
+	oidcClientsClient v1alpha1.OIDCClientInterface,
 ) *Manager {
 	return &Manager{
 		providerHandlers:    make(map[string]http.Handler),
@@ -59,6 +62,7 @@ func NewManager(
 		upstreamIDPs:        upstreamIDPs,
 		secretCache:         secretCache,
 		secretsClient:       secretsClient,
+		oidcClientsClient:   oidcClientsClient,
 	}
 }
 
@@ -93,10 +97,22 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, tokenHMACKeyGetter, nil, timeoutsConfiguration)
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(
+			oidc.NewNullStorage(m.secretsClient, m.oidcClientsClient),
+			issuer,
+			tokenHMACKeyGetter,
+			nil,
+			timeoutsConfiguration,
+		)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient, timeoutsConfiguration), issuer, tokenHMACKeyGetter, m.dynamicJWKSProvider, timeoutsConfiguration)
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(
+			oidc.NewKubeStorage(m.secretsClient, m.oidcClientsClient, timeoutsConfiguration),
+			issuer,
+			tokenHMACKeyGetter,
+			m.dynamicJWKSProvider,
+			timeoutsConfiguration,
+		)
 
 		var upstreamStateEncoder = dynamiccodec.New(
 			timeoutsConfiguration.UpstreamStateParamLifespan,

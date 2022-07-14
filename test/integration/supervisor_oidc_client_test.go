@@ -528,16 +528,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			},
-			secret: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"storage.pinniped.dev/type": "oidc-client-secret"},
-				},
-				Type: "storage.pinniped.dev/oidc-client-secret",
-				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"version":"1","hashes":[]}`),
-					"pinniped-storage-version": []byte("1"),
-				},
-			},
+			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{}),
 			wantPhase: "Error",
 			wantConditions: []supervisorconfigv1alpha1.Condition{
 				{
@@ -572,16 +563,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 				},
 			},
-			secret: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"storage.pinniped.dev/type": "oidc-client-secret"},
-				},
-				Type: "storage.pinniped.dev/oidc-client-secret",
-				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"version":"1","hashes":["$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m"]}`),
-					"pinniped-storage-version": []byte("1"),
-				},
-			},
+			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{"$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m"}),
 			wantPhase: "Ready",
 			wantConditions: []supervisorconfigv1alpha1.Condition{
 				{

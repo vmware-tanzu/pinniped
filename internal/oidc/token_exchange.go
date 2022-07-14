@@ -14,6 +14,8 @@ import (
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
+
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const (
@@ -142,8 +144,8 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 	if strings.Contains(result.requestedAudience, ".pinniped.dev") {
 		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot contain '.pinniped.dev'")
 	}
-	if result.requestedAudience == "pinniped-cli" {
-		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot equal 'pinniped-cli'")
+	if result.requestedAudience == clientregistry.PinnipedCLIClientID {
+		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot equal '%s'", clientregistry.PinnipedCLIClientID)
 	}
 
 	return &result, nil

@@ -42,6 +42,11 @@ func CreateFreshADTestUser(t *testing.T, env *TestEnv) (string, string) {
 	err = conn.Add(a)
 	require.NoError(t, err)
 
+	// Now that it has been created, schedule it for cleanup.
+	t.Cleanup(func() {
+		deleteTestADUser(t, env, testUserName)
+	})
+
 	// modify password and enable account
 	testUserPassword := createRandomASCIIString(t, 20)
 	enc := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder()
@@ -82,6 +87,11 @@ func CreateFreshADTestGroup(t *testing.T, env *TestEnv) string {
 	a.Attribute("instanceType", []string{fmt.Sprintf("%d", instanceType)})
 	err = conn.Add(a)
 	require.NoError(t, err)
+
+	// Now that it has been created, schedule it for cleanup.
+	t.Cleanup(func() {
+		deleteTestADUser(t, env, testGroupName)
+	})
 
 	time.Sleep(20 * time.Second) // intrasite domain controller replication can take up to 15 seconds, so wait to ensure the change has propogated.
 	return testGroupName
@@ -164,8 +174,8 @@ func ChangeADTestUserPassword(t *testing.T, env *TestEnv, testUserName string) {
 	// don't bother to return the new password... we won't be using it, just checking that it's changed.
 }
 
-// DeleteTestADUser deletes the test user created for this test.
-func DeleteTestADUser(t *testing.T, env *TestEnv, testUserName string) {
+// deleteTestADUser deletes the test user created for this test.
+func deleteTestADUser(t *testing.T, env *TestEnv, testUserName string) {
 	t.Helper()
 	conn := dialTLS(t, env)
 	// bind

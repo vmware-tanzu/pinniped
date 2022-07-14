@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestGetName(t *testing.T) {
@@ -105,6 +107,31 @@ func TestReadFromSecret(t *testing.T) {
 				Type: "storage.pinniped.dev/oidc-client-secret",
 			},
 			wantErr: "secret storage data has incorrect version",
+		},
+		{
+			name: "OIDCClientSecretStorageSecretForUID() test helper generates readable format, to ensure that test helpers are kept up to date",
+			secret: testutil.OIDCClientSecretStorageSecretForUID(t,
+				"some-namespace", "some-uid", []string{"first-hash", "second-hash"},
+			),
+			wantStored: &StoredClientSecret{
+				Version:      "1",
+				SecretHashes: []string{"first-hash", "second-hash"},
+			},
+		},
+		{
+			name: "OIDCClientSecretStorageSecretWithoutName() test helper generates readable format, to ensure that test helpers are kept up to date",
+			secret: testutil.OIDCClientSecretStorageSecretWithoutName(t,
+				"some-namespace", []string{"first-hash", "second-hash"},
+			),
+			wantStored: &StoredClientSecret{
+				Version:      "1",
+				SecretHashes: []string{"first-hash", "second-hash"},
+			},
+		},
+		{
+			name:    "OIDCClientSecretStorageSecretForUIDWithWrongVersion() test helper generates readable format, to ensure that test helpers are kept up to date",
+			secret:  testutil.OIDCClientSecretStorageSecretForUIDWithWrongVersion(t, "some-namespace", "some-uid"),
+			wantErr: "OIDC client secret storage data has wrong version: OIDC client secret storage has version wrong-version instead of 1",
 		},
 	}
 

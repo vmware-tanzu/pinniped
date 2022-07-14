@@ -193,14 +193,19 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 		labelsToAdd[labelName] = labelValue
 	}
 
+	var annotations map[string]string
+	if s.lifetime > 0 {
+		annotations = map[string]string{
+			SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
+		}
+	}
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            s.GetName(signature),
 			ResourceVersion: resourceVersion,
 			Labels:          labelsToAdd,
-			Annotations: map[string]string{
-				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
-			},
+			Annotations:     annotations,
 			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{

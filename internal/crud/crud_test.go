@@ -62,6 +62,7 @@ func TestStorage(t *testing.T) {
 		name        string
 		resource    string
 		mocks       func(*testing.T, mocker)
+		lifetime    func() time.Duration
 		run         func(*testing.T, Storage, *clocktesting.FakeClock) error
 		wantActions []coretesting.Action
 		wantSecrets []corev1.Secret
@@ -1014,7 +1015,69 @@ func TestStorage(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name:     "create and get with infinite lifetime when lifetime is specified as zero",
+			resource: "access-tokens",
+			mocks:    nil,
+			lifetime: func() time.Duration { return 0 }, // 0 == infinity
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
+				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				require.NotEmpty(t, signature)
+				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
+
+				data := &testJSON{Data: "create-and-get"}
+				rv1, err := storage.Create(ctx, signature, data, nil)
+				require.Empty(t, rv1) // fake client does not set this
+				require.NoError(t, err)
+
+				out := &testJSON{}
+				rv2, err := storage.Get(ctx, signature, out)
+				require.Empty(t, rv2) // fake client does not set this
+				require.NoError(t, err)
+				require.Equal(t, data, out)
+
+				return nil
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						ResourceVersion: "",
+						// No garbage collection annotation was added.
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				}),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						// No garbage collection annotation was added.
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				},
+			},
+			wantErr: "",
+		},
 	}
+
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -1024,9 +1087,13 @@ func TestStorage(t *testing.T) {
 			if tt.mocks != nil {
 				tt.mocks(t, client)
 			}
+			useLifetime := lifetime
+			if tt.lifetime != nil {
+				useLifetime = tt.lifetime()
+			}
 			secrets := client.CoreV1().Secrets(namespace)
 			fakeClock := clocktesting.NewFakeClock(fakeNow)
-			storage := New(tt.resource, secrets, fakeClock.Now, lifetime)
+			storage := New(tt.resource, secrets, fakeClock.Now, useLifetime)
 
 			err := tt.run(t, storage, fakeClock)
 

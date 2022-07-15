@@ -101,11 +101,31 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name:       "anything goes",
-			oidcClient: configv1alpha1.OIDCClient{},
+			name: "name has client.oauth.pinniped.dev- prefix",
+			oidcClient: configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Name: "client.oauth.pinniped.dev-foo"},
+			},
 			wantAdd:    true,
 			wantUpdate: true,
 			wantDelete: true,
+		},
+		{
+			name: "name does not have client.oauth.pinniped.dev- prefix",
+			oidcClient: configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Name: "something.oauth.pinniped.dev-foo"},
+			},
+			wantAdd:    false,
+			wantUpdate: false,
+			wantDelete: false,
+		},
+		{
+			name: "other names without any particular pinniped.dev prefixes",
+			oidcClient: configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Name: "something"},
+			},
+			wantAdd:    false,
+			wantUpdate: false,
+			wantDelete: false,
 		},
 	}
 	for _, test := range tests {
@@ -143,15 +163,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 	t.Parallel()
 
 	const (
-		testName      = "test-name"
+		testName      = "client.oauth.pinniped.dev-test-name"
 		testNamespace = "test-namespace"
 		testUID       = "test-uid-123"
 
 		//nolint:gosec // this is not a credential
-		testBcryptSecret1 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password1"
-
+		testBcryptSecret1 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password1" at cost 15
 		//nolint:gosec // this is not a credential
-		testBcryptSecret2 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password2"
+		testBcryptSecret2 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password2" at cost 15
+		//nolint:gosec // this is not a credential
+		testInvalidBcryptSecretCostTooLow = "$2y$14$njwk1cItiRy6cb6u9aiJLuhtJG83zM9111t.xU6MxvnqqYbkXxzwy" // bcrypt of "password1" at cost 14
+		//nolint:gosec // this is not a credential
+		testInvalidBcryptSecretInvalidFormat = "$2y$14$njwk1cItiRy6cb6u9aiJLuhtJG83zM9111t.xU6MxvnqqYbkXxz" // not enough characters in hash value
 	)
 
 	now := metav1.NewTime(time.Now().UTC())
@@ -190,12 +213,23 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
+	sadNoClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "ClientSecretExists",
 			Status:             "False",
 			LastTransitionTime: time,
 			Reason:             "NoClientSecretFound",
+			Message:            message,
+			ObservedGeneration: observedGeneration,
+		}
+	}
+
+	sadInvalidClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "ClientSecretExists",
+			Status:             "False",
+			LastTransitionTime: time,
+			Reason:             "InvalidClientSecretFound",
 			Message:            message,
 			ObservedGeneration: observedGeneration,
 		}
@@ -245,6 +279,12 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		"pinniped-storage-version": []byte("1"),
 	}
 
+	secretStringDataWithSomeInvalidClientSecrets := map[string][]byte{
+		"pinniped-storage-data": []byte(`{"version":"1","hashes":["` +
+			testBcryptSecret1 + `","` + testInvalidBcryptSecretCostTooLow + `","` + testInvalidBcryptSecretInvalidFormat + `"]}`),
+		"pinniped-storage-version": []byte("1"),
+	}
+
 	secretStringDataWithWrongVersion := map[string][]byte{
 		"pinniped-storage-data":    []byte(`{"version":"wrong-version","hashes":[]}`),
 		"pinniped-storage-version": []byte("1"),
@@ -275,27 +315,48 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			wantAPIActions: 0, // no updates
 		},
 		{
-			name: "successfully validate minimal OIDCClient and one client secret stored",
+			name: "OIDCClient with wrong prefix is ignored",
 			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
-				},
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
-			wantAPIActions: 1, // one update
+			wantAPIActions: 0, // no updates
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
-					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
-						happyAllowedGrantTypesCondition(now, 1234),
-						happyAllowedScopesCondition(now, 1234),
-						happyClientSecretsCondition(1, now, 1234),
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
+			}},
+		},
+		{
+			name: "successfully validate minimal OIDCClient and one client secret stored (while ignoring client with wrong prefix)",
+			inputObjects: []runtime.Object{
+				&configv1alpha1.OIDCClient{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
+				},
+				&configv1alpha1.OIDCClient{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+					Spec: configv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
+						AllowedScopes:     []configv1alpha1.Scope{"openid"},
 					},
 				},
-			}},
+			},
+			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			wantAPIActions: 1, // one update
+			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+					Status: configv1alpha1.OIDCClientStatus{
+						Phase: "Ready",
+						Conditions: []configv1alpha1.Condition{
+							happyAllowedGrantTypesCondition(now, 1234),
+							happyAllowedScopesCondition(now, 1234),
+							happyClientSecretsCondition(1, now, 1234),
+						},
+						TotalClientSecrets: 1,
+					},
+				},
+			},
 		},
 		{
 			name: "successfully validate minimal OIDCClient and two client secrets stored",
@@ -317,6 +378,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(2, now, 1234),
 					},
+					TotalClientSecrets: 2,
 				},
 			}},
 		},
@@ -335,6 +397,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(earlier, 1234),
 						happyClientSecretsCondition(1, earlier, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
@@ -348,6 +411,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(earlier, 1234),
 						happyClientSecretsCondition(1, earlier, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -365,7 +429,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					Conditions: []configv1alpha1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"authorization_code" must always be included in "allowedGrantTypes"`),
 						sadAllowedScopesCondition(now, 1234, `"openid" must always be included in "allowedScopes"`),
-						sadClientSecretsCondition(now, 1234, "no client secret found (no Secret storage found)"),
+						sadNoClientSecretsCondition(now, 1234, "no client secret found (no Secret storage found)"),
 					},
 				},
 			}},
@@ -388,7 +452,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					Conditions: []configv1alpha1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
-						sadClientSecretsCondition(now, 1234, "error reading client secret storage: OIDC client secret storage data has wrong version: OIDC client secret storage has version wrong-version instead of 1"),
+						sadNoClientSecretsCondition(now, 1234, "error reading client secret storage: OIDC client secret storage data has wrong version: OIDC client secret storage has version wrong-version instead of 1"),
 					},
 				},
 			}},
@@ -411,8 +475,35 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					Conditions: []configv1alpha1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
-						sadClientSecretsCondition(now, 1234, "no client secret found (empty list in storage)"),
+						sadNoClientSecretsCondition(now, 1234, "no client secret found (empty list in storage)"),
 					},
+					TotalClientSecrets: 0,
+				},
+			}},
+		},
+		{
+			name: "client secret storage exists but some of the client secrets are invalid bcrypt hashes",
+			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: configv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				},
+			}},
+			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithSomeInvalidClientSecrets)},
+			wantAPIActions: 1, // one update
+			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: configv1alpha1.OIDCClientStatus{
+					Phase: "Error",
+					Conditions: []configv1alpha1.Condition{
+						happyAllowedGrantTypesCondition(now, 1234),
+						happyAllowedScopesCondition(now, 1234),
+						sadInvalidClientSecretsCondition(now, 1234,
+							"hashed client secret at index 1: bcrypt cost 14 is below the required minimum of 15; "+
+								"hashed client secret at index 2: crypto/bcrypt: hashedSecret too short to be a bcrypted password"),
+					},
+					TotalClientSecrets: 3,
 				},
 			}},
 		},
@@ -420,14 +511,14 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			name: "can operate on multiple at a time, e.g. one is valid one another is missing required minimum settings",
 			inputObjects: []runtime.Object{
 				&configv1alpha1.OIDCClient{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test1", Generation: 1234, UID: "uid1"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test1", Generation: 1234, UID: "uid1"},
 					Spec: configv1alpha1.OIDCClientSpec{
 						AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
 						AllowedScopes:     []configv1alpha1.Scope{"openid"},
 					},
 				},
 				&configv1alpha1.OIDCClient{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test2", Generation: 4567, UID: "uid2"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test2", Generation: 4567, UID: "uid2"},
 					Spec:       configv1alpha1.OIDCClientSpec{},
 				},
 			},
@@ -435,7 +526,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			wantAPIActions: 2, // one update for each OIDCClient
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
 				{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test1", Generation: 1234, UID: "uid1"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test1", Generation: 1234, UID: "uid1"},
 					Status: configv1alpha1.OIDCClientStatus{
 						Phase: "Ready",
 						Conditions: []configv1alpha1.Condition{
@@ -443,17 +534,19 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 							happyAllowedScopesCondition(now, 1234),
 							happyClientSecretsCondition(1, now, 1234),
 						},
+						TotalClientSecrets: 1,
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test2", Generation: 4567, UID: "uid2"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test2", Generation: 4567, UID: "uid2"},
 					Status: configv1alpha1.OIDCClientStatus{
 						Phase: "Error",
 						Conditions: []configv1alpha1.Condition{
 							sadAllowedGrantTypesCondition(now, 4567, `"authorization_code" must always be included in "allowedGrantTypes"`),
 							sadAllowedScopesCondition(now, 4567, `"openid" must always be included in "allowedScopes"`),
-							sadClientSecretsCondition(now, 4567, "no client secret found (no Secret storage found)"),
+							sadNoClientSecretsCondition(now, 4567, "no client secret found (no Secret storage found)"),
 						},
+						TotalClientSecrets: 0,
 					},
 				},
 			},
@@ -474,6 +567,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(earlier, 1234, `"openid" must always be included in "allowedScopes"`),
 						happyClientSecretsCondition(1, earlier, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
@@ -488,6 +582,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 4567),
 						happyClientSecretsCondition(1, earlier, 4567), // was already validated earlier
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -511,6 +606,64 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
+				},
+			}},
+		},
+		{
+			name: "multiple errors on allowedScopes and allowedGrantTypes",
+			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: configv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []configv1alpha1.GrantType{"refresh_token"},
+					AllowedScopes:     []configv1alpha1.Scope{"pinniped:request-audience"},
+				},
+			}},
+			wantAPIActions: 1, // one update
+			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: configv1alpha1.OIDCClientStatus{
+					Phase: "Error",
+					Conditions: []configv1alpha1.Condition{
+						sadAllowedGrantTypesCondition(now, 1234,
+							`"authorization_code" must always be included in "allowedGrantTypes"; `+
+								`"urn:ietf:params:oauth:grant-type:token-exchange" must be included in "allowedGrantTypes" when "pinniped:request-audience" is included in "allowedScopes"`),
+						sadAllowedScopesCondition(now, 1234,
+							`"openid" must always be included in "allowedScopes"; `+
+								`"offline_access" must be included in "allowedScopes" when "refresh_token" is included in "allowedGrantTypes"; `+
+								`"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
+						happyClientSecretsCondition(1, now, 1234),
+					},
+					TotalClientSecrets: 1,
+				},
+			}},
+		},
+		{
+			name: "another combination of multiple errors on allowedScopes and allowedGrantTypes",
+			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: configv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []configv1alpha1.GrantType{"urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []configv1alpha1.Scope{"offline_access"},
+				},
+			}},
+			wantAPIActions: 1, // one update
+			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: configv1alpha1.OIDCClientStatus{
+					Phase: "Error",
+					Conditions: []configv1alpha1.Condition{
+						sadAllowedGrantTypesCondition(now, 1234,
+							`"authorization_code" must always be included in "allowedGrantTypes"; `+
+								`"refresh_token" must be included in "allowedGrantTypes" when "offline_access" is included in "allowedScopes"`),
+						sadAllowedScopesCondition(now, 1234,
+							`"openid" must always be included in "allowedScopes"; `+
+								`"pinniped:request-audience" must be included in "allowedScopes" when "urn:ietf:params:oauth:grant-type:token-exchange" is included in "allowedGrantTypes"`),
+						happyClientSecretsCondition(1, now, 1234),
+					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -534,6 +687,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -557,6 +711,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(now, 1234, `"offline_access" must be included in "allowedScopes" when "refresh_token" is included in "allowedGrantTypes"`),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -580,6 +735,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -603,6 +759,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -626,6 +783,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -649,6 +807,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						sadAllowedScopesCondition(now, 1234, `"pinniped:request-audience" must be included in "allowedScopes" when "urn:ietf:params:oauth:grant-type:token-exchange" is included in "allowedGrantTypes"`),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -672,6 +831,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -695,6 +855,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -718,6 +879,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -741,6 +903,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -764,6 +927,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -787,6 +951,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -810,6 +975,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},
@@ -833,6 +999,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
 					},
+					TotalClientSecrets: 1,
 				},
 			}},
 		},

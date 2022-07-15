@@ -27,7 +27,7 @@ type GrantType string
 // +kubebuilder:validation:Enum="openid";"offline_access";"username";"groups";"pinniped:request-audience"
 type Scope string
 
-// OIDCClientSpec is a struct that describes an OIDC Client.
+// OIDCClientSpec is a struct that describes an OIDCClient.
 type OIDCClientSpec struct {
 	// allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this
 	// client. Any other uris will be rejected.
@@ -75,17 +75,20 @@ type OIDCClientSpec struct {
 
 // OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 type OIDCClientStatus struct {
-	// Phase summarizes the overall status of the OIDCClient.
+	// phase summarizes the overall status of the OIDCClient.
 	// +kubebuilder:default=Pending
 	// +kubebuilder:validation:Enum=Pending;Ready;Error
 	Phase OIDCClientPhase `json:"phase,omitempty"`
 
-	// Represents the observations of an OIDCClient's current state.
+	// conditions represent the observations of an OIDCClient's current state.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// totalClientSecrets is the current number of client secrets that are detected for this OIDCClient.
+	TotalClientSecrets int32 `json:"totalClientSecrets,omitempty"`
 }
 
 // OIDCClient describes the configuration of an OIDC client.

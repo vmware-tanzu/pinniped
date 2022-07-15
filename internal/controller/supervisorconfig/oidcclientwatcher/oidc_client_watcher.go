@@ -6,7 +6,10 @@ package oidcclientwatcher
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/crypto/bcrypt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,16 +32,17 @@ const (
 	allowedGrantTypesValid = "AllowedGrantTypesValid"
 	allowedScopesValid     = "AllowedScopesValid"
 
-	reasonSuccess              = "Success"
-	reasonMissingRequiredValue = "MissingRequiredValue"
-	reasonNoClientSecretFound  = "NoClientSecretFound"
+	reasonSuccess                  = "Success"
+	reasonMissingRequiredValue     = "MissingRequiredValue"
+	reasonNoClientSecretFound      = "NoClientSecretFound"
+	reasonInvalidClientSecretFound = "InvalidClientSecretFound"
 
 	authorizationCodeGrantTypeName = "authorization_code"
 	refreshTokenGrantTypeName      = "refresh_token"
 	tokenExchangeGrantTypeName     = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint:gosec // this is not a credential
 
-	openidScopeName          = "openid"
-	offlineAccessScopeName   = "offline_access"
+	openidScopeName          = oidc.ScopeOpenID
+	offlineAccessScopeName   = oidc.ScopeOfflineAccess
 	requestAudienceScopeName = "pinniped:request-audience"
 	usernameScopeName        = "username"
 	groupsScopeName          = "groups"
@@ -46,7 +50,10 @@ const (
 	allowedGrantTypesFieldName = "allowedGrantTypes"
 	allowedScopesFieldName     = "allowedScopes"
 
-	secretTypeToObserve = "storage.pinniped.dev/oidc-client-secret" //nolint:gosec // this is not a credential
+	secretTypeToObserve       = "storage.pinniped.dev/oidc-client-secret" //nolint:gosec // this is not a credential
+	oidcClientPrefixToObserve = "client.oauth.pinniped.dev-"              //nolint:gosec // this is not a credential
+
+	minimumRequiredBcryptCost = 15
 )
 
 type oidcClientWatcherController struct {
@@ -81,7 +88,9 @@ func NewOIDCClientWatcherController(
 		// We want to be notified when anything happens to an OIDCClient.
 		withInformer(
 			oidcClientInformer,
-			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return strings.HasPrefix(obj.GetName(), oidcClientPrefixToObserve)
+			}),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -101,6 +110,11 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 	storage := oidcclientsecretstorage.New(nil, nil)
 
 	for _, oidcClient := range oidcClients {
+		// Skip the OIDCClients that we are not trying to observe.
+		if !strings.HasPrefix(oidcClient.Name, oidcClientPrefixToObserve) {
+			continue
+		}
+
 		correspondingSecretName := storage.GetName(oidcClient.UID)
 
 		secret, err := c.secretInformer.Lister().Secrets(oidcClient.Namespace).Get(correspondingSecretName)
@@ -119,9 +133,9 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 			secret = nil
 		}
 
-		conditions := validateOIDCClient(oidcClient, secret)
+		conditions, totalClientSecrets := validateOIDCClient(oidcClient, secret)
 
-		if err := c.updateStatus(ctx.Context, oidcClient, conditions); err != nil {
+		if err := c.updateStatus(ctx.Context, oidcClient, conditions, totalClientSecrets); err != nil {
 			return fmt.Errorf("cannot update OIDCClient '%s/%s': %w", oidcClient.Namespace, oidcClient.Name, err)
 		}
 
@@ -138,100 +152,94 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 // validateOIDCClient validates the OIDCClient and its corresponding client secret storage Secret.
 // When the corresponding client secret storage Secret was not found, pass nil to this function to
-// get the validation error for that case.
-func validateOIDCClient(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret) []*v1alpha1.Condition {
-	c := validateSecret(secret, []*v1alpha1.Condition{})
+// get the validation error for that case. It returns a slice of conditions along with the number
+// of client secrets found.
+func validateOIDCClient(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret) ([]*v1alpha1.Condition, int) {
+	c, totalClientSecrets := validateSecret(secret, make([]*v1alpha1.Condition, 0, 3))
 	c = validateAllowedGrantTypes(oidcClient, c)
 	c = validateAllowedScopes(oidcClient, c)
-	return c
+	return c, totalClientSecrets
 }
 
 // validateAllowedScopes checks if allowedScopes is valid on the OIDCClient.
 func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
-	switch {
-	case !allowedScopesContains(oidcClient, openidScopeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:    allowedScopesValid,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must always be included in %q", openidScopeName, allowedScopesFieldName),
-		})
-	case allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName) && !allowedScopesContains(oidcClient, offlineAccessScopeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedScopesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must be included in %q when %q is included in %q",
-				offlineAccessScopeName, allowedScopesFieldName, refreshTokenGrantTypeName, allowedGrantTypesFieldName),
-		})
-	case allowedScopesContains(oidcClient, requestAudienceScopeName) &&
-		(!allowedScopesContains(oidcClient, usernameScopeName) || !allowedScopesContains(oidcClient, groupsScopeName)):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedScopesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q and %q must be included in %q when %q is included in %q",
-				usernameScopeName, groupsScopeName, allowedScopesFieldName, requestAudienceScopeName, allowedScopesFieldName),
-		})
-	case allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName) && !allowedScopesContains(oidcClient, requestAudienceScopeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedScopesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must be included in %q when %q is included in %q",
-				requestAudienceScopeName, allowedScopesFieldName, tokenExchangeGrantTypeName, allowedGrantTypesFieldName),
-		})
-	default:
+	m := make([]string, 0, 4)
+
+	if !allowedScopesContains(oidcClient, openidScopeName) {
+		m = append(m, fmt.Sprintf("%q must always be included in %q", openidScopeName, allowedScopesFieldName))
+	}
+	if allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName) && !allowedScopesContains(oidcClient, offlineAccessScopeName) {
+		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
+			offlineAccessScopeName, allowedScopesFieldName, refreshTokenGrantTypeName, allowedGrantTypesFieldName))
+	}
+	if allowedScopesContains(oidcClient, requestAudienceScopeName) &&
+		(!allowedScopesContains(oidcClient, usernameScopeName) || !allowedScopesContains(oidcClient, groupsScopeName)) {
+		m = append(m, fmt.Sprintf("%q and %q must be included in %q when %q is included in %q",
+			usernameScopeName, groupsScopeName, allowedScopesFieldName, requestAudienceScopeName, allowedScopesFieldName))
+	}
+	if allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName) && !allowedScopesContains(oidcClient, requestAudienceScopeName) {
+		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
+			requestAudienceScopeName, allowedScopesFieldName, tokenExchangeGrantTypeName, allowedGrantTypesFieldName))
+	}
+
+	if len(m) == 0 {
 		conditions = append(conditions, &v1alpha1.Condition{
 			Type:    allowedScopesValid,
 			Status:  v1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedScopesFieldName),
 		})
+	} else {
+		conditions = append(conditions, &v1alpha1.Condition{
+			Type:    allowedScopesValid,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonMissingRequiredValue,
+			Message: strings.Join(m, "; "),
+		})
 	}
+
 	return conditions
 }
 
 // validateAllowedGrantTypes checks if allowedGrantTypes is valid on the OIDCClient.
 func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
-	switch {
-	case !allowedGrantTypesContains(oidcClient, authorizationCodeGrantTypeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedGrantTypesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must always be included in %q",
-				authorizationCodeGrantTypeName, allowedGrantTypesFieldName),
-		})
-	case allowedScopesContains(oidcClient, offlineAccessScopeName) && !allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedGrantTypesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must be included in %q when %q is included in %q",
-				refreshTokenGrantTypeName, allowedGrantTypesFieldName, offlineAccessScopeName, allowedScopesFieldName),
-		})
-	case allowedScopesContains(oidcClient, requestAudienceScopeName) && !allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName):
-		conditions = append(conditions, &v1alpha1.Condition{
-			Type:   allowedGrantTypesValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingRequiredValue,
-			Message: fmt.Sprintf("%q must be included in %q when %q is included in %q",
-				tokenExchangeGrantTypeName, allowedGrantTypesFieldName, requestAudienceScopeName, allowedScopesFieldName),
-		})
-	default:
+	m := make([]string, 0, 3)
+
+	if !allowedGrantTypesContains(oidcClient, authorizationCodeGrantTypeName) {
+		m = append(m, fmt.Sprintf("%q must always be included in %q",
+			authorizationCodeGrantTypeName, allowedGrantTypesFieldName))
+	}
+	if allowedScopesContains(oidcClient, offlineAccessScopeName) && !allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName) {
+		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
+			refreshTokenGrantTypeName, allowedGrantTypesFieldName, offlineAccessScopeName, allowedScopesFieldName))
+	}
+	if allowedScopesContains(oidcClient, requestAudienceScopeName) && !allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName) {
+		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
+			tokenExchangeGrantTypeName, allowedGrantTypesFieldName, requestAudienceScopeName, allowedScopesFieldName))
+	}
+
+	if len(m) == 0 {
 		conditions = append(conditions, &v1alpha1.Condition{
 			Type:    allowedGrantTypesValid,
 			Status:  v1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedGrantTypesFieldName),
 		})
+	} else {
+		conditions = append(conditions, &v1alpha1.Condition{
+			Type:    allowedGrantTypesValid,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonMissingRequiredValue,
+			Message: strings.Join(m, "; "),
+		})
 	}
+
 	return conditions
 }
 
 // validateSecret checks if the client secret storage Secret is valid and contains at least one client secret.
-func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
+// It returns the updated conditions slice along with the number of client secrets found.
+func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1alpha1.Condition, int) {
 	if secret == nil {
 		// Invalid: no storage Secret found.
 		conditions = append(conditions, &v1alpha1.Condition{
@@ -240,7 +248,7 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) []*v1al
 			Reason:  reasonNoClientSecretFound,
 			Message: "no client secret found (no Secret storage found)",
 		})
-		return conditions
+		return conditions, 0
 	}
 
 	storedClientSecret, err := oidcclientsecretstorage.ReadFromSecret(secret)
@@ -252,7 +260,7 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) []*v1al
 			Reason:  reasonNoClientSecretFound,
 			Message: fmt.Sprintf("error reading client secret storage: %s", err.Error()),
 		})
-		return conditions
+		return conditions, 0
 	}
 
 	// Successfully read the stored client secrets, so check if there are any stored in the list.
@@ -265,16 +273,42 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) []*v1al
 			Reason:  reasonNoClientSecretFound,
 			Message: "no client secret found (empty list in storage)",
 		})
-	} else {
-		// Valid: has at least one client secret stored for this OIDC client.
+		return conditions, 0
+	}
+
+	// Check each hashed password's format and bcrypt cost.
+	bcryptErrs := make([]string, 0, storedClientSecretsCount)
+	for i, p := range storedClientSecret.SecretHashes {
+		cost, err := bcrypt.Cost([]byte(p))
+		if err != nil {
+			bcryptErrs = append(bcryptErrs, fmt.Sprintf(
+				"hashed client secret at index %d: %s",
+				i, err.Error()))
+		} else if cost < minimumRequiredBcryptCost {
+			bcryptErrs = append(bcryptErrs, fmt.Sprintf(
+				"hashed client secret at index %d: bcrypt cost %d is below the required minimum of %d",
+				i, cost, minimumRequiredBcryptCost))
+		}
+	}
+	if len(bcryptErrs) > 0 {
+		// Invalid: some stored client secrets were not valid.
 		conditions = append(conditions, &v1alpha1.Condition{
 			Type:    clientSecretExists,
-			Status:  v1alpha1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: fmt.Sprintf("%d client secret(s) found", storedClientSecretsCount),
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonInvalidClientSecretFound,
+			Message: strings.Join(bcryptErrs, "; "),
 		})
+		return conditions, storedClientSecretsCount
 	}
-	return conditions
+
+	// Valid: has at least one client secret stored for this OIDC client, and all stored client secrets are valid.
+	conditions = append(conditions, &v1alpha1.Condition{
+		Type:    clientSecretExists,
+		Status:  v1alpha1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: fmt.Sprintf("%d client secret(s) found", storedClientSecretsCount),
+	})
+	return conditions, storedClientSecretsCount
 }
 
 func allowedGrantTypesContains(haystack *v1alpha1.OIDCClient, needle string) bool {
@@ -295,7 +329,12 @@ func allowedScopesContains(haystack *v1alpha1.OIDCClient, needle string) bool {
 	return false
 }
 
-func (c *oidcClientWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) error {
+func (c *oidcClientWatcherController) updateStatus(
+	ctx context.Context,
+	upstream *v1alpha1.OIDCClient,
+	conditions []*v1alpha1.Condition,
+	totalClientSecrets int,
+) error {
 	updated := upstream.DeepCopy()
 
 	hadErrorCondition := conditionsutil.MergeConfigConditions(conditions, upstream.Generation, &updated.Status.Conditions, plog.New())
@@ -304,6 +343,8 @@ func (c *oidcClientWatcherController) updateStatus(ctx context.Context, upstream
 	if hadErrorCondition {
 		updated.Status.Phase = v1alpha1.PhaseError
 	}
+
+	updated.Status.TotalClientSecrets = int32(totalClientSecrets)
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
 		return nil

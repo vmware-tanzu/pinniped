@@ -506,7 +506,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 					Type:    "AllowedScopesValid",
 					Status:  "False",
 					Reason:  "MissingRequiredValue",
-					Message: `"openid" must always be included in "allowedScopes"`,
+					Message: `"openid" must always be included in "allowedScopes"; "offline_access" must be included in "allowedScopes" when "refresh_token" is included in "allowedGrantTypes"`,
 				},
 				{
 					Type:    "ClientSecretExists",

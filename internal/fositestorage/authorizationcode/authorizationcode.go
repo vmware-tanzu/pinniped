@@ -88,7 +88,7 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	//      of the consent authorization request. It is used to identify the session.
 	//  signature for lookup in the DB
 
-	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil)
+	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil, nil)
 	return err
 }
 

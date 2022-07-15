@@ -18,11 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/rest"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/trace"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
-	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
@@ -34,11 +34,12 @@ import (
 //  also write a unit test that fails in 2023 to ask this to be updated to latest recommendation
 const cost = bcrypt.DefaultCost + 5
 
-func NewREST(resource schema.GroupResource, client *kubeclient.Client, namespace string) *REST {
+func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
 	return &REST{
 		tableConvertor: rest.NewDefaultTableConvertor(resource),
-		secretStorage:  oidcclientsecretstorage.New(client.Kubernetes.CoreV1().Secrets(namespace)),
-		clients:        client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(namespace),
+		secretStorage:  oidcclientsecretstorage.New(secrets),
+		clients:        clients,
+		namespace:      namespace,
 		rand:           rand.Reader,
 	}
 }
@@ -47,6 +48,7 @@ type REST struct {
 	tableConvertor rest.TableConvertor
 	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
 	clients        configv1alpha1clientset.OIDCClientInterface
+	namespace      string // TODO use
 	rand           io.Reader
 }
 

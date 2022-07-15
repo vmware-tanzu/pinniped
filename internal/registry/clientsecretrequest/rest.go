@@ -26,7 +26,13 @@ import (
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
-const cost = 15 // a good bcrypt cost for 2022, should take about a second to validate
+// cost is a good bcrypt cost for 2022, should take about a second to validate
+// this is meant to scale up automatically if bcrypt.DefaultCost increases
+// it must be kept private because validation of client secrets cannot rely
+// on a cost that changes without some form client secret storage migration
+// TODO write a unit test that fails when this changes so that we know if/when it happens
+//  also write a unit test that fails in 2023 to ask this to be updated to latest recommendation
+const cost = bcrypt.DefaultCost + 5
 
 func NewREST(resource schema.GroupResource, client *kubeclient.Client, namespace string) *REST {
 	return &REST{
@@ -122,18 +128,20 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 
 		hashes = append([]string{string(hash)}, hashes...)
-
-		err = r.secretStorage.Set(ctx, oidcClient.Name, oidcClient.UID, hashes)
-		if err != nil {
-			return nil, err // TODO obfuscate
-		}
 	}
 
-	if req.Spec.RevokeOldSecrets && len(hashes) > 0 {
+	needsRevoke := req.Spec.RevokeOldSecrets && len(hashes) > 0
+	if needsRevoke {
 		hashes = []string{hashes[0]}
 	}
 
-	// do not let them have more than 100? secrets
+	// TODO do not let them have more than 100? secrets
+
+	if req.Spec.GenerateNewSecret || needsRevoke {
+		if err := r.secretStorage.Set(ctx, oidcClient.Name, oidcClient.UID, hashes); err != nil {
+			return nil, err // TODO obfuscate
+		}
+	}
 
 	return &clientsecretapi.OIDCClientSecretRequest{
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{

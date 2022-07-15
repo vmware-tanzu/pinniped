@@ -69,7 +69,7 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, oidcClientName string
 	if errors.IsNotFound(err) {
 		ownerReferences := []metav1.OwnerReference{
 			{
-				APIVersion:         configv1alpha1.SchemeGroupVersion.String(), // TODO uh API group suffix?
+				APIVersion:         configv1alpha1.SchemeGroupVersion.String(),
 				Kind:               "OIDCClient",
 				Name:               oidcClientName,
 				UID:                oidcClientUID,

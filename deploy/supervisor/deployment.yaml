@@ -98,6 +98,7 @@ spec:
             readOnlyRootFilesystem: true
           resources:
             requests:
+              #! NOTE for BEN before we commit: make sure that IAM pick this up :)
               cpu: "2048m"
               memory: "128Mi"
             limits:

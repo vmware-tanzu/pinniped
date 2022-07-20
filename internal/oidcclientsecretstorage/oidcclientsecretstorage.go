@@ -45,28 +45,27 @@ func New(secrets corev1client.SecretInterface) *OIDCClientSecretStorage {
 	return &OIDCClientSecretStorage{storage: crud.New(TypeLabelValue, secrets, nil, 0)}
 }
 
-func (s *OIDCClientSecretStorage) Get(ctx context.Context, oidcClientUID types.UID) ([]string, error) {
+func (s *OIDCClientSecretStorage) Get(ctx context.Context, oidcClientUID types.UID) (string, []string, error) {
 	secret := &storedClientSecret{}
-	_, err := s.storage.Get(ctx, uidToName(oidcClientUID), secret)
+	rv, err := s.storage.Get(ctx, uidToName(oidcClientUID), secret)
 	if errors.IsNotFound(err) {
-		return nil, nil
+		return "", nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
+		return "", nil, fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
 	}
 
-	return secret.SecretHashes, nil
+	return rv, secret.SecretHashes, nil
 }
 
-func (s *OIDCClientSecretStorage) Set(ctx context.Context, oidcClientName string, oidcClientUID types.UID, secretHashes []string) error {
+func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidcClientName string, oidcClientUID types.UID, secretHashes []string) error {
 	secret := &storedClientSecret{
 		SecretHashes: secretHashes,
 		Version:      oidcClientSecretStorageVersion,
 	}
 	name := uidToName(oidcClientUID)
 
-	rv, err := s.storage.Get(ctx, name, &storedClientSecret{})
-	if errors.IsNotFound(err) {
+	if mustBeCreate := len(resourceVersion) == 0; mustBeCreate {
 		ownerReferences := []metav1.OwnerReference{
 			{
 				APIVersion:         configv1alpha1.SchemeGroupVersion.String(),
@@ -83,11 +82,8 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, oidcClientName string
 		}
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
-	}
 
-	_, err = s.storage.Update(ctx, name, rv, secret)
+	_, err := s.storage.Update(ctx, name, resourceVersion, secret)
 	if err != nil {
 		return fmt.Errorf("failed to update client secret for uid %s: %w", oidcClientUID, err)
 	}

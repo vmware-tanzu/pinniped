@@ -102,6 +102,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	})
 	defer t.Log()
 
+	// TODO actually validate the request like checking that the namespace is the supervisor's namespace
 	req, err := validateRequest(obj, t)
 	if err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 	t.Step("clients.Get")
 
-	hashes, err := r.secretStorage.Get(ctx, oidcClient.UID)
+	rv, hashes, err := r.secretStorage.Get(ctx, oidcClient.UID)
 	if err != nil {
 		return nil, err // TODO obfuscate
 	}
@@ -145,8 +146,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	// TODO do not let them have more than 100? secrets
 
 	if req.Spec.GenerateNewSecret || needsRevoke {
-		if err := r.secretStorage.Set(ctx, oidcClient.Name, oidcClient.UID, hashes); err != nil {
-			return nil, err // TODO obfuscate
+		if err := r.secretStorage.Set(ctx, rv, oidcClient.Name, oidcClient.UID, hashes); err != nil {
+			return nil, err // TODO obfuscate, also return good errors for cases like when the secret now exists but previously did not
 		}
 		t.Step("secretStorage.Set")
 	}

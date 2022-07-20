@@ -32,7 +32,7 @@ import (
 // on a cost that changes without some form client secret storage migration
 // TODO write a unit test that fails when this changes so that we know if/when it happens
 //  also write a unit test that fails in 2023 to ask this to be updated to latest recommendation
-const cost = bcrypt.DefaultCost + 5
+const cost = 12
 
 func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
 	return &REST{
@@ -106,16 +106,19 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if err != nil {
 		return nil, err
 	}
+	t.Step("validateRequest")
 
 	oidcClient, err := r.clients.Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err // TODO obfuscate
 	}
+	t.Step("clients.Get")
 
 	hashes, err := r.secretStorage.Get(ctx, oidcClient.UID)
 	if err != nil {
 		return nil, err // TODO obfuscate
 	}
+	t.Step("secretStorage.Get")
 
 	var secret string
 	if req.Spec.GenerateNewSecret {
@@ -123,11 +126,13 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		if err != nil {
 			return nil, err // TODO obfuscate
 		}
+		t.Step("generateSecret")
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(secret), cost)
 		if err != nil {
 			return nil, err // TODO obfuscate
 		}
+		t.Step("bcrypt.GenerateFromPassword")
 
 		hashes = append([]string{string(hash)}, hashes...)
 	}
@@ -143,6 +148,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		if err := r.secretStorage.Set(ctx, oidcClient.Name, oidcClient.UID, hashes); err != nil {
 			return nil, err // TODO obfuscate
 		}
+		t.Step("secretStorage.Set")
 	}
 
 	return &clientsecretapi.OIDCClientSecretRequest{

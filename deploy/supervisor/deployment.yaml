@@ -98,10 +98,10 @@ spec:
             readOnlyRootFilesystem: true
           resources:
             requests:
-              cpu: "100m"
+              cpu: "2048m"
               memory: "128Mi"
             limits:
-              cpu: "100m"
+              cpu: "2048m"
               memory: "128Mi"
           volumeMounts:
             - name: config-volume

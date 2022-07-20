@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -27,7 +28,6 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/utils/pointer"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
@@ -79,8 +79,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		pinnipedCLIClientID = "pinniped-cli"
 		dynamicClientID     = "client.oauth.pinniped.dev-test-name"
 		dynamicClientUID    = "fake-client-uid"
-		//nolint:gosec // this is not a credential
-		dynamicClientHashedSecret = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password1" at cost 15
 	)
 
 	require.Len(t, happyState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
@@ -237,13 +235,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	createOauthHelperWithRealStorage := func(secretsClient v1.SecretInterface, oidcClientsClient v1alpha1.OIDCClientInterface) (fosite.OAuth2Provider, *oidc.KubeStorage) {
 		// Configure fosite the same way that the production code would when using Kube storage.
 		// Inject this into our test subject at the last second so we get a fresh storage for every test.
-		kubeOauthStore := oidc.NewKubeStorage(secretsClient, oidcClientsClient, timeoutsConfiguration)
+		// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+		kubeOauthStore := oidc.NewKubeStorage(secretsClient, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 		return oidc.FositeOauth2Helper(kubeOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration), kubeOauthStore
 	}
 
 	createOauthHelperWithNullStorage := func(secretsClient v1.SecretInterface, oidcClientsClient v1alpha1.OIDCClientInterface) (fosite.OAuth2Provider, *oidc.NullStorage) {
 		// Configure fosite the same way that the production code would, using NullStorage to turn off storage.
-		nullOauthStore := oidc.NewNullStorage(secretsClient, oidcClientsClient)
+		// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+		nullOauthStore := oidc.NewNullStorage(secretsClient, oidcClientsClient, bcrypt.MinCost)
 		return oidc.FositeOauth2Helper(nullOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration), nullOauthStore
 	}
 
@@ -511,24 +511,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 	}
 
-	fullyCapableDynamicClient := &configv1alpha1.OIDCClient{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "some-namespace", Name: dynamicClientID, Generation: 1, UID: dynamicClientUID},
-		Spec: configv1alpha1.OIDCClientSpec{
-			AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-			AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-			AllowedRedirectURIs: []configv1alpha1.RedirectURI{downstreamRedirectURI},
-		},
-	}
-
-	allDynamicClientScopes := "openid offline_access pinniped:request-audience username groups"
-
-	storageSecretWithOneClientSecretForDynamicClient := testutil.OIDCClientSecretStorageSecretForUID(t,
-		"some-namespace", dynamicClientUID, []string{dynamicClientHashedSecret},
-	)
-
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
-		require.NoError(t, supervisorClient.Tracker().Add(fullyCapableDynamicClient))
-		require.NoError(t, kubeClient.Tracker().Add(storageSecretWithOneClientSecretForDynamicClient))
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace", dynamicClientID, dynamicClientUID, downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost})
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
@@ -611,11 +598,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", oidcUpstreamName, "oidc"), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -646,11 +633,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", ldapUpstreamName, "ldap")}),
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", ldapUpstreamName, "ldap")}),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -681,11 +668,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", activeDirectoryUpstreamName, "activedirectory")}),
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", activeDirectoryUpstreamName, "activedirectory")}),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -835,12 +822,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", oidcUpstreamName, "oidc"), nil),
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -874,12 +861,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", ldapUpstreamName, "ldap")}),
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", ldapUpstreamName, "ldap")}),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -913,12 +900,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}, "", activeDirectoryUpstreamName, "activedirectory")}),
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", activeDirectoryUpstreamName, "activedirectory")}),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -1111,7 +1098,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 				"client_id":    dynamicClientID,
-				"scope":        allDynamicClientScopes,
+				"scope":        testutil.AllDynamicClientScopesSpaceSep,
 			}),
 			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
@@ -1119,7 +1106,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantLocationHeader: expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 				"client_id":    dynamicClientID,
-				"scope":        allDynamicClientScopes,
+				"scope":        testutil.AllDynamicClientScopesSpaceSep,
 			}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
@@ -1526,7 +1513,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
 			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1539,7 +1526,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
 			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1552,7 +1539,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
 			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1589,7 +1576,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-dynamic-client",
 				"client_id":    dynamicClientID,
-				"scope":        allDynamicClientScopes,
+				"scope":        testutil.AllDynamicClientScopesSpaceSep,
 			}),
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: jsonContentType,
@@ -1705,7 +1692,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
-				"scope":         allDynamicClientScopes,
+				"scope":         testutil.AllDynamicClientScopesSpaceSep,
 			}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
@@ -1754,7 +1741,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
-				"scope":         allDynamicClientScopes,
+				"scope":         testutil.AllDynamicClientScopesSpaceSep,
 			}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
@@ -1791,7 +1778,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
-				"scope":         allDynamicClientScopes,
+				"scope":         testutil.AllDynamicClientScopesSpaceSep,
 			}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
@@ -1865,7 +1852,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"response_mode": "form_post", "client_id": dynamicClientID, "scope": allDynamicClientScopes}),
+			path:            modifiedHappyGetRequestPath(map[string]string{"response_mode": "form_post", "client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:      http.StatusOK, // this is weird, but fosite uses a form_post response to tell the client that it is not allowed to use form_post responses
 			wantContentType: htmlContentType,
 			wantBodyRegex:   `<input type="hidden" name="encoded_params" value="error=unsupported_response_mode&amp;error_description=The&#43;authorization&#43;server&#43;does&#43;not&#43;support&#43;obtaining&#43;a&#43;response&#43;using&#43;this&#43;response&#43;mode.`,
@@ -1919,7 +1906,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "response_type": ""}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -1964,7 +1951,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "response_type": ""}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -1997,7 +1984,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "response_type": ""}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -2062,7 +2049,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "code_challenge": ""}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
@@ -2120,7 +2107,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
@@ -2178,7 +2165,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "code_challenge_method": "plain"}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "plain"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2236,7 +2223,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "code_challenge_method": ""}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2298,7 +2285,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "prompt": "none login"}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "prompt": "none login"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
@@ -2865,7 +2852,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": allDynamicClientScopes, "state": "short"}),
+			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "state": "short"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),

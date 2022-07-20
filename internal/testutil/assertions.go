@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
@@ -49,6 +50,23 @@ func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.Secret
 	t.Helper()
 	storedAuthcodeSecrets, err := secrets.List(context.Background(), v12.ListOptions{
 		LabelSelector: labelSet.String(),
+	})
+	require.NoError(t, err)
+	require.Len(t, storedAuthcodeSecrets.Items, expectedNumberOfSecrets)
+}
+
+func RequireNumberOfSecretsExcludingLabelSelector(t *testing.T, secrets v1.SecretInterface, labelSet labels.Set, expectedNumberOfSecrets int) {
+	t.Helper()
+
+	selector := labels.Everything()
+	for k, v := range labelSet {
+		requirement, err := labels.NewRequirement(k, selection.NotEquals, []string{v})
+		require.NoError(t, err)
+		selector = selector.Add(*requirement)
+	}
+
+	storedAuthcodeSecrets, err := secrets.List(context.Background(), v12.ListOptions{
+		LabelSelector: selector.String(),
 	})
 	require.NoError(t, err)
 	require.Len(t, storedAuthcodeSecrets.Items, expectedNumberOfSecrets)

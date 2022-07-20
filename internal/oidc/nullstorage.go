@@ -26,9 +26,13 @@ type NullStorage struct {
 
 var _ fositestoragei.AllFositeStorage = &NullStorage{}
 
-func NewNullStorage(secrets corev1client.SecretInterface, oidcClientsClient v1alpha1.OIDCClientInterface) *NullStorage {
+func NewNullStorage(
+	secrets corev1client.SecretInterface,
+	oidcClientsClient v1alpha1.OIDCClientInterface,
+	minBcryptCost int,
+) *NullStorage {
 	return &NullStorage{
-		ClientManager: clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, time.Now)),
+		ClientManager: clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, time.Now), minBcryptCost),
 	}
 }
 

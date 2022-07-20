@@ -35,10 +35,15 @@ type KubeStorage struct {
 
 var _ fositestoragei.AllFositeStorage = &KubeStorage{}
 
-func NewKubeStorage(secrets corev1client.SecretInterface, oidcClientsClient v1alpha1.OIDCClientInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
+func NewKubeStorage(
+	secrets corev1client.SecretInterface,
+	oidcClientsClient v1alpha1.OIDCClientInterface,
+	timeoutsConfiguration TimeoutsConfiguration,
+	minBcryptCost int,
+) *KubeStorage {
 	nowFunc := time.Now
 	return &KubeStorage{
-		clientManager:            clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, nowFunc)),
+		clientManager:            clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, nowFunc), minBcryptCost),
 		authorizationCodeStorage: authorizationcode.New(secrets, nowFunc, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
 		pkceStorage:              pkce.New(secrets, nowFunc, timeoutsConfiguration.PKCESessionStorageLifetime),
 		oidcStorage:              openidconnect.New(secrets, nowFunc, timeoutsConfiguration.OIDCSessionStorageLifetime),

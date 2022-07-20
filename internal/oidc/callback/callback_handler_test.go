@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/securecookie"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -139,10 +140,11 @@ func TestCallbackEndpoint(t *testing.T) {
 	tests := []struct {
 		name string
 
-		idps       *oidctestutil.UpstreamIDPListerBuilder
-		method     string
-		path       string
-		csrfCookie string
+		idps          *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
+		method        string
+		path          string
+		csrfCookie    string
 
 		wantStatus                        int
 		wantContentType                   string
@@ -1071,14 +1073,20 @@ func TestCallbackEndpoint(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset()
-			secrets := client.CoreV1().Secrets("some-namespace")
-			oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
+			kubeClient := fake.NewSimpleClientset()
+			supervisorClient := supervisorfake.NewSimpleClientset()
+			secrets := kubeClient.CoreV1().Secrets("some-namespace")
+			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
+
+			if test.kubeResources != nil {
+				test.kubeResources(t, supervisorClient, kubeClient)
+			}
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
-			oauthStore := oidc.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration)
+			// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+			oauthStore := oidc.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
@@ -1120,7 +1128,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Body.String(),
 					test.wantBodyFormResponseRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,
@@ -1147,7 +1155,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,

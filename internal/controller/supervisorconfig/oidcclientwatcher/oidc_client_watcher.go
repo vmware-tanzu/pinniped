@@ -107,7 +107,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 			secret = nil
 		}
 
-		_, conditions, clientSecrets := oidcclientvalidator.Validate(oidcClient, secret)
+		_, conditions, clientSecrets := oidcclientvalidator.Validate(oidcClient, secret, oidcclientvalidator.DefaultMinBcryptCost)
 
 		if err := c.updateStatus(ctx.Context, oidcClient, conditions, len(clientSecrets)); err != nil {
 			return fmt.Errorf("cannot update OIDCClient '%s/%s': %w", oidcClient.Namespace, oidcClient.Name, err)

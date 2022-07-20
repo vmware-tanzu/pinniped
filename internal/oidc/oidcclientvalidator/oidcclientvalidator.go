@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	DefaultMinBcryptCost = 12
+
 	clientSecretExists     = "ClientSecretExists"
 	allowedGrantTypesValid = "AllowedGrantTypesValid"
 	allowedScopesValid     = "AllowedScopesValid"
@@ -37,8 +39,6 @@ const (
 
 	allowedGrantTypesFieldName = "allowedGrantTypes"
 	allowedScopesFieldName     = "allowedScopes"
-
-	minimumRequiredBcryptCost = 15
 )
 
 // Validate validates the OIDCClient and its corresponding client secret storage Secret.
@@ -46,10 +46,10 @@ const (
 // get the validation error for that case. It returns a bool to indicate if the client is valid,
 // along with a slice of conditions containing more details, and the list of client secrets in the
 // case that the client was valid.
-func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret) (bool, []*v1alpha1.Condition, []string) {
+func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost int) (bool, []*v1alpha1.Condition, []string) {
 	conds := make([]*v1alpha1.Condition, 0, 3)
 
-	conds, clientSecrets := validateSecret(secret, conds)
+	conds, clientSecrets := validateSecret(secret, conds, minBcryptCost)
 	conds = validateAllowedGrantTypes(oidcClient, conds)
 	conds = validateAllowedScopes(oidcClient, conds)
 
@@ -141,7 +141,7 @@ func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1
 
 // validateSecret checks if the client secret storage Secret is valid and contains at least one client secret.
 // It returns the updated conditions slice along with the client secrets found in that case that it is valid.
-func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1alpha1.Condition, []string) {
+func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcryptCost int) ([]*v1alpha1.Condition, []string) {
 	emptyList := []string{}
 
 	if secret == nil {
@@ -188,10 +188,10 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1a
 			bcryptErrs = append(bcryptErrs, fmt.Sprintf(
 				"hashed client secret at index %d: %s",
 				i, err.Error()))
-		} else if cost < minimumRequiredBcryptCost {
+		} else if cost < minBcryptCost {
 			bcryptErrs = append(bcryptErrs, fmt.Sprintf(
 				"hashed client secret at index %d: bcrypt cost %d is below the required minimum of %d",
-				i, cost, minimumRequiredBcryptCost))
+				i, cost, minBcryptCost))
 		}
 	}
 	if len(bcryptErrs) > 0 {

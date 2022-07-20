@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -232,11 +233,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		idps         *oidctestutil.UpstreamIDPListerBuilder
-		decodedState *oidc.UpstreamStateParamData
-		formParams   url.Values
-		reqURIQuery  url.Values
+		name          string
+		idps          *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
+		decodedState  *oidc.UpstreamStateParamData
+		formParams    url.Values
+		reqURIQuery   url.Values
 
 		wantStatus      int
 		wantContentType string
@@ -671,13 +673,19 @@ func TestPostLoginEndpoint(t *testing.T) {
 			t.Parallel()
 
 			kubeClient := fake.NewSimpleClientset()
+			supervisorClient := supervisorfake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
-			oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
+			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
+
+			if test.kubeResources != nil {
+				test.kubeResources(t, supervisorClient, kubeClient)
+			}
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
-			kubeOauthStore := oidc.NewKubeStorage(secretsClient, oidcClientsClient, timeoutsConfiguration)
+			// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+			kubeOauthStore := oidc.NewKubeStorage(secretsClient, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()

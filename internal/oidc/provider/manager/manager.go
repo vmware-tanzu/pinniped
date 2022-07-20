@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/oidc/idpdiscovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/login"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
@@ -98,7 +99,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
 		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(
-			oidc.NewNullStorage(m.secretsClient, m.oidcClientsClient),
+			oidc.NewNullStorage(m.secretsClient, m.oidcClientsClient, oidcclientvalidator.DefaultMinBcryptCost),
 			issuer,
 			tokenHMACKeyGetter,
 			nil,
@@ -107,7 +108,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
 		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(
-			oidc.NewKubeStorage(m.secretsClient, m.oidcClientsClient, timeoutsConfiguration),
+			oidc.NewKubeStorage(m.secretsClient, m.oidcClientsClient, timeoutsConfiguration, oidcclientvalidator.DefaultMinBcryptCost),
 			issuer,
 			tokenHMACKeyGetter,
 			m.dynamicJWKSProvider,

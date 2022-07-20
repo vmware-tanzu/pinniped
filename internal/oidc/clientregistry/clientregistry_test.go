@@ -21,6 +21,7 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -32,11 +33,6 @@ func TestClientManager(t *testing.T) {
 		testName      = "client.oauth.pinniped.dev-test-name"
 		testNamespace = "test-namespace"
 		testUID       = "test-uid-123"
-
-		//nolint:gosec // this is not a credential
-		testBcryptSecret1 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password1" at cost 15
-		//nolint:gosec // this is not a credential
-		testBcryptSecret2 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password2" at cost 15
 	)
 
 	tests := []struct {
@@ -121,7 +117,7 @@ func TestClientManager(t *testing.T) {
 				},
 			},
 			secrets: []*corev1.Secret{
-				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testBcryptSecret1, testBcryptSecret2}),
+				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost}),
 			},
 			run: func(t *testing.T, subject *ClientManager) {
 				got, err := subject.GetClient(ctx, testName)
@@ -174,7 +170,7 @@ func TestClientManager(t *testing.T) {
 				},
 			},
 			secrets: []*corev1.Secret{
-				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testBcryptSecret1, testBcryptSecret2}),
+				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost}),
 			},
 			run: func(t *testing.T, subject *ClientManager) {
 				got, err := subject.GetClient(ctx, testName)
@@ -185,8 +181,8 @@ func TestClientManager(t *testing.T) {
 				require.Equal(t, testName, c.GetID())
 				require.Nil(t, c.GetHashedSecret())
 				require.Len(t, c.GetRotatedHashes(), 2)
-				require.Equal(t, testBcryptSecret1, string(c.GetRotatedHashes()[0]))
-				require.Equal(t, testBcryptSecret2, string(c.GetRotatedHashes()[1]))
+				require.Equal(t, testutil.HashedPassword1AtSupervisorMinCost, string(c.GetRotatedHashes()[0]))
+				require.Equal(t, testutil.HashedPassword2AtSupervisorMinCost, string(c.GetRotatedHashes()[1]))
 				require.Equal(t, []string{"http://localhost:80", "https://foobar.com/callback"}, c.GetRedirectURIs())
 				require.Equal(t, fosite.Arguments{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"}, c.GetGrantTypes())
 				require.Equal(t, fosite.Arguments{"code"}, c.GetResponseTypes())
@@ -214,7 +210,11 @@ func TestClientManager(t *testing.T) {
 			secrets := kubeClient.CoreV1().Secrets(testNamespace)
 			supervisorClient := supervisorfake.NewSimpleClientset()
 			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients(testNamespace)
-			subject := NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, time.Now))
+			subject := NewClientManager(
+				oidcClientsClient,
+				oidcclientsecretstorage.New(secrets, time.Now),
+				oidcclientvalidator.DefaultMinBcryptCost,
+			)
 
 			for _, secret := range test.secrets {
 				require.NoError(t, kubeClient.Tracker().Add(secret))

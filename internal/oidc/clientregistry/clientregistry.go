@@ -50,6 +50,7 @@ func (c Client) GetResponseModes() []fosite.ResponseModeType {
 type ClientManager struct {
 	oidcClientsClient supervisorclient.OIDCClientInterface
 	storage           *oidcclientsecretstorage.OIDCClientSecretStorage
+	minBcryptCost     int
 }
 
 var _ fosite.ClientManager = (*ClientManager)(nil)
@@ -57,10 +58,12 @@ var _ fosite.ClientManager = (*ClientManager)(nil)
 func NewClientManager(
 	oidcClientsClient supervisorclient.OIDCClientInterface,
 	storage *oidcclientsecretstorage.OIDCClientSecretStorage,
+	minBcryptCost int,
 ) *ClientManager {
 	return &ClientManager{
 		oidcClientsClient: oidcClientsClient,
 		storage:           storage,
+		minBcryptCost:     minBcryptCost,
 	}
 }
 
@@ -95,7 +98,7 @@ func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client
 	}
 
 	// Check if the OIDCClient and its corresponding Secret are valid.
-	valid, conditions, clientSecrets := oidcclientvalidator.Validate(oidcClient, storageSecret)
+	valid, conditions, clientSecrets := oidcclientvalidator.Validate(oidcClient, storageSecret, m.minBcryptCost)
 	if !valid {
 		// Log the conditions so an admin can see exactly what was invalid at the time of the request.
 		plog.Debug("OIDC client lookup GetClient() found an invalid client", "clientID", id, "conditions", conditions)

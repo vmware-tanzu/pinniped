@@ -563,7 +563,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 				},
 			},
-			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{"$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m"}),
+			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{testutil.HashedPassword1AtSupervisorMinCost}),
 			wantPhase: "Ready",
 			wantConditions: []supervisorconfigv1alpha1.Condition{
 				{

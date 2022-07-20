@@ -29,14 +29,17 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
 	josejwt "gopkg.in/square/go-jose.v2/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
@@ -50,6 +53,7 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -59,12 +63,15 @@ import (
 const (
 	goodIssuer           = "https://some-issuer.com"
 	goodUpstreamSubject  = "some-subject"
-	goodClient           = "pinniped-cli"
 	goodRedirectURI      = "http://127.0.0.1/callback"
 	goodPKCECodeVerifier = "some-pkce-verifier-that-must-be-at-least-43-characters-to-meet-entropy-requirements"
 	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	goodSubject          = "https://issuer?sub=some-subject"
 	goodUsername         = "some-username"
+
+	pinnipedCLIClientID = "pinniped-cli"
+	dynamicClientID     = "client.oauth.pinniped.dev-test-name"
+	dynamicClientUID    = "fake-client-uid"
 
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
@@ -72,7 +79,7 @@ const (
 	accessTokenExpirationSeconds = 2 * 60  // Currently, we set our access token expiration to 2 minutes
 	idTokenExpirationSeconds     = 2 * 60  // Currently, we set our ID token expiration to 2 minutes
 
-	timeComparisonFudgeSeconds = 15
+	timeComparisonFudge = 15 * time.Second
 )
 
 var (
@@ -156,6 +163,20 @@ var (
 		}
 	`)
 
+	fositeClientIDMismatchDuringAuthcodeExchangeErrorBody = here.Doc(`
+		{
+			"error":             "invalid_grant",
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request."
+		}
+	`)
+
+	fositeClientIDMismatchDuringRefreshErrorBody = here.Doc(`
+		{
+			"error":             "invalid_grant",
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the ID during the initial token issuance."
+		}
+	`)
+
 	fositeInvalidRedirectURIErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
@@ -198,11 +219,25 @@ var (
 		}
 	`)
 
+	fositeClientAuthFailedErrorBody = here.Doc(`
+		{
+			"error":             "invalid_client",
+			"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."
+		}
+	`)
+
+	fositeClientAuthMustBeBasicAuthErrorBody = here.Doc(`
+		{
+			"error":             "invalid_client",
+			"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client supports client authentication method 'client_secret_basic', but method 'client_secret_post' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_post'."
+		}
+	`)
+
 	happyAuthRequest = &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
 			"scope":                 {"openid profile email groups"},
-			"client_id":             {goodClient},
+			"client_id":             {pinnipedCLIClientID},
 			"state":                 {"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
 			"nonce":                 {goodNonce},
 			"code_challenge":        {testutil.SHA256(goodPKCECodeVerifier)},
@@ -219,7 +254,7 @@ var (
 				"subject_token":        {subjectToken},
 				"subject_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
 				"requested_token_type": {"urn:ietf:params:oauth:token-type:jwt"},
-				"client_id":            {goodClient},
+				"client_id":            {pinnipedCLIClientID},
 			},
 		}
 	}
@@ -239,6 +274,7 @@ type tokenEndpointResponseExpectedValues struct {
 	wantStatus                        int
 	wantSuccessBodyFields             []string
 	wantErrorResponseBody             string
+	wantClientID                      string
 	wantRequestedScopes               []string
 	wantGrantedScopes                 []string
 	wantGroups                        []string
@@ -260,10 +296,32 @@ type authcodeExchangeInputs struct {
 	want              tokenEndpointResponseExpectedValues
 }
 
+func addFullyCapableDynamicClientAndSecretToKubeResources(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+	oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+		"some-namespace",
+		dynamicClientID,
+		dynamicClientUID,
+		goodRedirectURI,
+		[]string{testutil.HashedPassword1AtGoMinCost, testutil.HashedPassword2AtGoMinCost},
+	)
+	require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+	require.NoError(t, kubeClient.Tracker().Add(secret))
+}
+
+func modifyAuthcodeTokenRequestWithDynamicClientAuth(r *http.Request, authCode string) {
+	r.Body = happyAuthcodeRequestBody(authCode).WithClientID("").ReadCloser() // No client_id in body.
+	r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)              // Use basic auth header instead.
+}
+
+func addDynamicClientIDToFormPostBody(r *http.Request) {
+	r.Form.Set("client_id", dynamicClientID)
+}
+
 func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 	tests := []struct {
 		name             string
 		authcodeExchange authcodeExchangeInputs
+		kubeResources    func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 	}{
 		// happy path
 		{
@@ -272,9 +330,29 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
 					wantRequestedScopes:   []string{"openid", "profile", "email", "groups"},
 					wantGrantedScopes:     []string{"openid", "groups"},
+					wantGroups:            goodGroups,
+				},
+			},
+		},
+		{
+			name:          "request is valid and tokens are issued for dynamic client",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "groups"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -285,19 +363,59 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "profile email") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in"}, // no id or refresh tokens
 					wantRequestedScopes:   []string{"profile", "email"},
 					wantGrantedScopes:     []string{},
-					wantGroups:            goodGroups,
+					wantGroups:            nil,
 				},
 			},
 		},
 		{
-			name: "offline_access and openid scopes were requested and granted from authorize endpoint",
+			name:          "openid scope was not requested from authorize endpoint for dynamic client",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "pinniped:request-audience groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in"}, // no id or refresh tokens
+					wantRequestedScopes:   []string{"pinniped:request-audience", "groups"},
+					wantGrantedScopes:     []string{"pinniped:request-audience", "groups"},
+					wantGroups:            nil,
+				},
+			},
+		},
+		{
+			name: "offline_access and openid scopes were requested and granted from authorize endpoint (no groups)",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in", "refresh_token"}, // all possible tokens
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantGroups:            nil,
+				},
+			},
+		},
+		{
+			name:          "offline_access and openid scopes were requested and granted from authorize endpoint for dynamic client (no groups)",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in", "refresh_token"}, // all possible tokens
 					wantRequestedScopes:   []string{"openid", "offline_access"},
 					wantGrantedScopes:     []string{"openid", "offline_access"},
@@ -311,10 +429,30 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in", "refresh_token"}, // no id token
 					wantRequestedScopes:   []string{"offline_access"},
 					wantGrantedScopes:     []string{"offline_access"},
-					wantGroups:            goodGroups,
+					wantGroups:            nil,
+				},
+			},
+		},
+		{
+			name:          "offline_access (without openid scope) was requested and granted from authorize endpoint for dynamic client",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "offline_access")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in", "refresh_token"}, // no id token
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+					wantGroups:            nil,
 				},
 			},
 		},
@@ -324,9 +462,32 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
 					wantRequestedScopes:   []string{"openid", "profile", "email", "groups"},
 					wantGrantedScopes:     []string{"openid", "groups"},
+					wantGroups:            goodGroups,
+				},
+			},
+		},
+		{
+			name:          "dynamic client uses a secondary client secret (one of the other client secrets after the first one in the list)",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience groups")
+				},
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithClientID("").ReadCloser()
+					r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword2) // use the second client secret that was configured on the client
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "groups"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "groups"},
 					wantGroups:            goodGroups,
 				},
 			},
@@ -374,6 +535,57 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			},
 		},
 		{
+			name:          "dynamic client uses wrong client secret",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience groups")
+				},
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithClientID("").ReadCloser()
+					r.SetBasicAuth(dynamicClientID, "wrong client secret")
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeClientAuthFailedErrorBody,
+				},
+			},
+		},
+		{
+			name:          "dynamic client uses wrong auth method (must use basic auth)",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience groups")
+				},
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					// Add client auth to the form, when it should be in basic auth headers.
+					r.Body = happyAuthcodeRequestBody(authCode).WithClientID(dynamicClientID).WithClientSecret(testutil.PlaintextPassword1).ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeClientAuthMustBeBasicAuthErrorBody,
+				},
+			},
+		},
+		{
+			name:          "tries to change client ID between authorization request and token request",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					// Test uses pinniped-cli client_id by default here.
+					r.Form.Set("scope", "openid pinniped:request-audience")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeClientIDMismatchDuringAuthcodeExchangeErrorBody,
+				},
+			},
+		},
+		{
 			name: "content type is invalid",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyTokenRequest: func(r *http.Request, authCode string) { r.Header.Set("Content-Type", "text/plain") },
@@ -414,18 +626,6 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeMissingGrantTypeErrorBody,
-				},
-			},
-		},
-		{
-			name: "grant type is not authorization_code",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyTokenRequest: func(r *http.Request, authCode string) {
-					r.Body = happyAuthcodeRequestBody(authCode).WithGrantType("bogus").ReadCloser()
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeInvalidRequestErrorBody,
 				},
 			},
 		},
@@ -568,7 +768,8 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			t.Parallel()
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
-			exchangeAuthcodeForTokens(t, test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
+			exchangeAuthcodeForTokens(t,
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
 		})
 	}
 }
@@ -577,6 +778,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 	tests := []struct {
 		name             string
 		authcodeExchange authcodeExchangeInputs
+		kubeResources    func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 	}{
 		{
 			name: "authcode exchange succeeds once and then fails when the same authcode is used again",
@@ -584,6 +786,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access profile email groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid", "offline_access", "profile", "email", "groups"},
 					wantGrantedScopes:     []string{"openid", "offline_access", "groups"},
@@ -600,7 +803,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// First call - should be successful.
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
 			var parsedResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
@@ -611,6 +814,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyAuthcodeRequestBody(authCode).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			reusedAuthcodeResponse := httptest.NewRecorder()
+			approxRequestTime := time.Now()
 			subject.ServeHTTP(reusedAuthcodeResponse, req)
 			t.Logf("second response: %#v", reusedAuthcodeResponse)
 			t.Logf("second response body: %q", reusedAuthcodeResponse.Body.String())
@@ -619,7 +823,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			require.JSONEq(t, fositeReusedAuthCodeErrorBody, reusedAuthcodeResponse.Body.String())
 
 			// This was previously invalidated by the first request, so it remains invalidated
-			requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
+			requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets, approxRequestTime)
 			// Has now invalidated the access token that was previously handed out by the first request
 			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
 			// This was previously invalidated by the first request, so it remains invalidated
@@ -628,7 +832,9 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// Note that customSessionData is only relevant to refresh grant, so we leave it as nil for this
 			// authcode exchange test, even though in practice it would actually be in the session.
 			requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore,
-				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes, test.authcodeExchange.want.wantGroups, nil)
+				test.authcodeExchange.want.wantClientID, test.authcodeExchange.want.wantRequestedScopes,
+				test.authcodeExchange.want.wantGrantedScopes, test.authcodeExchange.want.wantGroups, nil,
+				approxRequestTime)
 
 			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -636,7 +842,8 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
-			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
+			// Assert the number of all secrets, excluding any OIDCClient's storage secret, since those are not related to session storage.
+			testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2)
 		})
 	}
 }
@@ -644,6 +851,16 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn:ietf:params:oauth:grant-type:token-exchange"
 	successfulAuthCodeExchange := tokenEndpointResponseExpectedValues{
 		wantStatus:            http.StatusOK,
+		wantClientID:          pinnipedCLIClientID,
+		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+		wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "groups"},
+		wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "groups"},
+		wantGroups:            goodGroups,
+	}
+
+	successfulAuthCodeExchangeUsingDynamicClient := tokenEndpointResponseExpectedValues{
+		wantStatus:            http.StatusOK,
+		wantClientID:          dynamicClientID,
 		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
 		wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "groups"},
 		wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "groups"},
@@ -657,13 +874,24 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		want: successfulAuthCodeExchange,
 	}
 
+	doValidAuthCodeExchangeUsingDynamicClient := authcodeExchangeInputs{
+		modifyAuthRequest: func(authRequest *http.Request) {
+			addDynamicClientIDToFormPostBody(authRequest)
+			authRequest.Form.Set("scope", "openid pinniped:request-audience groups")
+		},
+		modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+		want:               successfulAuthCodeExchangeUsingDynamicClient,
+	}
+
 	tests := []struct {
 		name string
 
-		authcodeExchange    authcodeExchangeInputs
-		modifyRequestParams func(t *testing.T, params url.Values)
-		modifyStorage       func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request)
-		requestedAudience   string
+		authcodeExchange     authcodeExchangeInputs
+		modifyRequestParams  func(t *testing.T, params url.Values)
+		modifyRequestHeaders func(r *http.Request)
+		modifyStorage        func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request)
+		requestedAudience    string
+		kubeResources        func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 
 		wantStatus               int
 		wantResponseBodyContains string
@@ -673,6 +901,116 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			wantStatus:        http.StatusOK,
+		},
+		{
+			name:             "happy path with dynamic client",
+			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
+		},
+		{
+			name: "dynamic client lacks the required urn:ietf:params:oauth:grant-type:token-exchange grant type",
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				namespace, clientID, clientUID, redirectURI := "some-namespace", dynamicClientID, dynamicClientUID, goodRedirectURI
+				oidcClient := &configv1alpha1.OIDCClient{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: clientID, Generation: 1, UID: types.UID(clientUID)},
+					Spec: configv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // does not have the grant type
+						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // would be invalid if it also asked for pinniped:request-audience since it lacks the grant type
+						AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(redirectURI)},
+					},
+				}
+				secret := testutil.OIDCClientSecretStorageSecretForUID(t, namespace, clientUID, []string{testutil.HashedPassword1AtGoMinCost, testutil.HashedPassword2AtGoMinCost})
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					addDynamicClientIDToFormPostBody(authRequest)
+					authRequest.Form.Set("scope", "openid groups") // don't request pinniped:request-audience scope
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "groups"}, // don't want pinniped:request-audience scope
+					wantGrantedScopes:     []string{"openid", "groups"}, // don't want pinniped:request-audience scope
+					wantGroups:            goodGroups,
+				},
+			},
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusBadRequest,
+			wantResponseBodyContains: `The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'.`,
+		},
+		{
+			name:          "dynamic client did not ask for the pinniped:request-audience scope in the original authorization request, so the access token submitted during token exchange lacks the scope",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					addDynamicClientIDToFormPostBody(authRequest)
+					authRequest.Form.Set("scope", "openid groups") // don't request pinniped:request-audience scope
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "groups"}, // don't want pinniped:request-audience scope
+					wantGrantedScopes:     []string{"openid", "groups"}, // don't want pinniped:request-audience scope
+					wantGroups:            goodGroups,
+				},
+			},
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusForbidden,
+			wantResponseBodyContains: `The resource owner or authorization server denied the request. missing the 'pinniped:request-audience' scope`,
+		},
+		{
+			name:          "dynamic client did not ask for the openid scope in the original authorization request, so the access token submitted during token exchange lacks the scope",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					addDynamicClientIDToFormPostBody(authRequest)
+					authRequest.Form.Set("scope", "pinniped:request-audience groups") // don't request openid scope
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"}, // no id token
+					wantRequestedScopes:   []string{"pinniped:request-audience", "groups"},               // don't want openid scope
+					wantGrantedScopes:     []string{"pinniped:request-audience", "groups"},               // don't want openid scope
+					wantGroups:            nil,
+				},
+			},
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusForbidden,
+			wantResponseBodyContains: `The resource owner or authorization server denied the request. missing the 'openid' scope`,
 		},
 		{
 			name:                     "missing audience",
@@ -753,6 +1091,60 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantResponseBodyContains: `Invalid token format`,
 		},
 		{
+			name:              "bad client ID",
+			authcodeExchange:  doValidAuthCodeExchange,
+			requestedAudience: "some-workload-cluster",
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Set("client_id", "some-bogus-value")
+			},
+			wantStatus:               http.StatusUnauthorized,
+			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
+		},
+		{
+			name:             "dynamic client uses wrong client secret",
+			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, "bad client secret")
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusUnauthorized,
+			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
+		},
+		{
+			name:             "dynamic client uses wrong auth method (must use basic auth)",
+			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				// Dynamic clients do not support this method of auth.
+				params.Set("client_id", dynamicClientID)
+				params.Set("client_secret", testutil.PlaintextPassword1)
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				// would usually set the basic auth header here, but we don't for this test case
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusUnauthorized,
+			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client supports client authentication method 'client_secret_basic', but method 'client_secret_post' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_post'.`,
+		},
+		{
+			name:             "different client used between authorize/authcode calls and the call to token exchange",
+			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: doValidAuthCodeExchange, // use pinniped-cli for authorize and authcode exchange
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1) // use dynamic client for token exchange
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusBadRequest,
+			wantResponseBodyContains: `The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request.`,
+		},
+		{
 			name:              "valid access token, but deleted from storage",
 			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
@@ -772,6 +1164,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid", "groups"},
 					wantGrantedScopes:     []string{"openid", "groups"},
@@ -790,10 +1183,11 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"pinniped:request-audience", "groups"},
 					wantGrantedScopes:     []string{"pinniped:request-audience", "groups"},
-					wantGroups:            goodGroups,
+					wantGroups:            nil,
 				},
 			},
 			requestedAudience:        "some-workload-cluster",
@@ -808,6 +1202,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope", "id_token"},
 					wantRequestedScopes:   []string{"openid", "pinniped:request-audience"},
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience"},
@@ -839,7 +1234,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build())
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -854,6 +1249,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter", body(request.Form).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rsp = httptest.NewRecorder()
+
+			if test.modifyRequestHeaders != nil {
+				test.modifyRequestHeaders(req)
+			}
 
 			// Measure the secrets in storage after the auth code flow.
 			existingSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})
@@ -1062,6 +1461,7 @@ func TestRefreshGrant(t *testing.T) {
 	happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
 		want := tokenEndpointResponseExpectedValues{
 			wantStatus:                  http.StatusOK,
+			wantClientID:                pinnipedCLIClientID,
 			wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 			wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
 			wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
@@ -1069,6 +1469,16 @@ func TestRefreshGrant(t *testing.T) {
 			wantGroups:                  goodGroups,
 		}
 		return want
+	}
+
+	withWantDynamicClientID := func(w tokenEndpointResponseExpectedValues) tokenEndpointResponseExpectedValues {
+		w.wantClientID = dynamicClientID
+		return w
+	}
+
+	modifyRefreshTokenRequestWithDynamicClientAuth := func(tokenRequest *http.Request, refreshToken string, accessToken string) {
+		tokenRequest.Body = happyRefreshRequestBody(refreshToken).WithClientID("").ReadCloser() // No client_id in body.
+		tokenRequest.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)                 // Use basic auth header instead.
 	}
 
 	happyRefreshTokenResponseForOpenIDAndOfflineAccess := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token) tokenEndpointResponseExpectedValues {
@@ -1134,6 +1544,7 @@ func TestRefreshGrant(t *testing.T) {
 	tests := []struct {
 		name                      string
 		idps                      *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources             func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		authcodeExchange          authcodeExchangeInputs
 		refreshRequest            refreshRequestInputs
 		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string)
@@ -1158,6 +1569,34 @@ func TestRefreshGrant(t *testing.T) {
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 				),
+			},
+		},
+		{
+			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want:               withWantDynamicClientID(happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData())),
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: modifyRefreshTokenRequestWithDynamicClientAuth,
+				want: withWantDynamicClientID(happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				)),
 			},
 		},
 		{
@@ -1208,6 +1647,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
 					wantSuccessBodyFields: []string{"refresh_token", "id_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:   []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:     []string{"openid", "offline_access", "groups"},
@@ -1239,6 +1679,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"offline_access"},
 					wantGrantedScopes:           []string{"offline_access"},
@@ -1248,6 +1689,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"offline_access"},
 					wantGrantedScopes:                 []string{"offline_access"},
@@ -1273,6 +1715,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
@@ -1302,6 +1745,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
@@ -1331,6 +1775,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
@@ -1360,6 +1805,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
@@ -1389,6 +1835,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "groups"},
@@ -1417,6 +1864,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
@@ -1444,6 +1892,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
@@ -1466,6 +1915,7 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: happyLDAPCustomSessionData,
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access"},
 					wantGrantedScopes:           []string{"openid", "offline_access"},
@@ -1479,6 +1929,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access"},
 					wantGrantedScopes:           []string{"openid", "offline_access"},
@@ -1504,6 +1955,7 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access"},
 					wantGrantedScopes:           []string{"openid", "offline_access"},
@@ -1517,6 +1969,54 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access"},
+					wantGrantedScopes:                 []string{"openid", "offline_access"},
+					wantGroups:                        nil,
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "oidc refresh grant when the upstream refresh when groups scope not requested on original request or refresh when using dynamic client",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				customSessionData:  initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantClientID:                dynamicClientID,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access"},
+					wantGrantedScopes:           []string{"openid", "offline_access"},
+					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+					wantGroups:                  nil,
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithClientID("").WithScope("openid offline_access").ReadCloser()
+					r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1) // Use basic auth header instead.
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantClientID:                      dynamicClientID,
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access"},
 					wantGrantedScopes:                 []string{"openid", "offline_access"},
@@ -1542,6 +2042,7 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: happyLDAPCustomSessionData,
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
@@ -1555,6 +2056,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "groups"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "groups"},
@@ -1651,6 +2153,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience groups") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
 					wantGrantedScopes:           []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
@@ -1664,6 +2167,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
 					wantSuccessBodyFields:             []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
 					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience", "groups"},
@@ -1707,6 +2211,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"offline_access"},
 					wantGrantedScopes:           []string{"offline_access"},
@@ -1731,6 +2236,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"offline_access"},
 					wantGrantedScopes:           []string{"offline_access"},
@@ -1755,6 +2261,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
 					wantSuccessBodyFields:       []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:         []string{"offline_access"},
 					wantGrantedScopes:           []string{"offline_access"},
@@ -1768,6 +2275,96 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusUnauthorized,
 					wantErrorResponseBody: fositeInvalidClientErrorBody,
+				},
+			},
+		},
+		{
+			name: "when the refresh request uses a different client than the one that was used to get the refresh token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				// Make the auth request and authcode exchange request using the pinniped-cli client.
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					r.Form.Set("scope", "openid offline_access groups")
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			refreshRequest: refreshRequestInputs{
+				// Make the refresh request with the dynamic client.
+				modifyTokenRequest: modifyRefreshTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeClientIDMismatchDuringRefreshErrorBody,
+				},
+			},
+		},
+		{
+			name: "when the client auth fails on the refresh request using dynamic client",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want:               withWantDynamicClientID(happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData())),
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(tokenRequest *http.Request, refreshToken string, accessToken string) {
+					tokenRequest.Body = happyRefreshRequestBody(refreshToken).WithClientID("").ReadCloser()
+					tokenRequest.SetBasicAuth(dynamicClientID, "wrong client secret")
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeClientAuthFailedErrorBody,
+				},
+			},
+		},
+		{
+			name: "dynamic client uses wrong auth method on the refresh request (must use basic auth)",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want:               withWantDynamicClientID(happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData())),
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(tokenRequest *http.Request, refreshToken string, accessToken string) {
+					// Add client auth to the form, when it should be in basic auth headers.
+					tokenRequest.Body = happyRefreshRequestBody(refreshToken).WithClientID(dynamicClientID).WithClientSecret(testutil.PlaintextPassword1).ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeClientAuthMustBeBasicAuthErrorBody,
 				},
 			},
 		},
@@ -2920,7 +3517,8 @@ func TestRefreshGrant(t *testing.T) {
 			// First exchange the authcode for tokens, including a refresh token.
 			// its actually fine to use this function even when simulating ldap (which uses a different flow) because it's
 			// just populating a secret in storage.
-			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange, test.idps.Build())
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t,
+				test.authcodeExchange, test.idps.Build(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -2951,6 +3549,7 @@ func TestRefreshGrant(t *testing.T) {
 			}
 
 			refreshResponse := httptest.NewRecorder()
+			approxRequestTime := time.Now()
 			subject.ServeHTTP(refreshResponse, req)
 			t.Logf("second response: %#v", refreshResponse)
 			t.Logf("second response body: %q", refreshResponse.Body.String())
@@ -2994,6 +3593,7 @@ func TestRefreshGrant(t *testing.T) {
 				oauthStore,
 				jwtSigningKey,
 				secrets,
+				approxRequestTime,
 			)
 
 			if test.refreshRequest.want.wantStatus == http.StatusOK {
@@ -3054,7 +3654,12 @@ func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[st
 	require.Equal(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
 }
 
-func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps provider.DynamicUpstreamIDPProvider) (
+func exchangeAuthcodeForTokens(
+	t *testing.T,
+	test authcodeExchangeInputs,
+	idps provider.DynamicUpstreamIDPProvider,
+	kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset),
+) (
 	subject http.Handler,
 	rsp *httptest.ResponseRecorder,
 	authCode string,
@@ -3067,13 +3672,18 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 		test.modifyAuthRequest(authRequest)
 	}
 
-	client := fake.NewSimpleClientset()
-	secrets = client.CoreV1().Secrets("some-namespace")
-	oidcClientsClient := supervisorfake.NewSimpleClientset().ConfigV1alpha1().OIDCClients("some-namespace")
+	kubeClient := fake.NewSimpleClientset()
+	supervisorClient := supervisorfake.NewSimpleClientset()
+	secrets = kubeClient.CoreV1().Secrets("some-namespace")
+	oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
+
+	if kubeResources != nil {
+		kubeResources(t, supervisorClient, kubeClient)
+	}
 
 	var oauthHelper fosite.OAuth2Provider
-
-	oauthStore = oidc.NewKubeStorage(secrets, oidcClientsClient, oidc.DefaultOIDCTimeoutsConfiguration())
+	// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+	oauthStore = oidc.NewKubeStorage(secrets, oidcClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), bcrypt.MinCost)
 	if test.makeOathHelper != nil {
 		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore, test.customSessionData)
 	} else {
@@ -3096,7 +3706,8 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, expectedNumberOfIDSessionsStored)
-	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2+expectedNumberOfIDSessionsStored)
+	// Assert the number of all secrets, excluding any OIDCClient's storage secret, since those are not related to session storage.
+	testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2+expectedNumberOfIDSessionsStored)
 
 	req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyAuthcodeRequestBody(authCode).ReadCloser())
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -3105,12 +3716,13 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 	}
 	rsp = httptest.NewRecorder()
 
+	approxRequestTime := time.Now()
 	subject.ServeHTTP(rsp, req)
 	t.Logf("response: %#v", rsp)
 	t.Logf("response body: %q", rsp.Body.String())
 
 	wantAtHashClaimInIDToken := false // due to a bug in fosite, the at_hash claim is not filled in during authcode exchange
-	wantNonceValueInIDToken := true   // ID tokens returned by the authcode exchange must include the nonce from the auth request (unliked refreshed ID tokens)
+	wantNonceValueInIDToken := true   // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)
 
 	requireTokenEndpointBehavior(t,
 		test.want,
@@ -3123,6 +3735,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs, idps p
 		oauthStore,
 		jwtSigningKey,
 		secrets,
+		approxRequestTime,
 	)
 
 	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore
@@ -3140,6 +3753,7 @@ func requireTokenEndpointBehavior(
 	oauthStore *oidc.KubeStorage,
 	jwtSigningKey *ecdsa.PrivateKey,
 	secrets v1.SecretInterface,
+	requestTime time.Time,
 ) {
 	testutil.RequireEqualContentType(t, tokenEndpointResponse.Header().Get("Content-Type"), "application/json")
 	require.Equal(t, test.wantStatus, tokenEndpointResponse.Code)
@@ -3154,11 +3768,11 @@ func requireTokenEndpointBehavior(
 		wantIDToken := contains(test.wantSuccessBodyFields, "id_token")
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
-		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
-		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets)
+		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets, requestTime)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets, requestTime)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
 		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data and old groups from the initial login.
-		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, oldGroups, oldCustomSessionData)
+		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, oldGroups, oldCustomSessionData, requestTime)
 
 		expectedNumberOfRefreshTokenSessionsStored := 0
 		if wantRefreshToken {
@@ -3167,10 +3781,10 @@ func requireTokenEndpointBehavior(
 		expectedNumberOfIDSessionsStored := 0
 		if wantIDToken {
 			expectedNumberOfIDSessionsStored = 1
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, test.wantGroups, parsedResponseBody["access_token"].(string))
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantAtHashClaimInIDToken, wantNonceValueInIDToken, test.wantGroups, parsedResponseBody["access_token"].(string), requestTime)
 		}
 		if wantRefreshToken {
-			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets)
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantGroups, test.wantCustomSessionDataStored, secrets, requestTime)
 		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -3178,7 +3792,8 @@ func requireTokenEndpointBehavior(
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, expectedNumberOfRefreshTokenSessionsStored)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, expectedNumberOfIDSessionsStored)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2+expectedNumberOfRefreshTokenSessionsStored+expectedNumberOfIDSessionsStored)
+		// Assert the number of all secrets, excluding any OIDCClient's storage secret, since those are not related to session storage.
+		testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2+expectedNumberOfRefreshTokenSessionsStored+expectedNumberOfIDSessionsStored)
 	} else {
 		require.NotNil(t, test.wantErrorResponseBody, "problem with test table setup: wanted failure but did not specify failure response body")
 
@@ -3204,7 +3819,7 @@ func happyAuthcodeRequestBody(happyAuthCode string) body {
 		"code":          {happyAuthCode},
 		"redirect_uri":  {goodRedirectURI},
 		"code_verifier": {goodPKCECodeVerifier},
-		"client_id":     {goodClient},
+		"client_id":     {pinnipedCLIClientID},
 	}
 }
 
@@ -3212,7 +3827,7 @@ func happyRefreshRequestBody(refreshToken string) body {
 	return map[string][]string{
 		"grant_type":    {"refresh_token"},
 		"scope":         {"openid"},
-		"client_id":     {goodClient},
+		"client_id":     {pinnipedCLIClientID},
 		"refresh_token": {refreshToken},
 	}
 }
@@ -3227,6 +3842,10 @@ func (b body) WithRefreshToken(refreshToken string) body {
 
 func (b body) WithClientID(clientID string) body {
 	return b.with("client_id", clientID)
+}
+
+func (b body) WithClientSecret(clientSecret string) body {
+	return b.with("client_secret", clientSecret)
 }
 
 func (b body) WithAuthCode(code string) body {
@@ -3395,6 +4014,7 @@ func requireInvalidAuthCodeStorage(
 	code string,
 	storage fositeoauth2.CoreStorage,
 	secrets v1.SecretInterface,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
@@ -3402,18 +4022,20 @@ func requireInvalidAuthCodeStorage(
 	_, err := storage.GetAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, code), nil)
 	require.True(t, errors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
 	// make sure that its still around in storage so if someone tries to use it again we invalidate everything
-	requireGarbageCollectTimeInDelta(t, code, "authcode", secrets, time.Now().Add(9*time.Hour).Add(10*time.Minute), 30*time.Second)
+	requireGarbageCollectTimeInDelta(t, code, "authcode", secrets, requestTime.Add(9*time.Hour).Add(10*time.Minute), 30*time.Second)
 }
 
 func requireValidRefreshTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
 	storage fositeoauth2.CoreStorage,
+	wantClientID string,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
@@ -3434,25 +4056,29 @@ func requireValidRefreshTokenStorage(
 		t,
 		storedRequest,
 		storedRequest.Sanitize([]string{}).GetRequestForm(),
+		wantClientID,
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
 		wantGroups,
 		wantCustomSessionData,
+		requestTime,
 	)
 
-	requireGarbageCollectTimeInDelta(t, refreshTokenString, "refresh-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
+	requireGarbageCollectTimeInDelta(t, refreshTokenString, "refresh-token", secrets, requestTime.Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
 }
 
 func requireValidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
 	storage fositeoauth2.CoreStorage,
+	wantClientID string,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
 	secrets v1.SecretInterface,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
@@ -3492,14 +4118,16 @@ func requireValidAccessTokenStorage(
 		t,
 		storedRequest,
 		storedRequest.Sanitize([]string{}).GetRequestForm(),
+		wantClientID,
 		wantRequestedScopes,
 		wantGrantedScopes,
 		true,
 		wantGroups,
 		wantCustomSessionData,
+		requestTime,
 	)
 
-	requireGarbageCollectTimeInDelta(t, accessTokenString, "access-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
+	requireGarbageCollectTimeInDelta(t, accessTokenString, "access-token", secrets, requestTime.Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
 }
 
 func requireInvalidAccessTokenStorage(
@@ -3536,10 +4164,12 @@ func requireValidOIDCStorage(
 	body map[string]interface{},
 	code string,
 	storage openid.OpenIDConnectRequestStorage,
+	wantClientID string,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
@@ -3559,11 +4189,13 @@ func requireValidOIDCStorage(
 			t,
 			storedRequest,
 			storedRequest.Sanitize([]string{"nonce"}).GetRequestForm(),
+			wantClientID,
 			wantRequestedScopes,
 			wantGrantedScopes,
 			false,
 			wantGroups,
 			wantCustomSessionData,
+			requestTime,
 		)
 	} else {
 		_, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
@@ -3575,18 +4207,20 @@ func requireValidStoredRequest(
 	t *testing.T,
 	request fosite.Requester,
 	wantRequestForm url.Values,
+	wantClientID string,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
 	wantAccessTokenExpiresAt bool,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
 	// Assert that the getters on the request return what we think they should.
 	require.NotEmpty(t, request.GetID())
-	testutil.RequireTimeInDelta(t, request.GetRequestedAt(), time.Now().UTC(), timeComparisonFudgeSeconds*time.Second)
-	require.Equal(t, goodClient, request.GetClient().GetID())
+	testutil.RequireTimeInDelta(t, request.GetRequestedAt(), requestTime.UTC(), timeComparisonFudge)
+	require.Equal(t, wantClientID, request.GetClient().GetID())
 	require.Equal(t, fosite.Arguments(wantRequestedScopes), request.GetRequestedScopes())
 	require.Equal(t, fosite.Arguments(wantGrantedScopes), request.GetGrantedScopes())
 	require.Empty(t, request.GetRequestedAudience())
@@ -3636,6 +4270,9 @@ func requireValidStoredRequest(
 		require.Empty(t, claims.AuthenticationContextClassReference)
 		require.Empty(t, claims.AuthenticationMethodsReferences)
 		require.Empty(t, claims.CodeHash)
+	} else if wantGroups != nil {
+		t.Fatal("test did not want the openid scope to be granted, but also wanted groups, " +
+			"which is a combination that doesn't make sense since you need an ID token to get groups")
 	}
 
 	// Assert that the session headers are what we think they should be.
@@ -3647,9 +4284,9 @@ func requireValidStoredRequest(
 	require.True(t, ok, "expected session to hold expiration time for auth code")
 	testutil.RequireTimeInDelta(
 		t,
-		time.Now().UTC().Add(authCodeExpirationSeconds*time.Second),
+		requestTime.UTC().Add(authCodeExpirationSeconds*time.Second),
 		authCodeExpiresAt,
-		timeComparisonFudgeSeconds*time.Second,
+		timeComparisonFudge,
 	)
 
 	// OpenID Connect sessions do not store access token expiration information.
@@ -3658,9 +4295,9 @@ func requireValidStoredRequest(
 		require.True(t, ok, "expected session to hold expiration time for access token")
 		testutil.RequireTimeInDelta(
 			t,
-			time.Now().UTC().Add(accessTokenExpirationSeconds*time.Second),
+			requestTime.UTC().Add(accessTokenExpirationSeconds*time.Second),
 			accessTokenExpiresAt,
-			timeComparisonFudgeSeconds*time.Second,
+			timeComparisonFudge,
 		)
 	} else {
 		require.False(t, ok, "expected session to not hold expiration time for access token, but it did")
@@ -3696,10 +4333,12 @@ func requireValidIDToken(
 	t *testing.T,
 	body map[string]interface{},
 	jwtSigningKey *ecdsa.PrivateKey,
+	wantClientID string,
 	wantAtHashClaimInIDToken bool,
 	wantNonceValueInIDToken bool,
 	wantGroupsInIDToken []string,
 	actualAccessToken string,
+	requestTime time.Time,
 ) {
 	t.Helper()
 
@@ -3709,7 +4348,7 @@ func requireValidIDToken(
 	require.Truef(t, ok, "wanted id_token to be a string, but got %T", idToken)
 
 	// The go-oidc library will validate the signature and the client claim in the ID token.
-	token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, goodClient, jwtSigningKey, idTokenString)
+	token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, wantClientID, jwtSigningKey, idTokenString)
 
 	var claims struct {
 		Subject         string   `json:"sub"`
@@ -3752,7 +4391,7 @@ func requireValidIDToken(
 	require.Equal(t, goodUsername, claims.Username)
 	require.Equal(t, wantGroupsInIDToken, claims.Groups)
 	require.Len(t, claims.Audience, 1)
-	require.Equal(t, goodClient, claims.Audience[0])
+	require.Equal(t, wantClientID, claims.Audience[0])
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
 
@@ -3766,10 +4405,10 @@ func requireValidIDToken(
 	issuedAt := time.Unix(claims.IssuedAt, 0)
 	requestedAt := time.Unix(claims.RequestedAt, 0)
 	authTime := time.Unix(claims.AuthTime, 0)
-	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudgeSeconds*time.Second)
-	testutil.RequireTimeInDelta(t, time.Now().UTC(), issuedAt, timeComparisonFudgeSeconds*time.Second)
-	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
-	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
+	testutil.RequireTimeInDelta(t, requestTime.UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudge)
+	testutil.RequireTimeInDelta(t, requestTime.UTC(), issuedAt, timeComparisonFudge)
+	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudge)
+	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudge)
 
 	if wantAtHashClaimInIDToken {
 		require.NotEmpty(t, actualAccessToken)

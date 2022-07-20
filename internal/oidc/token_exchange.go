@@ -13,15 +13,17 @@ import (
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/x/errorsx"
 	"github.com/pkg/errors"
 
 	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const (
-	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
-	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
-	pinnipedTokenExchangeScope = "pinniped:request-audience"                     //nolint: gosec
+	tokenExchangeGrantType     = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint: gosec
+	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token"   //nolint: gosec
+	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"            //nolint: gosec
+	pinnipedTokenExchangeScope = "pinniped:request-audience"                       //nolint: gosec
 )
 
 type stsParams struct {
@@ -68,6 +70,18 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	originalRequester, err := t.validateAccessToken(ctx, requester, params.subjectAccessToken)
 	if err != nil {
 		return errors.WithStack(err)
+	}
+
+	// Check that the currently authenticated client and the client which was originally used to get the access token are the same.
+	if originalRequester.GetClient().GetID() != requester.GetClient().GetID() {
+		// This error message is copied from the similar check in fosite's flow_authorize_code_token.go.
+		return errorsx.WithStack(fosite.ErrInvalidGrant.WithHint("The OAuth 2.0 Client ID from this request does not match the one from the authorize request."))
+	}
+
+	// Check that the client is allowed to perform this grant type.
+	if !requester.GetClient().GetGrantTypes().Has(tokenExchangeGrantType) {
+		// This error message is trying to be similar to the analogous one in fosite's flow_authorize_code_token.go.
+		return errorsx.WithStack(fosite.ErrUnauthorizedClient.WithHintf("The OAuth 2.0 Client is not allowed to use token exchange grant \"%s\".", tokenExchangeGrantType))
 	}
 
 	// Require that the incoming access token has the pinniped:request-audience and OpenID scopes.
@@ -168,5 +182,5 @@ func (t *TokenExchangeHandler) CanSkipClientAuth(_ fosite.AccessRequester) bool 
 }
 
 func (t *TokenExchangeHandler) CanHandleTokenEndpointRequest(requester fosite.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne("urn:ietf:params:oauth:grant-type:token-exchange")
+	return requester.GetGrantTypes().ExactOne(tokenExchangeGrantType)
 }

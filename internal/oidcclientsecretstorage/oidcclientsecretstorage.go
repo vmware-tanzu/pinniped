@@ -76,15 +76,13 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidc
 				BlockOwnerDeletion: nil,
 			},
 		}
-		_, err := s.storage.Create(ctx, name, secret, nil, ownerReferences)
-		if err != nil {
+		if _, err := s.storage.Create(ctx, name, secret, nil, ownerReferences); err != nil {
 			return fmt.Errorf("failed to create client secret for uid %s: %w", oidcClientUID, err)
 		}
 		return nil
 	}
 
-	_, err := s.storage.Update(ctx, name, resourceVersion, secret)
-	if err != nil {
+	if _, err := s.storage.Update(ctx, name, resourceVersion, secret); err != nil {
 		return fmt.Errorf("failed to update client secret for uid %s: %w", oidcClientUID, err)
 	}
 	return nil

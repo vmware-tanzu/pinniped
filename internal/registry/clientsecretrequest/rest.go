@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,7 +86,7 @@ func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtim
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions)
+	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions) // TODO support status fields
 }
 
 func (*REST) NamespaceScoped() bool {
@@ -97,10 +98,16 @@ func (*REST) Categories() []string {
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	t := trace.FromContext(ctx).Nest("create", trace.Field{
-		Key:   "kind",
-		Value: "OIDCClientSecretRequest",
-	})
+	t := trace.FromContext(ctx).Nest("create",
+		trace.Field{
+			Key:   "kind",
+			Value: "OIDCClientSecretRequest",
+		},
+		trace.Field{
+			Key:   "metadata.name",
+			Value: name(obj),
+		},
+	)
 	defer t.Log()
 
 	req, err := r.validateRequest(ctx, obj, createValidation, options, t)
@@ -111,13 +118,20 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	oidcClient, err := r.clients.Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
-		return nil, err // TODO obfuscate
+		if apierrors.IsNotFound(err) {
+			traceValidationFailure(t, fmt.Sprintf("client %q does not exist", req.Name))
+			errs := field.ErrorList{field.NotFound(field.NewPath("metadata", "name"), req.Name)}
+			return nil, apierrors.NewInvalid(kindFromContext(ctx), req.Name, errs)
+		}
+		traceFailureWithError(t, "clients.Get", err)
+		return nil, apierrors.NewInternalError(fmt.Errorf("getting client %q failed", req.Name))
 	}
 	t.Step("clients.Get")
 
 	rv, hashes, err := r.secretStorage.Get(ctx, oidcClient.UID)
 	if err != nil {
-		return nil, err // TODO obfuscate
+		traceFailureWithError(t, "secretStorage.Get", err)
+		return nil, apierrors.NewInternalError(fmt.Errorf("getting secret for client %q failed", req.Name))
 	}
 	t.Step("secretStorage.Get")
 
@@ -125,13 +139,15 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if req.Spec.GenerateNewSecret {
 		secret, err = generateSecret(r.rand)
 		if err != nil {
-			return nil, err // TODO obfuscate
+			traceFailureWithError(t, "generateSecret", err)
+			return nil, apierrors.NewInternalError(fmt.Errorf("client secret generation failed"))
 		}
 		t.Step("generateSecret")
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(secret), cost)
 		if err != nil {
-			return nil, err // TODO obfuscate
+			traceFailureWithError(t, "bcrypt.GenerateFromPassword", err)
+			return nil, apierrors.NewInternalError(fmt.Errorf("hash generation failed"))
 		}
 		t.Step("bcrypt.GenerateFromPassword")
 
@@ -146,11 +162,18 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if req.Spec.GenerateNewSecret || needsRevoke {
 		// each bcrypt comparison is expensive and we do not want a large list to cause wasted CPU
 		if len(hashes) > 5 {
-			return nil, apierrors.NewRequestEntityTooLargeError(fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name))
+			return nil, apierrors.NewRequestEntityTooLargeError(
+				fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name))
 		}
 
 		if err := r.secretStorage.Set(ctx, rv, oidcClient.Name, oidcClient.UID, hashes); err != nil {
-			return nil, err // TODO obfuscate, also return good errors for cases like when the secret now exists but previously did not
+			if apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err) {
+				return nil, apierrors.NewConflict(qualifiedResourceFromContext(ctx), req.Name,
+					fmt.Errorf("multiple concurrent secret generation requests for same client"))
+			}
+
+			traceFailureWithError(t, "secretStorage.Set", err)
+			return nil, apierrors.NewInternalError(fmt.Errorf("setting client secret failed"))
 		}
 		t.Step("secretStorage.Set")
 	}
@@ -176,12 +199,18 @@ func (r *REST) validateRequest(
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))
 	}
 
+	// TODO validate these fields
+	_ = clientSecretRequest.Name
+	_ = clientSecretRequest.GenerateName
+	_ = clientSecretRequest.Namespace
+	_ = clientSecretRequest.ResourceVersion
+
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(t, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
-			return nil, apierrors.NewInvalid(clientsecretapi.Kind(clientSecretRequest.Kind), clientSecretRequest.Name, errs)
+			return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 		}
 	}
 
@@ -221,4 +250,28 @@ func generateSecret(rand io.Reader) (string, error) {
 		return "", fmt.Errorf("could not generate client secret: %w", err)
 	}
 	return hex.EncodeToString(buf[:]), nil
+}
+
+func name(obj runtime.Object) string {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return "<unknown>"
+	}
+	return accessor.GetName()
+}
+
+func qualifiedResourceFromContext(ctx context.Context) schema.GroupResource {
+	if info, ok := genericapirequest.RequestInfoFrom(ctx); ok {
+		return schema.GroupResource{Group: info.APIGroup, Resource: info.Resource}
+	}
+	// this should never happen in practice
+	return clientsecretapi.Resource("oidcclientsecretrequests")
+}
+
+func kindFromContext(ctx context.Context) schema.GroupKind {
+	if info, ok := genericapirequest.RequestInfoFrom(ctx); ok {
+		return schema.GroupKind{Group: info.APIGroup, Kind: "OIDCClientSecretRequest"}
+	}
+	// this should never happen in practice
+	return clientsecretapi.Kind("OIDCClientSecretRequest")
 }

@@ -72,6 +72,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 		}),
 		kubetesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
 		kubetesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+		kubetesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
 		kubetesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
@@ -134,7 +135,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
-	testutil.LogActualJSONFromUpdateAction(t, client, 3) // makes it easier to update expected values when needed
+	testutil.LogActualJSONFromUpdateAction(t, client, 4) // makes it easier to update expected values when needed
 	require.Equal(t, wantActions, client.Actions())
 
 	// Doing a Get on an invalidated session should still return the session, but also return an error.

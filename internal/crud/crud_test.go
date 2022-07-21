@@ -456,6 +456,7 @@ func TestStorage(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba"),
 				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",

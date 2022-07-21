@@ -527,6 +527,9 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		},
 		addSuffix("oidcclients.config.supervisor"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Privileged Scopes", Type: "string", JSONPath: `.spec.allowedScopes[?(@ == "pinniped:request-audience")]`},
+				{Name: "Client Secrets", Type: "integer", JSONPath: ".status.totalClientSecrets"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

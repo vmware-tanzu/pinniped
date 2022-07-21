@@ -18,6 +18,15 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.allowedScopes[?(@ == "pinniped:request-audience")]
+      name: Privileged Scopes
+      type: string
+    - jsonPath: .status.totalClientSecrets
+      name: Client Secrets
+      type: integer
+    - jsonPath: .status.phase
+      name: Status
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

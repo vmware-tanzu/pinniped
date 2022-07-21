@@ -144,9 +144,12 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		hashes = []string{hashes[0]}
 	}
 
-	// TODO do not let them have more than 100? secrets
-
 	if req.Spec.GenerateNewSecret || needsRevoke {
+		// each bcrypt comparison is expensive and we do not want a large list to cause wasted CPU
+		if len(hashes) > 5 {
+			return nil, apierrors.NewRequestEntityTooLargeError(fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name))
+		}
+
 		if err := r.secretStorage.Set(ctx, rv, oidcClient.Name, oidcClient.UID, hashes); err != nil {
 			return nil, err // TODO obfuscate, also return good errors for cases like when the secret now exists but previously did not
 		}

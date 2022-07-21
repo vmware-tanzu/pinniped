@@ -16,6 +16,8 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
+	"k8s.io/apimachinery/pkg/api/validation/path"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,6 +41,7 @@ import (
 const cost = 12
 
 var tableConvertor = func() rest.TableConvertor {
+	// sadly this is not useful at the moment because `kubectl create` does not support table output
 	columns := []apiextensionsv1.CustomResourceColumnDefinition{
 		{
 			Name:        "Secret",
@@ -221,11 +224,28 @@ func (r *REST) validateRequest(
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))
 	}
 
-	// TODO validate these fields, copy BeforeCreate logic
-	_ = clientSecretRequest.Name            // -> non-empty, has prefix
-	_ = clientSecretRequest.GenerateName    // --> empty
-	_ = clientSecretRequest.Namespace       // matches
-	_ = clientSecretRequest.ResourceVersion // empty?
+	// ensure namespace on the object is correct, or error if a conflicting namespace was set in the object
+	requestNamespace, ok := genericapirequest.NamespaceFrom(ctx)
+	if !ok {
+		return nil, apierrors.NewInternalError(fmt.Errorf("no namespace information found in request context"))
+	}
+	if err := rest.EnsureObjectNamespaceMatchesRequestNamespace(requestNamespace, clientSecretRequest); err != nil {
+		return nil, err
+	}
+	// making client secrets outside the supervisor's namespace does not make sense
+	if requestNamespace != r.namespace {
+		msg := fmt.Sprintf("namespace must be %s on OIDCClientSecretRequest, was %s", r.namespace, requestNamespace)
+		traceValidationFailure(t, msg)
+		return nil, apierrors.NewBadRequest(msg)
+	}
+
+	// TODO validate these fields
+	_ = clientSecretRequest.Name         // -> non-empty, has prefix
+	_ = clientSecretRequest.GenerateName // --> empty
+
+	if errs := genericvalidation.ValidateObjectMetaAccessor(clientSecretRequest, true, path.ValidatePathSegmentName, field.NewPath("metadata")); len(errs) > 0 {
+		return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
+	}
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {
@@ -234,12 +254,6 @@ func (r *REST) validateRequest(
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
 			return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 		}
-	}
-
-	if namespace := genericapirequest.NamespaceValue(ctx); namespace != r.namespace {
-		msg := fmt.Sprintf("namespace must be %s on OIDCClientSecretRequest, was %s", r.namespace, namespace)
-		traceValidationFailure(t, msg)
-		return nil, apierrors.NewBadRequest(msg)
 	}
 
 	if createValidation != nil {

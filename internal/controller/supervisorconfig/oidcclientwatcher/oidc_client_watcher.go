@@ -251,7 +251,7 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1a
 		return conditions, 0
 	}
 
-	storedClientSecret, err := oidcclientsecretstorage.ReadFromSecret(secret)
+	hashes, err := oidcclientsecretstorage.ReadFromSecret(secret)
 	if err != nil {
 		// Invalid: storage Secret exists but its data could not be parsed.
 		conditions = append(conditions, &v1alpha1.Condition{
@@ -264,7 +264,7 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1a
 	}
 
 	// Successfully read the stored client secrets, so check if there are any stored in the list.
-	storedClientSecretsCount := len(storedClientSecret.SecretHashes)
+	storedClientSecretsCount := len(hashes)
 	if storedClientSecretsCount == 0 {
 		// Invalid: no client secrets stored.
 		conditions = append(conditions, &v1alpha1.Condition{
@@ -278,7 +278,7 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition) ([]*v1a
 
 	// Check each hashed password's format and bcrypt cost.
 	bcryptErrs := make([]string, 0, storedClientSecretsCount)
-	for i, p := range storedClientSecret.SecretHashes {
+	for i, p := range hashes {
 		cost, err := bcrypt.Cost([]byte(p))
 		if err != nil {
 			bcryptErrs = append(bcryptErrs, fmt.Sprintf(

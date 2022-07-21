@@ -98,8 +98,8 @@ func uidToName(oidcClientUID types.UID) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(oidcClientUID))
 }
 
-// ReadFromSecret reads the contents of a Secret as a storedClientSecret.
-func ReadFromSecret(s *corev1.Secret) (*storedClientSecret, error) {
+// ReadFromSecret reads the contents of a Secret as a storedClientSecret and returns the associated hashes.
+func ReadFromSecret(s *corev1.Secret) ([]string, error) {
 	secret := &storedClientSecret{}
 	err := crud.FromSecret(TypeLabelValue, s, secret)
 	if err != nil {
@@ -109,5 +109,5 @@ func ReadFromSecret(s *corev1.Secret) (*storedClientSecret, error) {
 		return nil, fmt.Errorf("%w: OIDC client secret storage has version %s instead of %s",
 			ErrOIDCClientSecretStorageVersion, secret.Version, oidcClientSecretStorageVersion)
 	}
-	return secret, nil
+	return secret.SecretHashes, nil
 }

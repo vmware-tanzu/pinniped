@@ -13,7 +13,7 @@ import (
 
 func TestGetName(t *testing.T) {
 	// Note that GetName() should not depend on the constructor params, to make it easier to use in various contexts.
-	subject := New(nil, nil)
+	subject := New(nil)
 
 	require.Equal(t,
 		"pinniped-storage-oidc-client-secret-onxw2zjnmv4gc3lqnrss25ljmqyq",
@@ -28,7 +28,7 @@ func TestReadFromSecret(t *testing.T) {
 	tests := []struct {
 		name       string
 		secret     *corev1.Secret
-		wantStored *storedClientSecret
+		wantHashes []string
 		wantErr    string
 	}{
 		{
@@ -47,10 +47,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/oidc-client-secret",
 			},
-			wantStored: &storedClientSecret{
-				Version:      "1",
-				SecretHashes: []string{"first-hash", "second-hash"},
-			},
+			wantHashes: []string{"first-hash", "second-hash"},
 		},
 		{
 			name: "wrong secret type",
@@ -112,13 +109,13 @@ func TestReadFromSecret(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			session, err := ReadFromSecret(tt.secret)
+			hashes, err := ReadFromSecret(tt.secret)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				require.Equal(t, tt.wantStored, session)
+				require.Equal(t, tt.wantHashes, hashes)
 			} else {
 				require.EqualError(t, err, tt.wantErr)
-				require.Nil(t, session)
+				require.Nil(t, hashes)
 			}
 		})
 	}

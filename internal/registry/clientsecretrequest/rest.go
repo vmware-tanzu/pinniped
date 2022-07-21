@@ -38,9 +38,10 @@ import (
 // this value is expected to be increased over time to match CPU improvements
 // thus it must be kept private because validation of client secrets cannot rely
 // on a cost that changes without some form client secret storage migration
-// TODO write a unit test that fails in 2023 to ask this to be updated to latest recommendation
+// TODO write a unit test that fails in 2023 to ask this to be updated to latest recommendation.
 const cost = 12
 
+// nolint: gochecknoglobals
 var tableConvertor = func() rest.TableConvertor {
 	// sadly this is not useful at the moment because `kubectl create` does not support table output
 	columns := []apiextensionsv1.CustomResourceColumnDefinition{
@@ -101,7 +102,7 @@ func (*REST) NewList() runtime.Object {
 
 // support `kubectl get pinniped`
 // to make sure all resources are in the pinniped category and
-// avoid kubectl errors when kubectl lists you must support the list verb
+// avoid kubectl errors when kubectl lists you must support the list verb.
 func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
 	return &clientsecretapi.OIDCClientSecretRequestList{
 		ListMeta: metav1.ListMeta{

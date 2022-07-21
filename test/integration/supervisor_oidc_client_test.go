@@ -624,7 +624,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 
 			if tt.secret != nil {
 				// Force the Secret's name to match the client created above.
-				tt.secret.Name = oidcclientsecretstorage.New(nil, nil).GetName(client.UID)
+				tt.secret.Name = oidcclientsecretstorage.New(nil).GetName(client.UID)
 				secret, err := secrets.Create(ctx, tt.secret, metav1.CreateOptions{})
 				require.NoError(t, err)
 				t.Cleanup(func() {

@@ -57,11 +57,12 @@ Goals for this proposal:
   Not all webapps should have permission to act on behalf of the user with the Kubernetes API of the clusters,
   so an admin must be able to configure which clients have this permission.
 - Provide a mechanism for requesting access to different aspects of a user identity, especially getting group
-  memberships or not, to allow the admin to exclude this potentially information for clients which do not need it.
+  memberships or not, to allow the admin to exclude this potentially sensitive information for clients which do not need it.
 - Support a web UI based LDAP/ActiveDirectory login screen. This is needed to avoid having webapps handle the user's
   password, which must only be seen by the Supervisor and the LDAP server. However, the details of this item have been
   split out to a
   [separate proposal document](https://github.com/vmware-tanzu/pinniped/tree/main/proposals/1113_ldap-ad-web-ui).
+  The feature was released in [v0.18.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.18.0).
 - Client secrets must be stored encrypted or hashed, not in plain text.
 - Creation of client credentials on the operator's behalf - the server must generate any secrets.
 - The operator must be able to initiate manual rotation of client credentials.

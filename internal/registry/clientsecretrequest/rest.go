@@ -199,11 +199,11 @@ func (r *REST) validateRequest(
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))
 	}
 
-	// TODO validate these fields
-	_ = clientSecretRequest.Name
-	_ = clientSecretRequest.GenerateName
-	_ = clientSecretRequest.Namespace
-	_ = clientSecretRequest.ResourceVersion
+	// TODO validate these fields, copy BeforeCreate logic
+	_ = clientSecretRequest.Name            // -> non-empty, has prefix
+	_ = clientSecretRequest.GenerateName    // --> empty
+	_ = clientSecretRequest.Namespace       // matches
+	_ = clientSecretRequest.ResourceVersion // empty?
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {

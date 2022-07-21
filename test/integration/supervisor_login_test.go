@@ -1748,9 +1748,8 @@ func testSupervisorLogin(
 		require.EqualError(t, err, wantAuthcodeExchangeError)
 		// The authcode exchange has failed, so can't continue the login flow, making this the end of the test case.
 		return
-	} else {
-		require.NoError(t, err)
 	}
+	require.NoError(t, err)
 	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
 	if slices.Contains(downstreamScopes, "groups") {
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")

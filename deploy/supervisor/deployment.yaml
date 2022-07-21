@@ -99,10 +99,10 @@ spec:
           resources:
             requests:
               #! NOTE for BEN before we commit: make sure that IAM pick this up :)
-              cpu: "2048m"
+              cpu: "1024m"
               memory: "128Mi"
             limits:
-              cpu: "2048m"
+              cpu: "1024m"
               memory: "128Mi"
           volumeMounts:
             - name: config-volume

@@ -17,6 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/trace"
@@ -48,7 +50,7 @@ type REST struct {
 	tableConvertor rest.TableConvertor
 	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
 	clients        configv1alpha1clientset.OIDCClientInterface
-	namespace      string // TODO use
+	namespace      string
 	rand           io.Reader
 }
 
@@ -102,8 +104,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	})
 	defer t.Log()
 
-	// TODO actually validate the request like checking that the namespace is the supervisor's namespace
-	req, err := validateRequest(obj, t)
+	req, err := r.validateRequest(ctx, obj, createValidation, options, t)
 	if err != nil {
 		return nil, err
 	}
@@ -160,11 +161,39 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}, nil
 }
 
-func validateRequest(obj runtime.Object, t *trace.Trace) (*clientsecretapi.OIDCClientSecretRequest, error) {
+func (r *REST) validateRequest(
+	ctx context.Context,
+	obj runtime.Object,
+	createValidation rest.ValidateObjectFunc,
+	options *metav1.CreateOptions,
+	t *trace.Trace,
+) (*clientsecretapi.OIDCClientSecretRequest, error) {
 	clientSecretRequest, ok := obj.(*clientsecretapi.OIDCClientSecretRequest)
 	if !ok {
 		traceValidationFailure(t, "not an OIDCClientSecretRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))
+	}
+
+	// just a sanity check, not sure how to honor a dry run on a virtual API
+	if options != nil {
+		if len(options.DryRun) != 0 {
+			traceValidationFailure(t, "dryRun not supported")
+			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
+			return nil, apierrors.NewInvalid(clientsecretapi.Kind(clientSecretRequest.Kind), clientSecretRequest.Name, errs)
+		}
+	}
+
+	if namespace := genericapirequest.NamespaceValue(ctx); namespace != r.namespace {
+		msg := fmt.Sprintf("namespace must be %s on OIDCClientSecretRequest, was %s", r.namespace, namespace)
+		traceValidationFailure(t, msg)
+		return nil, apierrors.NewBadRequest(msg)
+	}
+
+	if createValidation != nil {
+		if err := createValidation(ctx, obj.DeepCopyObject()); err != nil {
+			traceFailureWithError(t, "validation webhook", err)
+			return nil, err
+		}
 	}
 
 	return clientSecretRequest, nil
@@ -174,6 +203,13 @@ func traceValidationFailure(t *trace.Trace, msg string) {
 	t.Step("failure",
 		trace.Field{Key: "failureType", Value: "request validation"},
 		trace.Field{Key: "msg", Value: msg},
+	)
+}
+
+func traceFailureWithError(t *trace.Trace, failureType string, err error) {
+	t.Step("failure",
+		trace.Field{Key: "failureType", Value: failureType},
+		trace.Field{Key: "msg", Value: err.Error()},
 	)
 }
 

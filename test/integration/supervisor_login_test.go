@@ -224,10 +224,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		// Want the authorization endpoint to redirect to the callback with this error type.
 		// The rest of the flow will be skipped since the initial authorization failed.
-		wantErrorType string
+		wantAuthorizationErrorType string
 		// Want the authorization endpoint to redirect to the callback with this error description.
-		// Should be used with wantErrorType.
-		wantErrorDescription string
+		// Should be used with wantAuthorizationErrorType.
+		wantAuthorizationErrorDescription string
+
+		// Optionally want to the authcode exchange at the token endpoint to fail. The rest of the flow will be
+		// skipped since the authcode exchange failed.
+		wantAuthcodeExchangeError string
 
 		// Optionally make all required assertions about the response of the RFC8693 token exchange for
 		// the cluster-scoped ID token, given the http response status and response body from the token endpoint.
@@ -674,8 +678,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					true,
 				)
 			},
-			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:        "access_denied",
+			wantAuthorizationErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantAuthorizationErrorType:        "access_denied",
 		},
 		{
 			name:      "ldap login still works after updating bind secret",
@@ -1125,9 +1129,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil,
-			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:           "access_denied",
+			breakRefreshSessionData:           nil,
+			wantAuthorizationErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantAuthorizationErrorType:        "access_denied",
 		},
 		{
 			name:      "ldap refresh fails when username changes from email as username to dn as username",
@@ -1366,6 +1370,30 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
+		{
+			name:      "ldap upstream with downstream dynamic client, failed client authentication",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				clientID, _ := testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+				return clientID, "wrong-client-secret"
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantAuthcodeExchangeError: "oauth2: cannot fetch token: 401 Unauthorized\n" +
+				`Response: {"error":"invalid_client","error_description":"Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -1373,7 +1401,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.maybeSkip(t)
 
-			testSupervisorLogin(t,
+			testSupervisorLogin(
+				t,
 				tt.createIDP,
 				tt.requestAuthorization,
 				tt.editRefreshSessionDataWithoutBreaking,
@@ -1386,8 +1415,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
-				tt.wantErrorDescription,
-				tt.wantErrorType,
+				tt.wantAuthorizationErrorType,
+				tt.wantAuthorizationErrorDescription,
+				tt.wantAuthcodeExchangeError,
 				tt.wantTokenExchangeResponse,
 			)
 		})
@@ -1516,8 +1546,8 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
 	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
-	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string) []string,
-	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string) []string,
+	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
 	testUser func(t *testing.T) (string, string),
 	createOIDCClient func(t *testing.T, callbackURL string) (string, string),
 	downstreamScopes []string,
@@ -1526,8 +1556,9 @@ func testSupervisorLogin(
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
-	wantErrorDescription string,
-	wantErrorType string,
+	wantAuthorizationErrorType string,
+	wantAuthorizationErrorDescription string,
+	wantAuthcodeExchangeError string,
 	wantTokenExchangeResponse func(t *testing.T, status int, body string),
 ) {
 	env := testlib.IntegrationEnv(t)
@@ -1693,116 +1724,124 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	t.Logf("got callback request: %s", testlib.MaskTokens(callback.URL.String()))
-	if wantErrorType == "" { // nolint:nestif
-		require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-		require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
-		authcode := callback.URL.Query().Get("code")
-		require.NotEmpty(t, authcode)
 
-		// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
-		require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
-
-		// Call the token endpoint to get tokens.
-		tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
-		require.NoError(t, err)
-
-		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
-		if slices.Contains(downstreamScopes, "groups") {
-			expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
-		}
-		verifyTokenResponse(t,
-			tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
-			expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
-
-		// token exchange on the original token
-		if requestTokenExchangeAud == "" {
-			requestTokenExchangeAud = "some-cluster-123" // use a default test value
-		}
-		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
-
-		refreshedGroups := wantDownstreamIDTokenGroups
-		if editRefreshSessionDataWithoutBreaking != nil {
-			latestRefreshToken := tokenResponse.RefreshToken
-			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
-
-			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
-			supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
-			supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
-			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
-			require.NoError(t, err)
-
-			// Next mutate the part of the session that is used during upstream refresh.
-			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
-			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-
-			refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
-
-			// Then save the mutated Secret back to Kubernetes.
-			// There is no update function, so delete and create again at the same name.
-			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
-		}
-		// Use the refresh token to get new tokens
-		refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
-		refreshedTokenResponse, err := refreshSource.Token()
-		require.NoError(t, err)
-
-		// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
-		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
-		if slices.Contains(downstreamScopes, "groups") {
-			expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
-		}
-		verifyTokenResponse(t,
-			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
-
-		require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
-		require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
-		require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
-
-		// token exchange on the refreshed token
-		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
-
-		// Now that we have successfully performed a refresh, let's test what happens when an
-		// upstream refresh fails during the next downstream refresh.
-		if breakRefreshSessionData != nil {
-			latestRefreshToken := refreshedTokenResponse.RefreshToken
-			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
-
-			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
-			supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
-			supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
-			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
-			require.NoError(t, err)
-
-			// Next mutate the part of the session that is used during upstream refresh.
-			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
-			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-			breakRefreshSessionData(t, pinnipedSession, idpName, username)
-
-			// Then save the mutated Secret back to Kubernetes.
-			// There is no update function, so delete and create again at the same name.
-			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
-
-			// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
-			_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
-			// Should have got an error since the upstream refresh should have failed.
-			require.Error(t, err)
-			require.Regexp(t,
-				regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
-					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
-					"[^']+",
-				err.Error(),
-			)
-		}
-	} else {
+	if wantAuthorizationErrorType != "" {
 		errorDescription := callback.URL.Query().Get("error_description")
 		errorType := callback.URL.Query().Get("error")
-		require.Equal(t, errorDescription, wantErrorDescription)
-		require.Equal(t, errorType, wantErrorType)
+		require.Equal(t, errorDescription, wantAuthorizationErrorDescription)
+		require.Equal(t, errorType, wantAuthorizationErrorType)
+		// The authorization has failed, so can't continue the login flow, making this the end of the test case.
+		return
+	}
+
+	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
+	require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
+	authcode := callback.URL.Query().Get("code")
+	require.NotEmpty(t, authcode)
+
+	// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
+	require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
+
+	// Call the token endpoint to get tokens.
+	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
+	if wantAuthcodeExchangeError != "" {
+		require.EqualError(t, err, wantAuthcodeExchangeError)
+		// The authcode exchange has failed, so can't continue the login flow, making this the end of the test case.
+		return
+	} else {
+		require.NoError(t, err)
+	}
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
+	if slices.Contains(downstreamScopes, "groups") {
+		expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
+	}
+	verifyTokenResponse(t,
+		tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
+
+	// token exchange on the original token
+	if requestTokenExchangeAud == "" {
+		requestTokenExchangeAud = "some-cluster-123" // use a default test value
+	}
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+
+	refreshedGroups := wantDownstreamIDTokenGroups
+	if editRefreshSessionDataWithoutBreaking != nil {
+		latestRefreshToken := tokenResponse.RefreshToken
+		signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+		require.NoError(t, err)
+
+		// Next mutate the part of the session that is used during upstream refresh.
+		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+
+		refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
+
+		// Then save the mutated Secret back to Kubernetes.
+		// There is no update function, so delete and create again at the same name.
+		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+	}
+	// Use the refresh token to get new tokens
+	refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
+	refreshedTokenResponse, err := refreshSource.Token()
+	require.NoError(t, err)
+
+	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
+	if slices.Contains(downstreamScopes, "groups") {
+		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
+	}
+	verifyTokenResponse(t,
+		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
+		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
+
+	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
+	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
+	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
+
+	// token exchange on the refreshed token
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+
+	// Now that we have successfully performed a refresh, let's test what happens when an
+	// upstream refresh fails during the next downstream refresh.
+	if breakRefreshSessionData != nil {
+		latestRefreshToken := refreshedTokenResponse.RefreshToken
+		signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+		require.NoError(t, err)
+
+		// Next mutate the part of the session that is used during upstream refresh.
+		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+		breakRefreshSessionData(t, pinnipedSession, idpName, username)
+
+		// Then save the mutated Secret back to Kubernetes.
+		// There is no update function, so delete and create again at the same name.
+		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+
+		// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
+		_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
+		// Should have got an error since the upstream refresh should have failed.
+		require.Error(t, err)
+		require.Regexp(t,
+			regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
+				regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
+				"[^']+",
+			err.Error(),
+		)
 	}
 }
 

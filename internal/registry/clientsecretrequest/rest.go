@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -239,11 +240,21 @@ func (r *REST) validateRequest(
 		return nil, apierrors.NewBadRequest(msg)
 	}
 
-	// TODO validate these fields
-	_ = clientSecretRequest.Name         // -> non-empty, has prefix
-	_ = clientSecretRequest.GenerateName // --> empty
-
-	if errs := genericvalidation.ValidateObjectMetaAccessor(clientSecretRequest, true, path.ValidatePathSegmentName, field.NewPath("metadata")); len(errs) > 0 {
+	if errs := genericvalidation.ValidateObjectMetaAccessor(
+		clientSecretRequest,
+		true,
+		func(name string, prefix bool) []string {
+			if prefix {
+				return []string{"generateName is not supported"}
+			}
+			var errs []string
+			if !strings.HasPrefix(name, "client.oauth.pinniped.dev-") {
+				errs = append(errs, `must start with 'client.oauth.pinniped.dev-'`)
+			}
+			return append(errs, path.IsValidPathSegmentName(name)...)
+		},
+		field.NewPath("metadata"),
+	); len(errs) > 0 {
 		return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 	}
 

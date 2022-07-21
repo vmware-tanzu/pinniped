@@ -28,12 +28,11 @@ import (
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
-// cost is a good bcrypt cost for 2022, should take about a second to validate
-// this is meant to scale up automatically if bcrypt.DefaultCost increases
-// it must be kept private because validation of client secrets cannot rely
+// cost is a good bcrypt cost for 2022, should take about 250 ms to validate
+// this value is expected to be increased over time to match CPU improvements
+// thus it must be kept private because validation of client secrets cannot rely
 // on a cost that changes without some form client secret storage migration
-// TODO write a unit test that fails when this changes so that we know if/when it happens
-//  also write a unit test that fails in 2023 to ask this to be updated to latest recommendation
+// TODO write a unit test that fails in 2023 to ask this to be updated to latest recommendation
 const cost = 12
 
 func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
@@ -159,7 +158,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	return &clientsecretapi.OIDCClientSecretRequest{
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{
 			GeneratedSecret:    secret,
-			TotalClientSecrets: len(hashes), // TODO what about validation of hashes??
+			TotalClientSecrets: len(hashes),
 		},
 	}, nil
 }

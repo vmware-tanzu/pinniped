@@ -249,6 +249,9 @@ func (r *REST) validateRequest(
 				return []string{"generateName is not supported"}
 			}
 			var errs []string
+			if name == "client.oauth.pinniped.dev-" {
+				errs = append(errs, `must not equal 'client.oauth.pinniped.dev-'`)
+			}
 			if !strings.HasPrefix(name, "client.oauth.pinniped.dev-") {
 				errs = append(errs, `must start with 'client.oauth.pinniped.dev-'`)
 			}

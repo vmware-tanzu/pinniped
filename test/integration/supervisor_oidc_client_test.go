@@ -362,6 +362,33 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "zone" is invalid: [metadata.name: Invalid value: "zone": metadata.name in body should match '^client\.oauth\.pinniped\.dev-', spec.allowedGrantTypes[0]: Unsupported value: "the": supported values: "authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange", spec.allowedRedirectURIs[0]: Invalid value: "of": spec.allowedRedirectURIs[0] in body should match '^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/', spec.allowedScopes[0]: Unsupported value: "enders": supported values: "openid", "offline_access", "username", "groups", "pinniped:request-audience"]`,
 		},
 		{
+			name: "just the prefix is not valid",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "client.oauth.pinniped.dev-",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{
+						"https://example.com",
+						"http://127.0.0.1/yoyo",
+					},
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{
+						"authorization_code",
+						"refresh_token",
+						"urn:ietf:params:oauth:grant-type:token-exchange",
+					},
+					AllowedScopes: []supervisorconfigv1alpha1.Scope{
+						"openid",
+						"offline_access",
+						"username",
+						"groups",
+						"pinniped:request-audience",
+					},
+				},
+			},
+			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-" is invalid: metadata.name: Invalid value: "client.oauth.pinniped.dev-": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')`,
+		},
+		{
 			name: "everything valid",
 			client: &supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{

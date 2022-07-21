@@ -25,7 +25,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/utils/pointer"
 
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
@@ -3088,7 +3087,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			// OIDC validations are checked in fosite after the OAuth authcode (and sometimes the OIDC session)
 			// is stored, so it is possible with an LDAP upstream to store objects and then return an error to
 			// the client anyway (which makes the stored objects useless, but oh well).
-			require.Len(t, filterActions(kubeClient.Actions()), test.wantUnnecessaryStoredRecords)
+			require.Len(t, oidctestutil.FilterClientSecretCreateActions(kubeClient.Actions()), test.wantUnnecessaryStoredRecords)
 		case test.wantRedirectLocationRegexp != "":
 			if test.wantDownstreamClientID == "" {
 				test.wantDownstreamClientID = pinnipedCLIClientID // default assertion value when not provided by test case
@@ -3300,21 +3299,4 @@ func requireEqualURLs(t *testing.T, actualURL string, expectedURL string, ignore
 		actualLocationQuery.Del("state")
 	}
 	require.Equal(t, expectedLocationQuery, actualLocationQuery)
-}
-
-// filterActions ignores any reads made to get a storage secret corresponding to an OIDCClient, since these
-// are normal actions when the request is using a dynamic client's client_id, and we don't need to make assertions
-// about these Secrets since they are not related to session storage.
-func filterActions(actions []kubetesting.Action) []kubetesting.Action {
-	filtered := make([]kubetesting.Action, 0, len(actions))
-	for _, action := range actions {
-		if action.Matches("get", "secrets") {
-			getAction := action.(kubetesting.GetAction)
-			if strings.HasPrefix(getAction.GetName(), "pinniped-storage-oidc-client-secret-") {
-				continue // filter out OIDCClient's storage secret reads
-			}
-		}
-		filtered = append(filtered, action) // otherwise include the action
-	}
-	return filtered
 }

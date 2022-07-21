@@ -41,7 +41,8 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		if err != nil {
 			// This shouldn't really happen because the authorization endpoint has already validated these params
 			// by calling NewAuthorizeRequest() itself.
-			plog.Error("error using state downstream auth params", err)
+			plog.Error("error using state downstream auth params", err,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 

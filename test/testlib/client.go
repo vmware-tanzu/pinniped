@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -435,7 +437,7 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 	_, err := io.ReadFull(rand.Reader, buf[:])
 	require.NoError(t, err)
 	randomSecret := hex.EncodeToString(buf[:])
-	hashedRandomSecret, err := bcrypt.GenerateFromPassword([]byte(randomSecret), 15)
+	hashedRandomSecret, err := bcrypt.GenerateFromPassword([]byte(randomSecret), oidcclientvalidator.DefaultMinBcryptCost)
 	require.NoError(t, err)
 
 	created, err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Create(ctx, &corev1.Secret{

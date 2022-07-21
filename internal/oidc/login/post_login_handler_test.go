@@ -38,7 +38,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 		downstreamIssuer              = "https://my-downstream-issuer.com/path"
 		downstreamRedirectURI         = "http://127.0.0.1/callback"
-		downstreamClientID            = "pinniped-cli"
+		downstreamPinnipedCLIClientID = "pinniped-cli"
+		downstreamDynamicClientID     = "client.oauth.pinniped.dev-test-name"
+		downstreamDynamicClientUID    = "fake-client-uid"
 		happyDownstreamState          = "8b-state"
 		downstreamNonce               = "some-nonce-value"
 		downstreamPKCEChallenge       = "some-challenge"
@@ -90,7 +92,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	happyDownstreamRequestParamsQuery := url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
-		"client_id":             []string{downstreamClientID},
+		"client_id":             []string{downstreamPinnipedCLIClientID},
 		"state":                 []string{happyDownstreamState},
 		"nonce":                 []string{downstreamNonce},
 		"code_challenge":        []string{downstreamPKCEChallenge},
@@ -99,14 +101,10 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 	happyDownstreamRequestParams := happyDownstreamRequestParamsQuery.Encode()
 
-	copyOfHappyDownstreamRequestParamsQuery := func() url.Values {
-		params := url.Values{}
-		for k, v := range happyDownstreamRequestParamsQuery {
-			params[k] = make([]string, len(v))
-			copy(params[k], v)
-		}
-		return params
-	}
+	happyDownstreamRequestParamsQueryForDynamicClient := shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+		map[string]string{"client_id": downstreamDynamicClientID},
+	)
+	happyDownstreamRequestParamsForDynamicClient := happyDownstreamRequestParamsQueryForDynamicClient.Encode()
 
 	happyLDAPDecodedState := &oidc.UpstreamStateParamData{
 		AuthParams:    happyDownstreamRequestParams,
@@ -124,15 +122,20 @@ func TestPostLoginEndpoint(t *testing.T) {
 		return &copyOfHappyLDAPDecodedState
 	}
 
-	happyActiveDirectoryDecodedState := &oidc.UpstreamStateParamData{
-		AuthParams:    happyDownstreamRequestParams,
-		UpstreamName:  activeDirectoryUpstreamName,
-		UpstreamType:  activeDirectoryUpstreamType,
-		Nonce:         happyDownstreamNonce,
-		CSRFToken:     happyDownstreamCSRF,
-		PKCECode:      happyDownstreamPKCE,
-		FormatVersion: happyDownstreamStateVersion,
-	}
+	happyLDAPDecodedStateForDynamicClient := modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+		data.AuthParams = happyDownstreamRequestParamsForDynamicClient
+	})
+
+	happyActiveDirectoryDecodedState := modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+		data.UpstreamName = activeDirectoryUpstreamName
+		data.UpstreamType = activeDirectoryUpstreamType
+	})
+
+	happyActiveDirectoryDecodedStateForDynamicClient := modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+		data.AuthParams = happyDownstreamRequestParamsForDynamicClient
+		data.UpstreamName = activeDirectoryUpstreamName
+		data.UpstreamType = activeDirectoryUpstreamType
+	})
 
 	happyLDAPUsername := "some-ldap-user"
 	happyLDAPUsernameFromAuthenticator := "some-mapped-ldap-username"
@@ -232,6 +235,13 @@ func TestPostLoginEndpoint(t *testing.T) {
 		return urlToReturn
 	}
 
+	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost})
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
+	}
+
 	tests := []struct {
 		name          string
 		idps          *oidctestutil.UpstreamIDPListerBuilder
@@ -262,6 +272,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamNonce               string
+		wantDownstreamClient              string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
 
 		// Authorization requests for either a successful OIDC upstream or for an error with any upstream
@@ -289,6 +300,31 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name: "happy LDAP login with dynamic client",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(&upstreamLDAPIdentityProvider). // should pick this one
+				WithActiveDirectory(&erroringUpstreamLDAPIdentityProvider),
+			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState:                      happyLDAPDecodedStateForDynamicClient,
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -311,6 +347,31 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
+		},
+		{
+			name: "happy AD login with dynamic client",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(&erroringUpstreamLDAPIdentityProvider).
+				WithActiveDirectory(&upstreamActiveDirectoryIdentityProvider), // should pick this one
+			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState:                      happyActiveDirectoryDecodedStateForDynamicClient,
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
@@ -319,9 +380,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "happy LDAP login when downstream response_mode=form_post returns 200 with HTML+JS form",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["response_mode"] = []string{"form_post"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"response_mode": "form_post"},
+				).Encode()
 			}),
 			formParams:      happyUsernamePasswordFormParams,
 			wantStatus:      http.StatusOK,
@@ -335,6 +396,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -343,9 +405,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "happy LDAP login when downstream redirect uri matches what is configured for client except for the port number",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["redirect_uri"] = []string{"http://127.0.0.1:4242/callback"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"redirect_uri": "http://127.0.0.1:4242/callback"},
+				).Encode()
 			}),
 			formParams:                        happyUsernamePasswordFormParams,
 			wantStatus:                        http.StatusSeeOther,
@@ -359,6 +421,33 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         "http://127.0.0.1:4242/callback",
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name:          "happy LDAP login when downstream redirect uri matches what is configured for client except for the port number with dynamic client",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"redirect_uri": "http://127.0.0.1:4242/callback"},
+				).Encode()
+			}),
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         "http://127.0.0.1:4242/callback",
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -367,9 +456,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "happy LDAP login when there are additional allowed downstream requested scopes",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["scope"] = []string{"openid offline_access pinniped:request-audience"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"scope": "openid offline_access pinniped:request-audience"},
+				).Encode()
 			}),
 			formParams:                        happyUsernamePasswordFormParams,
 			wantStatus:                        http.StatusSeeOther,
@@ -383,6 +472,33 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "pinniped:request-audience"},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name:          "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid offline_access pinniped:request-audience"},
+				).Encode()
+			}),
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+pinniped%3Arequest-audience&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "pinniped:request-audience"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -391,11 +507,13 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "happy LDAP when downstream OIDC validations are skipped because the openid scope was not requested",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["scope"] = []string{"email"}
-				// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-				query["prompt"] = []string{"none login"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{
+						"scope": "email",
+						// The following prompt value is illegal when openid is requested, but note that openid is not requested.
+						"prompt": "none login",
+					},
+				).Encode()
 			}),
 			formParams:                        happyUsernamePasswordFormParams,
 			wantStatus:                        http.StatusSeeOther,
@@ -409,6 +527,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -419,9 +538,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 				WithLDAP(&upstreamLDAPIdentityProvider). // should pick this one
 				WithActiveDirectory(&erroringUpstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["scope"] = []string{"openid"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"scope": "openid"},
+				).Encode()
 			}),
 			formParams:                        happyUsernamePasswordFormParams,
 			wantStatus:                        http.StatusSeeOther,
@@ -434,6 +553,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       []string{"openid"},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
@@ -502,9 +622,21 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "downstream redirect uri does not match what is configured for client",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["redirect_uri"] = []string{"http://127.0.0.1/wrong_callback"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"redirect_uri": "http://127.0.0.1/wrong_callback"},
+				).Encode()
+			}),
+			formParams: happyUsernamePasswordFormParams,
+			wantErr:    "error using state downstream auth params",
+		},
+		{
+			name:          "downstream redirect uri does not match what is configured for client with dynamic client",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"redirect_uri": "http://127.0.0.1/wrong_callback"},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -513,9 +645,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "downstream client does not exist",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["client_id"] = []string{"wrong_client_id"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"client_id": "wrong_client_id"},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -524,9 +656,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "downstream client is missing",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				delete(query, "client_id")
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"client_id": ""},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -535,9 +667,21 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "response type is unsupported",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["response_type"] = []string{"unsupported"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"response_type": "unsupported"},
+				).Encode()
+			}),
+			formParams: happyUsernamePasswordFormParams,
+			wantErr:    "error using state downstream auth params",
+		},
+		{
+			name:          "response type form_post is unsupported for dynamic clients",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"response_type": "form_post"},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -546,9 +690,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "response type is missing",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				delete(query, "response_type")
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"response_type": ""},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -557,9 +701,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "PKCE code_challenge is missing",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				delete(query, "code_challenge")
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"code_challenge": ""},
+				).Encode()
 			}),
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -572,9 +716,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "PKCE code_challenge_method is invalid",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["code_challenge_method"] = []string{"this-is-not-a-valid-pkce-alg"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"},
+				).Encode()
 			}),
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -587,9 +731,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "PKCE code_challenge_method is `plain`",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["code_challenge_method"] = []string{"plain"} // plain is not allowed
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"code_challenge_method": "plain"}, // plain is not allowed
+				).Encode()
 			}),
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -602,9 +746,25 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "PKCE code_challenge_method is missing",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				delete(query, "code_challenge_method")
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"code_challenge_method": ""},
+				).Encode()
+			}),
+			formParams:                   happyUsernamePasswordFormParams,
+			wantStatus:                   http.StatusSeeOther,
+			wantContentType:              htmlContentType,
+			wantBodyString:               "",
+			wantRedirectLocationString:   urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
+			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
+		},
+		{
+			name:          "PKCE code_challenge_method is missing with dynamic client",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"code_challenge_method": ""},
+				).Encode()
 			}),
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -617,9 +777,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "prompt param is not allowed to have none and another legal value at the same time",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["prompt"] = []string{"none login"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"prompt": "none login"},
+				).Encode()
 			}),
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -632,9 +792,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "downstream state does not have enough entropy",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["state"] = []string{"short"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"state": "short"},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -643,9 +803,21 @@ func TestPostLoginEndpoint(t *testing.T) {
 			name: "downstream scopes do not match what is configured for client",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
-				query := copyOfHappyDownstreamRequestParamsQuery()
-				query["scope"] = []string{"openid offline_access pinniped:request-audience scope_not_allowed"}
-				data.AuthParams = query.Encode()
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+					map[string]string{"scope": "openid offline_access pinniped:request-audience scope_not_allowed"},
+				).Encode()
+			}),
+			formParams: happyUsernamePasswordFormParams,
+			wantErr:    "error using state downstream auth params",
+		},
+		{
+			name:          "downstream scopes do not match what is configured for client with dynamic client",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid offline_access pinniped:request-audience scope_not_allowed"},
+				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
@@ -677,8 +849,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
 			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
 
-			if test.kubeResources != nil {
-				test.kubeResources(t, supervisorClient, kubeClient)
+			if tt.kubeResources != nil {
+				tt.kubeResources(t, supervisorClient, kubeClient)
 			}
 
 			// Configure fosite the same way that the production code would.
@@ -704,7 +876,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			err := subject(rsp, req, happyEncodedUpstreamState, tt.decodedState)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				require.Empty(t, kubeClient.Actions())
+				require.Empty(t, oidctestutil.FilterClientSecretCreateActions(kubeClient.Actions()))
 				return // the http response doesn't matter when the function returns an error, because the caller should handle the error
 			}
 			// Otherwise, expect no error.
@@ -735,7 +907,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamPKCEChallenge,
 					tt.wantDownstreamPKCEChallengeMethod,
 					tt.wantDownstreamNonce,
-					downstreamClientID,
+					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
 				)
@@ -745,12 +917,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 				expectedLocation := downstreamIssuer + oidc.PinnipedLoginPath +
 					"?err=" + tt.wantRedirectToLoginPageError + "&state=" + happyEncodedUpstreamState
 				require.Equal(t, expectedLocation, actualLocation)
-				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
+				require.Len(t, oidctestutil.FilterClientSecretCreateActions(kubeClient.Actions()), tt.wantUnnecessaryStoredRecords)
 			case tt.wantRedirectLocationString != "":
 				// Expecting an error redirect to the client.
 				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				require.Equal(t, tt.wantRedirectLocationString, actualLocation)
-				require.Len(t, kubeClient.Actions(), tt.wantUnnecessaryStoredRecords)
+				require.Len(t, oidctestutil.FilterClientSecretCreateActions(kubeClient.Actions()), tt.wantUnnecessaryStoredRecords)
 			case tt.wantBodyFormResponseRegexp != "":
 				// Expecting the body of the response to be a html page with a form (for "response_mode=form_post").
 				_, hasLocationHeader := rsp.Header()["Location"]
@@ -770,7 +942,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamPKCEChallenge,
 					tt.wantDownstreamPKCEChallengeMethod,
 					tt.wantDownstreamNonce,
-					downstreamClientID,
+					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
 				)
@@ -780,4 +952,19 @@ func TestPostLoginEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string) url.Values {
+	copied := url.Values{}
+	for key, value := range query {
+		copied[key] = value
+	}
+	for key, value := range modifications {
+		if value == "" {
+			copied.Del(key)
+		} else {
+			copied[key] = []string{value}
+		}
+	}
+	return copied
 }

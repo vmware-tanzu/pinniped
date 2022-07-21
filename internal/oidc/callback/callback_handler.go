@@ -48,7 +48,8 @@ func NewHandler(
 		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {
-			plog.Error("error using state downstream auth params", err)
+			plog.Error("error using state downstream auth params", err,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
@@ -83,7 +84,8 @@ func NewHandler(
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
-			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
+			plog.WarningErr("error while generating and saving authcode", err,
+				"upstreamName", upstreamIDPConfig.GetName(), "fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 

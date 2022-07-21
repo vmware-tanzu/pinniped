@@ -12,6 +12,8 @@ import (
 	"io"
 
 	"golang.org/x/crypto/bcrypt"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -36,22 +38,42 @@ import (
 // TODO write a unit test that fails in 2023 to ask this to be updated to latest recommendation
 const cost = 12
 
-func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
+var tableConvertor = func() rest.TableConvertor {
+	columns := []apiextensionsv1.CustomResourceColumnDefinition{
+		{
+			Name:        "Secret",
+			Type:        "string",
+			Description: "", // TODO generate SwaggerDoc() method to fill this field
+			JSONPath:    ".status.generatedSecret",
+		},
+		{
+			Name:        "Total",
+			Type:        "integer",
+			Description: "", // TODO generate SwaggerDoc() method to fill this field
+			JSONPath:    ".status.totalClientSecrets",
+		},
+	}
+	tc, err := tableconvertor.New(columns) // just re-use the CRD table code so we do not have to implement the interface ourselves
+	if err != nil {
+		panic(err) // inputs are static so this should never happen
+	}
+	return tc
+}()
+
+func NewREST(secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
 	return &REST{
-		tableConvertor: rest.NewDefaultTableConvertor(resource),
-		secretStorage:  oidcclientsecretstorage.New(secrets),
-		clients:        clients,
-		namespace:      namespace,
-		rand:           rand.Reader,
+		secretStorage: oidcclientsecretstorage.New(secrets),
+		clients:       clients,
+		namespace:     namespace,
+		rand:          rand.Reader,
 	}
 }
 
 type REST struct {
-	tableConvertor rest.TableConvertor
-	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
-	clients        configv1alpha1clientset.OIDCClientInterface
-	namespace      string
-	rand           io.Reader
+	secretStorage *oidcclientsecretstorage.OIDCClientSecretStorage
+	clients       configv1alpha1clientset.OIDCClientInterface
+	namespace     string
+	rand          io.Reader
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -86,7 +108,7 @@ func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtim
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions) // TODO support status fields
+	return tableConvertor.ConvertToTable(ctx, obj, tableOptions)
 }
 
 func (*REST) NamespaceScoped() bool {

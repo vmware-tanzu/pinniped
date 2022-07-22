@@ -254,6 +254,13 @@ EOF
     --dry-run=client --output yaml | kubectl apply -f -
 fi
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  certificateAuthorityData=$(cat "$root_ca_crt_path" | base64)
+else
+  # Linux base64 requires an extra flag to keep the output on one line.
+  certificateAuthorityData=$(cat "$root_ca_crt_path" | base64 -w 0)
+fi
+
 # Make a JWTAuthenticator which respects JWTs from the Supervisor's issuer.
 # The issuer URL must be accessible from within the cluster for OIDC discovery.
 cat <<EOF | kubectl apply -f -
@@ -265,7 +272,7 @@ spec:
   issuer: $issuer
   audience: $audience
   tls:
-    certificateAuthorityData: $(cat "$root_ca_crt_path" | base64)
+    certificateAuthorityData: $certificateAuthorityData
 EOF
 
 echo "Waiting for JWTAuthenticator to initialize..."

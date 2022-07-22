@@ -439,7 +439,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		dynamicUpstreamIDPProvider,
 		&secretCache,
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
-		clientWithoutLeaderElection.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
+		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
 	)
 
 	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the

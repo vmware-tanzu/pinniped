@@ -7,6 +7,7 @@ package clientregistry
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -21,8 +22,12 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// PinnipedCLIClientID is the client ID of the statically defined public OIDC client which is used by the CLI.
-const PinnipedCLIClientID = "pinniped-cli"
+const (
+	// PinnipedCLIClientID is the client ID of the statically defined public OIDC client which is used by the CLI.
+	PinnipedCLIClientID = "pinniped-cli"
+
+	requiredOIDCClientPrefix = "client.oauth.pinniped.dev-"
+)
 
 // Client represents a Pinniped OAuth/OIDC client. It can be the static pinniped-cli client
 // or a dynamic client defined by an OIDCClient CR.
@@ -37,7 +42,7 @@ var (
 	_ fosite.ResponseModeClient  = (*Client)(nil)
 )
 
-func (c Client) GetResponseModes() []fosite.ResponseModeType {
+func (c *Client) GetResponseModes() []fosite.ResponseModeType {
 	if c.ID == PinnipedCLIClientID {
 		// The pinniped-cli client supports "" (unspecified), "query", and "form_post" response modes.
 		return []fosite.ResponseModeType{fosite.ResponseModeDefault, fosite.ResponseModeQuery, fosite.ResponseModeFormPost}
@@ -76,6 +81,12 @@ func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client
 	if id == PinnipedCLIClientID {
 		// Return the static client. No lookups needed.
 		return PinnipedCLI(), nil
+	}
+
+	if !strings.HasPrefix(id, requiredOIDCClientPrefix) {
+		// It shouldn't really be possible to find this OIDCClient because the OIDCClient CRD validates the name prefix
+		// upon create, but just in case, don't even try to lookup clients which lack the required name prefix.
+		return nil, fosite.ErrNotFound.WithDescription("no such client")
 	}
 
 	// Try to look up an OIDCClient with the given client ID (which will be the Name of the OIDCClient).

@@ -126,6 +126,31 @@ func TestClientManager(t *testing.T) {
 			},
 		},
 		{
+			name: "find a dynamic client which somehow does not have the required prefix in its name, just in case, although should not be possible since prefix is a validation on the CRD",
+			oidcClients: []*configv1alpha1.OIDCClient{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "does-not-have-prefix", Generation: 1234, UID: testUID},
+					Spec: configv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
+					},
+				},
+			},
+			secrets: []*corev1.Secret{
+				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost}),
+			},
+			run: func(t *testing.T, subject *ClientManager) {
+				got, err := subject.GetClient(ctx, "does-not-have-prefix")
+				require.Error(t, err)
+				require.Nil(t, got)
+				rfcErr := fosite.ErrorToRFC6749Error(err)
+				require.NotNil(t, rfcErr)
+				require.Equal(t, rfcErr.CodeField, 404)
+				require.Equal(t, rfcErr.GetDescription(), "no such client")
+			},
+		},
+		{
 			name: "when there is an unexpected error getting the OIDCClient",
 			addSupervisorReactions: func(client *supervisorfake.Clientset) {
 				client.PrependReactor("get", "oidcclients", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {

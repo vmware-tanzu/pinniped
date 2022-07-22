@@ -112,7 +112,7 @@ func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 		func(requireEventually *require.Assertions) {
 			url, err := page.URL()
 			if url != lastURL {
-				t.Logf("saw URL %s", url)
+				t.Logf("saw URL %s", testlib.MaskTokens(url))
 				lastURL = url
 			}
 			requireEventually.NoError(err)
@@ -125,9 +125,9 @@ func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 	)
 }
 
-// LoginToUpstream expects the page to be redirected to one of several known upstream IDPs.
+// LoginToUpstreamOIDC expects the page to be redirected to one of several known upstream IDPs.
 // It knows how to enter the test username/password and submit the upstream login form.
-func LoginToUpstream(t *testing.T, page *agouti.Page, upstream testlib.TestOIDCUpstream) {
+func LoginToUpstreamOIDC(t *testing.T, page *agouti.Page, upstream testlib.TestOIDCUpstream) {
 	t.Helper()
 
 	type config struct {
@@ -181,4 +181,46 @@ func LoginToUpstream(t *testing.T, page *agouti.Page, upstream testlib.TestOIDCU
 	require.NoError(t, page.First(cfg.UsernameSelector).Fill(upstream.Username))
 	require.NoError(t, page.First(cfg.PasswordSelector).Fill(upstream.Password))
 	require.NoError(t, page.First(cfg.LoginButtonSelector).Click())
+}
+
+// LoginToUpstreamLDAP expects the page to be redirected to the Supervisor's login UI for an LDAP/AD IDP.
+// It knows how to enter the test username/password and submit the upstream login form.
+func LoginToUpstreamLDAP(t *testing.T, page *agouti.Page, issuer, username, password string) {
+	t.Helper()
+
+	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?state=.+\z`)
+	require.NoError(t, err)
+
+	// Expect to be redirected to the login page.
+	t.Logf("waiting for redirect to %s/login page", issuer)
+	WaitForURL(t, page, loginURLRegexp)
+
+	// Wait for the login page to be rendered.
+	WaitForVisibleElements(t, page, "#username", "#password", "#submit")
+
+	// Fill in the username and password and click "submit".
+	SubmitUpstreamLDAPLoginForm(t, page, username, password)
+}
+
+func SubmitUpstreamLDAPLoginForm(t *testing.T, page *agouti.Page, username string, password string) {
+	t.Helper()
+
+	// Fill in the username and password and click "submit".
+	t.Logf("logging in via Supervisor's upstream LDAP/AD login UI page")
+	require.NoError(t, page.First("#username").Fill(username))
+	require.NoError(t, page.First("#password").Fill(password))
+	require.NoError(t, page.First("#submit").Click())
+}
+
+func WaitForUpstreamLDAPLoginPageWithError(t *testing.T, page *agouti.Page, issuer string) {
+	t.Helper()
+
+	// Wait for redirect back to the login page again with an error.
+	t.Logf("waiting for redirect to back to login page with error message")
+	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?err=login_error&state=.+\z`)
+	require.NoError(t, err)
+	WaitForURL(t, page, loginURLRegexp)
+
+	// Wait for the login page to be rendered again, this time also with an error message.
+	WaitForVisibleElements(t, page, "#username", "#password", "#submit", "#alert")
 }

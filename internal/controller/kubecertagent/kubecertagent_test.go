@@ -4,8 +4,10 @@
 package kubecertagent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,8 +37,8 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -339,7 +341,7 @@ func TestAgentController(t *testing.T) {
 				"could not ensure agent deployment: some creation error",
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -386,7 +388,7 @@ func TestAgentController(t *testing.T) {
 				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
@@ -435,7 +437,7 @@ func TestAgentController(t *testing.T) {
 				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment:       healthyAgentDeploymentWithDefaultedPaths,
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
@@ -461,8 +463,8 @@ func TestAgentController(t *testing.T) {
 				"could not find a healthy agent pod (1 candidate)",
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"deleting deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "create"}, // must recreate deployment when Selector field changes
@@ -496,7 +498,7 @@ func TestAgentController(t *testing.T) {
 				"could not ensure agent deployment: some delete error",
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"deleting deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment: healthyAgentDeploymentWithOldStyleSelector, // couldn't be deleted, so it didn't change
 			// delete to try to recreate deployment when Selector field changes, but delete always fails, so keeps trying to delete
@@ -532,9 +534,9 @@ func TestAgentController(t *testing.T) {
 				"could not ensure agent deployment: some create error",
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
-				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"deleting deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment: nil, // was deleted, but couldn't be recreated
 			// delete to try to recreate deployment when Selector field changes, but create always fails, so keeps trying to recreate
@@ -584,7 +586,7 @@ func TestAgentController(t *testing.T) {
 				"could not find a healthy agent pod (1 candidate)",
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="updating existing deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"updating existing deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment:       healthyAgentDeploymentWithExtraLabels,
 			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
@@ -619,7 +621,7 @@ func TestAgentController(t *testing.T) {
 				LastUpdateTime: metav1.NewTime(now),
 			},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="updating existing deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"updating existing deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 		},
 		{
@@ -931,8 +933,8 @@ func TestAgentController(t *testing.T) {
 			// delete to try to recreate deployment when Selector field changes, but delete always fails, so keeps trying to delete
 			wantDeploymentActionVerbs: []string{"list", "watch", "delete", "delete"},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="deleting deployment to update immutable Selector field" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
-				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"deleting deployment to update immutable Selector field","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
 			},
 			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
@@ -962,7 +964,7 @@ func TestAgentController(t *testing.T) {
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
 			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -996,7 +998,7 @@ func TestAgentController(t *testing.T) {
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
 			wantDistinctLogs: []string{
-				`kube-cert-agent-controller "level"=0 "msg"="successfully loaded signing key from agent pod into cache"`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
 			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -1028,7 +1030,9 @@ func TestAgentController(t *testing.T) {
 			}
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
+
+			var buf bytes.Buffer
+			log := plog.TestZapr(t, &buf)
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -1066,7 +1070,7 @@ func TestAgentController(t *testing.T) {
 				mockDynamicCert,
 				fakeClock,
 				execCache,
-				log.Logger,
+				log,
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1081,7 +1085,7 @@ func TestAgentController(t *testing.T) {
 			allAllowedErrors = append(allAllowedErrors, tt.alsoAllowUndesiredDistinctErrors...)
 			assert.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
-			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
+			assert.Equal(t, tt.wantDistinctLogs, deduplicate(logLines(buf.String())), "unexpected logs")
 
 			// Assert on all actions that happened to deployments.
 			var actualDeploymentActionVerbs []string
@@ -1122,6 +1126,14 @@ func TestAgentController(t *testing.T) {
 			}
 		})
 	}
+}
+
+func logLines(logs string) []string {
+	if len(logs) == 0 {
+		return nil
+	}
+
+	return strings.Split(strings.TrimSpace(logs), "\n")
 }
 
 func TestMergeLabelsAndAnnotations(t *testing.T) {

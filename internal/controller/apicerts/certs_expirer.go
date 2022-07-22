@@ -32,6 +32,8 @@ type certsExpirerController struct {
 	renewBefore time.Duration
 
 	secretKey string
+
+	logger plog.Logger
 }
 
 // NewCertsExpirerController returns a controllerlib.Controller that will delete a
@@ -45,10 +47,12 @@ func NewCertsExpirerController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	renewBefore time.Duration,
 	secretKey string,
+	logger plog.Logger,
 ) controllerlib.Controller {
+	const name = "certs-expirer-controller"
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-expirer-controller",
+			Name: name,
 			Syncer: &certsExpirerController{
 				namespace:               namespace,
 				certsSecretResourceName: certsSecretResourceName,
@@ -56,6 +60,7 @@ func NewCertsExpirerController(
 				secretInformer:          secretInformer,
 				renewBefore:             renewBefore,
 				secretKey:               secretKey,
+				logger:                  logger.WithName(name),
 			},
 		},
 		withInformer(
@@ -74,7 +79,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
-		plog.Info("secret does not exist yet or was deleted",
+		c.logger.Info("secret does not exist yet or was deleted",
 			"controller", ctx.Name,
 			"namespace", c.namespace,
 			"name", c.certsSecretResourceName,
@@ -91,7 +96,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 
 	certAge := time.Since(notBefore)
 	renewDelta := certAge - c.renewBefore
-	plog.Debug("found renew delta",
+	c.logger.Debug("found renew delta",
 		"controller", ctx.Name,
 		"namespace", c.namespace,
 		"name", c.certsSecretResourceName,

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package idpdiscovery
@@ -37,22 +37,22 @@ func TestIDPDiscovery(t *testing.T) {
 			wantContentType: "application/json",
 			wantFirstResponseBodyJSON: here.Doc(`{
 				"pinniped_identity_providers": [
-					{"name": "a-some-ldap-idp", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "a-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "a-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
-					{"name": "x-some-idp",      "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "x-some-idp",      "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "x-some-idp",      "type": "oidc",            "flows": ["browser_authcode"]},
-					{"name": "y-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password"]},
-					{"name": "z-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password"]},
-					{"name": "z-some-ldap-idp", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "y-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
+					{"name": "z-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
+					{"name": "z-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "z-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode", "cli_password"]}
 				]
 			}`),
 			wantSecondResponseBodyJSON: here.Doc(`{
 				"pinniped_identity_providers": [
-					{"name": "some-other-ad-idp-1",   "type": "activedirectory", "flows": ["cli_password"]},
-					{"name": "some-other-ad-idp-2",   "type": "activedirectory", "flows": ["cli_password"]},
-					{"name": "some-other-ldap-idp-1", "type": "ldap",            "flows": ["cli_password"]},
-					{"name": "some-other-ldap-idp-2", "type": "ldap",            "flows": ["cli_password"]},
+					{"name": "some-other-ad-idp-1",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
+					{"name": "some-other-ad-idp-2",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
+					{"name": "some-other-ldap-idp-1", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
+					{"name": "some-other-ldap-idp-2", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "some-other-oidc-idp-1", "type": "oidc",            "flows": ["browser_authcode", "cli_password"]},
 					{"name": "some-other-oidc-idp-2", "type": "oidc",            "flows": ["browser_authcode"]}
 				]

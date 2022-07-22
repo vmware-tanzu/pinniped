@@ -12,16 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/klog/v2"
-
-	"go.pinniped.dev/internal/testutil/testlogger"
-
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
 )
@@ -34,6 +33,10 @@ func TestLoginStaticCommand(t *testing.T) {
 	tmpdir := testutil.TempDir(t)
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
+
+	now, err := time.Parse(time.RFC3339Nano, "2038-12-07T23:37:26.953313745Z")
+	require.NoError(t, err)
+	nowStr := now.Local().Format(time.RFC1123)
 
 	tests := []struct {
 		name             string
@@ -136,7 +139,9 @@ func TestLoginStaticCommand(t *testing.T) {
 			wantStderr: here.Doc(`
 				Error: could not complete Concierge credential exchange: some concierge error
 			`),
-			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped login: exchanging static token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1/\""},
+			wantLogs: []string{
+				nowStr + `  pinniped-login  cmd/login_static.go:147  exchanging static token for cluster credential  {"endpoint": "https://127.0.0.1/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+			},
 		},
 		{
 			name: "invalid API group suffix",
@@ -165,8 +170,10 @@ func TestLoginStaticCommand(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
-			klog.SetLogger(testLogger.Logger)
+			var buf bytes.Buffer
+			fakeClock := clocktesting.NewFakeClock(now)
+			ctx := plog.TestZapOverrides(context.Background(), t, &buf, nil, zap.WithClock(plog.ZapClock(fakeClock)))
+
 			cmd := staticLoginCommand(staticLoginDeps{
 				lookupEnv: func(s string) (string, bool) {
 					v, ok := tt.env[s]
@@ -194,7 +201,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			cmd.SetArgs(tt.args)
-			err := cmd.Execute()
+			err := cmd.ExecuteContext(ctx)
 			if tt.wantError {
 				require.Error(t, err)
 			} else {
@@ -203,7 +210,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 
-			require.Equal(t, tt.wantLogs, testLogger.Lines())
+			require.Equal(t, tt.wantLogs, logLines(buf.String()))
 		})
 	}
 }

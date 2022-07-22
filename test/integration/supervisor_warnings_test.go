@@ -103,9 +103,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	)
 
 	t.Run("LDAP group refresh flow", func(t *testing.T) {
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("LDAP integration test requires connectivity to an LDAP server")
-		}
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
@@ -242,13 +240,9 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		t.Logf("second kubectl command took %s", time.Since(startTime2).String())
 	})
+
 	t.Run("Active Directory group refresh flow", func(t *testing.T) {
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
-			t.Skip("LDAP integration test requires connectivity to an LDAP server")
-		}
-		if env.SupervisorUpstreamActiveDirectory.Host == "" {
-			t.Skip("Active Directory hostname not specified")
-		}
+		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 
 		expectedUsername, password := testlib.CreateFreshADTestUser(t, env)
 		t.Cleanup(func() {
@@ -448,7 +442,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		require.NoError(t, page.Navigate(loginURL))
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)

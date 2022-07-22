@@ -435,7 +435,7 @@ func TestMiddlware(t *testing.T) {
 			responseObj:             tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
 			wantMutateRequests:      3,
 			wantMutateResponses:     1,
-			wantMutateRequestErrors: []string{`cannot replace token credential request "/" authenticator API group "authentication.concierge.some.suffix.com" with group suffix "some.suffix.com"`},
+			wantMutateRequestErrors: []string{`cannot replace token credential request / authenticator API group "authentication.concierge.some.suffix.com" with group suffix "some.suffix.com"`},
 			wantResponseObj:         tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{
@@ -475,7 +475,7 @@ func TestMiddlware(t *testing.T) {
 			responseObj:             tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
 			wantMutateRequests:      3,
 			wantMutateResponses:     1,
-			wantMutateRequestErrors: []string{`cannot replace token credential request "/" without authenticator API group`},
+			wantMutateRequestErrors: []string{`cannot replace token credential request / without authenticator API group`},
 			wantResponseObj:         tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,8 +18,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/go-logr/logr"
-	"github.com/go-logr/stdr"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
@@ -34,23 +31,24 @@ import (
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/net/phttp"
+	"go.pinniped.dev/internal/plog"
 )
 
 type kubeconfigDeps struct {
 	getPathToSelf func() (string, error)
 	getClientset  getConciergeClientsetFunc
-	log           logr.Logger
+	log           plog.MinLogger
 }
 
 func kubeconfigRealDeps() kubeconfigDeps {
 	return kubeconfigDeps{
 		getPathToSelf: os.Executable,
 		getClientset:  getRealConciergeClientset,
-		log:           stdr.New(log.New(os.Stderr, "", 0)),
+		log:           plog.New(),
 	}
 }
 
-//nolint: gochecknoinits
+// nolint: gochecknoinits
 func init() {
 	getCmd.AddCommand(kubeconfigCommand(kubeconfigRealDeps()))
 }
@@ -175,6 +173,11 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	ctx, cancel := context.WithTimeout(ctx, flags.timeout)
 	defer cancel()
 
+	// the log statements in this file assume that Info logs are unconditionally printed so we set the global level to info
+	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, plog.LogSpec{Level: plog.LevelInfo, Format: plog.FormatCLI}); err != nil {
+		return err
+	}
+
 	// Validate api group suffix and immediately return an error if it is invalid.
 	if err := groupsuffix.Validate(flags.concierge.apiGroupSuffix); err != nil {
 		return fmt.Errorf("invalid API group suffix: %w", err)
@@ -233,7 +236,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	// When all the upstream IDP flags are set by the user, then skip discovery and don't validate their input. Maybe they know something
 	// that we can't know, like the name of an IDP that they are going to define in the future.
 	if len(flags.oidc.issuer) > 0 && (flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "" || flags.oidc.upstreamIDPFlow == "") {
-		if err := discoverSupervisorUpstreamIDP(ctx, &flags); err != nil {
+		if err := discoverSupervisorUpstreamIDP(ctx, &flags, deps.log); err != nil {
 			return err
 		}
 	}
@@ -398,7 +401,7 @@ func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.I
 	return credentialIssuer, nil
 }
 
-func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log logr.Logger) error {
+func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log plog.MinLogger) error {
 	// Autodiscover the --concierge-mode.
 	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
 	if err != nil {
@@ -446,7 +449,7 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	return nil
 }
 
-func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log logr.Logger) {
+func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log plog.MinLogger) {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		log.Info("found CredentialIssuer strategy",
 			"type", strategy.Type,
@@ -457,7 +460,7 @@ func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log logr.L
 	}
 }
 
-func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log logr.Logger) error {
+func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log plog.MinLogger) error {
 	switch auth := authenticator.(type) {
 	case *conciergev1alpha1.WebhookAuthenticator:
 		// If the --concierge-authenticator-type/--concierge-authenticator-name flags were not set explicitly, set
@@ -556,7 +559,7 @@ func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.E
 	}
 }
 
-func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string, log logr.Logger) (*configv1alpha1.CredentialIssuer, error) {
+func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string, log plog.MinLogger) (*configv1alpha1.CredentialIssuer, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
@@ -582,7 +585,7 @@ func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string,
 	return result, nil
 }
 
-func lookupAuthenticator(clientset conciergeclientset.Interface, authType, authName string, log logr.Logger) (metav1.Object, error) {
+func lookupAuthenticator(clientset conciergeclientset.Interface, authType, authName string, log plog.MinLogger) (metav1.Object, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
@@ -643,7 +646,7 @@ func writeConfigAsYAML(out io.Writer, config clientcmdapi.Config) error {
 	return nil
 }
 
-func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconfig clientcmdapi.Config, log logr.Logger) error {
+func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconfig clientcmdapi.Config, log plog.MinLogger) error {
 	if flags.skipValidate {
 		return nil
 	}
@@ -706,7 +709,7 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 				log.Info("validated connection to the cluster", "attempts", attempts)
 				return nil
 			}
-			log.Error(err, "could not connect to cluster, retrying...", "attempts", attempts, "remaining", time.Until(deadline).Round(time.Second).String())
+			log.Info("could not connect to cluster, retrying...", "error", err, "attempts", attempts, "remaining", time.Until(deadline).Round(time.Second).String())
 		}
 	}
 }
@@ -726,7 +729,7 @@ func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool 
 	return false
 }
 
-func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams) error {
+func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams, log plog.MinLogger) error {
 	httpClient, err := newDiscoveryHTTPClient(flags.oidc.caBundle)
 	if err != nil {
 		return err
@@ -758,7 +761,7 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 		return err
 	}
 
-	selectedIDPFlow, err := selectUpstreamIDPFlow(discoveredIDPFlows, selectedIDPName, selectedIDPType, flags.oidc.upstreamIDPFlow)
+	selectedIDPFlow, err := selectUpstreamIDPFlow(discoveredIDPFlows, selectedIDPName, selectedIDPType, flags.oidc.upstreamIDPFlow, log)
 	if err != nil {
 		return err
 	}
@@ -898,7 +901,7 @@ func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.PinnipedID
 	}
 }
 
-func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, selectedIDPName string, selectedIDPType idpdiscoveryv1alpha1.IDPType, specifiedFlow string) (idpdiscoveryv1alpha1.IDPFlow, error) {
+func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, selectedIDPName string, selectedIDPType idpdiscoveryv1alpha1.IDPType, specifiedFlow string, log plog.MinLogger) (idpdiscoveryv1alpha1.IDPFlow, error) {
 	switch {
 	case len(discoveredIDPFlows) == 0:
 		// No flows listed by discovery means that we are talking to an old Supervisor from before this feature existed.
@@ -922,10 +925,9 @@ func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, se
 		return discoveredIDPFlows[0], nil
 	default:
 		// The user did not specify a flow, and more than one was found.
-		return "", fmt.Errorf(
-			"multiple client flows for Supervisor upstream identity provider %q of type %q were found, "+
-				"so the --upstream-identity-provider-flow flag must be specified. "+
-				"Found these flows: %v",
-			selectedIDPName, selectedIDPType, discoveredIDPFlows)
+		log.Info("multiple client flows found, selecting first value as default",
+			"idpName", selectedIDPName, "idpType", selectedIDPType,
+			"selectedFlow", discoveredIDPFlows[0].String(), "availableFlows", discoveredIDPFlows)
+		return discoveredIDPFlows[0], nil
 	}
 }

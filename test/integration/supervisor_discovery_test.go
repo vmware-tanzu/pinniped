@@ -505,6 +505,7 @@ func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, superviso
       "scopes_supported": ["openid", "offline"],
       "response_types_supported": ["code"],
       "response_modes_supported": ["query", "form_post"],
+      "code_challenge_methods_supported": ["S256"],
       "claims_supported": ["groups"],
       "discovery.supervisor.pinniped.dev/v1alpha1": {"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"},
       "subject_types_supported": ["public"],

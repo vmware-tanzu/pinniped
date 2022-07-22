@@ -43,8 +43,8 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestImpersonatorConfigControllerOptions(t *testing.T) {
@@ -63,7 +63,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		var credIssuerInformerFilter controllerlib.Filter
 		var servicesInformerFilter controllerlib.Filter
 		var secretsInformerFilter controllerlib.Filter
-		var testLog *testlogger.Logger
 
 		it.Before(func() {
 			r = require.New(t)
@@ -73,7 +72,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 			credIssuerInformer := pinnipedInformerFactory.Config().V1alpha1().CredentialIssuers()
 			servicesInformer := sharedInformerFactory.Core().V1().Services()
 			secretsInformer := sharedInformerFactory.Core().V1().Secrets()
-			testLog = testlogger.New(t)
 
 			_ = NewImpersonatorConfigController(
 				installedInNamespace,
@@ -94,7 +92,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 				caSignerName,
 				nil,
-				testLog.Logger,
+				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
 			)
 			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
@@ -292,7 +290,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var testHTTPServerInterruptCh chan struct{}
 		var queue *testQueue
 		var validClientCert *tls.Certificate
-		var testLog *testlogger.Logger
 
 		var impersonatorFunc = func(
 			port int,
@@ -563,7 +560,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				impersonatorFunc,
 				caSignerName,
 				signingCertProvider,
-				testLog.Logger,
+				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
 			)
 			controllerlib.TestWrap(t, subject, func(syncer controllerlib.Syncer) controllerlib.Syncer {
 				tlsServingCertDynamicCertProvider = syncer.(*impersonatorConfigController).tlsServingCertDynamicCertProvider
@@ -1120,7 +1117,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			signingCASecret = newSigningKeySecret(caSignerName, signingCACertPEM, signingCAKeyPEM)
 			validClientCert, err = ca.IssueClientCert("username", nil, time.Hour)
 			r.NoError(err)
-			testLog = testlogger.New(t)
 		})
 
 		it.After(func() {

@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -22,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -252,7 +252,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 }
 
 func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) {
-	log := klogr.New().WithValues("namespace", upstream.Namespace, "name", upstream.Name)
+	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
 	hadErrorCondition := conditionsutil.Merge(conditions, upstream.Generation, &updated.Status.Conditions, log)
@@ -271,6 +271,6 @@ func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1al
 		LDAPIdentityProviders(upstream.Namespace).
 		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err != nil {
-		log.Error(err, "failed to update status")
+		log.Error("failed to update status", err)
 	}
 }

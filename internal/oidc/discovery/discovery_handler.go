@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package discovery provides a handler for the OIDC discovery endpoint.
@@ -38,6 +38,9 @@ type Metadata struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	ClaimsSupported                   []string `json:"claims_supported"`
 
+	// https://datatracker.ietf.org/doc/html/rfc8414#section-2 says, “If omitted, the authorization server does not support PKCE.”
+	CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
+
 	// ^^^ Optional ^^^
 
 	// vvv Custom vvv
@@ -64,6 +67,7 @@ func NewHandler(issuerURL string) http.Handler {
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
+		CodeChallengeMethodsSupported:     []string{"S256"},
 		ScopesSupported:                   []string{"openid", "offline"},
 		ClaimsSupported:                   []string{"groups"},
 	}

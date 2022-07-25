@@ -1,12 +1,12 @@
 [[redirects]]
   from = "/community"
-  to = "https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md#meeting-with-the-maintainers"
+  to = "https://pinniped.dev/community"
   status = 302
   force = true
 
 [[redirects]]
   from = "/community/zoom"
-  to = "https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09"
+  to = "https://vmware.zoom.us/j/TodoUpdateThisLink"
   status = 302
   force = true
 

@@ -65,7 +65,7 @@ We intend to add features in future releases to make it more convenient to integ
 as an LDAP provider, and to include AD in our automated testing suite. Stay tuned.
 
 In the meantime, please let us know if you run into any issues or concerns using your LDAP system.
-Feel free to ask questions via [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kubernetes Slack,
+Feel free to ask questions via [#pinniped](https://go.pinniped.dev/community/slack) on Kubernetes Slack,
 or [create an issue](https://github.com/vmware-tanzu/pinniped/issues/new/choose) on our Github repository.
 
 ### Security Considerations
@@ -143,7 +143,7 @@ The Pinniped community continues to grow, and is a vital part of the project's s
 We thrive on community feedback. Did you try our new LDAP features?
 What else do you need from identity systems for your Kubernetes clusters?
 
-Find us in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kubernetes Slack,
+Find us in [#pinniped](https://go.pinniped.dev/community/slack) on Kubernetes Slack,
 [create an issue](https://github.com/vmware-tanzu/pinniped/issues/new/choose) on our Github repository,
 or start a [Discussion](https://github.com/vmware-tanzu/pinniped/discussions).
 

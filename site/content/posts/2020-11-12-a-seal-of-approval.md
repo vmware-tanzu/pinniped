@@ -50,7 +50,7 @@ Let’s be clear: We’re not there yet, but that’s where we’re headed with 
 - Create a unified login experience across clusters regardless of provider or distribution
 - Advance the state of the art in Kubernetes login security  
 
-From contributing code to uploading documentation to sharing how you’d like to use Pinniped in the wild, there are many ways to get involved. Feel free to ask questions via [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kubernetes Slack, or check out the [Contribute to Pinniped](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md) page for details on how to contribute to the Pinniped project. There you’ll find out how you can:
+From contributing code to uploading documentation to sharing how you’d like to use Pinniped in the wild, there are many ways to get involved. Feel free to ask questions via [#pinniped](https://go.pinniped.dev/community/slack) on Kubernetes Slack, or check out the [Contribute to Pinniped](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md) page for details on how to contribute to the Pinniped project. There you’ll find out how you can:
 
 - Propose or request new features
 - Try writing a plugin

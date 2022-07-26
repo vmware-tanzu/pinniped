@@ -37,7 +37,7 @@ subdirectory, create a `README.md` containing the core proposal. Include other f
 understanding of the feature.
 
 To make your new proposal known to all other contributors, please send a link to your new proposal PR on the Kubernetes
-Slack in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA)
+Slack in [#pinniped](https://go.pinniped.dev/community/slack)
 or via the [Pinniped mailing list](mailto:project-pinniped@googlegroups.com).
 
 Author(s) of proposals for major changes will give a time period of no less than five (5) working days for comment and
@@ -231,5 +231,5 @@ previous proposals for historical context when appropriate.
 ## Getting Help with the Proposal Process
 
 Please reach out to the maintainers in the Kubernetes Slack Workspace within
-the [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) channel or on
+the [#pinniped](https://go.pinniped.dev/community/slack) channel or on
 the [Pinniped mailing list](mailto:project-pinniped@googlegroups.com) with any questions.

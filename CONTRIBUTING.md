@@ -1,5 +1,8 @@
 # Contributing to Pinniped
 
+Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring
+great software to the community.
+
 Contributions to Pinniped are welcome. Here are some things to help you get started.
 
 ## Code of Conduct
@@ -14,24 +17,13 @@ See [SCOPE.md](./SCOPE.md) for some guidelines about what we consider in and out
 
 The near-term and mid-term roadmap for the work planned for the project [maintainers](MAINTAINERS.md) is documented in [ROADMAP.md](ROADMAP.md).
 
-## Community Meetings
-
-Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great
-software to the community. Please join us during our online community meetings,
-occurring every first and third Thursday of the month at 9 AM PT / 12 PM ET.
-Use [this Zoom Link](https://go.pinniped.dev/community/zoom)
-to attend and add any agenda items you wish to discuss
-to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view).
-Join our [Google Group](https://groups.google.com/g/project-pinniped) to receive invites to this meeting.
-
-If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
-
 ## Discussion
 
 Got a question, comment, or idea? Please don't hesitate to reach out
 via GitHub [Discussions](https://github.com/vmware-tanzu/pinniped/discussions),
 GitHub [Issues](https://github.com/vmware-tanzu/pinniped/issues),
-or in the Kubernetes Slack Workspace within the [#pinniped channel](https://kubernetes.slack.com/archives/C01BW364RJA).
+or in the Kubernetes Slack Workspace within the [#pinniped channel](https://go.pinniped.dev/community/slack).
+Join our [Google Group](https://go.pinniped.dev/community/group) to receive updates and meeting invitations.
 
 ## Issues
 

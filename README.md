@@ -21,26 +21,18 @@ Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped
 Got a question, comment, or idea? Please don't hesitate to reach out
 via GitHub [Discussions](https://github.com/vmware-tanzu/pinniped/discussions),
 GitHub [Issues](https://github.com/vmware-tanzu/pinniped/issues),
-or in the Kubernetes Slack Workspace within the [#pinniped channel](https://kubernetes.slack.com/archives/C01BW364RJA).
+or in the Kubernetes Slack Workspace within the [#pinniped channel](https://go.pinniped.dev/community/slack).
+Join our [Google Group](https://go.pinniped.dev/community/group) to receive updates and meeting invitations.
 
 ## Contributions
+
+Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring
+great software to the community.
 
 Want to get involved? Contributions are welcome.
 
 Please see the [contributing guide](CONTRIBUTING.md) for more information about reporting bugs, requesting features,
 building and testing the code, submitting PRs, and other contributor topics.
-
-## Community meetings
-
-Pinniped is better because of our contributors and [maintainers](MAINTAINERS.md). It is because of you that we can bring great
-software to the community. Please join us during our online community meetings, occurring every first and third
-Thursday of the month at 9 AM PT / 12 PM ET.
-
-Use [this Zoom Link](https://go.pinniped.dev/community/zoom) to attend and add any agenda items you wish to
-discuss to [the notes document](https://go.pinniped.dev/community/agenda).
-Join our [Google Group](https://groups.google.com/g/project-pinniped) to receive invites to this meeting.
-
-If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
 
 ## Adopters
 

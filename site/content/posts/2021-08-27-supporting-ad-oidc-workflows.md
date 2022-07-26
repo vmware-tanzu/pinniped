@@ -108,7 +108,7 @@ We thrive on community feedback.
 Did you try our new LDAP or AD features?
 What other configurations do you need for authenticating users to your Kubernetes clusters?
 
-Find us in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kubernetes Slack,
+Find us in [#pinniped](https://go.pinniped.dev/community/slack) on Kubernetes Slack,
 [create an issue](https://github.com/vmware-tanzu/pinniped/issues/new/choose) on our Github repository,
 or start a [Discussion](https://github.com/vmware-tanzu/pinniped/discussions).
 

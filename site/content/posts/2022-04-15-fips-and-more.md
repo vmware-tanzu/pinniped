@@ -58,7 +58,7 @@ Are there other Identity Providers for which you want to see documentation simil
 
 We thrive on community feedback and would like to hear more!  
 
-Reach out to us in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kubernetes Slack,
+Reach out to us in [#pinniped](https://go.pinniped.dev/community/slack) on Kubernetes Slack,
 [create an issue](https://github.com/vmware-tanzu/pinniped/issues/new/choose) on our Github repository,
 or start a [discussion](https://github.com/vmware-tanzu/pinniped/discussions).
 

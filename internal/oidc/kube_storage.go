@@ -13,6 +13,7 @@ import (
 	fositepkce "github.com/ory/fosite/handler/pkce"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
@@ -20,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
 type KubeStorage struct {
@@ -33,10 +35,15 @@ type KubeStorage struct {
 
 var _ fositestoragei.AllFositeStorage = &KubeStorage{}
 
-func NewKubeStorage(secrets corev1client.SecretInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
+func NewKubeStorage(
+	secrets corev1client.SecretInterface,
+	oidcClientsClient v1alpha1.OIDCClientInterface,
+	timeoutsConfiguration TimeoutsConfiguration,
+	minBcryptCost int,
+) *KubeStorage {
 	nowFunc := time.Now
 	return &KubeStorage{
-		clientManager:            &clientregistry.StaticClientManager{},
+		clientManager:            clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, nowFunc), minBcryptCost),
 		authorizationCodeStorage: authorizationcode.New(secrets, nowFunc, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
 		pkceStorage:              pkce.New(secrets, nowFunc, timeoutsConfiguration.PKCESessionStorageLifetime),
 		oidcStorage:              openidconnect.New(secrets, nowFunc, timeoutsConfiguration.OIDCSessionStorageLifetime),

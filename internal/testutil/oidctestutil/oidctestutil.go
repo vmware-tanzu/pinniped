@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/authenticators"
@@ -954,7 +955,7 @@ func RequireAuthCodeRegexpMatch(
 	if includesOpenIDScope(wantDownstreamGrantedScopes) {
 		expectedNumberOfCreatedSecrets++
 	}
-	require.Len(t, kubeClient.Actions(), expectedNumberOfCreatedSecrets)
+	require.Len(t, FilterClientSecretCreateActions(kubeClient.Actions()), expectedNumberOfCreatedSecrets)
 
 	// One authcode should have been stored.
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secretsClient, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -1163,4 +1164,21 @@ func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requ
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &psession.PinnipedSession{})
 
 	return storedRequest, storedSession
+}
+
+// FilterClientSecretCreateActions ignores any reads made to get a storage secret corresponding to an OIDCClient, since these
+// are normal actions when the request is using a dynamic client's client_id, and we don't need to make assertions
+// about these Secrets since they are not related to session storage.
+func FilterClientSecretCreateActions(actions []kubetesting.Action) []kubetesting.Action {
+	filtered := make([]kubetesting.Action, 0, len(actions))
+	for _, action := range actions {
+		if action.Matches("get", "secrets") {
+			getAction := action.(kubetesting.GetAction)
+			if strings.HasPrefix(getAction.GetName(), "pinniped-storage-oidc-client-secret-") {
+				continue // filter out OIDCClient's storage secret reads
+			}
+		}
+		filtered = append(filtered, action) // otherwise include the action
+	}
+	return filtered
 }

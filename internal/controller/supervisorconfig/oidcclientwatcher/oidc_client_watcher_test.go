@@ -5,9 +5,7 @@ package oidcclientwatcher
 
 import (
 	"context"
-	"encoding/base32"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -166,15 +164,6 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		testName      = "client.oauth.pinniped.dev-test-name"
 		testNamespace = "test-namespace"
 		testUID       = "test-uid-123"
-
-		//nolint:gosec // this is not a credential
-		testBcryptSecret1 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password1" at cost 15
-		//nolint:gosec // this is not a credential
-		testBcryptSecret2 = "$2y$15$Kh7cRj0ScSD5QelE3ZNSl.nF04JDv7zb3SgGN.tSfLIX.4kt3UX7m" // bcrypt of "password2" at cost 15
-		//nolint:gosec // this is not a credential
-		testInvalidBcryptSecretCostTooLow = "$2y$14$njwk1cItiRy6cb6u9aiJLuhtJG83zM9111t.xU6MxvnqqYbkXxzwy" // bcrypt of "password1" at cost 14
-		//nolint:gosec // this is not a credential
-		testInvalidBcryptSecretInvalidFormat = "$2y$14$njwk1cItiRy6cb6u9aiJLuhtJG83zM9111t.xU6MxvnqqYbkXxz" // not enough characters in hash value
 	)
 
 	now := metav1.NewTime(time.Now().UTC())
@@ -257,51 +246,6 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	secretNameForUID := func(uid string) string {
-		// See GetName() in OIDCClientSecretStorage for how the production code determines the Secret name.
-		// This test helper is intended to choose the same name.
-		return "pinniped-storage-oidc-client-secret-" +
-			strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(uid)))
-	}
-
-	secretStringDataWithZeroClientSecrets := map[string][]byte{
-		"pinniped-storage-data":    []byte(`{"version":"1","hashes":[]}`),
-		"pinniped-storage-version": []byte("1"),
-	}
-
-	secretStringDataWithOneClientSecret := map[string][]byte{
-		"pinniped-storage-data":    []byte(`{"version":"1","hashes":["` + testBcryptSecret1 + `"]}`),
-		"pinniped-storage-version": []byte("1"),
-	}
-
-	secretStringDataWithTwoClientSecrets := map[string][]byte{
-		"pinniped-storage-data":    []byte(`{"version":"1","hashes":["` + testBcryptSecret1 + `","` + testBcryptSecret2 + `"]}`),
-		"pinniped-storage-version": []byte("1"),
-	}
-
-	secretStringDataWithSomeInvalidClientSecrets := map[string][]byte{
-		"pinniped-storage-data": []byte(`{"version":"1","hashes":["` +
-			testBcryptSecret1 + `","` + testInvalidBcryptSecretCostTooLow + `","` + testInvalidBcryptSecretInvalidFormat + `"]}`),
-		"pinniped-storage-version": []byte("1"),
-	}
-
-	secretStringDataWithWrongVersion := map[string][]byte{
-		"pinniped-storage-data":    []byte(`{"version":"wrong-version","hashes":[]}`),
-		"pinniped-storage-version": []byte("1"),
-	}
-
-	storageSecretForUIDWithData := func(uid string, data map[string][]byte) *corev1.Secret {
-		return &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: testNamespace,
-				Name:      secretNameForUID(uid),
-				Labels:    map[string]string{"storage.pinniped.dev/type": "oidc-client-secret"},
-			},
-			Type: "storage.pinniped.dev/oidc-client-secret",
-			Data: data,
-		}
-	}
-
 	tests := []struct {
 		name                     string
 		inputObjects             []runtime.Object
@@ -338,7 +282,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
 				{
@@ -367,7 +311,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithTwoClientSecrets)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -400,7 +344,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 0, // no updates
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -443,7 +387,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithWrongVersion)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUIDWithWrongVersion(t, testNamespace, testUID)},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -466,7 +410,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithZeroClientSecrets)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -490,7 +434,10 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithSomeInvalidClientSecrets)},
+			inputSecrets: []runtime.Object{
+				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID,
+					[]string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword1JustBelowSupervisorMinCost, testutil.HashedPassword1InvalidFormat}),
+			},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -500,10 +447,11 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						sadInvalidClientSecretsCondition(now, 1234,
-							"hashed client secret at index 1: bcrypt cost 14 is below the required minimum of 15; "+
+							"3 stored client secrets found, but some were invalid, so none will be used: "+
+								"hashed client secret at index 1: bcrypt cost 11 is below the required minimum of 12; "+
 								"hashed client secret at index 2: crypto/bcrypt: hashedSecret too short to be a bcrypted password"),
 					},
-					TotalClientSecrets: 3,
+					TotalClientSecrets: 0,
 				},
 			}},
 		},
@@ -522,7 +470,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					Spec:       configv1alpha1.OIDCClientSpec{},
 				},
 			},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData("uid1", secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, "uid1", []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 2, // one update for each OIDCClient
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
 				{
@@ -570,7 +518,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 4567, UID: testUID},
@@ -596,7 +544,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				},
 			}},
 			wantAPIActions: 1, // one update
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
@@ -620,7 +568,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				},
 			}},
 			wantAPIActions: 1, // one update
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
@@ -649,7 +597,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				},
 			}},
 			wantAPIActions: 1, // one update
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
@@ -676,7 +624,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "username", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -700,7 +648,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -724,7 +672,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -748,7 +696,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -772,7 +720,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "username"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -796,7 +744,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -820,7 +768,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -844,7 +792,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -868,7 +816,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "username"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -892,7 +840,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -916,7 +864,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -940,7 +888,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "username"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -964,7 +912,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "username"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -988,7 +936,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					AllowedScopes:     []configv1alpha1.Scope{"openid", "username", "groups"},
 				},
 			}},
-			inputSecrets:   []runtime.Object{storageSecretForUIDWithData(testUID, secretStringDataWithOneClientSecret)},
+			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
 			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},

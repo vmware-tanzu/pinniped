@@ -457,7 +457,7 @@ func PerformAuthcodeRedirect(
 ) {
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
-		plog.WarningErr("error while generating and saving authcode", err)
+		plog.WarningErr("error while generating and saving authcode", err, "fositeErr", FositeErrorForLog(err))
 		WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
 		return
 	}

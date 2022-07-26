@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/login"
@@ -126,6 +127,10 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return nil
 	}
 
+	if !requireStaticClientForUsernameAndPasswordHeaders(w, oauthHelper, authorizeRequester) {
+		return nil
+	}
+
 	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
 	if !hadUsernamePasswordValues {
 		return nil
@@ -196,6 +201,10 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
 	if !created {
+		return nil
+	}
+
+	if !requireStaticClientForUsernameAndPasswordHeaders(w, oauthHelper, authorizeRequester) {
 		return nil
 	}
 
@@ -312,6 +321,15 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	return nil
 }
 
+func requireStaticClientForUsernameAndPasswordHeaders(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) bool {
+	isStaticClient := authorizeRequester.GetClient().GetID() == clientregistry.PinnipedCLIClientID
+	if !isStaticClient {
+		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("This client is not allowed to submit username or password headers to this endpoint."), true)
+	}
+	return isStaticClient
+}
+
 func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
 	username := r.Header.Get(supervisoroidc.AuthorizeUsernameHeaderName)
 	password := r.Header.Get(supervisoroidc.AuthorizePasswordHeaderName)
@@ -330,10 +348,12 @@ func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fos
 		return nil, false
 	}
 
-	// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
+	// Automatically grant the openid, offline_access, pinniped:request-audience, and groups scopes, but only if they were requested.
 	// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
 	// There don't seem to be any validations inside `NewAuthorizeResponse` related to the offline_access scope
 	// at this time, however we will temporarily grant the scope just in case that changes in a future release of fosite.
+	// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
+	// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 	downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 	return authorizeRequester, true

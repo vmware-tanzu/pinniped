@@ -31,6 +31,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -156,29 +157,94 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		return ldapIDP, secret
 	}
 
+	// These tests attempt to exercise the entire login and refresh flow of the Supervisor for various cases.
+	// They do not use the Pinniped CLI as the client, which allows them to exercise the Supervisor as an
+	// OIDC provider in ways that the CLI might not use. Similar tests exist using the CLI in e2e_test.go.
+	//
+	// Each of these tests perform the following flow:
+	// 1. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
+	// 2. Configure an IDP CR.
+	// 3. Call the authorization endpoint and log in as a specific user.
+	//    Note that these tests do not use form_post response type (which is tested by e2e_test.go).
+	// 4. Listen on a local callback server for the authorization redirect, and assert that it was success or failure.
+	// 5. Call the token endpoint to exchange the authcode.
+	// 6. Call the token endpoint to perform the RFC8693 token exchange for the cluster-scoped ID token.
+	// 7. Potentially edit the refresh session data or IDP settings before the refresh.
+	// 8. Call the token endpoint to perform a refresh, and expect it to succeed.
+	// 9. Call the token endpoint again to perform another RFC8693 token exchange for the cluster-scoped ID token,
+	//    this time using the recently refreshed tokens when submitting the request.
+	// 10. Potentially edit the refresh session data or IDP settings again, this time in such a way that the next
+	//     refresh should fail. If done, then perform one more refresh and expect failure.
 	tests := []struct {
-		name                                 string
-		maybeSkip                            func(t *testing.T)
-		createTestUser                       func(t *testing.T) (string, string)
-		deleteTestUser                       func(t *testing.T, username string)
-		requestAuthorization                 func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
-		createIDP                            func(t *testing.T) string
-		requestTokenExchangeAud              string
-		downstreamScopes                     []string
-		wantLocalhostCallbackToNeverHappen   bool
-		wantDownstreamIDTokenSubjectToMatch  string
-		wantDownstreamIDTokenUsernameToMatch func(username string) string
-		wantDownstreamIDTokenGroups          []string
-		wantErrorDescription                 string
-		wantErrorType                        string
-		wantTokenExchangeResponse            func(t *testing.T, status int, body string)
+		name string
 
-		// Either revoke the user's session on the upstream provider, or manipulate the user's session
+		// This required function might choose to skip the test case, for example if the LDAP server is not
+		// available for an LDAP test.
+		maybeSkip func(t *testing.T)
+
+		// This required function should configure an IDP CR. It should also wait for it to be ready and schedule
+		// its cleanup. Return the name of the IDP CR.
+		createIDP func(t *testing.T) string
+
+		// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
+		// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
+		// When a client secret is returned, it will be used for authcode exchange, refresh requests, and RFC8693
+		// token exchanges for cluster-scoped tokens (client secrets are not needed in authorization requests).
+		createOIDCClient func(t *testing.T, callbackURL string) (string, string)
+
+		// Optionally return the username and password for the test to use when logging in. This username/password
+		// will be passed to requestAuthorization(), or empty strings will be passed to indicate that the defaults
+		// should be used. If there is any cleanup required, then this function should also schedule that cleanup.
+		testUser func(t *testing.T) (string, string)
+
+		// This required function should call the authorization endpoint using the given URL and also perform whatever
+		// interactions are needed to log in as the user.
+		requestAuthorization func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
+
+		// This string will be used as the requested audience in the RFC8693 token exchange for
+		// the cluster-scoped ID token. When it is not specified, a default string will be used.
+		requestTokenExchangeAud string
+
+		// The scopes to request from the authorization endpoint. Defaults will be used when not specified.
+		downstreamScopes []string
+
+		// When we want the localhost callback to have never happened, then the flow will stop there. The login was
+		// unable to finish so there is nothing to assert about what should have happened with the callback, and there
+		// won't be any error sent to the callback either. This would happen, for example, when the user fails to log
+		// in at the LDAP/AD login page, because then they would be redirected back to that page again, instead of
+		// getting a callback success/error redirect.
+		wantLocalhostCallbackToNeverHappen bool
+
+		// The expected ID token subject claim value as a regexp, for the original ID token and the refreshed ID token.
+		wantDownstreamIDTokenSubjectToMatch string
+		// The expected ID token username claim value as a regexp, for the original ID token and the refreshed ID token.
+		wantDownstreamIDTokenUsernameToMatch func(username string) string
+		// The expected ID token groups claim value, for the original ID token and the refreshed ID token.
+		wantDownstreamIDTokenGroups []string
+
+		// Want the authorization endpoint to redirect to the callback with this error type.
+		// The rest of the flow will be skipped since the initial authorization failed.
+		wantAuthorizationErrorType string
+		// Want the authorization endpoint to redirect to the callback with this error description.
+		// Should be used with wantAuthorizationErrorType.
+		wantAuthorizationErrorDescription string
+
+		// Optionally want to the authcode exchange at the token endpoint to fail. The rest of the flow will be
+		// skipped since the authcode exchange failed.
+		wantAuthcodeExchangeError string
+
+		// Optionally make all required assertions about the response of the RFC8693 token exchange for
+		// the cluster-scoped ID token, given the http response status and response body from the token endpoint.
+		// When this is not specified then the appropriate default assertions for a successful exchange are made.
+		// Even if this expects failures, the rest of the flow will continue.
+		wantTokenExchangeResponse func(t *testing.T, status int, body string)
+
+		// Optionally edit the refresh session data between the initial login and the first refresh,
+		// which is still expected to succeed after these edits.
+		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
+		// Optionally either revoke the user's session on the upstream provider, or manipulate the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
 		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
-		// Edit the refresh session data between the initial login and the refresh, which is expected to
-		// succeed.
-		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
 	}{
 		{
 			name:      "oidc with default username and groups claim settings",
@@ -389,7 +455,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
@@ -414,7 +480,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					"this is the wrong password" // password to present to server during login
@@ -429,7 +495,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return "this is the wrong username", // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
@@ -444,7 +510,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
@@ -612,8 +678,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					true,
 				)
 			},
-			wantErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:        "access_denied",
+			wantAuthorizationErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantAuthorizationErrorType:        "access_denied",
 		},
 		{
 			name:      "ldap login still works after updating bind secret",
@@ -964,11 +1030,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
-			},
-			deleteTestUser: func(t *testing.T, username string) {
-				testlib.DeleteTestADUser(t, env, username)
 			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -997,11 +1060,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
-			},
-			deleteTestUser: func(t *testing.T, username string) {
-				testlib.DeleteTestADUser(t, env, username)
 			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -1030,11 +1090,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
 				return idp.Name
 			},
-			createTestUser: func(t *testing.T) (string, string) {
+			testUser: func(t *testing.T) (string, string) {
 				return testlib.CreateFreshADTestUser(t, env)
-			},
-			deleteTestUser: func(t *testing.T, username string) {
-				testlib.DeleteTestADUser(t, env, username)
 			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, testUserName, testUserPassword string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
@@ -1072,9 +1129,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					true,
 				)
 			},
-			breakRefreshSessionData: nil,
-			wantErrorDescription:    "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
-			wantErrorType:           "access_denied",
+			breakRefreshSessionData:           nil,
+			wantAuthorizationErrorDescription: "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
+			wantAuthorizationErrorType:        "access_denied",
 		},
 		{
 			name:      "ldap refresh fails when username changes from email as username to dn as username",
@@ -1226,27 +1283,141 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					body)
 			},
 		},
+		{
+			name:      "oidc upstream with downstream dynamic client happy path",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client happy path",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "active directory with all default options with downstream dynamic client happy path",
+			maybeSkip: skipActiveDirectoryTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			requestAuthorization: func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t,
+					downstreamIssuer,
+					downstreamAuthorizeURL,
+					downstreamCallbackURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
+					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client, failed client authentication",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				clientID, _ := testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+				return clientID, "wrong-client-secret"
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantAuthcodeExchangeError: "oauth2: cannot fetch token: 401 Unauthorized\n" +
+				`Response: {"error":"invalid_client","error_description":"Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."}`,
+		},
 	}
+
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			tt.maybeSkip(t)
 
-			testSupervisorLogin(t,
+			testSupervisorLogin(
+				t,
 				tt.createIDP,
 				tt.requestAuthorization,
 				tt.editRefreshSessionDataWithoutBreaking,
 				tt.breakRefreshSessionData,
-				tt.createTestUser,
-				tt.deleteTestUser,
+				tt.testUser,
+				tt.createOIDCClient,
 				tt.downstreamScopes,
 				tt.requestTokenExchangeAud,
 				tt.wantLocalhostCallbackToNeverHappen,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
-				tt.wantErrorDescription,
-				tt.wantErrorType,
+				tt.wantAuthorizationErrorType,
+				tt.wantAuthorizationErrorDescription,
+				tt.wantAuthcodeExchangeError,
 				tt.wantTokenExchangeResponse,
 			)
 		})
@@ -1375,18 +1546,19 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
 	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
-	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string) []string,
-	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName, username string),
-	createTestUser func(t *testing.T) (string, string),
-	deleteTestUser func(t *testing.T, username string),
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string) []string,
+	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
+	testUser func(t *testing.T) (string, string),
+	createOIDCClient func(t *testing.T, callbackURL string) (string, string),
 	downstreamScopes []string,
 	requestTokenExchangeAud string,
 	wantLocalhostCallbackToNeverHappen bool,
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
-	wantErrorDescription string,
-	wantErrorType string,
+	wantAuthorizationErrorType string,
+	wantAuthorizationErrorDescription string,
+	wantAuthcodeExchangeError string,
 	wantTokenExchangeResponse func(t *testing.T, status int, body string),
 ) {
 	env := testlib.IntegrationEnv(t)
@@ -1475,12 +1647,20 @@ func testSupervisorLogin(
 	// Create upstream IDP and wait for it to become ready.
 	idpName := createIDP(t)
 
+	// Start a callback server on localhost.
+	localCallbackServer := startLocalCallbackServer(t)
+
+	// Optionally create an OIDCClient. Default to using the hardcoded public client that the Supervisor supports.
+	clientID, clientSecret := "pinniped-cli", "" //nolint:gosec // empty credential is not a hardcoded credential
+	if createOIDCClient != nil {
+		clientID, clientSecret = createOIDCClient(t, localCallbackServer.URL)
+	}
+
+	// Optionally override which user to use for the test, or choose zero values to mean use the default for
+	// the test's IDP.
 	username, password := "", ""
-	if createTestUser != nil {
-		username, password = createTestUser(t)
-		if deleteTestUser != nil {
-			defer deleteTestUser(t, username)
-		}
+	if testUser != nil {
+		username, password = testUser(t)
 	}
 
 	// Perform OIDC discovery for our downstream.
@@ -1491,23 +1671,27 @@ func testSupervisorLogin(
 		requireEventually.NoError(err)
 	}, 30*time.Second, 200*time.Millisecond)
 
-	// Start a callback server on localhost.
-	localCallbackServer := startLocalCallbackServer(t)
-
 	if downstreamScopes == nil {
 		downstreamScopes = []string{"openid", "pinniped:request-audience", "offline_access", "groups"}
 	}
 
-	// Form the OAuth2 configuration corresponding to our CLI client.
+	// Create the OAuth2 configuration.
 	// Note that this is not using response_type=form_post, so the Supervisor will redirect to the callback endpoint
 	// directly, without using the Javascript form_post HTML page to POST back to the callback endpoint. The e2e
 	// tests which use the Pinniped CLI are testing the form_post part of the flow, so that is covered elsewhere.
+	// When ClientSecret is set here, it will be used for all token endpoint requests, but not for the authorization
+	// request, where it is not needed.
+	endpoint := discovery.Endpoint()
+	if clientSecret != "" {
+		// We only support basic auth for dynamic clients, so use basic auth in these tests.
+		endpoint.AuthStyle = oauth2.AuthStyleInHeader
+	}
 	downstreamOAuth2Config := oauth2.Config{
-		// This is the hardcoded public client that the supervisor supports.
-		ClientID:    "pinniped-cli",
-		Endpoint:    discovery.Endpoint(),
-		RedirectURL: localCallbackServer.URL,
-		Scopes:      downstreamScopes,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Endpoint:     endpoint,
+		RedirectURL:  localCallbackServer.URL,
+		Scopes:       downstreamScopes,
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -1540,116 +1724,123 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	t.Logf("got callback request: %s", testlib.MaskTokens(callback.URL.String()))
-	if wantErrorType == "" { // nolint:nestif
-		require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-		require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
-		authcode := callback.URL.Query().Get("code")
-		require.NotEmpty(t, authcode)
 
-		// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
-		require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
-
-		// Call the token endpoint to get tokens.
-		tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
-		require.NoError(t, err)
-
-		expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
-		if slices.Contains(downstreamScopes, "groups") {
-			expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
-		}
-		verifyTokenResponse(t,
-			tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
-			expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
-
-		// token exchange on the original token
-		if requestTokenExchangeAud == "" {
-			requestTokenExchangeAud = "some-cluster-123" // use a default test value
-		}
-		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
-
-		refreshedGroups := wantDownstreamIDTokenGroups
-		if editRefreshSessionDataWithoutBreaking != nil {
-			latestRefreshToken := tokenResponse.RefreshToken
-			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
-
-			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
-			kubeClient := testlib.NewKubernetesClientset(t)
-			supervisorSecretsClient := kubeClient.CoreV1().Secrets(env.SupervisorNamespace)
-			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, oidc.DefaultOIDCTimeoutsConfiguration())
-			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
-			require.NoError(t, err)
-
-			// Next mutate the part of the session that is used during upstream refresh.
-			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
-			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-
-			refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
-
-			// Then save the mutated Secret back to Kubernetes.
-			// There is no update function, so delete and create again at the same name.
-			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
-		}
-		// Use the refresh token to get new tokens
-		refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
-		refreshedTokenResponse, err := refreshSource.Token()
-		require.NoError(t, err)
-
-		// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
-		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
-		if slices.Contains(downstreamScopes, "groups") {
-			expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
-		}
-		verifyTokenResponse(t,
-			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
-
-		require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
-		require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
-		require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
-
-		// token exchange on the refreshed token
-		doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
-
-		// Now that we have successfully performed a refresh, let's test what happens when an
-		// upstream refresh fails during the next downstream refresh.
-		if breakRefreshSessionData != nil {
-			latestRefreshToken := refreshedTokenResponse.RefreshToken
-			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
-
-			// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
-			kubeClient := testlib.NewKubernetesClientset(t)
-			supervisorSecretsClient := kubeClient.CoreV1().Secrets(env.SupervisorNamespace)
-			oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, oidc.DefaultOIDCTimeoutsConfiguration())
-			storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
-			require.NoError(t, err)
-
-			// Next mutate the part of the session that is used during upstream refresh.
-			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
-			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-			breakRefreshSessionData(t, pinnipedSession, idpName, username)
-
-			// Then save the mutated Secret back to Kubernetes.
-			// There is no update function, so delete and create again at the same name.
-			require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-			require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
-
-			// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
-			_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
-			// Should have got an error since the upstream refresh should have failed.
-			require.Error(t, err)
-			require.Regexp(t,
-				regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
-					regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
-					"[^']+",
-				err.Error(),
-			)
-		}
-	} else {
+	if wantAuthorizationErrorType != "" {
 		errorDescription := callback.URL.Query().Get("error_description")
 		errorType := callback.URL.Query().Get("error")
-		require.Equal(t, errorDescription, wantErrorDescription)
-		require.Equal(t, errorType, wantErrorType)
+		require.Equal(t, errorDescription, wantAuthorizationErrorDescription)
+		require.Equal(t, errorType, wantAuthorizationErrorType)
+		// The authorization has failed, so can't continue the login flow, making this the end of the test case.
+		return
+	}
+
+	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
+	require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
+	authcode := callback.URL.Query().Get("code")
+	require.NotEmpty(t, authcode)
+
+	// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
+	require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
+
+	// Call the token endpoint to get tokens.
+	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
+	if wantAuthcodeExchangeError != "" {
+		require.EqualError(t, err, wantAuthcodeExchangeError)
+		// The authcode exchange has failed, so can't continue the login flow, making this the end of the test case.
+		return
+	}
+	require.NoError(t, err)
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
+	if slices.Contains(downstreamScopes, "groups") {
+		expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
+	}
+	verifyTokenResponse(t,
+		tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
+
+	// token exchange on the original token
+	if requestTokenExchangeAud == "" {
+		requestTokenExchangeAud = "some-cluster-123" // use a default test value
+	}
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+
+	refreshedGroups := wantDownstreamIDTokenGroups
+	if editRefreshSessionDataWithoutBreaking != nil {
+		latestRefreshToken := tokenResponse.RefreshToken
+		signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+		require.NoError(t, err)
+
+		// Next mutate the part of the session that is used during upstream refresh.
+		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+
+		refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
+
+		// Then save the mutated Secret back to Kubernetes.
+		// There is no update function, so delete and create again at the same name.
+		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+	}
+	// Use the refresh token to get new tokens
+	refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
+	refreshedTokenResponse, err := refreshSource.Token()
+	require.NoError(t, err)
+
+	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
+	if slices.Contains(downstreamScopes, "groups") {
+		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
+	}
+	verifyTokenResponse(t,
+		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
+		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
+
+	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
+	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
+	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
+
+	// token exchange on the refreshed token
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+
+	// Now that we have successfully performed a refresh, let's test what happens when an
+	// upstream refresh fails during the next downstream refresh.
+	if breakRefreshSessionData != nil {
+		latestRefreshToken := refreshedTokenResponse.RefreshToken
+		signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
+
+		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
+		require.NoError(t, err)
+
+		// Next mutate the part of the session that is used during upstream refresh.
+		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
+		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
+		breakRefreshSessionData(t, pinnipedSession, idpName, username)
+
+		// Then save the mutated Secret back to Kubernetes.
+		// There is no update function, so delete and create again at the same name.
+		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+
+		// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
+		_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
+		// Should have got an error since the upstream refresh should have failed.
+		require.Error(t, err)
+		require.Regexp(t,
+			regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
+				regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
+				"[^']+",
+			err.Error(),
+		)
 	}
 }
 
@@ -1922,6 +2113,10 @@ func doTokenExchange(
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.Endpoint.TokenURL, reqBody)
 	require.NoError(t, err)
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	if config.ClientSecret != "" {
+		// We only support basic auth for dynamic clients, so use basic auth in these tests.
+		req.SetBasicAuth(config.ClientID, config.ClientSecret)
+	}
 
 	resp, err := httpClient.Do(req)
 	require.NoError(t, err)

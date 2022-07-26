@@ -88,13 +88,17 @@ type OIDCClientStatus struct {
 	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// totalClientSecrets is the current number of client secrets that are detected for this OIDCClient.
-	TotalClientSecrets int32 `json:"totalClientSecrets,omitempty"`
+	// +optional
+	TotalClientSecrets int32 `json:"totalClientSecrets"` // do not omitempty to allow it to show in the printer column even when it is 0
 }
 
 // OIDCClient describes the configuration of an OIDC client.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped
+// +kubebuilder:printcolumn:name="Privileged Scopes",type=string,JSONPath=`.spec.allowedScopes[?(@ == "pinniped:request-audience")]`
+// +kubebuilder:printcolumn:name="Client Secrets",type=integer,JSONPath=`.status.totalClientSecrets`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:subresource:status
 type OIDCClient struct {

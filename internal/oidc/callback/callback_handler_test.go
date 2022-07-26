@@ -15,9 +15,11 @@ import (
 
 	"github.com/gorilla/securecookie"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/psession"
@@ -52,7 +54,9 @@ const (
 
 	downstreamIssuer              = "https://my-downstream-issuer.com/path"
 	downstreamRedirectURI         = "http://127.0.0.1/callback"
-	downstreamClientID            = "pinniped-cli"
+	downstreamPinnipedClientID    = "pinniped-cli"
+	downstreamDynamicClientID     = "client.oauth.pinniped.dev-test-name"
+	downstreamDynamicClientUID    = "fake-client-uid"
 	downstreamNonce               = "some-nonce-value"
 	downstreamPKCEChallenge       = "some-challenge"
 	downstreamPKCEChallengeMethod = "S256"
@@ -68,14 +72,19 @@ var (
 	happyDownstreamRequestParamsQuery = url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
-		"client_id":             []string{downstreamClientID},
+		"client_id":             []string{downstreamPinnipedClientID},
 		"state":                 []string{happyDownstreamState},
 		"nonce":                 []string{downstreamNonce},
 		"code_challenge":        []string{downstreamPKCEChallenge},
 		"code_challenge_method": []string{downstreamPKCEChallengeMethod},
 		"redirect_uri":          []string{downstreamRedirectURI},
 	}
-	happyDownstreamRequestParams     = happyDownstreamRequestParamsQuery.Encode()
+	happyDownstreamRequestParams = happyDownstreamRequestParamsQuery.Encode()
+
+	happyDownstreamRequestParamsForDynamicClient = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+		map[string]string{"client_id": downstreamDynamicClientID},
+	).Encode()
+
 	happyDownstreamCustomSessionData = &psession.CustomSessionData{
 		ProviderUID:  happyUpstreamIDPResourceUID,
 		ProviderName: happyUpstreamIDPName,
@@ -120,6 +129,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
 	happyState := happyUpstreamStateParam().Build(t, happyStateCodec)
+	happyStateForDynamicClient := happyUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
@@ -135,13 +145,21 @@ func TestCallbackEndpoint(t *testing.T) {
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
 	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState
 
+	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost})
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
+	}
+
 	tests := []struct {
 		name string
 
-		idps       *oidctestutil.UpstreamIDPListerBuilder
-		method     string
-		path       string
-		csrfCookie string
+		idps          *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
+		method        string
+		path          string
+		csrfCookie    string
 
 		wantStatus                        int
 		wantContentType                   string
@@ -154,6 +172,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamIDTokenGroups       []string
 		wantDownstreamRequestedScopes     []string
 		wantDownstreamNonce               string
+		wantDownstreamClientID            string
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
@@ -182,6 +201,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -205,6 +225,32 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code when using dynamic client",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyStateForDynamicClient).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -228,6 +274,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamAccessTokenCustomSessionData,
@@ -260,6 +307,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     []string{"openid"},
 			wantDownstreamGrantedScopes:       []string{"openid"},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -283,6 +331,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: &psession.CustomSessionData{
@@ -318,6 +367,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -343,6 +393,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -370,6 +421,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -398,6 +450,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -528,6 +581,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -553,6 +607,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -578,6 +633,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -712,6 +768,42 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:        "Bad Request: error using state downstream auth params\n",
 		},
 		{
+			name:   "state's downstream auth params have invalid client_id",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"client_id": "bogus"}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
+			name:          "dynamic clients do not allow response_mode=form_post",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:        http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id":     downstreamDynamicClientID,
+							"response_mode": "form_post",
+							"scope":         "openid",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
 			name:   "state's downstream auth params does not contain openid scope",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
@@ -730,6 +822,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamGrantedScopes:       []string{"groups"},
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -756,6 +849,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamGrantedScopes:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -783,6 +877,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "groups"},
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -881,6 +976,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -1070,13 +1166,20 @@ func TestCallbackEndpoint(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset()
-			secrets := client.CoreV1().Secrets("some-namespace")
+			kubeClient := fake.NewSimpleClientset()
+			supervisorClient := supervisorfake.NewSimpleClientset()
+			secrets := kubeClient.CoreV1().Secrets("some-namespace")
+			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
+
+			if test.kubeResources != nil {
+				test.kubeResources(t, supervisorClient, kubeClient)
+			}
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
-			oauthStore := oidc.NewKubeStorage(secrets, timeoutsConfiguration)
+			// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+			oauthStore := oidc.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
@@ -1118,7 +1221,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Body.String(),
 					test.wantBodyFormResponseRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,
@@ -1129,7 +1232,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamPKCEChallenge,
 					test.wantDownstreamPKCEChallengeMethod,
 					test.wantDownstreamNonce,
-					downstreamClientID,
+					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
 				)
@@ -1145,7 +1248,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,
@@ -1156,7 +1259,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamPKCEChallenge,
 					test.wantDownstreamPKCEChallengeMethod,
 					test.wantDownstreamNonce,
-					downstreamClientID,
+					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
 				)
@@ -1225,6 +1328,12 @@ func happyUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
 		K: happyDownstreamPKCE,
 		V: happyDownstreamStateVersion,
 	}
+}
+
+func happyUpstreamStateParamForDynamicClient() *oidctestutil.UpstreamStateParamBuilder {
+	p := happyUpstreamStateParam()
+	p.P = happyDownstreamRequestParamsForDynamicClient
+	return p
 }
 
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {

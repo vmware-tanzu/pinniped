@@ -5,21 +5,36 @@ package oidc
 
 import (
 	"context"
+	"time"
 
 	"github.com/ory/fosite"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
 const errNullStorageNotImplemented = constable.Error("NullStorage does not implement this method. It should not have been called.")
 
 type NullStorage struct {
-	clientregistry.StaticClientManager
+	// The authorization endpoint uses NullStorage to avoid saving any data, but it still needs to perform client lookups.
+	*clientregistry.ClientManager
 }
 
 var _ fositestoragei.AllFositeStorage = &NullStorage{}
+
+func NewNullStorage(
+	secrets corev1client.SecretInterface,
+	oidcClientsClient v1alpha1.OIDCClientInterface,
+	minBcryptCost int,
+) *NullStorage {
+	return &NullStorage{
+		ClientManager: clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, time.Now), minBcryptCost),
+	}
+}
 
 func (NullStorage) RevokeRefreshToken(_ context.Context, _ string) error {
 	return errNullStorageNotImplemented

@@ -41,11 +41,14 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		if err != nil {
 			// This shouldn't really happen because the authorization endpoint has already validated these params
 			// by calling NewAuthorizeRequest() itself.
-			plog.Error("error using state downstream auth params", err)
+			plog.Error("error using state downstream auth params", err,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
 		// Automatically grant the openid, offline_access, pinniped:request-audience and groups scopes, but only if they were requested.
+		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
+		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
 
 		// Get the username and password form params from the POST body.

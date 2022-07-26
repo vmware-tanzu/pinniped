@@ -1336,8 +1336,15 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)
 	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")
 
-	// Confirm we are the right user according to Kube by calling the whoami API.
-	kubectlCmd3 := exec.CommandContext(ctx, "kubectl", "create", "-f", "-", "-o", "yaml", "--kubeconfig", kubeconfigPath)
+	// Confirm we are the right user according to Kube by calling the WhoAmIRequest API.
+	// Use --validate=false with this command because running this command against any cluster which has
+	// the ServerSideFieldValidation feature gate enabled causes this command to return an RBAC error
+	// complaining that this user does not have permission to list CRDs:
+	//   error validating data: failed to check CRD: failed to list CRDs: customresourcedefinitions.apiextensions.k8s.io is forbidden:
+	//   User "pinny" cannot list resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope; if you choose to ignore these errors, turn validation off with --validate=false
+	// While it is true that the user cannot list CRDs, that fact seems unrelated to making a create call to the
+	// aggregated API endpoint, so this is a strange error, but it can be easily reproduced.
+	kubectlCmd3 := exec.CommandContext(ctx, "kubectl", "create", "-f", "-", "-o", "yaml", "--kubeconfig", kubeconfigPath, "--validate=false")
 	kubectlCmd3.Env = append(os.Environ(), env.ProxyEnv()...)
 	kubectlCmd3.Stdin = strings.NewReader(here.Docf(`
 			apiVersion: identity.concierge.%s/v1alpha1
@@ -1345,7 +1352,8 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	`, env.APIGroupSuffix))
 
 	kubectlOutput3, err := kubectlCmd3.CombinedOutput()
-	require.NoError(t, err)
+	require.NoErrorf(t, err,
+		"expected no error but got error, combined stdout/stderr was:\n----start of output\n%s\n----end of output", kubectlOutput3)
 
 	whoAmI := deserializeWhoAmIRequest(t, string(kubectlOutput3), env.APIGroupSuffix)
 	require.Equal(t, expectedUsername, whoAmI.Status.KubernetesUserInfo.User.Username)

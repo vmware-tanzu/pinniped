@@ -142,7 +142,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-issuer string                       OpenID Connect issuer URL (default: autodiscover)
 				      --oidc-listen-port uint16                  TCP port for localhost listener (authorization code flow only)
 				      --oidc-request-audience string             Request a token with an alternate audience using RFC8693 token exchange
-				      --oidc-scopes strings                      OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience])
+				      --oidc-scopes strings                      OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience,username,groups])
 				      --oidc-session-cache string                Path to OpenID Connect session cache file
 				      --oidc-skip-browser                        During OpenID Connect login, skip opening the browser (just print the URL)
 				  -o, --output string                            Output file path (default: stdout)
@@ -1290,7 +1290,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -1496,7 +1496,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -1577,7 +1577,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --credential-cache=/path/to/cache/dir/credentials.yaml
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --skip-browser
 						  - --skip-listen
 						  - --listen-port=1234
@@ -1695,7 +1695,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=%s
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -1804,7 +1804,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -1881,7 +1881,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-ldap-idp
@@ -1960,7 +1960,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-oidc-idp
@@ -2037,7 +2037,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -2110,7 +2110,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -2190,7 +2190,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  command: '.../path/to/pinniped'
@@ -2265,7 +2265,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-oidc-idp
@@ -2348,7 +2348,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --request-audience=test-audience
 						  - --upstream-identity-provider-name=some-oidc-idp
@@ -2408,7 +2408,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2469,7 +2469,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2530,7 +2530,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2592,7 +2592,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2654,7 +2654,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2715,7 +2715,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap
@@ -2775,7 +2775,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --issuer=%s
 						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
 						  - --ca-bundle-data=%s
 						  - --upstream-identity-provider-name=some-ldap-idp
 						  - --upstream-identity-provider-type=ldap

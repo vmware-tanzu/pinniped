@@ -17,10 +17,12 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -86,8 +88,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 		}
 	)
 
-	happyDownstreamScopesRequested := []string{"openid", "groups"}
-	happyDownstreamScopesGranted := []string{"openid", "groups"}
+	happyDownstreamScopesRequested := []string{"openid", "username", "groups"}
+	happyDownstreamScopesGranted := []string{"openid", "username", "groups"}
 
 	happyDownstreamRequestParamsQuery := url.Values{
 		"response_type":         []string{"code"},
@@ -192,6 +194,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	expectedHappyActiveDirectoryUpstreamCustomSession := &psession.CustomSessionData{
+		Username:     happyLDAPUsernameFromAuthenticator,
 		ProviderUID:  activeDirectoryUpstreamResourceUID,
 		ProviderName: activeDirectoryUpstreamName,
 		ProviderType: psession.ProviderTypeActiveDirectory,
@@ -204,6 +207,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	expectedHappyLDAPUpstreamCustomSession := &psession.CustomSessionData{
+		Username:     happyLDAPUsernameFromAuthenticator,
 		ProviderUID:  ldapUpstreamResourceUID,
 		ProviderName: ldapUpstreamName,
 		ProviderType: psession.ProviderTypeLDAP,
@@ -216,7 +220,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState
+	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState
 
 	happyUsernamePasswordFormParams := url.Values{userParam: []string{happyLDAPUsername}, passParam: []string{happyLDAPPassword}}
 
@@ -237,7 +241,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
-			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost})
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI,
+			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 		require.NoError(t, kubeClient.Tracker().Add(secret))
 	}
@@ -413,7 +418,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusSeeOther,
 			wantContentType:                   htmlContentType,
 			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
@@ -439,7 +444,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusSeeOther,
 			wantContentType:                   htmlContentType,
 			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+groups&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        "http://127.0.0.1:4242/callback" + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
@@ -460,17 +465,18 @@ func TestPostLoginEndpoint(t *testing.T) {
 					map[string]string{"scope": "openid offline_access pinniped:request-audience"},
 				).Encode()
 			}),
-			formParams:                        happyUsernamePasswordFormParams,
-			wantStatus:                        http.StatusSeeOther,
-			wantContentType:                   htmlContentType,
-			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+pinniped%3Arequest-audience&state=` + happyDownstreamState,
+			formParams:      happyUsernamePasswordFormParams,
+			wantStatus:      http.StatusSeeOther,
+			wantContentType: htmlContentType,
+			wantBodyString:  "",
+			// username and groups scopes were not requested but are granted anyway for the pinniped-cli client for backwards compatibility
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+pinniped%3Arequest-audience\+username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
-			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "pinniped:request-audience"},
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
@@ -478,7 +484,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 		},
 		{
-			name:          "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client",
+			name:          "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is allowed to request username and groups but does not request them",
 			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
@@ -492,11 +498,79 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantBodyString:                    "",
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+pinniped%3Arequest-audience&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
-			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
-			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamIDTokenUsername:     "",         // username scope was not requested, so there should be no username in the ID token
+			wantDownstreamIDTokenGroups:       []string{}, // groups scope was not requested, so there should be no groups in the ID token
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "pinniped:request-audience"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name: "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is not allowed to request username and does not request username",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid groups offline_access"},
+				).Encode()
+			}),
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+groups&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     "", // username scope was not requested, so there should be no username in the ID token
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "groups"},
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "groups"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name: "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is not allowed to request groups and does not request groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid username offline_access"},
+				).Encode()
+			}),
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+username&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       []string{}, // groups scope was not requested, so there should be no groups in the ID token
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "username"},
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "username"},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClient:              downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
@@ -515,17 +589,18 @@ func TestPostLoginEndpoint(t *testing.T) {
 					},
 				).Encode()
 			}),
-			formParams:                        happyUsernamePasswordFormParams,
-			wantStatus:                        http.StatusSeeOther,
-			wantContentType:                   htmlContentType,
-			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState, // no scopes granted
+			formParams:      happyUsernamePasswordFormParams,
+			wantStatus:      http.StatusSeeOther,
+			wantContentType: htmlContentType,
+			wantBodyString:  "",
+			// username and groups scopes were not requested but are granted anyway for the pinniped-cli client for backwards compatibility
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
-			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
+			wantDownstreamGrantedScopes:       []string{"username", "groups"},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
@@ -533,7 +608,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 		},
 		{
-			name: "happy LDAP login when groups scope is not requested",
+			name: "happy LDAP login when username and groups scopes are not requested",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().
 				WithLDAP(&upstreamLDAPIdentityProvider). // should pick this one
 				WithActiveDirectory(&erroringUpstreamLDAPIdentityProvider),
@@ -542,16 +617,18 @@ func TestPostLoginEndpoint(t *testing.T) {
 					map[string]string{"scope": "openid"},
 				).Encode()
 			}),
-			formParams:                        happyUsernamePasswordFormParams,
-			wantStatus:                        http.StatusSeeOther,
-			wantContentType:                   htmlContentType,
-			wantBodyString:                    "",
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			formParams:      happyUsernamePasswordFormParams,
+			wantStatus:      http.StatusSeeOther,
+			wantContentType: htmlContentType,
+			wantBodyString:  "",
+			// username and groups scopes were not requested but are granted anyway for the pinniped-cli client for backwards compatibility
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     []string{"openid"},
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
-			wantDownstreamGrantedScopes:       []string{"openid"},
+			wantDownstreamGrantedScopes:       []string{"openid", "username", "groups"},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClient:              downstreamPinnipedCLIClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
@@ -805,6 +882,46 @@ func TestPostLoginEndpoint(t *testing.T) {
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"scope": "openid offline_access pinniped:request-audience scope_not_allowed"},
+				).Encode()
+			}),
+			formParams: happyUsernamePasswordFormParams,
+			wantErr:    "error using state downstream auth params",
+		},
+		{
+			name: "using dynamic client which is not allowed to request username scope in authorize request but requests it anyway",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid username offline_access"},
+				).Encode()
+			}),
+			formParams: happyUsernamePasswordFormParams,
+			wantErr:    "error using state downstream auth params",
+		},
+		{
+			name: "using dynamic client which is not allowed to request groups scope in authorize request but requests it anyway",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid groups offline_access"},
 				).Encode()
 			}),
 			formParams: happyUsernamePasswordFormParams,

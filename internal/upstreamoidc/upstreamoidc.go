@@ -20,8 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
-	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -286,7 +286,7 @@ func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, 
 		return nil, err
 	}
 
-	idTokenSubject, _ := validatedClaims[oidc.IDTokenSubjectClaim].(string)
+	idTokenSubject, _ := validatedClaims[oidcapi.IDTokenClaimSubject].(string)
 
 	if len(idTokenSubject) > 0 || !requireIDToken {
 		// only fetch userinfo if the ID token has a subject or if we are ignoring the id token completely.
@@ -346,7 +346,7 @@ func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token,
 }
 
 func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}, requireIDToken bool, requireUserInfo bool) error {
-	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
+	idTokenSubject, _ := claims[oidcapi.IDTokenClaimSubject].(string)
 
 	userInfo, err := p.maybeFetchUserInfo(ctx, tok, requireUserInfo)
 	if err != nil {
@@ -371,7 +371,7 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	}
 
 	// keep track of the issuer from the ID token
-	idTokenIssuer := claims["iss"]
+	idTokenIssuer := claims[oidcapi.IDTokenClaimIssuer]
 
 	// merge existing claims with user info claims
 	if err := userInfo.Claims(&claims); err != nil {
@@ -381,9 +381,9 @@ func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, t
 	//  "If signed, the UserInfo Response SHOULD contain the Claims iss (issuer) and aud (audience) as members. The iss value SHOULD be the OP's Issuer Identifier URL."
 	//  See https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
 	//  So we just ignore it and use it the version from the id token, which has stronger guarantees.
-	delete(claims, "iss")
+	delete(claims, oidcapi.IDTokenClaimIssuer)
 	if idTokenIssuer != nil {
-		claims["iss"] = idTokenIssuer
+		claims[oidcapi.IDTokenClaimIssuer] = idTokenIssuer
 	}
 
 	maybeLogClaims("claims from ID token and userinfo", p.Name, claims)

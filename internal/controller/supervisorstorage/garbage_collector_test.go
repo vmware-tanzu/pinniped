@@ -263,13 +263,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired authcode secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -307,13 +308,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
 
 				inactiveOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  false,
 					Request: &fosite.Request{
 						ID:     "request-id-2",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -385,13 +387,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired authcode secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -429,13 +432,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
 
 				inactiveOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  false,
 					Request: &fosite.Request{
 						ID:     "request-id-2",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -507,13 +511,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is an invalid, expired authcode secret", func() {
 			it.Before(func() {
 				invalidOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "", // it is invalid for there to be a missing request ID
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -575,13 +580,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, expired authcode secret but its upstream name does not match any existing upstream", func() {
 			it.Before(func() {
 				wrongProviderNameOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name-will-not-match",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -645,13 +651,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, expired authcode secret but its upstream UID does not match any existing upstream", func() {
 			it.Before(func() {
 				wrongProviderNameOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid-will-not-match",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -715,13 +722,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, recently expired authcode secret but the upstream revocation fails", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -819,13 +827,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, long-since expired authcode secret but the upstream revocation fails", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "2",
+					Version: "3",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -897,13 +906,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired access token secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				offlineAccessGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2", "offline_access"},
 						ID:           "request-id-1",
 						Client:       &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -941,13 +951,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(offlineAccessGrantedOIDCAccessTokenSessionSecret))
 
 				offlineAccessNotGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2"},
 						ID:           "request-id-2",
 						Client:       &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -1019,13 +1030,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired access token secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				offlineAccessGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2", "offline_access"},
 						ID:           "request-id-1",
 						Client:       &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -1063,13 +1075,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(offlineAccessGrantedOIDCAccessTokenSessionSecret))
 
 				offlineAccessNotGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2"},
 						ID:           "request-id-2",
 						Client:       &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -1141,12 +1154,13 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired refresh secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				oidcRefreshSession := &refreshtoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,
@@ -1217,12 +1231,13 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired refresh secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				oidcRefreshSession := &refreshtoken.Session{
-					Version: "2",
+					Version: "3",
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
 						Session: &psession.PinnipedSession{
 							Custom: &psession.CustomSessionData{
+								Username:     "should be ignored by garbage collector",
 								ProviderUID:  "upstream-oidc-provider-uid",
 								ProviderName: "upstream-oidc-provider-name",
 								ProviderType: psession.ProviderTypeOIDC,

@@ -269,7 +269,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 	require.Equal(t, []string{"http://127.0.0.1/callback"}, c.GetRedirectURIs())
 	require.Equal(t, fosite.Arguments{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"}, c.GetGrantTypes())
 	require.Equal(t, fosite.Arguments{"code"}, c.GetResponseTypes())
-	require.Equal(t, fosite.Arguments{oidc.ScopeOpenID, oidc.ScopeOfflineAccess, "profile", "email", "pinniped:request-audience", "groups"}, c.GetScopes())
+	require.Equal(t, fosite.Arguments{oidc.ScopeOpenID, oidc.ScopeOfflineAccess, "profile", "email", "pinniped:request-audience", "username", "groups"}, c.GetScopes())
 	require.True(t, c.IsPublic())
 	require.Nil(t, c.GetAudience())
 	require.Nil(t, c.GetRequestURIs())
@@ -302,6 +302,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 			"profile",
 			"email",
 			"pinniped:request-audience",
+			"username",
 			"groups"
 		  ],
 		  "audience": null,

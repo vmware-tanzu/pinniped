@@ -1,7 +1,7 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package nonce implements
+// Package nonce implements helpers for OIDC nonce parameter handling.
 package nonce
 
 import (
@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
 
@@ -36,11 +36,11 @@ func (n *Nonce) String() string {
 
 // Param returns the OAuth2 auth code parameter for sending the nonce during the authorization request.
 func (n *Nonce) Param() oauth2.AuthCodeOption {
-	return oidc.Nonce(string(*n))
+	return coreosoidc.Nonce(string(*n))
 }
 
 // Validate the returned ID token). Returns true iff the nonce matches or the returned JWT does not have a nonce.
-func (n *Nonce) Validate(token *oidc.IDToken) error {
+func (n *Nonce) Validate(token *coreosoidc.IDToken) error {
 	if subtle.ConstantTimeCompare([]byte(token.Nonce), []byte(*n)) != 1 {
 		return InvalidNonceError{Expected: *n, Got: Nonce(token.Nonce)}
 	}

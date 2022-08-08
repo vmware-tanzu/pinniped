@@ -171,7 +171,7 @@ func TestManager(t *testing.T) {
 			r.NoError(err)
 			actualLocationQueryParams := parsedLocation.Query()
 			r.Contains(actualLocationQueryParams, "code")
-			r.Equal("openid", actualLocationQueryParams.Get("scope"))
+			r.Equal("openid username groups", actualLocationQueryParams.Get("scope"))
 			r.Equal("some-state-value-with-enough-bytes-to-exceed-min-allowed", actualLocationQueryParams.Get("state"))
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
@@ -343,7 +343,7 @@ func TestManager(t *testing.T) {
 
 			authRequestParams := "?" + url.Values{
 				"response_type":         []string{"code"},
-				"scope":                 []string{"openid profile email"},
+				"scope":                 []string{"openid profile email username groups"},
 				"client_id":             []string{downstreamClientID},
 				"state":                 []string{"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
 				"nonce":                 []string{"some-nonce-value-with-enough-bytes-to-exceed-min-allowed"},

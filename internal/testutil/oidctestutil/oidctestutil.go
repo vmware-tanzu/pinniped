@@ -1064,14 +1064,22 @@ func validateAuthcodeStorage(
 
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
-	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
+	wantDownstreamIDTokenUsernameClaimToExist := 1
+	if wantDownstreamIDTokenUsername == "" {
+		wantDownstreamIDTokenUsernameClaimToExist = 0
+		require.NotContains(t, actualClaims.Extra, "username")
+	} else {
+		require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
+	}
 	if slices.Contains(wantDownstreamGrantedScopes, "groups") {
-		require.Len(t, actualClaims.Extra, 2)
+		require.Len(t, actualClaims.Extra, wantDownstreamIDTokenUsernameClaimToExist+1)
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.NotNil(t, actualDownstreamIDTokenGroups)
 		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
 	} else {
-		require.Len(t, actualClaims.Extra, 1)
+		require.Emptyf(t, wantDownstreamIDTokenGroups, "test case did not want the groups scope to be granted, "+
+			"but wanted something in the groups claim, which doesn't make sense. please review the test case's expectations.")
+		require.Len(t, actualClaims.Extra, wantDownstreamIDTokenUsernameClaimToExist)
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.Nil(t, actualDownstreamIDTokenGroups)
 	}

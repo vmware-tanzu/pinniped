@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/oidc"
 )
 
@@ -68,8 +69,8 @@ func NewHandler(issuerURL string) http.Handler {
 		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
 		CodeChallengeMethodsSupported:     []string{"S256"},
-		ScopesSupported:                   []string{"openid", "offline"},
-		ClaimsSupported:                   []string{"groups"},
+		ScopesSupported:                   []string{oidcapi.ScopeOpenID, oidcapi.ScopeOfflineAccess, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups},
+		ClaimsSupported:                   []string{oidcapi.IDTokenClaimUsername, oidcapi.IDTokenClaimGroups},
 	}
 
 	var b bytes.Buffer

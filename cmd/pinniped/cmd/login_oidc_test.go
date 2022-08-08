@@ -80,7 +80,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --issuer string                            OpenID Connect issuer URL
 				      --listen-port uint16                       TCP port for localhost listener (authorization code flow only)
 				      --request-audience string                  Request a token with an alternate audience using RFC8693 token exchange
-				      --scopes strings                           OIDC scopes to request during login (default [offline_access,openid,pinniped:request-audience])
+				      --scopes strings                           OIDC scopes to request during login (default [offline_access,openid,pinniped:request-audience,username,groups])
 				      --session-cache string                     Path to session cache file (default "` + cfgDir + `/sessions.yaml")
 				      --skip-browser                             Skip opening the browser (just print the URL)
 					  --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'browser_authcode', 'cli_password')

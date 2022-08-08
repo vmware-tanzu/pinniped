@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -173,7 +172,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"}
+		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,
@@ -481,7 +480,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"}
+		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,

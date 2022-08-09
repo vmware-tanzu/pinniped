@@ -79,7 +79,8 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {

@@ -1996,7 +1996,7 @@ func testSupervisorLogin(
 	}
 	require.NoError(t, err)
 
-	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "azp"}
 	if slices.Contains(wantDownstreamScopes, "username") {
 		// If the test wants the username scope to have been granted, then also expect the claim in the ID token.
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "username")
@@ -2044,7 +2044,7 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
-	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "at_hash"}
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "azp", "at_hash"}
 	if slices.Contains(wantDownstreamScopes, "username") {
 		// If the test wants the username scope to have been granted, then also expect the claim in the refreshed ID token.
 		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "username")
@@ -2147,6 +2147,10 @@ func verifyTokenResponse(
 		idTokenClaimNames = append(idTokenClaimNames, k)
 	}
 	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
+
+	// There should always be an "azp" claim, and the value should be the client ID of the client which made
+	// the authorization request.
+	require.Equal(t, downstreamOAuth2Config.ClientID, idTokenClaims["azp"])
 
 	// Check username claim of the ID token, if one is expected. Asserting on the lack of a username claim is
 	// handled above where the full list of claims are asserted.
@@ -2423,6 +2427,11 @@ func doTokenExchange(
 	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
 	require.NoError(t, err)
 	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
+
+	// The original client ID should be preserved in the azp claim, therefore preserving this information
+	// about the original source of the authorization for tracing/auditing purposes, since the "aud" claim
+	// has been updated to have a new value.
+	require.Equal(t, config.ClientID, claims["azp"])
 }
 
 func expectSecurityHeaders(t *testing.T, response *http.Response, expectFositeToOverrideSome bool) {

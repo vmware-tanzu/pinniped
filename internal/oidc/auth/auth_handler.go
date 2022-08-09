@@ -149,7 +149,8 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	username = authenticateResponse.User.GetName()
 	groups := authenticateResponse.User.GetGroups()
 	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
 	return nil
@@ -250,7 +251,8 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 

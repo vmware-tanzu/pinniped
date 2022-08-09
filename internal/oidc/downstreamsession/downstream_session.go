@@ -41,7 +41,14 @@ const (
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(subject string, username string, groups []string, grantedScopes []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
+func MakeDownstreamSession(
+	subject string,
+	username string,
+	groups []string,
+	grantedScopes []string,
+	clientID string,
+	custom *psession.CustomSessionData,
+) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
@@ -56,13 +63,17 @@ func MakeDownstreamSession(subject string, username string, groups []string, gra
 	if groups == nil {
 		groups = []string{}
 	}
-	openIDSession.IDTokenClaims().Extra = map[string]interface{}{}
+
+	extras := map[string]interface{}{}
+	extras[oidcapi.IDTokenClaimAuthorizedParty] = clientID
 	if slices.Contains(grantedScopes, oidcapi.ScopeUsername) {
-		openIDSession.IDTokenClaims().Extra[oidcapi.IDTokenClaimUsername] = username
+		extras[oidcapi.IDTokenClaimUsername] = username
 	}
 	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
-		openIDSession.IDTokenClaims().Extra[oidcapi.IDTokenClaimGroups] = groups
+		extras[oidcapi.IDTokenClaimGroups] = groups
 	}
+	openIDSession.IDTokenClaims().Extra = extras
+
 	return openIDSession
 }
 

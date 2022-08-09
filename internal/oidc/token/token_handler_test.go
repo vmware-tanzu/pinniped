@@ -1398,7 +1398,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
 
 			// Make sure that these are the only fields in the token.
-			idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "username"}
+			idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "username", "azp"}
 			if test.authcodeExchange.want.wantGroups != nil {
 				idTokenFields = append(idTokenFields, "groups")
 			}
@@ -1412,6 +1412,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.NotEmpty(t, tokenClaims["rat"])
 			require.Len(t, tokenClaims["aud"], 1)
 			require.Contains(t, tokenClaims["aud"], test.requestedAudience)
+			require.Equal(t, test.authcodeExchange.want.wantClientID, tokenClaims["azp"])
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
 			if test.authcodeExchange.want.wantUsername != "" {
@@ -4027,6 +4028,9 @@ func simulateAuthEndpointHavingAlreadyRun(
 		session.Fosite.Claims.Extra["groups"] = goodGroups
 	}
 
+	// The authorization endpoint sets the authorized party to the client ID of the original requester.
+	session.Fosite.Claims.Extra["azp"] = authRequester.GetClient().GetID()
+
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)
 	return authResponder
@@ -4291,6 +4295,7 @@ func requireValidStoredRequest(
 	if wantGroups != nil {
 		expectedExtra["groups"] = toSliceOfInterface(wantGroups)
 	}
+	expectedExtra["azp"] = wantClientID
 	require.Equal(t, expectedExtra, claims.Extra)
 
 	// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -4412,7 +4417,7 @@ func requireValidIDToken(
 	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
 	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
 	// We can add a workaround for this later.
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat"}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "azp"}
 	if wantAtHashClaimInIDToken {
 		idTokenFields = append(idTokenFields, "at_hash")
 	}
@@ -4439,6 +4444,7 @@ func requireValidIDToken(
 	require.Equal(t, wantGroupsInIDToken, claims.Groups)
 	require.Len(t, claims.Audience, 1)
 	require.Equal(t, wantClientID, claims.Audience[0])
+	require.Equal(t, wantClientID, m["azp"])
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
 

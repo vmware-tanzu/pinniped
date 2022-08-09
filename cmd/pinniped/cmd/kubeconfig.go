@@ -331,6 +331,9 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 		execConfig.Args = append(execConfig.Args, "--debug-session-cache")
 	}
 	if flags.oidc.requestAudience != "" {
+		if strings.Contains(flags.oidc.requestAudience, ".pinniped.dev") {
+			return nil, fmt.Errorf("request audience is not allowed to include the substring '.pinniped.dev': %s", flags.oidc.requestAudience)
+		}
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
 	}
 	if flags.oidc.upstreamIDPName != "" {

@@ -640,6 +640,77 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
+			name: "autodetect JWT authenticator, invalid substring in audience",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					&conciergev1alpha1.JWTAuthenticator{
+						ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
+						Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+							Issuer:   issuerURL,
+							Audience: "some-test-audience.pinniped.dev-invalid-substring",
+							TLS: &conciergev1alpha1.TLSSpec{
+								CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(issuerCABundle)),
+							},
+						},
+					},
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="some-test-audience.pinniped.dev-invalid-substring"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n"
+			},
+		},
+		{
+			name: "autodetect JWT authenticator, override audience value, invalid substring in audience override value",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--oidc-request-audience", "some-test-audience.pinniped.dev-invalid-substring",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n"
+			},
+		},
+		{
 			name: "fail to get self-path",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{

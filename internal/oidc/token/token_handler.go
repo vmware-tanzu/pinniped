@@ -17,6 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/utils/strings/slices"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
@@ -39,7 +40,7 @@ func NewHandler(
 		}
 
 		// Check if we are performing a refresh grant.
-		if accessRequest.GetGrantTypes().ExactOne("refresh_token") {
+		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeRefreshToken) {
 			// The above call to NewAccessRequest has loaded the session from storage into the accessRequest variable.
 			// The session, requested scopes, and requested audience from the original authorize request was retrieved
 			// from the Kube storage layer and added to the accessRequest. Additionally, the audience and scopes may
@@ -54,7 +55,7 @@ func NewHandler(
 
 		// When we are in the authorization code flow, check if we have any warnings that previous handlers want us
 		// to send to the client to be printed on the CLI.
-		if accessRequest.GetGrantTypes().ExactOne("authorization_code") {
+		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeAuthorizationCode) {
 			storedSession := accessRequest.GetSession().(*psession.PinnipedSession)
 			customSessionData := storedSession.Custom
 			if customSessionData != nil {
@@ -108,20 +109,27 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	}
 
 	grantedScopes := accessRequest.GetGrantedScopes()
+	clientID := accessRequest.GetClient().GetID()
 
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, session, providerCache, grantedScopes)
+		return upstreamOIDCRefresh(ctx, session, providerCache, grantedScopes, clientID)
 	case psession.ProviderTypeLDAP:
-		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes)
+		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes, clientID)
 	case psession.ProviderTypeActiveDirectory:
-		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes)
+		return upstreamLDAPRefresh(ctx, providerCache, session, grantedScopes, clientID)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 }
 
-func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession, providerCache oidc.UpstreamIdentityProvidersLister, grantedScopes []string) error {
+func upstreamOIDCRefresh(
+	ctx context.Context,
+	session *psession.PinnipedSession,
+	providerCache oidc.UpstreamIdentityProvidersLister,
+	grantedScopes []string,
+	clientID string,
+) error {
 	s := session.Custom
 	if s.OIDC == nil {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -180,7 +188,7 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 		return err
 	}
 
-	groupsScope := slices.Contains(grantedScopes, oidc.DownstreamGroupsScope)
+	groupsScope := slices.Contains(grantedScopes, oidcapi.ScopeGroups)
 	if groupsScope { //nolint:nestif
 		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
 		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
@@ -204,8 +212,8 @@ func upstreamOIDCRefresh(ctx context.Context, session *psession.PinnipedSession,
 			if err != nil {
 				return err
 			}
-			warnIfGroupsChanged(ctx, oldGroups, refreshedGroups, username)
-			session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = refreshedGroups
+			warnIfGroupsChanged(ctx, oldGroups, refreshedGroups, username, clientID)
+			session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedGroups
 		}
 	}
 
@@ -240,7 +248,7 @@ func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interfac
 		return nil
 	}
 
-	newSub, hasSub := getString(mergedClaims, oidc.IDTokenSubjectClaim)
+	newSub, hasSub := getString(mergedClaims, oidcapi.IDTokenClaimSubject)
 	if !hasSub {
 		return errUpstreamRefreshError().WithHintf(
 			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh not found")).
@@ -253,7 +261,10 @@ func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interfac
 	}
 
 	newUsername, hasUsername := getString(mergedClaims, usernameClaimName)
-	oldUsername := session.Fosite.Claims.Extra[oidc.DownstreamUsernameClaim]
+	oldUsername, err := getDownstreamUsernameFromPinnipedSession(session)
+	if err != nil {
+		return err
+	}
 	// It's possible that a username wasn't returned by the upstream provider during refresh,
 	// but if it is, verify that it hasn't changed.
 	if hasUsername && oldUsername != newUsername {
@@ -262,7 +273,7 @@ func validateIdentityUnchangedSinceInitialLogin(mergedClaims map[string]interfac
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
 	}
 
-	newIssuer, hasIssuer := getString(mergedClaims, oidc.IDTokenIssuerClaim)
+	newIssuer, hasIssuer := getString(mergedClaims, oidcapi.IDTokenClaimIssuer)
 	// It's possible that an issuer wasn't returned by the upstream provider during refresh,
 	// but if it is, verify that it hasn't changed.
 	if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
@@ -297,14 +308,20 @@ func findOIDCProviderByNameAndValidateUID(
 		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 }
 
-func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentityProvidersLister, session *psession.PinnipedSession, grantedScopes []string) error {
+func upstreamLDAPRefresh(
+	ctx context.Context,
+	providerCache oidc.UpstreamIdentityProvidersLister,
+	session *psession.PinnipedSession,
+	grantedScopes []string,
+	clientID string,
+) error {
 	username, err := getDownstreamUsernameFromPinnipedSession(session)
 	if err != nil {
 		return err
 	}
 	subject := session.Fosite.Claims.Subject
 	var oldGroups []string
-	if slices.Contains(grantedScopes, oidc.DownstreamGroupsScope) {
+	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
 		oldGroups, err = getDownstreamGroupsFromPinnipedSession(session)
 		if err != nil {
 			return err
@@ -349,12 +366,11 @@ func upstreamLDAPRefresh(ctx context.Context, providerCache oidc.UpstreamIdentit
 			"Upstream refresh failed.").WithTrace(err).
 			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
 	}
-	groupsScope := slices.Contains(grantedScopes, oidc.DownstreamGroupsScope)
+	groupsScope := slices.Contains(grantedScopes, oidcapi.ScopeGroups)
 	if groupsScope {
+		warnIfGroupsChanged(ctx, oldGroups, groups, username, clientID)
 		// Replace the old value with the new value.
-		session.Fosite.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
-
-		warnIfGroupsChanged(ctx, oldGroups, groups, username)
+		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = groups
 	}
 
 	return nil
@@ -391,16 +407,8 @@ func findLDAPProviderByNameAndValidateUID(
 }
 
 func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession) (string, error) {
-	extra := session.Fosite.Claims.Extra
-	if extra == nil {
-		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-	downstreamUsernameInterface := extra[oidc.DownstreamUsernameClaim]
-	if downstreamUsernameInterface == nil {
-		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-	downstreamUsername, ok := downstreamUsernameInterface.(string)
-	if !ok || len(downstreamUsername) == 0 {
+	downstreamUsername := session.Custom.Username
+	if len(downstreamUsername) == 0 {
 		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 	return downstreamUsername, nil
@@ -411,7 +419,7 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 	if extra == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
-	downstreamGroupsInterface := extra[oidc.DownstreamGroupsClaim]
+	downstreamGroupsInterface := extra[oidcapi.IDTokenClaimGroups]
 	if downstreamGroupsInterface == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
@@ -431,8 +439,17 @@ func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) (
 	return downstreamGroups, nil
 }
 
-func warnIfGroupsChanged(ctx context.Context, oldGroups, newGroups []string, username string) {
+func warnIfGroupsChanged(ctx context.Context, oldGroups, newGroups []string, username string, clientID string) {
+	if clientID != oidcapi.ClientIDPinnipedCLI {
+		// Only send these warnings to the CLI client. They are intended for kubectl to print to the screen.
+		// A webapp using a dynamic client wouldn't know to look for these special warning headers, and
+		// if the dynamic client lacked the username scope, then these warning messages would be leaking
+		// the user's username to the client within the text of the warning.
+		return
+	}
+
 	added, removed := diffSortedGroups(oldGroups, newGroups)
+
 	if len(added) > 0 {
 		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been added to the following groups: %q", username, added))
 	}

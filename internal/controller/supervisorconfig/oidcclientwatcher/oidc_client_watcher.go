@@ -15,6 +15,7 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configInformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -27,7 +28,7 @@ import (
 
 const (
 	secretTypeToObserve       = "storage.pinniped.dev/oidc-client-secret" //nolint:gosec // this is not a credential
-	oidcClientPrefixToObserve = "client.oauth.pinniped.dev-"              //nolint:gosec // this is not a credential
+	oidcClientPrefixToObserve = oidcapi.ClientIDRequiredOIDCClientPrefix
 )
 
 type oidcClientWatcherController struct {

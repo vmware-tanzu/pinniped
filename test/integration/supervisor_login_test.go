@@ -207,6 +207,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		// The scopes to request from the authorization endpoint. Defaults will be used when not specified.
 		downstreamScopes []string
+		// The scopes to want granted from the authorization endpoint. Defaults to the downstreamScopes value when not,
+		// specified, i.e. by default it expects that all requested scopes were granted.
+		wantDownstreamScopes []string
 
 		// When we want the localhost callback to have never happened, then the flow will stop there. The login was
 		// unable to finish so there is nothing to assert about what should have happened with the callback, and there
@@ -218,6 +221,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// The expected ID token subject claim value as a regexp, for the original ID token and the refreshed ID token.
 		wantDownstreamIDTokenSubjectToMatch string
 		// The expected ID token username claim value as a regexp, for the original ID token and the refreshed ID token.
+		// This function should return an empty string when there should be no username claim in the ID tokens.
 		wantDownstreamIDTokenUsernameToMatch func(username string) string
 		// The expected ID token groups claim value, for the original ID token and the refreshed ID token.
 		wantDownstreamIDTokenGroups []string
@@ -240,7 +244,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		wantTokenExchangeResponse func(t *testing.T, status int, body string)
 
 		// Optionally edit the refresh session data between the initial login and the first refresh,
-		// which is still expected to succeed after these edits.
+		// which is still expected to succeed after these edits. Returns the group memberships expected after the
+		// refresh is performed.
 		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
 		// Optionally either revoke the user's session on the upstream provider, or manipulate the user's session
 		// data in such a way that it should cause the next upstream refresh attempt to fail.
@@ -278,8 +283,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
-				fositeSessionData := pinnipedSession.Fosite
-				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
+				customSessionData := pinnipedSession.Custom
+				customSessionData.Username = "some-incorrect-username"
 			},
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
@@ -321,8 +326,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
-				fositeSessionData := pinnipedSession.Fosite
-				fositeSessionData.Claims.Extra["username"] = "some-incorrect-username"
+				customSessionData := pinnipedSession.Custom
+				customSessionData.Username = "some-incorrect-username"
 			},
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
@@ -400,13 +405,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name:      "ldap without requesting groups scope",
+			name:      "ldap without requesting username and groups scope gets them anyway for pinniped-cli for backwards compatibility with old CLIs",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			downstreamScopes: []string{"openid", "pinniped:request-audience", "offline_access"},
+			downstreamScopes:     []string{"openid", "pinniped:request-audience", "offline_access"},
+			wantDownstreamScopes: []string{"openid", "pinniped:request-audience", "offline_access", "username", "groups"},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
@@ -426,10 +432,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
-			wantDownstreamIDTokenGroups: []string{},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name:      "oidc without requesting groups scope",
+			name:      "oidc without requesting username and groups scope gets them anyway for pinniped-cli for backwards compatibility with old CLIs",
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				spec := basicOIDCIdentityProviderSpec()
@@ -443,10 +449,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
 			downstreamScopes:                     []string{"openid", "pinniped:request-audience", "offline_access"},
+			wantDownstreamScopes:                 []string{"openid", "pinniped:request-audience", "offline_access", "username", "groups"},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
-			wantDownstreamIDTokenGroups:          nil,
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
 			name:      "ldap with browser flow",
@@ -649,8 +656,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
-				fositeSessionData := pinnipedSession.Fosite
-				fositeSessionData.Claims.Extra["username"] = "not-the-same"
+				customSessionData.Username = "not-the-same"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -829,8 +835,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				customSessionData := pinnipedSession.Custom
 				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
-				fositeSessionData := pinnipedSession.Fosite
-				fositeSessionData.Claims.Extra["username"] = "not-the-same"
+				customSessionData.Username = "not-the-same"
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
@@ -1284,7 +1289,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 		},
 		{
-			name:      "oidc upstream with downstream dynamic client happy path",
+			name:      "oidc upstream with downstream dynamic client happy path, requesting all scopes",
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
@@ -1301,9 +1306,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
-			name:      "ldap upstream with downstream dynamic client happy path",
+			name:      "ldap upstream with downstream dynamic client happy path, requesting all scopes",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, nil)
@@ -1333,6 +1339,237 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client is not allowed to use the token exchange grant type, causes token exchange error",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // token exchange grant type not allowed
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // a validation requires that we also disallow the pinniped:request-audience scope
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes:     []string{"openid", "offline_access", "username", "groups"}, // does not request (or expect) pinniped:request-audience token exchange scope
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) { // can't do token exchanges without the token exchange grant type
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"unauthorized_client","error_description":"The client is not authorized to request a token using this method. `+
+						`The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'."}`,
+					body)
+			},
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client that does not request the pinniped:request-audience scope, causes token exchange error",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes:     []string{"openid", "offline_access", "username", "groups"}, // does not request (or expect) pinniped:request-audience token exchange scope
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) { // can't do token exchanges without the pinniped:request-audience token exchange scope
+				require.Equal(t, http.StatusForbidden, status)
+				require.Equal(t,
+					`{"error":"access_denied","error_description":"The resource owner or authorization server denied the request. `+
+						`missing the 'pinniped:request-audience' scope"}`,
+					body)
+			},
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client is not allowed to request username but requests username anyway, causes authorization error",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes: []string{"openid", "offline_access", "username"}, // request username, even though the client is not allowed to request it
+			// Should have been immediately redirected back to the local callback server with an error in this case,
+			// since we requested a scope that the client is not allowed to request. The login UI page is never shown.
+			requestAuthorization:              requestAuthorizationAndExpectImmediateRedirectToCallback,
+			wantAuthorizationErrorDescription: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'username'.",
+			wantAuthorizationErrorType:        "invalid_scope",
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client is not allowed to request groups but requests groups anyway, causes authorization error",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes: []string{"openid", "offline_access", "groups"}, // request groups, even though the client is not allowed to request it
+			// Should have been immediately redirected back to the local callback server with an error in this case,
+			// since we requested a scope that the client is not allowed to request. The login UI page is never shown.
+			requestAuthorization:              requestAuthorizationAndExpectImmediateRedirectToCallback,
+			wantAuthorizationErrorDescription: "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'groups'.",
+			wantAuthorizationErrorType:        "invalid_scope",
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client does not request groups happy path",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes:     []string{"openid", "pinniped:request-audience", "offline_access", "username"}, // do not request (or expect) groups
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: nil, // did not request groups, so should not have got any groups
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client does not request username, is allowed to auth but cannot do token exchange",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes:     []string{"openid", "pinniped:request-audience", "offline_access", "groups"}, // do not request (or expect) username
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "" // username should not exist as a claim since we did not request it
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) { // can't do token exchanges without a username
+				require.Equal(t, http.StatusForbidden, status)
+				require.Equal(t,
+					`{"error":"access_denied","error_description":"The resource owner or authorization server denied the request. `+
+						`No username found in session. Ensure that the 'username' scope was requested and granted at the authorization endpoint."}`,
+					body)
+			},
+		},
+		{
+			name:      "ldap upstream with downstream dynamic client when dynamic client is not allowed to request username or groups and does not request them, is allowed to auth but cannot do token exchange",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access"}, // validations require that when username/groups are excluded, then token exchange must also not be allowed
+				}, configv1alpha1.PhaseReady)
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			downstreamScopes:     []string{"openid", "offline_access"}, // do not request (or expect) pinniped:request-audience or username or groups
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "" // username should not exist as a claim since we did not request it
+			},
+			wantDownstreamIDTokenGroups: nil, // did not request groups, so should not have got any groups
+			wantTokenExchangeResponse: func(t *testing.T, status int, body string) { // can't do token exchanges without the token exchange grant type
+				require.Equal(t, http.StatusBadRequest, status)
+				require.Equal(t,
+					`{"error":"unauthorized_client","error_description":"The client is not authorized to request a token using this method. `+
+						`The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'."}`,
+					body)
+			},
 		},
 		{
 			name:      "active directory with all default options with downstream dynamic client happy path",
@@ -1411,6 +1648,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.createOIDCClient,
 				tt.downstreamScopes,
 				tt.requestTokenExchangeAud,
+				tt.wantDownstreamScopes,
 				tt.wantLocalhostCallbackToNeverHappen,
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
@@ -1552,6 +1790,7 @@ func testSupervisorLogin(
 	createOIDCClient func(t *testing.T, callbackURL string) (string, string),
 	downstreamScopes []string,
 	requestTokenExchangeAud string,
+	wantDownstreamScopes []string,
 	wantLocalhostCallbackToNeverHappen bool,
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
@@ -1672,7 +1911,13 @@ func testSupervisorLogin(
 	}, 30*time.Second, 200*time.Millisecond)
 
 	if downstreamScopes == nil {
-		downstreamScopes = []string{"openid", "pinniped:request-audience", "offline_access", "groups"}
+		// By default, tests will request all the relevant groups.
+		downstreamScopes = []string{"openid", "pinniped:request-audience", "offline_access", "username", "groups"}
+	}
+	if wantDownstreamScopes == nil {
+		// By default, tests will want that all requested scopes were granted.
+		wantDownstreamScopes = make([]string, len(downstreamScopes))
+		copy(wantDownstreamScopes, downstreamScopes)
 	}
 
 	// Create the OAuth2 configuration.
@@ -1728,14 +1973,14 @@ func testSupervisorLogin(
 	if wantAuthorizationErrorType != "" {
 		errorDescription := callback.URL.Query().Get("error_description")
 		errorType := callback.URL.Query().Get("error")
-		require.Equal(t, errorDescription, wantAuthorizationErrorDescription)
-		require.Equal(t, errorType, wantAuthorizationErrorType)
+		require.Equal(t, wantAuthorizationErrorDescription, errorDescription)
+		require.Equal(t, wantAuthorizationErrorType, errorType)
 		// The authorization has failed, so can't continue the login flow, making this the end of the test case.
 		return
 	}
 
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-	require.ElementsMatch(t, downstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
+	require.ElementsMatch(t, wantDownstreamScopes, strings.Split(callback.URL.Query().Get("scope"), " "))
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 
@@ -1750,8 +1995,14 @@ func testSupervisorLogin(
 		return
 	}
 	require.NoError(t, err)
-	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
-	if slices.Contains(downstreamScopes, "groups") {
+
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "azp"}
+	if slices.Contains(wantDownstreamScopes, "username") {
+		// If the test wants the username scope to have been granted, then also expect the claim in the ID token.
+		expectedIDTokenClaims = append(expectedIDTokenClaims, "username")
+	}
+	if slices.Contains(wantDownstreamScopes, "groups") {
+		// If the test wants the groups scope to have been granted, then also expect the claim in the ID token.
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
 	}
 	verifyTokenResponse(t,
@@ -1764,7 +2015,7 @@ func testSupervisorLogin(
 	}
 	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
 
-	refreshedGroups := wantDownstreamIDTokenGroups
+	wantRefreshedGroups := wantDownstreamIDTokenGroups
 	if editRefreshSessionDataWithoutBreaking != nil {
 		latestRefreshToken := tokenResponse.RefreshToken
 		signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
@@ -1780,7 +2031,7 @@ func testSupervisorLogin(
 		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
 
-		refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
+		wantRefreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession, idpName, username)
 
 		// Then save the mutated Secret back to Kubernetes.
 		// There is no update function, so delete and create again at the same name.
@@ -1793,13 +2044,18 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
-	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "at_hash"}
-	if slices.Contains(downstreamScopes, "groups") {
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "azp", "at_hash"}
+	if slices.Contains(wantDownstreamScopes, "username") {
+		// If the test wants the username scope to have been granted, then also expect the claim in the refreshed ID token.
+		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "username")
+	}
+	if slices.Contains(wantDownstreamScopes, "groups") {
+		// If the test wants the groups scope to have been granted, then also expect the claim in the refreshed ID token.
 		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
 	}
 	verifyTokenResponse(t,
 		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
+		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantRefreshedGroups)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
@@ -1892,8 +2148,15 @@ func verifyTokenResponse(
 	}
 	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
 
-	// Check username claim of the ID token.
-	require.Regexp(t, wantDownstreamIDTokenUsernameToMatch, idTokenClaims["username"].(string))
+	// There should always be an "azp" claim, and the value should be the client ID of the client which made
+	// the authorization request.
+	require.Equal(t, downstreamOAuth2Config.ClientID, idTokenClaims["azp"])
+
+	// Check username claim of the ID token, if one is expected. Asserting on the lack of a username claim is
+	// handled above where the full list of claims are asserted.
+	if wantDownstreamIDTokenUsernameToMatch != "" {
+		require.Regexp(t, wantDownstreamIDTokenUsernameToMatch, idTokenClaims["username"].(string))
+	}
 
 	// Check the groups claim.
 	require.ElementsMatch(t, wantDownstreamIDTokenGroups, idTokenClaims["groups"])
@@ -1910,6 +2173,21 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 	// Refresh tokens should start with the custom prefix "pin_rt_" to make them identifiable as refresh tokens when seen by a user out of context.
 	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
+}
+
+func requestAuthorizationAndExpectImmediateRedirectToCallback(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, _ *http.Client) {
+	t.Helper()
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect that it immediately redirects back to the callback, which is what happens for certain types of errors
+	// where it is not worth redirecting to the login UI page.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
@@ -2149,6 +2427,11 @@ func doTokenExchange(
 	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
 	require.NoError(t, err)
 	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
+
+	// The original client ID should be preserved in the azp claim, therefore preserving this information
+	// about the original source of the authorization for tracing/auditing purposes, since the "aud" claim
+	// has been updated to have a new value.
+	require.Equal(t, config.ClientID, claims["azp"])
 }
 
 func expectSecurityHeaders(t *testing.T, response *http.Response, expectFositeToOverrideSome bool) {

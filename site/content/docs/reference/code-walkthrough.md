@@ -188,7 +188,7 @@ The Supervisor's endpoints are:
 - And a number of endpoints for each FederationDomain that is configured by the user.
 
 Each FederationDomain's endpoints are mounted under the path of the FederationDomain's `spec.issuer`,
-if the issuer as a path specified in its URL. If the issuer has no path, then they are mounted under `/`.
+if the `spec.issuer` URL has a path component specified. If the issuer has no path, then they are mounted under `/`.
 These per-FederationDomain endpoint are all mounted by the code in
 [internal/oidc/provider/manager/manager.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/provider/manager/manager.go).
 
@@ -202,6 +202,10 @@ The per-FederationDomain endpoints are:
   See [internal/oidc/auth/auth_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/auth/auth_handler.go).
 - `<issuer_path>/oauth2/token` is the standard OIDC token endpoint.
   See [internal/oidc/token/token_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token/token_handler.go).
+  The token endpoint can handle the standard OIDC `authorization_code` and `refresh_token` grant types, and has also been
+  extended in [internal/oidc/token_exchange.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token_exchange.go)
+  to handle an additional grant type for [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) token exchanges to
+  reduce the applicable scope (technically, the `aud` claim) of ID tokens.
 - `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider custom resource.
   See [internal/oidc/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.

@@ -23,10 +23,10 @@ import (
 	"k8s.io/utils/strings/slices"
 	"k8s.io/utils/trace"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
-	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
@@ -241,7 +241,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		return storedRefreshAttributes.Groups, nil
 	}
 	// if we were not granted the groups scope, we should not search for groups or return any.
-	if !slices.Contains(storedRefreshAttributes.GrantedScopes, oidc.DownstreamGroupsScope) {
+	if !slices.Contains(storedRefreshAttributes.GrantedScopes, oidcapi.ScopeGroups) {
 		return nil, nil
 	}
 
@@ -593,7 +593,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, grantedScopes [
 	}
 
 	var mappedGroupNames []string
-	if slices.Contains(grantedScopes, oidc.DownstreamGroupsScope) {
+	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
 		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
 		if err != nil {
 			return nil, err

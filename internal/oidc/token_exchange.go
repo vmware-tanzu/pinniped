@@ -8,21 +8,19 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 
-	"go.pinniped.dev/internal/oidc/clientregistry"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/psession"
 )
 
 const (
-	tokenExchangeGrantType     = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint: gosec
-	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token"   //nolint: gosec
-	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"            //nolint: gosec
-	pinnipedTokenExchangeScope = "pinniped:request-audience"                       //nolint: gosec
+	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
+	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
 )
 
 type stsParams struct {
@@ -78,17 +76,22 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	}
 
 	// Check that the client is allowed to perform this grant type.
-	if !requester.GetClient().GetGrantTypes().Has(tokenExchangeGrantType) {
+	if !requester.GetClient().GetGrantTypes().Has(oidcapi.GrantTypeTokenExchange) {
 		// This error message is trying to be similar to the analogous one in fosite's flow_authorize_code_token.go.
-		return errors.WithStack(fosite.ErrUnauthorizedClient.WithHintf(`The OAuth 2.0 Client is not allowed to use token exchange grant "%s".`, tokenExchangeGrantType))
+		return errors.WithStack(fosite.ErrUnauthorizedClient.WithHintf(`The OAuth 2.0 Client is not allowed to use token exchange grant "%s".`, oidcapi.GrantTypeTokenExchange))
 	}
 
 	// Require that the incoming access token has the pinniped:request-audience and OpenID scopes.
-	if !originalRequester.GetGrantedScopes().Has(pinnipedTokenExchangeScope) {
-		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", pinnipedTokenExchangeScope))
+	if !originalRequester.GetGrantedScopes().Has(oidcapi.ScopeRequestAudience) {
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidcapi.ScopeRequestAudience))
 	}
-	if !originalRequester.GetGrantedScopes().Has(oidc.ScopeOpenID) {
-		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidc.ScopeOpenID))
+	if !originalRequester.GetGrantedScopes().Has(oidcapi.ScopeOpenID) {
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidcapi.ScopeOpenID))
+	}
+
+	// Check that the stored session meets the minimum requirements for token exchange.
+	if err := t.validateSession(originalRequester); err != nil {
+		return errors.WithStack(err)
 	}
 
 	// Use the original authorize request information, along with the requested audience, to mint a new JWT.
@@ -108,6 +111,22 @@ func (t *TokenExchangeHandler) mintJWT(ctx context.Context, requester fosite.Req
 	downscoped := fosite.NewAccessRequest(requester.GetSession())
 	downscoped.Client.(*fosite.DefaultClient).ID = audience
 	return t.idTokenStrategy.GenerateIDToken(ctx, downscoped)
+}
+
+func (t *TokenExchangeHandler) validateSession(requester fosite.Requester) error {
+	pSession, ok := requester.GetSession().(*psession.PinnipedSession)
+	if !ok {
+		// This shouldn't really happen.
+		return fosite.ErrServerError.WithHint("Invalid session storage.")
+	}
+	username, ok := pSession.IDTokenClaims().Extra[oidcapi.IDTokenClaimUsername].(string)
+	if !ok || username == "" {
+		// No username was stored in the session's ID token claims (or the stored username was not a string, which
+		// shouldn't really happen). Usernames will not be stored in the session's ID token claims when the username
+		// scope was not requested/granted, but otherwise they should be stored.
+		return fosite.ErrAccessDenied.WithHintf("No username found in session. Ensure that the %q scope was requested and granted at the authorization endpoint.", oidcapi.ScopeUsername)
+	}
+	return nil
 }
 
 func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, error) {
@@ -157,8 +176,8 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 	if strings.Contains(result.requestedAudience, ".pinniped.dev") {
 		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot contain '.pinniped.dev'")
 	}
-	if result.requestedAudience == clientregistry.PinnipedCLIClientID {
-		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot equal '%s'", clientregistry.PinnipedCLIClientID)
+	if result.requestedAudience == oidcapi.ClientIDPinnipedCLI {
+		return nil, fosite.ErrInvalidRequest.WithHintf("requested audience cannot equal '%s'", oidcapi.ClientIDPinnipedCLI)
 	}
 
 	return &result, nil
@@ -181,5 +200,5 @@ func (t *TokenExchangeHandler) CanSkipClientAuth(_ fosite.AccessRequester) bool 
 }
 
 func (t *TokenExchangeHandler) CanHandleTokenEndpointRequest(requester fosite.AccessRequester) bool {
-	return requester.GetGrantTypes().ExactOne(tokenExchangeGrantType)
+	return requester.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange)
 }

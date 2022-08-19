@@ -21,14 +21,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/net/phttp"
@@ -91,7 +91,7 @@ type handlerState struct {
 	callbackPath string
 
 	// Generated parameters of a login flow.
-	provider     *oidc.Provider
+	provider     *coreosoidc.Provider
 	oauth2Config *oauth2.Config
 	useFormPost  bool
 	state        state.State
@@ -106,8 +106,8 @@ type handlerState struct {
 	getEnv          func(key string) string
 	listen          func(string, string) (net.Listener, error)
 	isTTY           func(int) bool
-	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
-	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
+	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
+	validateIDToken func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error)
 	promptForValue  func(ctx context.Context, promptLabel string) (string, error)
 	promptForSecret func(promptLabel string) (string, error)
 
@@ -268,7 +268,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		issuer:       issuer,
 		clientID:     clientID,
 		listenAddr:   "localhost:0",
-		scopes:       []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "email", "profile"},
+		scopes:       []string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeEmail, oidcapi.ScopeProfile},
 		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
@@ -285,8 +285,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		listen:        net.Listen,
 		isTTY:         term.IsTerminal,
 		getProvider:   upstreamoidc.New,
-		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
-			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
+		validateIDToken: func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
+			return provider.Verifier(&coreosoidc.Config{ClientID: audience}).Verify(ctx, token)
 		},
 		promptForValue:  promptForValue,
 		promptForSecret: promptForSecret,
@@ -305,7 +305,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 	// Always set a long, but non-infinite timeout for this operation.
 	ctx, cancel := context.WithTimeout(h.ctx, overallTimeout)
 	defer cancel()
-	ctx = oidc.ClientContext(ctx, h.httpClient)
+	ctx = coreosoidc.ClientContext(ctx, h.httpClient)
 	h.ctx = ctx
 
 	// Initialize login parameters.
@@ -386,10 +386,10 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	}
 	if h.upstreamIdentityProviderName != "" {
 		authorizeOptions = append(authorizeOptions,
-			oauth2.SetAuthURLParam(supervisoroidc.AuthorizeUpstreamIDPNameParamName, h.upstreamIdentityProviderName),
+			oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPNameParamName, h.upstreamIdentityProviderName),
 		)
 		authorizeOptions = append(authorizeOptions,
-			oauth2.SetAuthURLParam(supervisoroidc.AuthorizeUpstreamIDPTypeParamName, h.upstreamIdentityProviderType),
+			oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPTypeParamName, h.upstreamIdentityProviderType),
 		)
 	}
 
@@ -447,8 +447,8 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	if err != nil {
 		return nil, fmt.Errorf("could not build authorize request: %w", err)
 	}
-	authReq.Header.Set(supervisoroidc.AuthorizeUsernameHeaderName, username)
-	authReq.Header.Set(supervisoroidc.AuthorizePasswordHeaderName, password)
+	authReq.Header.Set(oidcapi.AuthorizeUsernameHeaderName, username)
+	authReq.Header.Set(oidcapi.AuthorizePasswordHeaderName, password)
 	authRes, err := h.httpClient.Do(authReq)
 	if err != nil {
 		return nil, fmt.Errorf("authorization response error: %w", err)
@@ -710,7 +710,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 
 	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
 	var err error
-	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
+	h.provider, err = coreosoidc.NewProvider(h.ctx, h.issuer)
 	if err != nil {
 		return fmt.Errorf("could not perform OIDC discovery for %q: %w", h.issuer, err)
 	}
@@ -775,7 +775,7 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 	// Form the HTTP POST request with the parameters specified by RFC8693.
 	reqBody := strings.NewReader(url.Values{
 		"client_id":            []string{h.clientID},
-		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
+		"grant_type":           []string{oidcapi.GrantTypeTokenExchange},
 		"audience":             []string{h.requestedAudience},
 		"subject_token":        []string{baseToken.AccessToken.Token},
 		"subject_token_type":   []string{"urn:ietf:params:oauth:token-type:access_token"},

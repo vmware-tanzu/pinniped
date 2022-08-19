@@ -21,6 +21,7 @@ import (
 	"k8s.io/klog/v2"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
@@ -32,8 +33,8 @@ import (
 // These default values come from the way that the Supervisor issues and signs tokens. We make these
 // the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 const (
-	defaultUsernameClaim = "username"
-	defaultGroupsClaim   = "groups"
+	defaultUsernameClaim = oidcapi.IDTokenClaimUsername
+	defaultGroupsClaim   = oidcapi.IDTokenClaimGroups
 )
 
 // defaultSupportedSigningAlgos returns the default signing algos that this JWTAuthenticator

@@ -24,6 +24,7 @@ func NewFakePinnipedSession() *psession.PinnipedSession {
 			Subject:   "panda",
 		},
 		Custom: &psession.CustomSessionData{
+			Username:     "fake-username",
 			ProviderUID:  "fake-provider-uid",
 			ProviderType: "fake-provider-type",
 			ProviderName: "fake-provider-name",

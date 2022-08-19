@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package accesstoken
@@ -29,7 +29,8 @@ const (
 
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
-	accessTokenStorageVersion = "2"
+	// Version 3 is when we added the Username field to the psession.CustomSessionData.
+	accessTokenStorageVersion = "3"
 )
 
 type RevocationStorage interface {

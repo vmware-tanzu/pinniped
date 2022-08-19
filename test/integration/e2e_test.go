@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/creack/pty"
 	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
@@ -40,7 +39,6 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -52,6 +50,8 @@ import (
 // TestE2EFullIntegration_Browser tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	allScopes := []string{"openid", "offline_access", "pinniped:request-audience", "username", "groups"}
 
 	// Avoid allowing PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW to interfere with these tests.
 	originalFlowEnvVarValue, flowOverrideEnvVarSet := os.LookupEnv("PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW")
@@ -170,7 +170,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -193,11 +193,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
-	// If scopes aren't specified, we don't request the groups scope, which means we won't get any groups back in our token.
-	t.Run("with Supervisor OIDC upstream IDP and browser flow, scopes not specified", func(t *testing.T) {
+	// If the username and groups scope are not requested by the CLI, then the CLI still gets them, to allow for
+	// backwards compatibility with old CLIs that did not request those scopes because they did not exist yet.
+	t.Run("with Supervisor OIDC upstream IDP and browser flow, downstream username and groups scopes not requested", func(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
@@ -249,6 +250,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -271,7 +273,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, []string{}, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"})
+		// Note that the list of scopes param here is used to form the cache key for looking up local session storage.
+		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
+		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
+		// assert that the expected username and groups claims/values are in the downstream ID token.
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath,
+			pinnipedExe, expectedUsername, []string{}, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
@@ -328,7 +335,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -382,7 +389,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("access token based refresh with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
@@ -447,7 +454,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -518,7 +525,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow without web browser", func(t *testing.T) {
@@ -574,7 +581,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
@@ -601,7 +608,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow when OIDCIdentityProvider disallows it", func(t *testing.T) {
@@ -648,7 +655,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get --raw /healthz" which should trigger a browser-less CLI prompt login via the plugin.
@@ -710,7 +717,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
@@ -737,7 +744,66 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+	})
+
+	// If the username and groups scope are not requested by the CLI, then the CLI still gets them, to allow for
+	// backwards compatibility with old CLIs that did not request those scopes because they did not exist yet.
+	t.Run("with Supervisor LDAP upstream IDP using username and password prompts, downstream username and groups scopes not requested", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
+		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+
+		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
+		})
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		// Note that the list of scopes param here is used to form the cache key for looking up local session storage.
+		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
+		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
+		// assert that the expected username and groups claims/values are in the downstream ID token.
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath,
+			pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
@@ -764,7 +830,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Set up the username and password env vars to avoid the interactive prompts.
@@ -803,7 +869,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
@@ -830,7 +896,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
@@ -857,7 +923,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an ActiveDirectory upstream IDP and try using it to authenticate during kubectl commands
@@ -884,7 +950,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Set up the username and password env vars to avoid the interactive prompts.
@@ -923,7 +989,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
@@ -955,7 +1021,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -973,7 +1039,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
@@ -1005,7 +1071,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
@@ -1023,7 +1089,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the env var to choose the browser flow.
@@ -1055,7 +1121,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
-			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
+			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
 		// Override the --upstream-identity-provider-flow flag from the kubeconfig using the env var.
@@ -1079,7 +1145,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience", "groups"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 }
 
@@ -1337,17 +1403,17 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	requireGCAnnotationsOnSessionStorage(ctx, t, env.SupervisorNamespace, startTime, token)
 
 	idTokenClaims := token.IDToken.Claims
-	require.Equal(t, expectedUsername, idTokenClaims[oidc.DownstreamUsernameClaim])
+	require.Equal(t, expectedUsername, idTokenClaims["username"])
 
 	if expectedGroups == nil {
-		require.Nil(t, idTokenClaims[oidc.DownstreamGroupsClaim])
+		require.Nil(t, idTokenClaims["groups"])
 	} else {
 		// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
 		expectedGroupsAsEmptyInterfaces := make([]interface{}, 0, len(expectedGroups))
 		for _, g := range expectedGroups {
 			expectedGroupsAsEmptyInterfaces = append(expectedGroupsAsEmptyInterfaces, g)
 		}
-		require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims[oidc.DownstreamGroupsClaim])
+		require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims["groups"])
 	}
 
 	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)

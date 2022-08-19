@@ -34,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
@@ -391,8 +392,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return urlToReturn
 	}
 
-	happyDownstreamScopesRequested := []string{"openid", "profile", "email", "groups"}
-	happyDownstreamScopesGranted := []string{"openid", "groups"}
+	happyDownstreamScopesRequested := []string{"openid", "profile", "email", "username", "groups"}
+	happyDownstreamScopesGranted := []string{"openid", "username", "groups"}
 
 	happyGetRequestQueryMap := map[string]string{
 		"response_type":         "code",
@@ -465,6 +466,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyActiveDirectoryUpstreamCustomSession := &psession.CustomSessionData{
+		Username:     happyLDAPUsernameFromAuthenticator,
 		ProviderUID:  activeDirectoryUpstreamResourceUID,
 		ProviderName: activeDirectoryUpstreamName,
 		ProviderType: psession.ProviderTypeActiveDirectory,
@@ -477,6 +479,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyLDAPUpstreamCustomSession := &psession.CustomSessionData{
+		Username:     happyLDAPUsernameFromAuthenticator,
 		ProviderUID:  ldapUpstreamResourceUID,
 		ProviderName: ldapUpstreamName,
 		ProviderType: psession.ProviderTypeLDAP,
@@ -489,6 +492,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyOIDCPasswordGrantCustomSession := &psession.CustomSessionData{
+		Username:     oidcUpstreamUsername,
 		ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
 		ProviderName: oidcPasswordGrantUpstreamName,
 		ProviderType: psession.ProviderTypeOIDC,
@@ -499,7 +503,16 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 	}
 
+	expectedHappyOIDCPasswordGrantCustomSessionWithUsername := func(wantUsername string) *psession.CustomSessionData {
+		copyOfCustomSession := *expectedHappyOIDCPasswordGrantCustomSession
+		copyOfOIDC := *(expectedHappyOIDCPasswordGrantCustomSession.OIDC)
+		copyOfCustomSession.OIDC = &copyOfOIDC
+		copyOfCustomSession.Username = wantUsername
+		return &copyOfCustomSession
+	}
+
 	expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken := &psession.CustomSessionData{
+		Username:     oidcUpstreamUsername,
 		ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
 		ProviderName: oidcPasswordGrantUpstreamName,
 		ProviderType: psession.ProviderTypeOIDC,
@@ -512,13 +525,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
-			"some-namespace", dynamicClientID, dynamicClientUID, downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost})
+			"some-namespace", dynamicClientID, dynamicClientUID, downstreamRedirectURI,
+			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 		require.NoError(t, kubeClient.Tracker().Add(secret))
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState
+	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyState
 
 	incomingCookieCSRFValue := "csrf-value-from-cookie"
 	encodedIncomingCookieCSRFValue, err := happyCookieEncoder.Encode("csrf", incomingCookieCSRFValue)
@@ -528,6 +542,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		name string
 
 		idps                 *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources        func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		generateCSRF         func() (csrftoken.CSRFToken, error)
 		generatePKCE         func() (pkce.Code, error)
 		generateNonce        func() (nonce.Nonce, error)
@@ -540,7 +555,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		csrfCookie           string
 		customUsernameHeader *string // nil means do not send header, empty means send header with empty value
 		customPasswordHeader *string // nil means do not send header, empty means send header with empty value
-		kubeResources        func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 
 		wantStatus                             int
 		wantContentType                        string
@@ -1122,7 +1136,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState,
+			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyState,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
@@ -1145,7 +1159,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+groups&state=` + happyState,
+			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyState,
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
@@ -1219,6 +1233,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: &psession.CustomSessionData{
+				Username:     oidcUpstreamUsername,
 				ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
 				ProviderName: oidcPasswordGrantUpstreamName,
 				ProviderType: psession.ProviderTypeOIDC,
@@ -2373,13 +2388,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=username\+groups&state=` + happyState, // username and groups scopes were not requested, but are granted anyway for backwards compatibility
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
-			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
-			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
-			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,        // username scope was not requested, but is granted anyway for backwards compatibility
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership, // groups scope was not requested, but is granted anyway for backwards compatibility
+			wantDownstreamRequestedScopes:     []string{"email"},           // only email was requested
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
-			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
+			wantDownstreamGrantedScopes:       []string{"username", "groups"}, // username and groups scopes were not requested, but are granted anyway for backwards compatibility
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -2395,13 +2410,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=username\+groups&state=` + happyState, // username and groups scopes were not requested, but are granted anyway for backwards compatibility
 			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
-			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
-			wantDownstreamIDTokenGroups:       happyLDAPGroups,
-			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested
+			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator, // username scope was not requested, but is granted anyway for backwards compatibility
+			wantDownstreamIDTokenGroups:       happyLDAPGroups,                    // groups scope was not requested, but is granted anyway for backwards compatibility
+			wantDownstreamRequestedScopes:     []string{"email"},                  // only email was requested
 			wantDownstreamRedirectURI:         downstreamRedirectURI,
-			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
+			wantDownstreamGrantedScopes:       []string{"username", "groups"}, // username and groups scopes were not requested, but are granted anyway for backwards compatibility
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -2429,7 +2444,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername(oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
@@ -2455,7 +2470,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe@whitehouse.gov"),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
@@ -2482,7 +2497,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe@whitehouse.gov"),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
@@ -2510,7 +2525,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe"),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
@@ -2570,7 +2585,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername(oidcUpstreamSubject),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token has a non-array value",

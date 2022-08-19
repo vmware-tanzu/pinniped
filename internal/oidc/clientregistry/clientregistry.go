@@ -10,23 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/plog"
-)
-
-const (
-	// PinnipedCLIClientID is the client ID of the statically defined public OIDC client which is used by the CLI.
-	PinnipedCLIClientID = "pinniped-cli"
-
-	requiredOIDCClientPrefix = "client.oauth.pinniped.dev-"
 )
 
 // Client represents a Pinniped OAuth/OIDC client. It can be the static pinniped-cli client
@@ -43,7 +37,7 @@ var (
 )
 
 func (c *Client) GetResponseModes() []fosite.ResponseModeType {
-	if c.ID == PinnipedCLIClientID {
+	if c.ID == oidcapi.ClientIDPinnipedCLI {
 		// The pinniped-cli client supports "" (unspecified), "query", and "form_post" response modes.
 		return []fosite.ResponseModeType{fosite.ResponseModeDefault, fosite.ResponseModeQuery, fosite.ResponseModeFormPost}
 	}
@@ -78,12 +72,12 @@ func NewClientManager(
 // Other errors returned are plain errors, because fosite will wrap them into a new ErrInvalidClient error and
 // use the plain error's text as that error's debug message (see client_authentication.go in fosite).
 func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client, error) {
-	if id == PinnipedCLIClientID {
+	if id == oidcapi.ClientIDPinnipedCLI {
 		// Return the static client. No lookups needed.
 		return PinnipedCLI(), nil
 	}
 
-	if !strings.HasPrefix(id, requiredOIDCClientPrefix) {
+	if !strings.HasPrefix(id, oidcapi.ClientIDRequiredOIDCClientPrefix) {
 		// It shouldn't really be possible to find this OIDCClient because the OIDCClient CRD validates the name prefix
 		// upon create, but just in case, don't even try to lookup clients which lack the required name prefix.
 		return nil, fosite.ErrNotFound.WithDescription("no such client")
@@ -143,22 +137,23 @@ func PinnipedCLI() *Client {
 	return &Client{
 		DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
 			DefaultClient: &fosite.DefaultClient{
-				ID:           PinnipedCLIClientID,
+				ID:           oidcapi.ClientIDPinnipedCLI,
 				Secret:       nil,
 				RedirectURIs: []string{"http://127.0.0.1/callback"},
 				GrantTypes: fosite.Arguments{
-					"authorization_code",
-					"refresh_token",
-					"urn:ietf:params:oauth:grant-type:token-exchange",
+					oidcapi.GrantTypeAuthorizationCode,
+					oidcapi.GrantTypeRefreshToken,
+					oidcapi.GrantTypeTokenExchange,
 				},
 				ResponseTypes: []string{"code"},
 				Scopes: fosite.Arguments{
-					oidc.ScopeOpenID,
-					oidc.ScopeOfflineAccess,
-					"profile",
-					"email",
-					"pinniped:request-audience",
-					"groups",
+					oidcapi.ScopeOpenID,
+					oidcapi.ScopeOfflineAccess,
+					oidcapi.ScopeProfile,
+					oidcapi.ScopeEmail,
+					oidcapi.ScopeRequestAudience,
+					oidcapi.ScopeUsername,
+					oidcapi.ScopeGroups,
 				},
 				Audience: nil,
 				Public:   true,
@@ -167,7 +162,7 @@ func PinnipedCLI() *Client {
 			JSONWebKeys:                       nil,
 			JSONWebKeysURI:                    "",
 			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: oidc.RS256,
+			TokenEndpointAuthSigningAlgorithm: coreosoidc.RS256,
 			TokenEndpointAuthMethod:           "none",
 		},
 	}
@@ -194,7 +189,7 @@ func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSec
 			JSONWebKeys:                       nil,
 			JSONWebKeysURI:                    "",
 			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: oidc.RS256,
+			TokenEndpointAuthSigningAlgorithm: coreosoidc.RS256,
 			TokenEndpointAuthMethod:           "client_secret_basic",
 		},
 	}

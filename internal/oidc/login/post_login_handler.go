@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -46,10 +45,10 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, pinniped:request-audience and groups scopes, but only if they were requested.
+		// Automatically grant certain scopes, but only if they were requested.
 		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
+		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		// Get the username and password form params from the POST body.
 		username := r.PostFormValue(usernameParamName)
@@ -83,8 +82,9 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 		username = authenticateResponse.User.GetName()
 		groups := authenticateResponse.User.GetGroups()
-		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse)
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
+		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)
 
 		return nil

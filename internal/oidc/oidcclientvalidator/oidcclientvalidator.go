@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/crypto/bcrypt"
 	v1 "k8s.io/api/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
@@ -26,16 +26,6 @@ const (
 	reasonMissingRequiredValue     = "MissingRequiredValue"
 	reasonNoClientSecretFound      = "NoClientSecretFound"
 	reasonInvalidClientSecretFound = "InvalidClientSecretFound"
-
-	authorizationCodeGrantTypeName = "authorization_code"
-	refreshTokenGrantTypeName      = "refresh_token"
-	tokenExchangeGrantTypeName     = "urn:ietf:params:oauth:grant-type:token-exchange" //nolint:gosec // this is not a credential
-
-	openidScopeName          = oidc.ScopeOpenID
-	offlineAccessScopeName   = oidc.ScopeOfflineAccess
-	requestAudienceScopeName = "pinniped:request-audience"
-	usernameScopeName        = "username"
-	groupsScopeName          = "groups"
 
 	allowedGrantTypesFieldName = "allowedGrantTypes"
 	allowedScopesFieldName     = "allowedScopes"
@@ -67,21 +57,21 @@ func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost 
 func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
 	m := make([]string, 0, 4)
 
-	if !allowedScopesContains(oidcClient, openidScopeName) {
-		m = append(m, fmt.Sprintf("%q must always be included in %q", openidScopeName, allowedScopesFieldName))
+	if !allowedScopesContains(oidcClient, oidcapi.ScopeOpenID) {
+		m = append(m, fmt.Sprintf("%q must always be included in %q", oidcapi.ScopeOpenID, allowedScopesFieldName))
 	}
-	if allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName) && !allowedScopesContains(oidcClient, offlineAccessScopeName) {
+	if allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeRefreshToken) && !allowedScopesContains(oidcClient, oidcapi.ScopeOfflineAccess) {
 		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
-			offlineAccessScopeName, allowedScopesFieldName, refreshTokenGrantTypeName, allowedGrantTypesFieldName))
+			oidcapi.ScopeOfflineAccess, allowedScopesFieldName, oidcapi.GrantTypeRefreshToken, allowedGrantTypesFieldName))
 	}
-	if allowedScopesContains(oidcClient, requestAudienceScopeName) &&
-		(!allowedScopesContains(oidcClient, usernameScopeName) || !allowedScopesContains(oidcClient, groupsScopeName)) {
+	if allowedScopesContains(oidcClient, oidcapi.ScopeRequestAudience) &&
+		(!allowedScopesContains(oidcClient, oidcapi.ScopeUsername) || !allowedScopesContains(oidcClient, oidcapi.ScopeGroups)) {
 		m = append(m, fmt.Sprintf("%q and %q must be included in %q when %q is included in %q",
-			usernameScopeName, groupsScopeName, allowedScopesFieldName, requestAudienceScopeName, allowedScopesFieldName))
+			oidcapi.ScopeUsername, oidcapi.ScopeGroups, allowedScopesFieldName, oidcapi.ScopeRequestAudience, allowedScopesFieldName))
 	}
-	if allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName) && !allowedScopesContains(oidcClient, requestAudienceScopeName) {
+	if allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeTokenExchange) && !allowedScopesContains(oidcClient, oidcapi.ScopeRequestAudience) {
 		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
-			requestAudienceScopeName, allowedScopesFieldName, tokenExchangeGrantTypeName, allowedGrantTypesFieldName))
+			oidcapi.ScopeRequestAudience, allowedScopesFieldName, oidcapi.GrantTypeTokenExchange, allowedGrantTypesFieldName))
 	}
 
 	if len(m) == 0 {
@@ -107,17 +97,17 @@ func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alph
 func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
 	m := make([]string, 0, 3)
 
-	if !allowedGrantTypesContains(oidcClient, authorizationCodeGrantTypeName) {
+	if !allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeAuthorizationCode) {
 		m = append(m, fmt.Sprintf("%q must always be included in %q",
-			authorizationCodeGrantTypeName, allowedGrantTypesFieldName))
+			oidcapi.GrantTypeAuthorizationCode, allowedGrantTypesFieldName))
 	}
-	if allowedScopesContains(oidcClient, offlineAccessScopeName) && !allowedGrantTypesContains(oidcClient, refreshTokenGrantTypeName) {
+	if allowedScopesContains(oidcClient, oidcapi.ScopeOfflineAccess) && !allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeRefreshToken) {
 		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
-			refreshTokenGrantTypeName, allowedGrantTypesFieldName, offlineAccessScopeName, allowedScopesFieldName))
+			oidcapi.GrantTypeRefreshToken, allowedGrantTypesFieldName, oidcapi.ScopeOfflineAccess, allowedScopesFieldName))
 	}
-	if allowedScopesContains(oidcClient, requestAudienceScopeName) && !allowedGrantTypesContains(oidcClient, tokenExchangeGrantTypeName) {
+	if allowedScopesContains(oidcClient, oidcapi.ScopeRequestAudience) && !allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeTokenExchange) {
 		m = append(m, fmt.Sprintf("%q must be included in %q when %q is included in %q",
-			tokenExchangeGrantTypeName, allowedGrantTypesFieldName, requestAudienceScopeName, allowedScopesFieldName))
+			oidcapi.GrantTypeTokenExchange, allowedGrantTypesFieldName, oidcapi.ScopeRequestAudience, allowedScopesFieldName))
 	}
 
 	if len(m) == 0 {

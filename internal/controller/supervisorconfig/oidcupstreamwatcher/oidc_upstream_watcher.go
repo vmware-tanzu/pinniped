@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +26,7 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
@@ -97,11 +98,11 @@ type UpstreamOIDCIdentityProviderICache interface {
 type lruValidatorCache struct{ cache *cache.Expiring }
 
 type lruValidatorCacheEntry struct {
-	provider *oidc.Provider
+	provider *coreosoidc.Provider
 	client   *http.Client
 }
 
-func (c *lruValidatorCache) getProvider(spec *v1alpha1.OIDCIdentityProviderSpec) (*oidc.Provider, *http.Client) {
+func (c *lruValidatorCache) getProvider(spec *v1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client) {
 	if result, ok := c.cache.Get(c.cacheKey(spec)); ok {
 		entry := result.(*lruValidatorCacheEntry)
 		return entry.provider, entry.client
@@ -109,7 +110,7 @@ func (c *lruValidatorCache) getProvider(spec *v1alpha1.OIDCIdentityProviderSpec)
 	return nil, nil
 }
 
-func (c *lruValidatorCache) putProvider(spec *v1alpha1.OIDCIdentityProviderSpec, provider *oidc.Provider, client *http.Client) {
+func (c *lruValidatorCache) putProvider(spec *v1alpha1.OIDCIdentityProviderSpec, provider *coreosoidc.Provider, client *http.Client) {
 	c.cache.Set(c.cacheKey(spec), &lruValidatorCacheEntry{provider: provider, client: client}, oidcValidatorCacheTTL)
 }
 
@@ -129,8 +130,8 @@ type oidcWatcherController struct {
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
 	validatorCache               interface {
-		getProvider(*v1alpha1.OIDCIdentityProviderSpec) (*oidc.Provider, *http.Client)
-		putProvider(*v1alpha1.OIDCIdentityProviderSpec, *oidc.Provider, *http.Client)
+		getProvider(*v1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client)
+		putProvider(*v1alpha1.OIDCIdentityProviderSpec, *coreosoidc.Provider, *http.Client)
 	}
 }
 
@@ -329,7 +330,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 			return issuerURLCondition
 		}
 
-		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
+		discoveredProvider, err = coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
 			c.log.V(plog.KlogLevelTrace).WithValues(
 				"namespace", upstream.Namespace,
@@ -457,12 +458,12 @@ func defaultClientShortTimeout(rootCAs *x509.CertPool) *http.Client {
 func computeScopes(additionalScopes []string) []string {
 	// If none are set then provide a reasonable default which only tries to use scopes defined in the OIDC spec.
 	if len(additionalScopes) == 0 {
-		return []string{"openid", "offline_access", "email", "profile"}
+		return []string{oidcapi.ScopeOpenID, oidcapi.ScopeOfflineAccess, oidcapi.ScopeEmail, oidcapi.ScopeProfile}
 	}
 
 	// Otherwise, first compute the unique set of scopes, including "openid" (de-duplicate).
 	set := sets.NewString()
-	set.Insert("openid")
+	set.Insert(oidcapi.ScopeOpenID)
 	for _, s := range additionalScopes {
 		set.Insert(s)
 	}

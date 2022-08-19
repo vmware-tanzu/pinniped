@@ -1062,19 +1062,31 @@ func validateAuthcodeStorage(
 	// Now confirm the ID token claims.
 	actualClaims := storedSessionFromAuthcode.Fosite.Claims
 
+	// Should always have an azp claim.
+	require.Equal(t, wantDownstreamClientID, actualClaims.Extra["azp"])
+	wantDownstreamIDTokenExtraClaimsCount := 1 // should always have azp claim
+
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
-	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
+	if wantDownstreamIDTokenUsername == "" {
+		require.NotContains(t, actualClaims.Extra, "username")
+	} else {
+		wantDownstreamIDTokenExtraClaimsCount++ // should also have username claim
+		require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
+	}
 	if slices.Contains(wantDownstreamGrantedScopes, "groups") {
-		require.Len(t, actualClaims.Extra, 2)
+		wantDownstreamIDTokenExtraClaimsCount++ // should also have groups claim
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.NotNil(t, actualDownstreamIDTokenGroups)
 		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
 	} else {
-		require.Len(t, actualClaims.Extra, 1)
+		require.Emptyf(t, wantDownstreamIDTokenGroups, "test case did not want the groups scope to be granted, "+
+			"but wanted something in the groups claim, which doesn't make sense. please review the test case's expectations.")
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.Nil(t, actualDownstreamIDTokenGroups)
 	}
+	// Make sure that we asserted on every extra claim.
+	require.Len(t, actualClaims.Extra, wantDownstreamIDTokenExtraClaimsCount)
 
 	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
 	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)

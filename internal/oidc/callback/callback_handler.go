@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -53,10 +52,10 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, pinniped:request-audience, and groups scopes, but only if they were requested.
+		// Automatically grant certain scopes, but only if they were requested.
 		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester, []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, oidc.RequestAudienceScope, oidc.DownstreamGroupsScope})
+		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -75,12 +74,13 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token)
+		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token, username)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, authorizeRequester.GetGrantedScopes(), customSessionData)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {

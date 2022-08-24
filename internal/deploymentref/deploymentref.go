@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package deploymentref
@@ -23,8 +23,7 @@ import (
 // We would normally pass a kubernetes.Interface into New(), but the client we want to create in
 // the calling code depends on the return value of New() (i.e., on the kubeclient.Option for the
 // OwnerReference).
-//nolint: gochecknoglobals
-var getTempClient = func() (kubernetes.Interface, error) {
+var getTempClient = func() (kubernetes.Interface, error) { //nolint:gochecknoglobals
 	client, err := kubeclient.New()
 	if err != nil {
 		return nil, err

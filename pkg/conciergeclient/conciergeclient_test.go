@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package conciergeclient
@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -224,7 +224,7 @@ func TestExchangeToken(t *testing.T) {
 			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
-			body, err := ioutil.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			require.JSONEq(t,
 				`{

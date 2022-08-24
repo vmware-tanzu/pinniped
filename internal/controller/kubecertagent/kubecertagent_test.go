@@ -1110,7 +1110,7 @@ func TestAgentController(t *testing.T) {
 			require.NoError(t, err)
 			if tt.wantAgentDeployment == nil {
 				assert.Empty(t, deployments.Items, "did not expect an agent deployment")
-			} else { // nolint: gocritic
+			} else { //nolint:gocritic
 				if assert.Len(t, deployments.Items, 1, "expected a single agent deployment") {
 					assert.Equal(t, tt.wantAgentDeployment, &deployments.Items[0])
 				}

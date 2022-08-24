@@ -149,7 +149,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			}
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			log := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			controller := NewLegacyPodCleanerController(
 				AgentConfig{
 					Namespace: "concierge",

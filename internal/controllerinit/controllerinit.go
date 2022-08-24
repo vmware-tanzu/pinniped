@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerinit
@@ -29,8 +29,8 @@ type Informer interface {
 }
 
 // Prepare returns RunnerBuilder that, when called:
-//   1. Starts all provided informers and waits for them sync (and fails if they hang)
-//   2. Returns a Runner that combines the Runner and RunnerWrapper passed into Prepare
+// 1.) Starts all provided informers and waits for them sync (and fails if they hang), and
+// 2.) Returns a Runner that combines the Runner and RunnerWrapper passed into Prepare.
 func Prepare(controllers Runner, controllersWrapper RunnerWrapper, informers ...Informer) RunnerBuilder {
 	return func(ctx context.Context) (Runner, error) {
 		for _, informer := range informers {

@@ -5,7 +5,6 @@ package testlib
 
 import (
 	"encoding/base64"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -118,7 +117,7 @@ func (e *TestEnv) ProxyEnv() []string {
 
 // memoizedTestEnvsByTest maps *testing.T pointers to *TestEnv. It exists so that we don't do all the
 // environment parsing N times per test and so that any implicit assertions happen only once.
-var memoizedTestEnvsByTest sync.Map //nolint: gochecknoglobals
+var memoizedTestEnvsByTest sync.Map //nolint:gochecknoglobals
 
 // IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
@@ -137,7 +136,7 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 		"must specify either PINNIPED_TEST_CLUSTER_CAPABILITY_YAML or PINNIPED_TEST_CLUSTER_CAPABILITY_FILE env var for integration tests",
 	)
 	if capabilitiesDescriptionYAML == "" {
-		bytes, err := ioutil.ReadFile(capabilitiesDescriptionFile)
+		bytes, err := os.ReadFile(capabilitiesDescriptionFile)
 		capabilitiesDescriptionYAML = string(bytes)
 		require.NoError(t, err)
 	}

@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1701,7 +1701,7 @@ func requestAuthorizationUsingCLIPasswordFlow(t *testing.T, downstreamAuthorizeU
 			return false, nil
 		}
 		defer func() { _ = authResponse.Body.Close() }()
-		responseBody, err = ioutil.ReadAll(authResponse.Body)
+		responseBody, err = io.ReadAll(authResponse.Body)
 		if err != nil {
 			return false, nil
 		}

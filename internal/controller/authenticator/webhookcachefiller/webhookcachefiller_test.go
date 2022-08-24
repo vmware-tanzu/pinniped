@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -88,7 +88,7 @@ func TestController(t *testing.T) {
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
-			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 
 			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog.Logger)
 
@@ -121,7 +121,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 
 	t.Run("marshal failure", func(t *testing.T) {
 		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, ioutil.TempFile, marshalError)
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, os.CreateTemp, marshalError)
 		require.Nil(t, res)
 		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
 	})
@@ -130,7 +130,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
-		}, ioutil.TempFile, clientcmd.WriteToFile)
+		}, os.CreateTemp, clientcmd.WriteToFile)
 		require.Nil(t, res)
 		require.EqualError(t, err, "invalid TLS configuration: illegal base64 data at input byte 7")
 	})
@@ -139,7 +139,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("bad data"))},
-		}, ioutil.TempFile, clientcmd.WriteToFile)
+		}, os.CreateTemp, clientcmd.WriteToFile)
 		require.Nil(t, res)
 		require.EqualError(t, err, "invalid TLS configuration: certificateAuthorityData is not valid PEM: data does not contain any valid RSA or ECDSA certificates")
 	})
@@ -147,14 +147,14 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	t.Run("valid config with no TLS spec", func(t *testing.T) {
 		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
-		}, ioutil.TempFile, clientcmd.WriteToFile)
+		}, os.CreateTemp, clientcmd.WriteToFile)
 		require.NotNil(t, res)
 		require.NoError(t, err)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		caBundle, url := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			body, err := ioutil.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			require.Contains(t, string(body), "test-token")
 			_, err = w.Write([]byte(`{}`))
@@ -166,7 +166,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),
 			},
 		}
-		res, err := newWebhookAuthenticator(spec, ioutil.TempFile, clientcmd.WriteToFile)
+		res, err := newWebhookAuthenticator(spec, os.CreateTemp, clientcmd.WriteToFile)
 		require.NoError(t, err)
 		require.NotNil(t, res)
 

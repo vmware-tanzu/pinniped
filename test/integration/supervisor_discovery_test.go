@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -587,7 +586,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 
 		requireEventually.Equal(http.StatusOK, response.StatusCode)
 
-		responseBody, err = ioutil.ReadAll(response.Body)
+		responseBody, err = io.ReadAll(response.Body)
 		requireEventually.NoError(err)
 	}, 2*time.Minute, 200*time.Millisecond)
 
@@ -662,7 +661,7 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 		caCertPool.AppendCertsFromPEM([]byte(caBundle))
 		c.Transport = &http.Transport{
 			DialContext:     overrideDialContext,
-			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint: gosec // this seems to be a false flag, min tls version is 1.3 in normal mode or 1.2 in fips mode
+			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint:gosec // this seems to be a false flag, min tls version is 1.3 in normal mode or 1.2 in fips mode
 		}
 	} else {
 		c.Transport = &http.Transport{

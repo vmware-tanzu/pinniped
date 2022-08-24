@@ -15,7 +15,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -1103,7 +1103,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
 			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", runningTestPod.Namespace, runningTestPod.Name, remoteEchoFile), localEchoFile)
 			require.NoError(t, err, `"kubectl cp" failed`)
-			localEchoFileData, err := ioutil.ReadFile(localEchoFile)
+			localEchoFileData, err := os.ReadFile(localEchoFile)
 			require.NoError(t, err)
 			require.Equal(t, echoString+"\n", string(localEchoFileData))
 
@@ -1197,7 +1197,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					defer func() { requireEventually.NoError(resp.Body.Close()) }()
 				}
 				if err != nil && resp != nil {
-					body, _ := ioutil.ReadAll(resp.Body)
+					body, _ := io.ReadAll(resp.Body)
 					t.Logf("websocket dial failed: %d:%s", resp.StatusCode, body)
 				}
 				requireEventually.NoError(err)
@@ -1283,7 +1283,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 			response, err := httpClient.Do(getConfigmapRequest)
 			require.NoError(t, err)
-			body, _ := ioutil.ReadAll(response.Body)
+			body, _ := io.ReadAll(response.Body)
 			t.Logf("http2 status code: %d, proto: %s, message: %s", response.StatusCode, response.Proto, body)
 			require.Equal(t, "HTTP/2.0", response.Proto)
 			require.Equal(t, http.StatusOK, response.StatusCode)
@@ -2212,7 +2212,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 
 	// Write the kubeconfig to a temp file.
 	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
-	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
+	require.NoError(t, os.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
 	return kubeconfigPath, envVarsWithProxy, tempDir
 }

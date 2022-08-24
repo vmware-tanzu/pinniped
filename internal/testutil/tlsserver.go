@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -33,8 +34,9 @@ func TLSTestServerWithCert(t *testing.T, handler http.HandlerFunc, certificate *
 	c.Certificates = []tls.Certificate{*certificate}
 
 	server := http.Server{
-		TLSConfig: c,
-		Handler:   handler,
+		TLSConfig:         c,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")

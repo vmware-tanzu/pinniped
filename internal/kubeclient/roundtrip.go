@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -6,7 +6,7 @@ package kubeclient
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -213,7 +213,7 @@ func handleCreateOrUpdate(
 		return true, nil, fmt.Errorf("get body failed: %w", err)
 	}
 	defer body.Close()
-	data, err := ioutil.ReadAll(body)
+	data, err := io.ReadAll(body)
 	if err != nil {
 		return true, nil, fmt.Errorf("read body failed: %w", err)
 	}
@@ -296,7 +296,7 @@ func handleResponseNewGVK(
 
 	// always make sure we close the body, even if reading from it fails
 	defer resp.Body.Close()
-	respData, err := ioutil.ReadAll(resp.Body)
+	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -319,7 +319,7 @@ func handleResponseNewGVK(
 	newResp := &http.Response{}
 	*newResp = *resp
 
-	newResp.Body = ioutil.NopCloser(bytes.NewBuffer(fixedRespData))
+	newResp.Body = io.NopCloser(bytes.NewBuffer(fixedRespData))
 	return newResp, nil
 }
 

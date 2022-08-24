@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -94,7 +93,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	t.Run("whoami", func(t *testing.T) {
 		// Validate that `pinniped whoami` returns the correct identity.
 		kubeconfigPath := filepath.Join(testutil.TempDir(t), "whoami-kubeconfig")
-		require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(stdout), 0600))
+		require.NoError(t, os.WriteFile(kubeconfigPath, []byte(stdout), 0600))
 		assertWhoami(
 			ctx,
 			t,
@@ -174,7 +173,7 @@ func TestCLILoginOIDC_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
@@ -426,7 +425,7 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	// If there is a custom CA bundle, pass it via --ca-bundle and a temporary file.
 	if env.CLIUpstreamOIDC.CABundle != "" {
 		path := filepath.Join(testutil.TempDir(t), "test-ca.pem")
-		require.NoError(t, ioutil.WriteFile(path, []byte(env.CLIUpstreamOIDC.CABundle), 0600))
+		require.NoError(t, os.WriteFile(path, []byte(env.CLIUpstreamOIDC.CABundle), 0600))
 		cmd.Args = append(cmd.Args, "--ca-bundle", path)
 	}
 

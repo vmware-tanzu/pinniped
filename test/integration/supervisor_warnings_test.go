@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -65,7 +64,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	testCABundlePath := filepath.Join(tempDir, "test-ca.pem")
 	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
-	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCABundlePEM, 0600))
+	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
@@ -149,10 +148,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlPtyOutputBytes, _ := io.ReadAll(ptyFile)
 		if kubectlStdoutPipe != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			kubectlStdOutOutputBytes, _ := io.ReadAll(kubectlStdoutPipe)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -225,10 +224,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes2, _ := ioutil.ReadAll(ptyFile2)
+		kubectlPtyOutputBytes2, _ := io.ReadAll(ptyFile2)
 		if kubectlStdoutPipe2 != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes2, _ := ioutil.ReadAll(kubectlStdoutPipe2)
+			kubectlStdOutOutputBytes2, _ := io.ReadAll(kubectlStdoutPipe2)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes2))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -292,10 +291,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlPtyOutputBytes, _ := io.ReadAll(ptyFile)
 		if kubectlStdoutPipe != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			kubectlStdOutOutputBytes, _ := io.ReadAll(kubectlStdoutPipe)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -336,10 +335,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes2, _ := ioutil.ReadAll(ptyFile2)
+		kubectlPtyOutputBytes2, _ := io.ReadAll(ptyFile2)
 		if kubectlStdoutPipe2 != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes2, _ := ioutil.ReadAll(kubectlStdoutPipe2)
+			kubectlStdOutOutputBytes2, _ := io.ReadAll(kubectlStdoutPipe2)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes2))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -460,10 +459,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlPtyOutputBytes, _ := io.ReadAll(ptyFile)
 		if kubectlStdoutPipe != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			kubectlStdOutOutputBytes, _ := io.ReadAll(kubectlStdoutPipe)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -536,10 +535,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes2, _ := ioutil.ReadAll(ptyFile2)
+		kubectlPtyOutputBytes2, _ := io.ReadAll(ptyFile2)
 		if kubectlStdoutPipe2 != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes2, _ := ioutil.ReadAll(kubectlStdoutPipe2)
+			kubectlStdOutOutputBytes2, _ := io.ReadAll(kubectlStdoutPipe2)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes2))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra/doc"
 )
 
-//nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	rootCmd.AddCommand(generateMarkdownHelpCommand())
 }

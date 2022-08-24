@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package formposthtml defines HTML templates used by the Supervisor.
-//nolint: gochecknoglobals // This package uses globals to ensure that all parsing and minifying happens at init.
 package formposthtml
 
 import (
@@ -15,6 +14,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider/csp"
 )
 
+//nolint:gochecknoglobals // This package uses globals to ensure that all parsing and minifying happens at init.
 var (
 	//go:embed form_post.css
 	rawCSS      string
@@ -26,23 +26,23 @@ var (
 
 	//go:embed form_post.gohtml
 	rawHTMLTemplate string
+
+	// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
+	parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(template.FuncMap{
+		"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) },
+		"minifiedJS":  func() template.JS { return template.JS(minifiedJS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
+	}).Parse(rawHTMLTemplate))
+
+	// Generate the CSP header value once since it's effectively constant.
+	cspValue = strings.Join([]string{
+		`default-src 'none'`,
+		`script-src '` + csp.Hash(minifiedJS) + `'`,
+		`style-src '` + csp.Hash(minifiedCSS) + `'`,
+		`img-src data:`,
+		`connect-src *`,
+		`frame-ancestors 'none'`,
+	}, "; ")
 )
-
-// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
-var parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(template.FuncMap{
-	"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) },
-	"minifiedJS":  func() template.JS { return template.JS(minifiedJS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
-}).Parse(rawHTMLTemplate))
-
-// Generate the CSP header value once since it's effectively constant.
-var cspValue = strings.Join([]string{
-	`default-src 'none'`,
-	`script-src '` + csp.Hash(minifiedJS) + `'`,
-	`style-src '` + csp.Hash(minifiedCSS) + `'`,
-	`img-src data:`,
-	`connect-src *`,
-	`frame-ancestors 'none'`,
-}, "; ")
 
 func panicOnError(s string, err error) string {
 	if err != nil {

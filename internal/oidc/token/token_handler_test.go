@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -109,7 +108,7 @@ var (
 	fositeInvalidPayloadErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty."
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body."
 		}
 	`)
 
@@ -372,7 +371,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			name: "payload is not valid form serialization",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyTokenRequest: func(r *http.Request, authCode string) {
-					r.Body = ioutil.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
+					r.Body = io.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
@@ -3074,7 +3073,7 @@ func (b body) WithPKCE(verifier string) body {
 }
 
 func (b body) ReadCloser() io.ReadCloser {
-	return ioutil.NopCloser(strings.NewReader(url.Values(b).Encode()))
+	return io.NopCloser(strings.NewReader(url.Values(b).Encode()))
 }
 
 func (b body) with(param, value string) body {

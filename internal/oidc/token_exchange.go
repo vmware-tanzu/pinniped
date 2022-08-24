@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
-	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
-	pinnipedTokenExchangeScope = "pinniped:request-audience"                     //nolint: gosec
+	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token" //nolint:gosec
+	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"          //nolint:gosec
+	pinnipedTokenExchangeScope = "pinniped:request-audience"                     //nolint:gosec
 )
 
 type stsParams struct {

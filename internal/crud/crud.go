@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -168,7 +168,7 @@ func validateSecret(resource string, secret *corev1.Secret) error {
 	return nil
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 func (s *secretsStorage) getName(signature string) string {

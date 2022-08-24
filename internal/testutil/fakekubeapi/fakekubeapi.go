@@ -1,25 +1,28 @@
 // Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package fakekubeapi contains a *very* simple httptest.Server that can be used to stand in for
-// a real Kube API server in tests.
-//
-// Usage:
-//   func TestSomething(t *testing.T) {
-//     resources := map[string]kubeclient.Object{
-//       // store preexisting resources here
-//       "/api/v1/namespaces/default/pods/some-pod-name": &corev1.Pod{...},
-//     }
-//     server, restConfig := fakekubeapi.Start(t, resources)
-//     defer server.Close()
-//     client := kubeclient.New(kubeclient.WithConfig(restConfig))
-//     // do stuff with client...
-//   }
+/*
+Package fakekubeapi contains a *very* simple httptest.Server that can be used to stand in for
+a real Kube API server in tests.
+
+Usage:
+
+	func TestSomething(t *testing.T) {
+	  resources := map[string]kubeclient.Object{
+	    // store preexisting resources here
+	    "/api/v1/namespaces/default/pods/some-pod-name": &corev1.Pod{...},
+	  }
+	  server, restConfig := fakekubeapi.Start(t, resources)
+	  defer server.Close()
+	  client := kubeclient.New(kubeclient.WithConfig(restConfig))
+	  // do stuff with client...
+	}
+*/
 package fakekubeapi
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -104,13 +107,13 @@ func decodeObj(r *http.Request) (runtime.Object, error) {
 		return nil, httperr.Wrap(http.StatusUnsupportedMediaType, "could not parse mime type from content-type header", err)
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "read body", err)
 	}
 
 	var obj runtime.Object
-	var errs []error //nolint: prealloc
+	var errs []error //nolint:prealloc
 	codecsThatWeUseInOurCode := []runtime.NegotiatedSerializer{
 		kubescheme.Codecs,
 		aggregatorclientscheme.Codecs,

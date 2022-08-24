@@ -143,7 +143,7 @@ func TestController(t *testing.T) {
 			if tt.initialCache != nil {
 				tt.initialCache(t, cache)
 			}
-			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 
 			webhooks := informers.Authentication().V1alpha1().WebhookAuthenticators()
 			jwtAuthenticators := informers.Authentication().V1alpha1().JWTAuthenticators()

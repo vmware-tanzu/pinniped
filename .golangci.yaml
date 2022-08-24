@@ -8,16 +8,13 @@ linters:
   disable-all: true
   enable:
   # default linters
-  - deadcode
   - errcheck
   - gosimple
   - govet
   - ineffassign
   - staticcheck
-  - structcheck
   - typecheck
   - unused
-  - varcheck
 
   # additional linters for this project (we should disable these if they get annoying).
   - asciicheck

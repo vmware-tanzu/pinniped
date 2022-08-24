@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package credentialrequest provides REST functionality for the CredentialRequest resource.
@@ -58,6 +58,8 @@ var _ interface {
 func (*REST) New() runtime.Object {
 	return &loginapi.TokenCredentialRequest{}
 }
+
+func (*REST) Destroy() {}
 
 func (*REST) NewList() runtime.Object {
 	return &loginapi.TokenCredentialRequestList{}

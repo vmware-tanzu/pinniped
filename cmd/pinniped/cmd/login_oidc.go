@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,7 +40,7 @@ const (
 	upstreamIdentityProviderFlowEnvVarName = "PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW"
 )
 
-// nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	loginCmd.AddCommand(oidcLoginCommand(oidcLoginCommandRealDeps()))
 }
@@ -153,7 +152,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
 		oidcclient.WithContext(cmd.Context()),
-		oidcclient.WithLogger(plog.Logr()), // nolint: staticcheck  // old code with lots of log statements
+		oidcclient.WithLogger(plog.Logr()), //nolint:staticcheck  // old code with lots of log statements
 		oidcclient.WithScopes(flags.scopes),
 		oidcclient.WithSessionCache(sessionCache),
 	}
@@ -317,7 +316,7 @@ func flowOptions(
 func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, error) {
 	pool := x509.NewCertPool()
 	for _, p := range caBundlePaths {
-		pem, err := ioutil.ReadFile(p)
+		pem, err := os.ReadFile(p)
 		if err != nil {
 			return nil, fmt.Errorf("could not read --ca-bundle: %w", err)
 		}
@@ -361,10 +360,14 @@ func SetLogLevel(ctx context.Context, lookupEnv func(string) (string, bool)) (pl
 	return logger, nil
 }
 
-// mustGetConfigDir returns a directory that follows the XDG base directory convention:
-//   $XDG_CONFIG_HOME defines the base directory relative to which user specific configuration files should
-//   be stored. If $XDG_CONFIG_HOME is either not set or empty, a default equal to $HOME/.config should be used.
-// [1] https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+/*
+mustGetConfigDir returns a directory that follows the XDG base directory convention:
+
+	$XDG_CONFIG_HOME defines the base directory relative to which user specific configuration files should
+	be stored. If $XDG_CONFIG_HOME is either not set or empty, a default equal to $HOME/.config should be used.
+
+[1] https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+*/
 func mustGetConfigDir() string {
 	const xdgAppName = "pinniped"
 

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
@@ -41,7 +41,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
-				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
+				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 
 				certKey.UnsetCertKeyContent()
 
-				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
+				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
 		{
@@ -87,7 +87,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
-				return newCA.Pool().Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
+				return newCA.Pool().Subjects(), []tls.Certificate{cert}
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				ok := pool.AppendCertsFromPEM(ca.CurrentCABundleContent())
 				require.True(t, ok, "should have valid non-empty CA bundle")
 
-				return pool.Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
+				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
 		{
@@ -137,7 +137,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				err = ca.SetCertKeyContent(newOtherCA.Bundle(), caKey)
 				require.NoError(t, err)
 
-				return newOtherCA.Pool().Subjects(), []tls.Certificate{cert} // nolint: staticcheck  // not system cert pool
+				return newOtherCA.Pool().Subjects(), []tls.Certificate{cert}
 			},
 		},
 	}
@@ -221,7 +221,7 @@ func poolSubjects(pool *x509.CertPool) [][]byte {
 	if pool == nil {
 		return nil
 	}
-	return pool.Subjects() // nolint: staticcheck  // not system cert pool
+	return pool.Subjects()
 }
 
 func TestNewServingCert(t *testing.T) {

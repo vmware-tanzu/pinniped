@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ownerref
@@ -64,7 +64,7 @@ func New(refObj kubeclient.Object) kubeclient.Middleware {
 	})
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var namespaceGVK = corev1.SchemeGroupVersion.WithKind("Namespace")
 
 func isNamespace(obj kubeclient.Object) bool {

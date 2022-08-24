@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package issuerconfig contains helpers for updating CredentialIssuer status entries.
@@ -60,8 +60,7 @@ func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1a
 }
 
 // weights are a set of priorities for each strategy type.
-//nolint: gochecknoglobals
-var weights = map[v1alpha1.StrategyType]int{
+var weights = map[v1alpha1.StrategyType]int{ //nolint:gochecknoglobals
 	v1alpha1.KubeClusterSigningCertificateStrategyType: 2, // most preferred strategy
 	v1alpha1.ImpersonationProxyStrategyType:            1,
 	// unknown strategy types will have weight 0 by default

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package groupsuffix
@@ -175,7 +175,7 @@ func Unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 // makes sure that the provided apiGroupSuffix is a valid DNS-1123 subdomain with at least one dot,
 // to match Kubernetes behavior.
 func Validate(apiGroupSuffix string) error {
-	var errs []error // nolint: prealloc
+	var errs []error //nolint:prealloc
 
 	if len(strings.Split(apiGroupSuffix, ".")) < 2 {
 		errs = append(errs, constable.Error("must contain '.'"))

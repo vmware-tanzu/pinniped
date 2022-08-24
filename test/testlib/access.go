@@ -1,11 +1,10 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -154,7 +153,7 @@ func runKubectlGetNamespaces(t *testing.T, kubeConfigYAML string) (string, error
 
 	f := writeStringToTempFile(t, "pinniped-generated-kubeconfig-*", kubeConfigYAML)
 
-	//nolint: gosec // It's okay that we are passing f.Name() to an exec command here. It was created above.
+	//nolint:gosec // It's okay that we are passing f.Name() to an exec command here. It was created above.
 	output, err := exec.Command(
 		"kubectl", "get", "namespace", "--kubeconfig", f.Name(),
 	).CombinedOutput()
@@ -164,7 +163,7 @@ func runKubectlGetNamespaces(t *testing.T, kubeConfigYAML string) (string, error
 
 func writeStringToTempFile(t *testing.T, filename string, kubeConfigYAML string) *os.File {
 	t.Helper()
-	f, err := ioutil.TempFile("", filename)
+	f, err := os.CreateTemp("", filename)
 	require.NoError(t, err)
 	deferMe := func() {
 		err := os.Remove(f.Name())

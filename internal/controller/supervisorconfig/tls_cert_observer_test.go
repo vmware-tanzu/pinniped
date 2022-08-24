@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -6,8 +6,8 @@ package supervisorconfig
 import (
 	"context"
 	"crypto/tls"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/sclevine/spec"
@@ -170,7 +170,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 		}
 
 		var readTestFile = func(path string) []byte {
-			data, err := ioutil.ReadFile(path)
+			data, err := os.ReadFile(path)
 			r.NoError(err)
 			return data
 		}

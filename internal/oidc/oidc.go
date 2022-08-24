@@ -255,11 +255,12 @@ func FositeOauth2Helper(
 // passed to a plog function (e.g., plog.Info()).
 //
 // Sample usage:
-//   err := someFositeLibraryFunction()
-//   if err != nil {
-//     	plog.Info("some error", FositeErrorForLog(err)...)
-//      ...
-//    }
+//
+//	err := someFositeLibraryFunction()
+//	if err != nil {
+//	    plog.Info("some error", FositeErrorForLog(err)...)
+//	    ...
+//	}
 func FositeErrorForLog(err error) []interface{} {
 	rfc6749Error := fosite.ErrorToRFC6749Error(err)
 	keysAndValues := make([]interface{}, 0)

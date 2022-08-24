@@ -145,12 +145,12 @@ type agentController struct {
 
 var (
 	// controllerManagerLabels are the Kubernetes labels we expect on the kube-controller-manager Pod.
-	controllerManagerLabels = labels.SelectorFromSet(map[string]string{ // nolint: gochecknoglobals
+	controllerManagerLabels = labels.SelectorFromSet(map[string]string{ //nolint:gochecknoglobals
 		"component": "kube-controller-manager",
 	})
 
 	// agentLabels are the Kubernetes labels we always expect on the kube-controller-manager Pod.
-	agentLabels = labels.SelectorFromSet(map[string]string{ // nolint: gochecknoglobals
+	agentLabels = labels.SelectorFromSet(map[string]string{ //nolint:gochecknoglobals
 		agentPodLabelKey: agentPodLabelValue,
 	})
 )
@@ -179,7 +179,7 @@ func NewAgentController(
 		dynamicCertProvider,
 		&clock.RealClock{},
 		cache.NewExpiring(),
-		plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+		plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 	)
 }
 

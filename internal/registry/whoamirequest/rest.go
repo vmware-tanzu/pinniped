@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package whoamirequest
@@ -44,6 +44,8 @@ var _ interface {
 func (*REST) New() runtime.Object {
 	return &identityapi.WhoAmIRequest{}
 }
+
+func (*REST) Destroy() {}
 
 func (*REST) NewList() runtime.Object {
 	return &identityapi.WhoAmIRequestList{}

@@ -1,11 +1,10 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -585,7 +584,7 @@ func TestFromPath(t *testing.T) {
 			// this is a serial test because it sets the global logger
 
 			// Write yaml to temp file
-			f, err := ioutil.TempFile("", "pinniped-test-config-yaml-*")
+			f, err := os.CreateTemp("", "pinniped-test-config-yaml-*")
 			require.NoError(t, err)
 			defer func() {
 				err := os.Remove(f.Name())

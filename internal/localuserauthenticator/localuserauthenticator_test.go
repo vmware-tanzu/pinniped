@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package localuserauthenticator
@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -385,7 +384,7 @@ func TestWebhook(t *testing.T) {
 			url:        goodURL,
 			method:     http.MethodPost,
 			headers:    goodRequestHeaders,
-			body:       func() (io.ReadCloser, error) { return ioutil.NopCloser(bytes.NewBuffer([]byte("invalid body"))), nil },
+			body:       func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewBuffer([]byte("invalid body"))), nil },
 			wantStatus: http.StatusBadRequest,
 		},
 	}
@@ -416,7 +415,7 @@ func TestWebhook(t *testing.T) {
 				}
 			}
 
-			responseBody, err := ioutil.ReadAll(rsp.Body)
+			responseBody, err := io.ReadAll(rsp.Body)
 			require.NoError(t, err)
 			if test.wantBody != nil {
 				require.NoError(t, err)
@@ -520,7 +519,7 @@ func newTokenReviewBodyWithGVK(token string, gvk *schema.GroupVersionKind) (io.R
 		},
 	}
 	err := json.NewEncoder(buf).Encode(&tr)
-	return ioutil.NopCloser(buf), err
+	return io.NopCloser(buf), err
 }
 
 func unauthenticatedResponseJSON() *authenticationv1beta1.TokenReview {

@@ -91,7 +91,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
 				withInformer.WithInformer,
 			)
 
@@ -1400,7 +1400,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
-			testLog := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			cache := provider.NewDynamicUpstreamIDPProvider()
 			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},

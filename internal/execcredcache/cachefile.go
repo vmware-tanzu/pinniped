@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package execcredcache
@@ -6,7 +6,6 @@ package execcredcache
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"time"
@@ -51,7 +50,7 @@ type (
 
 // readCache loads a credCache from a path on disk. If the requested path does not exist, it returns an empty cache.
 func readCache(path string) (*credCache, error) {
-	cacheYAML, err := ioutil.ReadFile(path)
+	cacheYAML, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// If the file was not found, generate a freshly initialized empty cache.
@@ -87,7 +86,7 @@ func (c *credCache) writeTo(path string) error {
 	// Marshal the cache back to YAML and save it to the file.
 	cacheYAML, err := yaml.Marshal(c)
 	if err == nil {
-		err = ioutil.WriteFile(path, cacheYAML, 0600)
+		err = os.WriteFile(path, cacheYAML, 0600)
 	}
 	return err
 }

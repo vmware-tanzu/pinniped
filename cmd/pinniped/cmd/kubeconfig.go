@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -48,7 +47,7 @@ func kubeconfigRealDeps() kubeconfigDeps {
 	}
 }
 
-// nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	getCmd.AddCommand(kubeconfigCommand(kubeconfigRealDeps()))
 }
@@ -717,7 +716,7 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 func countCACerts(pemData []byte) int {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(pemData)
-	return len(pool.Subjects()) // nolint: staticcheck  // not system cert pool
+	return len(pool.Subjects())
 }
 
 func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool {
@@ -815,7 +814,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: unexpected http response status: %s", response.Status)
 	}
 
-	rawBody, err := ioutil.ReadAll(response.Body)
+	rawBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
 	}

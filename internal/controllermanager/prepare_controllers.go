@@ -97,8 +97,7 @@ type Config struct {
 }
 
 // PrepareControllers prepares the controllers and their informers and returns a function that will start them when called.
-//nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
-func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
+func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
 	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(c.APIGroupSuffix)
 
 	dref, deployment, _, err := deploymentref.New(c.ServerInstallationInfo)
@@ -223,7 +222,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				agentConfig,
 				client,
 				informers.installationNamespaceK8s.Core().V1().Pods(),
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -233,7 +232,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -241,7 +240,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 			jwtcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -250,7 +249,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -276,7 +275,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) {
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 			),
 			singletonWorker,
 		).

@@ -13,7 +13,7 @@ go 1.17
 // of our indirect dependencies pull in any old versions of ory/x anymore.
 //
 // Whenever we upgrade fosite and ory/x, we can try removing this replace directive and running
-// `go mod tidy` to see if github.com/oleiade/reflections@v1.0.0 still appears in our go.sum.
+// `go mod download` to see if github.com/oleiade/reflections@v1.0.0 still appears in our go.sum.
 // As long as it does, we probably need to keep this replace directive.
 replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 
@@ -42,7 +42,7 @@ require (
 	github.com/creack/pty v1.1.18
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.3
-	github.com/go-ldap/ldap/v3 v3.4.3
+	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.2.3
@@ -60,41 +60,41 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/sclevine/spec v1.4.0
-	github.com/spf13/cobra v1.4.0
+	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.2
-	github.com/tdewolff/minify/v2 v2.11.9
-	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.21.0
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
-	golang.org/x/net v0.0.0-20220607020251-c690dde0001d
-	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401
-	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
+	github.com/stretchr/testify v1.8.0
+	github.com/tdewolff/minify/v2 v2.12.0
+	go.uber.org/atomic v1.10.0
+	go.uber.org/zap v1.23.0
+	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
+	golang.org/x/net v0.0.0-20220822230855-b0a4917ee28c
+	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094
+	golang.org/x/sync v0.0.0-20220819030929-7fc1605a5dde
+	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035
 	golang.org/x/text v0.3.7
 	gopkg.in/square/go-jose.v2 v2.6.0
-	k8s.io/api v0.24.1
-	k8s.io/apiextensions-apiserver v0.24.1
-	k8s.io/apimachinery v0.24.1
-	k8s.io/apiserver v0.24.1
-	k8s.io/client-go v0.24.1
-	k8s.io/component-base v0.24.1
-	k8s.io/gengo v0.0.0-20220307231824-4627b89bbf1b
-	k8s.io/klog/v2 v2.60.1
-	k8s.io/kube-aggregator v0.24.1
-	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
+	k8s.io/api v0.25.0
+	k8s.io/apiextensions-apiserver v0.25.0
+	k8s.io/apimachinery v0.25.0
+	k8s.io/apiserver v0.25.0
+	k8s.io/client-go v0.25.0
+	k8s.io/component-base v0.25.0
+	k8s.io/gengo v0.0.0-20220613173612-397b4ae3bce7
+	k8s.io/klog/v2 v2.70.1
+	k8s.io/kube-aggregator v0.25.0
+	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
 	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
-	cloud.google.com/go/compute v1.6.1 // indirect
+	cloud.google.com/go/compute v1.7.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.27 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.20 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
-	github.com/Azure/go-ntlmssp v0.0.0-20211209120228-48547f28849e // indirect
+	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -106,7 +106,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
-	github.com/emicklei/go-restful v2.15.0+incompatible // indirect
+	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
@@ -154,7 +154,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.5.33 // indirect
+	github.com/tdewolff/parse/v2 v2.6.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.4 // indirect
@@ -170,13 +170,12 @@ require (
 	go.opentelemetry.io/otel/trace v1.7.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.15.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect
-	golang.org/x/tools v0.1.10 // indirect
-	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
+	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220607140733-d738665f6195 // indirect
+	google.golang.org/genproto v0.0.0-20220616135557-88e70c0c3a90 // indirect
 	google.golang.org/grpc v1.47.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -184,8 +183,8 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.31 // indirect
-	sigs.k8s.io/json v0.0.0-20220525155127-227cbc7cc124 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.32 // indirect
+	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )

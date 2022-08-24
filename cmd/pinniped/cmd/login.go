@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/tools/auth/exec"
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var loginCmd = &cobra.Command{
 	Use:          "login",
 	Short:        "login",
@@ -18,7 +18,7 @@ var loginCmd = &cobra.Command{
 	Hidden:       true, // These commands are not really meant to be used directly by users, so it's confusing to have them discoverable.
 }
 
-//nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	rootCmd.AddCommand(loginCmd)
 }

@@ -88,7 +88,7 @@ func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) 
 
 	setGlobalLoggers(log, flush)
 
-	// nolint: exhaustive  // the switch above is exhaustive for format already
+	//nolint:exhaustive  // the switch above is exhaustive for format already
 	switch spec.Format {
 	case FormatCLI:
 		return nil // do not spawn go routines on the CLI to allow the CLI to call this more than once

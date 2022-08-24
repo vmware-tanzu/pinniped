@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package loginhtml defines HTML templates used by the Supervisor.
-//nolint: gochecknoglobals // This package uses globals to ensure that all parsing and minifying happens at init.
 package loginhtml
 
 import (
@@ -15,6 +14,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider/csp"
 )
 
+//nolint:gochecknoglobals // This package uses globals to ensure that all parsing and minifying happens at init.
 var (
 	//go:embed login_form.css
 	rawCSS      string
@@ -22,19 +22,19 @@ var (
 
 	//go:embed login_form.gohtml
 	rawHTMLTemplate string
+
+	// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
+	parsedHTMLTemplate = template.Must(template.New("login_form.gohtml").Funcs(template.FuncMap{
+		"minifiedCSS": func() template.CSS { return template.CSS(CSS()) },
+	}).Parse(rawHTMLTemplate))
+
+	// Generate the CSP header value once since it's effectively constant.
+	cspValue = strings.Join([]string{
+		`default-src 'none'`,
+		`style-src '` + csp.Hash(minifiedCSS) + `'`,
+		`frame-ancestors 'none'`,
+	}, "; ")
 )
-
-// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
-var parsedHTMLTemplate = template.Must(template.New("login_form.gohtml").Funcs(template.FuncMap{
-	"minifiedCSS": func() template.CSS { return template.CSS(CSS()) },
-}).Parse(rawHTMLTemplate))
-
-// Generate the CSP header value once since it's effectively constant.
-var cspValue = strings.Join([]string{
-	`default-src 'none'`,
-	`style-src '` + csp.Hash(minifiedCSS) + `'`,
-	`frame-ancestors 'none'`,
-}, "; ")
 
 func panicOnError(s string, err error) string {
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -7,7 +7,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -155,7 +154,7 @@ func drainAndMaybeCloseBody(resp *http.Response, close bool) {
 	// from k8s.io/client-go/rest/request.go...
 	const maxBodySlurpSize = 2 << 10
 	if resp.ContentLength <= maxBodySlurpSize {
-		_, _ = io.Copy(ioutil.Discard, &io.LimitedReader{R: resp.Body, N: maxBodySlurpSize})
+		_, _ = io.Copy(io.Discard, &io.LimitedReader{R: resp.Body, N: maxBodySlurpSize})
 	}
 	if close {
 		resp.Body.Close()

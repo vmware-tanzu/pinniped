@@ -1,7 +1,7 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package secretgenerator provides a supervisorSecretsController that can ensure existence of a generated secret.
+// Package generator provides a supervisorSecretsController that can ensure existence of a generated secret.
 package generator
 
 import (
@@ -24,8 +24,7 @@ import (
 )
 
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate a symmetric key.
-//nolint:gochecknoglobals
-var generateKey = generateSymmetricKey
+var generateKey = generateSymmetricKey //nolint:gochecknoglobals
 
 type supervisorSecretsController struct {
 	labels         map[string]string

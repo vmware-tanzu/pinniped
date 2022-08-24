@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package webhookcachefiller implements a controller for filling an authncache.Cache with each added/updated WebhookAuthenticator.
@@ -6,7 +6,6 @@ package webhookcachefiller
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -64,7 +63,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
-	webhookAuthenticator, err := newWebhookAuthenticator(&obj.Spec, ioutil.TempFile, clientcmd.WriteToFile)
+	webhookAuthenticator, err := newWebhookAuthenticator(&obj.Spec, os.CreateTemp, clientcmd.WriteToFile)
 	if err != nil {
 		return fmt.Errorf("failed to build webhook config: %w", err)
 	}

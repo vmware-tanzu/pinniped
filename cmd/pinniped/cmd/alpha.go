@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var alphaCmd = &cobra.Command{
 	Use:          "alpha",
 	Short:        "alpha",
@@ -16,7 +16,7 @@ var alphaCmd = &cobra.Command{
 	Hidden:       true,
 }
 
-//nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	rootCmd.AddCommand(alphaCmd)
 }

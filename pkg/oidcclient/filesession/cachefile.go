@@ -1,13 +1,12 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package cachefile implements the file format for session caches.
+// Package filesession implements the file format for session caches.
 package filesession
 
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"sort"
@@ -55,7 +54,7 @@ type (
 
 // readSessionCache loads a sessionCache from a path on disk. If the requested path does not exist, it returns an empty cache.
 func readSessionCache(path string) (*sessionCache, error) {
-	cacheYAML, err := ioutil.ReadFile(path)
+	cacheYAML, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// If the file was not found, generate a freshly initialized empty cache.
@@ -91,7 +90,7 @@ func (c *sessionCache) writeTo(path string) error {
 	// Marshal the session back to YAML and save it to the file.
 	cacheYAML, err := yaml.Marshal(c)
 	if err == nil {
-		err = ioutil.WriteFile(path, cacheYAML, 0600)
+		err = os.WriteFile(path, cacheYAML, 0600)
 	}
 	return err
 }

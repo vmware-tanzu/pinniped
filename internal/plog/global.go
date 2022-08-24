@@ -15,7 +15,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	// note that these globals have no locks on purpose - they are expected to be set at init and then again after config parsing.
 	globalLevel  zap.AtomicLevel
@@ -26,7 +26,7 @@ var (
 	sinkMap sync.Map
 )
 
-// nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	// make sure we always have a functional global logger
 	globalLevel = zap.NewAtomicLevelAt(0) // log at the 0 verbosity level to start with, i.e. the "always" logs

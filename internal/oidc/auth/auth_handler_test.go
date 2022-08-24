@@ -54,10 +54,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		oidcUpstreamSubject                   = "abc123-some guid" // has a space character which should get escaped in URL
 		oidcUpstreamSubjectQueryEscaped       = "abc123-some+guid"
 		oidcUpstreamUsername                  = "test-oidc-pinniped-username"
-		oidcUpstreamPassword                  = "test-oidc-pinniped-password" //nolint: gosec
+		oidcUpstreamPassword                  = "test-oidc-pinniped-password" //nolint:gosec
 		oidcUpstreamUsernameClaim             = "the-user-claim"
 		oidcUpstreamGroupsClaim               = "the-groups-claim"
-		oidcPasswordGrantUpstreamRefreshToken = "some-opaque-token" //nolint: gosec
+		oidcPasswordGrantUpstreamRefreshToken = "some-opaque-token" //nolint:gosec
 		oidcUpstreamAccessToken               = "some-access-token"
 
 		downstreamIssuer                       = "https://my-downstream-issuer.com/some-path"

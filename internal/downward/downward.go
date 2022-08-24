@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package downward implements a client interface for interacting with Kubernetes "downwardAPI" volumes.
@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,20 +32,20 @@ type PodInfo struct {
 // Load pod metadata from a downwardAPI volume directory.
 func Load(directory string) (*PodInfo, error) {
 	var result PodInfo
-	ns, err := ioutil.ReadFile(filepath.Join(directory, "namespace"))
+	ns, err := os.ReadFile(filepath.Join(directory, "namespace"))
 	if err != nil {
 		return nil, fmt.Errorf("could not load namespace: %w", err)
 	}
 	result.Namespace = strings.TrimSpace(string(ns))
 
-	name, err := ioutil.ReadFile(filepath.Join(directory, "name"))
+	name, err := os.ReadFile(filepath.Join(directory, "name"))
 	if err != nil {
 		plog.Warning("could not read 'name' downward API file")
 	} else {
 		result.Name = strings.TrimSpace(string(name))
 	}
 
-	labels, err := ioutil.ReadFile(filepath.Join(directory, "labels"))
+	labels, err := os.ReadFile(filepath.Join(directory, "labels"))
 	if err != nil {
 		return nil, fmt.Errorf("could not load labels: %w", err)
 	}

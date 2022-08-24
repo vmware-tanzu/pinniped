@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -6,7 +6,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -54,10 +54,10 @@ func TestCABundleFlag(t *testing.T) {
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	emptyFilePath := filepath.Join(tmpdir, "empty")
-	require.NoError(t, ioutil.WriteFile(emptyFilePath, []byte{}, 0600))
+	require.NoError(t, os.WriteFile(emptyFilePath, []byte{}, 0600))
 
 	testCAPath := filepath.Join(tmpdir, "testca.pem")
-	require.NoError(t, ioutil.WriteFile(testCAPath, testCA.Bundle(), 0600))
+	require.NoError(t, os.WriteFile(testCAPath, testCA.Bundle(), 0600))
 
 	f := caBundleFlag{}
 	require.Equal(t, "path", f.Type())

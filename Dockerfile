@@ -3,7 +3,7 @@
 # Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.18.3 as build-env
+FROM golang:1.19.0 as build-env
 
 WORKDIR /work
 COPY . .
@@ -24,7 +24,7 @@ RUN \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator
 
 # Use a distroless runtime image with CA certificates, timezone data, and not much else.
-FROM gcr.io/distroless/static:nonroot@sha256:2556293984c5738fc75208cce52cf0a4762c709cf38e4bf8def65a61992da0ad
+FROM gcr.io/distroless/static:nonroot@sha256:66cd130e90992bebb68b8735a72f8ad154d0cd4a6f3a8b76f1e372467818d1b4
 
 # Copy the server binary from the build-env stage.
 COPY --from=build-env /usr/local/bin /usr/local/bin

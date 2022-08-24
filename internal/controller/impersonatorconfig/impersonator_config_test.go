@@ -11,7 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -92,7 +92,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 				caSignerName,
 				nil,
-				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
 			)
 			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
@@ -360,10 +360,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				}
 
 				testHTTPServerMutex.Lock() // this is to satisfy the race detector
-				testHTTPServer = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-					_, err := fmt.Fprint(w, fakeServerResponseBody)
-					r.NoError(err)
-				})}
+				testHTTPServer = &http.Server{
+					Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+						_, err := fmt.Fprint(w, fakeServerResponseBody)
+						r.NoError(err)
+					}),
+					ReadHeaderTimeout: 10 * time.Second,
+				}
 				testHTTPServerMutex.Unlock()
 
 				// Start serving requests in the background.
@@ -480,7 +483,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NoError(err)
 
 			r.Equal(http.StatusOK, resp.StatusCode)
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			r.NoError(resp.Body.Close())
 			r.NoError(err)
 			r.Equal(fakeServerResponseBody, string(body))
@@ -560,7 +563,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				impersonatorFunc,
 				caSignerName,
 				signingCertProvider,
-				plog.Logr(), // nolint: staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
 			)
 			controllerlib.TestWrap(t, subject, func(syncer controllerlib.Syncer) controllerlib.Syncer {
 				tlsServingCertDynamicCertProvider = syncer.(*impersonatorConfigController).tlsServingCertDynamicCertProvider

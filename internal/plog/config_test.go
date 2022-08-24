@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -136,7 +136,7 @@ func TestFormat(t *testing.T) {
 				`go.pinniped.dev/internal/plog.TestFormat
 	%s/config_test.go:%d
 testing.tRunner
-	%s/src/testing/testing.go:1439`,
+	%s/src/testing/testing.go:1446`,
 				wd, startLogLine+2+13+14+11+12+24, runtime.GOROOT(),
 			),
 		),

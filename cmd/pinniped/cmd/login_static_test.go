@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -32,7 +32,7 @@ func TestLoginStaticCommand(t *testing.T) {
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
-	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
+	require.NoError(t, os.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
 
 	now, err := time.Parse(time.RFC3339Nano, "2038-12-07T23:37:26.953313745Z")
 	require.NoError(t, err)

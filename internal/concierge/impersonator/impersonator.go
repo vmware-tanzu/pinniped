@@ -643,7 +643,7 @@ func getTransportForUser(ctx context.Context, userInfo user.Info, delegate, dele
 }
 
 func canImpersonateFully(userInfo user.Info) bool {
-	// nolint: gosimple  // this structure is on purpose because we plan to expand this function
+	//nolint:gosimple  // this structure is on purpose because we plan to expand this function
 	if len(userInfo.GetUID()) == 0 {
 		return true
 	}

@@ -949,7 +949,7 @@ func TestUnwrap(t *testing.T) {
 
 	server, restConfig := fakekubeapi.Start(t, nil)
 
-	serverSubjects := server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs.Subjects() // nolint: staticcheck  // not system cert pool
+	serverSubjects := server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs.Subjects()
 
 	t.Run("regular client", func(t *testing.T) {
 		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
@@ -1121,7 +1121,7 @@ func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
 			require.Equal(t, secureTLSConfig.NextProtos, tlsConfig.NextProtos)
 
 			// x509.CertPool has some embedded functions that make it hard to compare so just look at the subjects
-			require.Equal(t, serverSubjects, tlsConfig.RootCAs.Subjects()) // nolint: staticcheck  // not system cert pool
+			require.Equal(t, serverSubjects, tlsConfig.RootCAs.Subjects())
 		})
 	}
 }

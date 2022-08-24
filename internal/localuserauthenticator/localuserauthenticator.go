@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package localuserauthenticator provides a authentication webhook program.
@@ -79,8 +79,9 @@ func (w *webhook) start(ctx context.Context, l net.Listener) error {
 		return &cert, err
 	}
 	server := http.Server{
-		Handler:   w,
-		TLSConfig: c,
+		Handler:           w,
+		TLSConfig:         c,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	errCh := make(chan error)
@@ -356,7 +357,7 @@ func run(ctx context.Context) error {
 	startControllers(ctx, dynamicCertProvider, client.Kubernetes, kubeInformers)
 	plog.Debug("controllers are ready")
 
-	// nolint: gosec // Intentionally binding to all network interfaces.
+	//nolint:gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":8443")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)

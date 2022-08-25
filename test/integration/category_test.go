@@ -36,7 +36,7 @@ func requireCleanKubectlStderr(t *testing.T, stderr string) {
 		case strings.TrimSpace(line) == "",
 			strings.Contains(line, "Throttling request took"),
 			strings.Contains(line, "due to client-side throttling, not priority and fairness"),
-			strings.Contains(line, "the gcp auth plugin is deprecated in v1.22+, unavailable in v1.25+; use gcloud instead"),
+			strings.Contains(line, "the gcp auth plugin is deprecated in v1.22+, unavailable in "),
 			strings.Contains(line, "To learn more, consult https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke"):
 			// ignore these allowed stderr lines
 		default:

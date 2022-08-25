@@ -46,6 +46,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/psession"
@@ -646,11 +647,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 		authcodeExchange    authcodeExchangeInputs
 		modifyRequestParams func(t *testing.T, params url.Values)
-		modifyStorage       func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request)
+		modifyStorage       func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request)
 		requestedAudience   string
 
-		wantStatus               int
-		wantResponseBodyContains string
+		wantStatus            int
+		wantErrorType         string
+		wantErrorDescContains string
 	}{
 		{
 			name:              "happy path",
@@ -659,11 +661,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:        http.StatusOK,
 		},
 		{
-			name:                     "missing audience",
-			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "missing audience parameter",
+			name:                  "missing audience",
+			authcodeExchange:      doValidAuthCodeExchange,
+			requestedAudience:     "",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "Missing 'audience' parameter.",
 		},
 		{
 			name:              "missing subject_token",
@@ -672,8 +675,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("subject_token")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "missing subject_token parameter",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "Missing 'subject_token' parameter.",
 		},
 		{
 			name:              "wrong subject_token_type",
@@ -682,8 +686,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token_type", "invalid")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported subject_token_type parameter value`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported 'subject_token_type' parameter value, must be 'urn:ietf:params:oauth:token-type:access_token'.`,
 		},
 		{
 			name:              "wrong requested_token_type",
@@ -692,8 +697,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("requested_token_type", "invalid")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported requested_token_type parameter value`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported 'requested_token_type' parameter value, must be 'urn:ietf:params:oauth:token-type:jwt'.`,
 		},
 		{
 			name:              "unsupported RFC8693 parameter",
@@ -702,8 +708,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("resource", "some-resource-parameter-value")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported parameter resource`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported parameter 'resource'.`,
 		},
 		{
 			name:              "bogus access token",
@@ -712,20 +719,70 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token", "some-bogus-value")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `Invalid token format`,
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "request_unauthorized",
+			wantErrorDescContains: `The request could not be authorized. Invalid 'subject_token' parameter value.`,
 		},
 		{
-			name:              "valid access token, but deleted from storage",
+			name:              "valid access token, but it was already deleted from storage",
 			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
-			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request) {
+			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request) {
 				parts := strings.Split(pendingRequest.Form.Get("subject_token"), ".")
 				require.Len(t, parts, 2)
 				require.NoError(t, storage.DeleteAccessTokenSession(context.Background(), parts[1]))
 			},
-			wantStatus:               http.StatusUnauthorized,
-			wantResponseBodyContains: `invalid subject_token`,
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "request_unauthorized",
+			wantErrorDescContains: `Invalid 'subject_token' parameter value.`,
+		},
+		{
+			name:              "valid access token, but it has already expired",
+			authcodeExchange:  doValidAuthCodeExchange,
+			requestedAudience: "some-workload-cluster",
+			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request) {
+				// The fosite storage APIs don't offer a way to update an access token, so we will instead find the underlying
+				// storage Secret and update it in a more manual way. First get the access token's signature.
+				parts := strings.Split(pendingRequest.Form.Get("subject_token"), ".")
+				require.Len(t, parts, 2)
+				// Find the storage Secret for the access token by using its signature to compute the Secret name.
+				accessTokenSignature := parts[1]
+				accessTokenSecretName := getSecretNameFromSignature(t, accessTokenSignature, "access-token")
+				accessTokenSecret, err := secrets.Get(context.Background(), accessTokenSecretName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Parse the session from the storage Secret.
+				savedSessionJSON := accessTokenSecret.Data["pinniped-storage-data"]
+				// Declare the appropriate empty struct, similar to how our kubestorage implementation
+				// of GetAccessTokenSession() does when parsing a session from a storage Secret.
+				accessTokenSession := &accesstoken.Session{
+					Request: &fosite.Request{
+						Client:  &clientregistry.Client{},
+						Session: &psession.PinnipedSession{},
+					},
+				}
+				// Parse the session JSON and fill the empty struct with its data.
+				err = json.Unmarshal(savedSessionJSON, accessTokenSession)
+				require.NoError(t, err)
+				// Change the access token's expiration time to be one hour ago, so it will be considered already expired.
+				oneHourAgoInUTC := time.Now().UTC().Add(-1 * time.Hour)
+				accessTokenSession.Request.Session.(*psession.PinnipedSession).Fosite.SetExpiresAt(fosite.AccessToken, oneHourAgoInUTC)
+				// Write the updated session back to the access token's storage Secret.
+				updatedSessionJSON, err := json.Marshal(accessTokenSession)
+				require.NoError(t, err)
+				accessTokenSecret.Data["pinniped-storage-data"] = updatedSessionJSON
+				_, err = secrets.Update(context.Background(), accessTokenSecret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				// Just to be sure that this test setup is valid, confirm that the code above correctly updated the
+				// access token's expiration time by reading it again, this time performing the read using the
+				// kubestorage API instead of the manual/direct approach used above.
+				session, err := storage.GetAccessTokenSession(context.Background(), accessTokenSignature, nil)
+				require.NoError(t, err)
+				expiresAt := session.GetSession().GetExpiresAt(fosite.AccessToken)
+				require.Equal(t, oneHourAgoInUTC, expiresAt)
+			},
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "invalid_token",
+			wantErrorDescContains: `Token expired. Access token expired at `,
 		},
 		{
 			name: "access token missing pinniped:request-audience scope",
@@ -741,9 +798,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 				},
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the 'pinniped:request-audience' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `Missing the 'pinniped:request-audience' scope.`,
 		},
 		{
 			name: "access token missing openid scope",
@@ -759,9 +817,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 				},
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the 'openid' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `Missing the 'openid' scope.`,
 		},
 		{
 			name: "token minting failure",
@@ -773,9 +832,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
 				want:           successfulAuthCodeExchange,
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusServiceUnavailable,
-			wantResponseBodyContains: `The authorization server is currently unable to handle the request`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusServiceUnavailable,
+			wantErrorType:         "temporarily_unavailable",
+			wantErrorDescContains: `The authorization server is currently unable to handle the request`,
 		},
 	}
 	for _, test := range tests {
@@ -791,13 +851,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			request := happyTokenExchangeRequest(test.requestedAudience, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			if test.modifyStorage != nil {
-				test.modifyStorage(t, storage, request)
+				test.modifyStorage(t, storage, secrets, request)
 			}
 			if test.modifyRequestParams != nil {
 				test.modifyRequestParams(t, request.Form)
 			}
 
-			req := httptest.NewRequest("POST", "/path/shouldn't/matter", body(request.Form).ReadCloser())
+			req := httptest.NewRequest("POST", "/token/exchange/path/shouldn't/matter", body(request.Form).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rsp = httptest.NewRecorder()
 
@@ -815,12 +875,23 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
-			if test.wantResponseBodyContains != "" {
-				require.Contains(t, rsp.Body.String(), test.wantResponseBodyContains)
-			}
 
-			// The remaining assertions apply only to the happy path.
+			var parsedResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
+
 			if rsp.Code != http.StatusOK {
+				// All error responses should have two JSON keys.
+				require.Len(t, parsedResponseBody, 2)
+
+				errorType := parsedResponseBody["error"]
+				require.NotEmpty(t, errorType)
+				require.Equal(t, test.wantErrorType, errorType)
+
+				errorDesc := parsedResponseBody["error_description"]
+				require.NotEmpty(t, errorDesc)
+				require.Contains(t, errorDesc, test.wantErrorDescContains)
+
+				// The remaining assertions apply only to the happy path.
 				return
 			}
 
@@ -830,15 +901,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			err = firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
 			require.NoError(t, err)
 
-			var responseBody map[string]interface{}
-			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &responseBody))
-
-			require.Contains(t, responseBody, "access_token")
-			require.Equal(t, "N_A", responseBody["token_type"])
-			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", responseBody["issued_token_type"])
+			require.Contains(t, parsedResponseBody, "access_token")
+			require.Equal(t, "N_A", parsedResponseBody["token_type"])
+			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", parsedResponseBody["issued_token_type"])
 
 			// Parse the returned token.
-			parsedJWT, err := jose.ParseSigned(responseBody["access_token"].(string))
+			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string))
 			require.NoError(t, err)
 			var tokenClaims map[string]interface{}
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
@@ -3677,4 +3745,15 @@ func TestDiffSortedGroups(t *testing.T) {
 			require.Equal(t, test.wantRemoved, removed)
 		})
 	}
+}
+
+func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string) string {
+	t.Helper()
+	// try to decode base64 signatures to prevent double encoding of binary data
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(signature)
+	require.NoError(t, err)
+	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
+	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
+	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
+	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
 }

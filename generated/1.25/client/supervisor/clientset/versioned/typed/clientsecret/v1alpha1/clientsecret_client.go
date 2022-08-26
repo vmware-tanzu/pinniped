@@ -8,34 +8,29 @@ package v1alpha1
 import (
 	"net/http"
 
-	v1alpha1 "go.pinniped.dev/generated/1.25/apis/supervisor/config/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.25/apis/supervisor/clientsecret/v1alpha1"
 	"go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
-type ConfigV1alpha1Interface interface {
+type ClientsecretV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	FederationDomainsGetter
-	OIDCClientsGetter
+	OIDCClientSecretRequestsGetter
 }
 
-// ConfigV1alpha1Client is used to interact with features provided by the config.supervisor.pinniped.dev group.
-type ConfigV1alpha1Client struct {
+// ClientsecretV1alpha1Client is used to interact with features provided by the clientsecret.supervisor.pinniped.dev group.
+type ClientsecretV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ConfigV1alpha1Client) FederationDomains(namespace string) FederationDomainInterface {
-	return newFederationDomains(c, namespace)
+func (c *ClientsecretV1alpha1Client) OIDCClientSecretRequests(namespace string) OIDCClientSecretRequestInterface {
+	return newOIDCClientSecretRequests(c, namespace)
 }
 
-func (c *ConfigV1alpha1Client) OIDCClients(namespace string) OIDCClientInterface {
-	return newOIDCClients(c, namespace)
-}
-
-// NewForConfig creates a new ConfigV1alpha1Client for the given config.
+// NewForConfig creates a new ClientsecretV1alpha1Client for the given config.
 // NewForConfig is equivalent to NewForConfigAndClient(c, httpClient),
 // where httpClient was generated with rest.HTTPClientFor(c).
-func NewForConfig(c *rest.Config) (*ConfigV1alpha1Client, error) {
+func NewForConfig(c *rest.Config) (*ClientsecretV1alpha1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -47,9 +42,9 @@ func NewForConfig(c *rest.Config) (*ConfigV1alpha1Client, error) {
 	return NewForConfigAndClient(&config, httpClient)
 }
 
-// NewForConfigAndClient creates a new ConfigV1alpha1Client for the given config and http client.
+// NewForConfigAndClient creates a new ClientsecretV1alpha1Client for the given config and http client.
 // Note the http client provided takes precedence over the configured transport values.
-func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ConfigV1alpha1Client, error) {
+func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ClientsecretV1alpha1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -58,12 +53,12 @@ func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ConfigV1alpha1Clien
 	if err != nil {
 		return nil, err
 	}
-	return &ConfigV1alpha1Client{client}, nil
+	return &ClientsecretV1alpha1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new ConfigV1alpha1Client for the given config and
+// NewForConfigOrDie creates a new ClientsecretV1alpha1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *ConfigV1alpha1Client {
+func NewForConfigOrDie(c *rest.Config) *ClientsecretV1alpha1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -71,9 +66,9 @@ func NewForConfigOrDie(c *rest.Config) *ConfigV1alpha1Client {
 	return client
 }
 
-// New creates a new ConfigV1alpha1Client for the given RESTClient.
-func New(c rest.Interface) *ConfigV1alpha1Client {
-	return &ConfigV1alpha1Client{c}
+// New creates a new ClientsecretV1alpha1Client for the given RESTClient.
+func New(c rest.Interface) *ClientsecretV1alpha1Client {
+	return &ClientsecretV1alpha1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -91,7 +86,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ConfigV1alpha1Client) RESTClient() rest.Interface {
+func (c *ClientsecretV1alpha1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

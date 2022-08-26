@@ -5,6 +5,4 @@
 
 package v1alpha1
 
-type FederationDomainExpansion interface{}
-
-type OIDCClientExpansion interface{}
+type OIDCClientSecretRequestExpansion interface{}

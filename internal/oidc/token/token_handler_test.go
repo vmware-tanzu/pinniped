@@ -747,7 +747,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				require.Len(t, parts, 2)
 				// Find the storage Secret for the access token by using its signature to compute the Secret name.
 				accessTokenSignature := parts[1]
-				accessTokenSecretName := getSecretNameFromSignature(t, accessTokenSignature, "access-token")
+				accessTokenSecretName := getSecretNameFromSignature(t, accessTokenSignature, "access-token") // "access-token" is the storage type used in the Secret's name
 				accessTokenSecret, err := secrets.Get(context.Background(), accessTokenSecretName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// Parse the session from the storage Secret.
@@ -1143,7 +1143,7 @@ func TestRefreshGrant(t *testing.T) {
 		idps                      *oidctestutil.UpstreamIDPListerBuilder
 		authcodeExchange          authcodeExchangeInputs
 		refreshRequest            refreshRequestInputs
-		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string)
+		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string)
 	}{
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
@@ -1593,6 +1593,59 @@ func TestRefreshGrant(t *testing.T) {
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 				),
+			},
+		},
+		{
+			name: "when a valid refresh token is sent in the refresh request, but the token has already expired",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+			},
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
+				// The fosite storage APIs don't offer a way to update a refresh token, so we will instead find the underlying
+				// storage Secret and update it in a more manual way. First get the refresh token's signature.
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				// Find the storage Secret for the refresh token by using its signature to compute the Secret name.
+				refreshTokenSecretName := getSecretNameFromSignature(t, refreshTokenSignature, "refresh-token") // "refresh-token" is the storage type used in the Secret's name
+				refreshTokenSecret, err := secrets.Get(context.Background(), refreshTokenSecretName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Parse the session from the storage Secret.
+				savedSessionJSON := refreshTokenSecret.Data["pinniped-storage-data"]
+				// Declare the appropriate empty struct, similar to how our kubestorage implementation
+				// of GetRefreshTokenSession() does when parsing a session from a storage Secret.
+				refreshTokenSession := &refreshtoken.Session{
+					Request: &fosite.Request{
+						Client:  &clientregistry.Client{},
+						Session: &psession.PinnipedSession{},
+					},
+				}
+				// Parse the session JSON and fill the empty struct with its data.
+				err = json.Unmarshal(savedSessionJSON, refreshTokenSession)
+				require.NoError(t, err)
+				// Change the refresh token's expiration time to be one hour ago, so it will be considered already expired.
+				oneHourAgoInUTC := time.Now().UTC().Add(-1 * time.Hour)
+				refreshTokenSession.Request.Session.(*psession.PinnipedSession).Fosite.SetExpiresAt(fosite.RefreshToken, oneHourAgoInUTC)
+				// Write the updated session back to the refresh token's storage Secret.
+				updatedSessionJSON, err := json.Marshal(refreshTokenSession)
+				require.NoError(t, err)
+				refreshTokenSecret.Data["pinniped-storage-data"] = updatedSessionJSON
+				_, err = secrets.Update(context.Background(), refreshTokenSecret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				// Just to be sure that this test setup is valid, confirm that the code above correctly updated the
+				// refresh token's expiration time by reading it again, this time performing the read using the
+				// kubestorage API instead of the manual/direct approach used above.
+				session, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				expiresAt := session.GetSession().GetExpiresAt(fosite.RefreshToken)
+				require.Equal(t, oneHourAgoInUTC, expiresAt)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				},
 			},
 		},
 		{
@@ -2393,7 +2446,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2431,7 +2484,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2473,7 +2526,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2515,7 +2568,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2652,7 +2705,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2689,7 +2742,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2730,7 +2783,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -2836,7 +2889,7 @@ func TestRefreshGrant(t *testing.T) {
 			require.NotEmpty(t, firstRefreshToken)
 
 			if test.modifyRefreshTokenStorage != nil {
-				test.modifyRefreshTokenStorage(t, oauthStore, firstRefreshToken)
+				test.modifyRefreshTokenStorage(t, oauthStore, secrets, firstRefreshToken)
 			}
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",

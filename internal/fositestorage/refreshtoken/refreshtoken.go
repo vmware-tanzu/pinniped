@@ -91,6 +91,7 @@ func (a *refreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, sig
 		signature,
 		&Session{Request: request, Version: refreshTokenStorageVersion},
 		map[string]string{fositestorage.StorageRequestIDLabelName: requester.GetID()},
+		nil,
 	)
 	return err
 }

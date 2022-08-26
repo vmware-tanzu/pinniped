@@ -217,7 +217,7 @@ func TestManager(t *testing.T) {
 			oidctestutil.VerifyECDSAIDToken(t, jwkIssuer, downstreamClientID, privateKey, idToken)
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
-			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+8,
+			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+9,
 				"did not perform any kube actions during the callback request, but should have")
 		}
 

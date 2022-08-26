@@ -120,7 +120,7 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, nil)
+				rv1, err := storage.Create(ctx, signature, data, nil, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -180,14 +180,14 @@ func TestStorage(t *testing.T) {
 			mocks:    nil,
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				data := &testJSON{Data: "create1"}
-				rv1, err := storage.Create(ctx, "sig1", data, nil)
+				rv1, err := storage.Create(ctx, "sig1", data, nil, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
 				fakeClock.Step(42 * time.Minute) // simulate that a known amount of time has passed
 
 				data = &testJSON{Data: "create2"}
-				rv1, err = storage.Create(ctx, "sig2", data, nil)
+				rv1, err = storage.Create(ctx, "sig2", data, nil, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -279,7 +279,7 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, map[string]string{"label1": "value1", "label2": "value2"})
+				rv1, err := storage.Create(ctx, signature, data, map[string]string{"label1": "value1", "label2": "value2"}, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -456,6 +456,7 @@ func TestStorage(t *testing.T) {
 				return nil
 			},
 			wantActions: []coretesting.Action{
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba"),
 				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba"),
 				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1026,7 +1027,7 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, nil)
+				rv1, err := storage.Create(ctx, signature, data, nil, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 

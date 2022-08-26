@@ -43,7 +43,7 @@ func NewKubeStorage(
 ) *KubeStorage {
 	nowFunc := time.Now
 	return &KubeStorage{
-		clientManager:            clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, nowFunc), minBcryptCost),
+		clientManager:            clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets), minBcryptCost),
 		authorizationCodeStorage: authorizationcode.New(secrets, nowFunc, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
 		pkceStorage:              pkce.New(secrets, nowFunc, timeoutsConfiguration.PKCESessionStorageLifetime),
 		oidcStorage:              openidconnect.New(secrets, nowFunc, timeoutsConfiguration.OIDCSessionStorageLifetime),

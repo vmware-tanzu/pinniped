@@ -441,7 +441,7 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 
 	created, err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Create(ctx, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        oidcclientsecretstorage.New(nil, nil).GetName(forOIDCClient.UID), // use the required name
+			Name:        oidcclientsecretstorage.New(nil).GetName(forOIDCClient.UID), // use the required name
 			Labels:      map[string]string{"storage.pinniped.dev/type": "oidc-client-secret", "pinniped.dev/test": ""},
 			Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
 		},

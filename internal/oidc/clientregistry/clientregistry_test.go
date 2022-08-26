@@ -237,7 +237,7 @@ func TestClientManager(t *testing.T) {
 			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients(testNamespace)
 			subject := NewClientManager(
 				oidcClientsClient,
-				oidcclientsecretstorage.New(secrets, time.Now),
+				oidcclientsecretstorage.New(secrets),
 				oidcclientvalidator.DefaultMinBcryptCost,
 			)
 

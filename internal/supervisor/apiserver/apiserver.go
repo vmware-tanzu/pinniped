@@ -14,8 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/pkg/version"
 
+	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/clientsecretrequest"
@@ -31,6 +33,9 @@ type ExtraConfig struct {
 	Scheme                             *runtime.Scheme
 	NegotiatedSerializer               runtime.NegotiatedSerializer
 	ClientSecretSupervisorGroupVersion schema.GroupVersion
+	Secrets                            corev1client.SecretInterface
+	OIDCClients                        configv1alpha1clientset.OIDCClientInterface
+	Namespace                          string
 }
 
 type PinnipedServer struct {
@@ -75,7 +80,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			clientSecretReqGVR := c.ExtraConfig.ClientSecretSupervisorGroupVersion.WithResource("oidcclientsecretrequests")
-			clientSecretReqStorage := clientsecretrequest.NewREST(clientSecretReqGVR.GroupResource())
+			clientSecretReqStorage := clientsecretrequest.NewREST(c.ExtraConfig.Secrets, c.ExtraConfig.OIDCClients, c.ExtraConfig.Namespace)
 			return clientSecretReqGVR, clientSecretReqStorage
 		},
 	} {

@@ -71,7 +71,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	var errs []error //nolint: prealloc
+	var errs []error //nolint:prealloc
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			clientSecretReqGVR := c.ExtraConfig.ClientSecretSupervisorGroupVersion.WithResource("oidcclientsecretrequests")

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package certauthority
@@ -9,8 +9,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,10 +23,10 @@ import (
 func loadFromFiles(t *testing.T, certPath string, keyPath string) (*CA, error) {
 	t.Helper()
 
-	certPEM, err := ioutil.ReadFile(certPath)
+	certPEM, err := os.ReadFile(certPath)
 	require.NoError(t, err)
 
-	keyPEM, err := ioutil.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath)
 	require.NoError(t, err)
 
 	ca, err := Load(string(certPEM), string(keyPEM))
@@ -206,7 +206,7 @@ func TestPool(t *testing.T) {
 	require.NoError(t, err)
 
 	pool := ca.Pool()
-	require.Len(t, pool.Subjects(), 1) // nolint: staticcheck  // not system cert pool
+	require.Len(t, pool.Subjects(), 1)
 }
 
 type errSigner struct {

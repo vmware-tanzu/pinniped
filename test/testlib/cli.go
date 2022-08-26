@@ -1,10 +1,9 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +16,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var pinnipedCLIBinaryCache struct {
 	buf   []byte
 	mutex sync.Mutex
@@ -38,7 +37,7 @@ func PinnipedCLIPath(t *testing.T) string {
 	path := filepath.Join(testutil.TempDir(t), "pinniped")
 	if pinnipedCLIBinaryCache.buf != nil {
 		t.Log("using previously built pinniped CLI binary")
-		require.NoError(t, ioutil.WriteFile(path, pinnipedCLIBinaryCache.buf, 0500))
+		require.NoError(t, os.WriteFile(path, pinnipedCLIBinaryCache.buf, 0500))
 		return path
 	}
 
@@ -49,7 +48,7 @@ func PinnipedCLIPath(t *testing.T) string {
 	t.Logf("built CLI binary in %s", time.Since(start).Round(time.Millisecond))
 
 	// Fill our cache so we don't have to do this again.
-	pinnipedCLIBinaryCache.buf, err = ioutil.ReadFile(path)
+	pinnipedCLIBinaryCache.buf, err = os.ReadFile(path)
 	require.NoError(t, err, string(output))
 
 	return path

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -84,7 +83,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	testCABundlePath := filepath.Join(testutil.TempDir(t), "test-ca.pem")
 	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
-	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCABundlePEM, 0600))
+	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
@@ -384,7 +383,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -509,10 +508,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlPtyOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlPtyOutputBytes, _ := io.ReadAll(ptyFile)
 		if kubectlStdoutPipe != nil {
 			// On non-MacOS check that stdout of the CLI contains the expected output.
-			kubectlStdOutOutputBytes, _ := ioutil.ReadAll(kubectlStdoutPipe)
+			kubectlStdOutOutputBytes, _ := io.ReadAll(kubectlStdoutPipe)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
 		} else {
 			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
@@ -603,7 +602,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -681,7 +680,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		kubectlOutput := string(kubectlOutputBytes)
 
 		// The output should look like an authentication failure, because the OIDCIdentityProvider disallows password grants.
@@ -739,7 +738,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -793,7 +792,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -860,7 +859,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -918,7 +917,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -980,7 +979,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
@@ -1500,7 +1499,7 @@ func runPinnipedGetKubeconfig(t *testing.T, env *testlib.TestEnv, pinnipedExe st
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
 
 	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
-	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
+	require.NoError(t, os.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
 	return kubeconfigPath
 }

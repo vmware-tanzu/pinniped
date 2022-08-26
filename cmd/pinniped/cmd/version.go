@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -10,7 +10,7 @@ import (
 	"k8s.io/component-base/version"
 )
 
-//nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	rootCmd.AddCommand(newVersionCommand())
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -18,10 +18,10 @@ import (
 
 // Test certificate and private key that should get an authentication error. Generated with cfssl [1], like this:
 //
-// 	$ brew install cfssl
-// 	$ cfssl print-defaults csr | cfssl genkey -initca - | cfssljson -bare ca
-// 	$ cfssl print-defaults csr | cfssl gencert -ca ca.pem -ca-key ca-key.pem -hostname=testuser - | cfssljson -bare client
-// 	$ cat client.pem client-key.pem
+//	$ brew install cfssl
+//	$ cfssl print-defaults csr | cfssl genkey -initca - | cfssljson -bare ca
+//	$ cfssl print-defaults csr | cfssl gencert -ca ca.pem -ca-key ca-key.pem -hostname=testuser - | cfssljson -bare client
+//	$ cat client.pem client-key.pem
 //
 // [1]: https://github.com/cloudflare/cfssl
 var (

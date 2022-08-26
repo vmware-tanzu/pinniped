@@ -861,7 +861,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	}()
 
 	var params url.Values
-	if h.useFormPost { // nolint:nestif
+	if h.useFormPost { //nolint:nestif
 		// Return HTTP 405 for anything that's not a POST or an OPTIONS request.
 		if r.Method != http.MethodPost && r.Method != http.MethodOptions {
 			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
@@ -969,8 +969,9 @@ func (h *handlerState) serve(listener net.Listener) func() {
 	mux := http.NewServeMux()
 	mux.Handle(h.callbackPath, httperr.HandlerFunc(h.handleAuthCodeCallback))
 	srv := http.Server{
-		Handler:     securityheader.Wrap(mux),
-		BaseContext: func(_ net.Listener) context.Context { return h.ctx },
+		Handler:           securityheader.Wrap(mux),
+		BaseContext:       func(_ net.Listener) context.Context { return h.ctx },
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() { _ = srv.Serve(listener) }()
 	return func() {

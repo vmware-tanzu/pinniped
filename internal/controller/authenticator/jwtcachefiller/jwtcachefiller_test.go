@@ -375,7 +375,7 @@ func TestController(t *testing.T) {
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.jwtAuthenticators...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
-			testLog := testlogger.NewLegacy(t) //nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 
 			if tt.cache != nil {
 				tt.cache(t, cache, tt.wantClose)

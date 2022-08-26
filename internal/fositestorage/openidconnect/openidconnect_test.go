@@ -100,7 +100,7 @@ func TestOpenIdConnectStorage(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, request, newRequest)
 
-	err = storage.DeleteOpenIDConnectSession(ctx, "fancy-code.fancy-signature") //nolint: staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
+	err = storage.DeleteOpenIDConnectSession(ctx, "fancy-code.fancy-signature") //nolint:staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
 	require.NoError(t, err)
 
 	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed

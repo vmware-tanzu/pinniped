@@ -8,8 +8,8 @@ package supervisor
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 
 	"k8s.io/utils/pointer"
@@ -36,7 +36,7 @@ const (
 // defaults (from the Config documentation), and verifies that the config is
 // valid (Config documentation).
 func FromPath(ctx context.Context, path string) (*Config, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}

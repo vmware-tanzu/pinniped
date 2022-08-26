@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -57,7 +56,7 @@ func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Inter
 }
 
 func NewRestConfigFromKubeconfig(t *testing.T, kubeConfig string) *rest.Config {
-	kubeConfigFile, err := ioutil.TempFile("", "pinniped-cli-test-*")
+	kubeConfigFile, err := os.CreateTemp("", "pinniped-cli-test-*")
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, os.Remove(kubeConfigFile.Name()))

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -8,7 +8,7 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -85,7 +85,7 @@ func (f *caBundleFlag) String() string {
 }
 
 func (f *caBundleFlag) Set(path string) error {
-	pem, err := ioutil.ReadFile(path)
+	pem, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("could not read CA bundle path: %w", err)
 	}

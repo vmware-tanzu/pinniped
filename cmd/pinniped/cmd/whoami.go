@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -24,7 +24,7 @@ import (
 	"go.pinniped.dev/internal/here"
 )
 
-//nolint: gochecknoinits
+//nolint:gochecknoinits
 func init() {
 	rootCmd.AddCommand(newWhoamiCommand(getRealConciergeClientset))
 }

@@ -169,7 +169,7 @@ func validateSecret(resource string, secret *corev1.Secret) error {
 	return nil
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 func (s *secretsStorage) GetName(signature string) string {

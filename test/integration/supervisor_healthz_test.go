@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -58,7 +58,7 @@ func httpGet(ctx context.Context, t *testing.T, client *http.Client, url string,
 	require.NoError(t, err)
 	require.Equal(t, expectedStatus, response.StatusCode)
 
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	err = response.Body.Close()
 	require.NoError(t, err)

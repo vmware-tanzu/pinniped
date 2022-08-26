@@ -8,7 +8,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -84,7 +84,7 @@ func TestManager(t *testing.T) {
 
 			// Minimal check to ensure that the right discovery endpoint was called
 			r.Equal(http.StatusOK, recorder.Code)
-			responseBody, err := ioutil.ReadAll(recorder.Body)
+			responseBody, err := io.ReadAll(recorder.Body)
 			r.NoError(err)
 			parsedDiscoveryResult := discovery.Metadata{}
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
@@ -105,7 +105,7 @@ func TestManager(t *testing.T) {
 
 			// Minimal check to ensure that the right IDP discovery endpoint was called
 			r.Equal(http.StatusOK, recorder.Code)
-			responseBody, err := ioutil.ReadAll(recorder.Body)
+			responseBody, err := io.ReadAll(recorder.Body)
 			r.NoError(err)
 			r.Equal(
 				fmt.Sprintf(`{"pinniped_identity_providers":[{"name":"%s","type":"%s","flows":%s}]}`+"\n", expectedIDPName, expectedIDPType, expectedFlowsJSON),
@@ -230,7 +230,7 @@ func TestManager(t *testing.T) {
 
 			// Minimal check to ensure that the right JWKS endpoint was called
 			r.Equal(http.StatusOK, recorder.Code)
-			responseBody, err := ioutil.ReadAll(recorder.Body)
+			responseBody, err := io.ReadAll(recorder.Body)
 			r.NoError(err)
 			parsedJWKSResult := jose.JSONWebKeySet{}
 			err = json.Unmarshal(responseBody, &parsedJWKSResult)

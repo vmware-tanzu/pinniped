@@ -11,7 +11,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var rootCmd = &cobra.Command{
 	Use:          "pinniped",
 	Short:        "pinniped",

@@ -44,6 +44,8 @@ func (*REST) New() runtime.Object {
 	return &clientsecretapi.OIDCClientSecretRequest{}
 }
 
+func (*REST) Destroy() {}
+
 func (*REST) NewList() runtime.Object {
 	return &clientsecretapi.OIDCClientSecretRequestList{}
 }

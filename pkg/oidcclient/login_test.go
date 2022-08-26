@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -72,7 +72,7 @@ func newClientForServer(server *httptest.Server) *http.Client {
 	return phttp.Default(pool)
 }
 
-func TestLogin(t *testing.T) { // nolint:gocyclo
+func TestLogin(t *testing.T) { //nolint:gocyclo
 	time1 := time.Date(2035, 10, 12, 13, 14, 15, 16, time.UTC)
 	time1Unix := int64(2075807775)
 	require.Equal(t, time1Unix, time1.Add(2*time.Minute).Unix())
@@ -1040,7 +1040,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 							return &http.Response{
 								StatusCode: http.StatusOK,
 								Header:     http.Header{"content-type": []string{"application/json"}},
-								Body:       ioutil.NopCloser(strings.NewReader(string(jsonResponseBody))),
+								Body:       io.NopCloser(strings.NewReader(string(jsonResponseBody))),
 							}, nil
 						default:
 							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
@@ -1890,7 +1890,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testLogger := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
+			testLogger := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			klog.SetLogger(testLogger.Logger)
 
 			tok, err := Login(tt.issuer, tt.clientID,
@@ -2333,7 +2333,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				logger:    plog.Logr(), // nolint: staticcheck  // old test with no log assertions
+				logger:    plog.Logr(), //nolint:staticcheck  // old test with no log assertions
 				issuer:    "https://valid-issuer.com/with/some/path",
 			}
 			if tt.opt != nil {

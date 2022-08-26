@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -10,7 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -259,7 +259,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 
 	const namespace = "tuna-namespace"
 
-	goodKeyPEM, err := ioutil.ReadFile("testdata/good-ec-key.pem")
+	goodKeyPEM, err := os.ReadFile("testdata/good-ec-key.pem")
 	require.NoError(t, err)
 	block, _ := pem.Decode(goodKeyPEM)
 	require.NotNil(t, block, "expected block to be non-nil...is goodKeyPEM a valid PEM?")
@@ -747,7 +747,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 func readJWKJSON(t *testing.T, path string) []byte {
 	t.Helper()
 
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 
 	// Trim whitespace from our testdata so that we match the compact JSON encoding of

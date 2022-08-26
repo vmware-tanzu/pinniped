@@ -77,8 +77,9 @@ func startServer(ctx context.Context, shutdown *sync.WaitGroup, l net.Listener, 
 	handler = withBootstrapPaths(handler, "/healthz") // only health checks are allowed for bootstrap connections
 
 	server := http.Server{
-		Handler:     handler,
-		ConnContext: withBootstrapConnCtx,
+		Handler:           handler,
+		ConnContext:       withBootstrapConnCtx,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	shutdown.Add(1)
@@ -288,7 +289,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				plog.Logr(), // nolint: staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
 				controllerlib.WithInformer,
 			),
 			singletonWorker).

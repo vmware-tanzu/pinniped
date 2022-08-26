@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -52,6 +51,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -119,7 +119,7 @@ var (
 	fositeInvalidPayloadErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty."
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body."
 		}
 	`)
 
@@ -633,7 +633,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			name: "payload is not valid form serialization",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyTokenRequest: func(r *http.Request, authCode string) {
-					r.Body = ioutil.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
+					r.Body = io.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
@@ -927,12 +927,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		authcodeExchange     authcodeExchangeInputs
 		modifyRequestParams  func(t *testing.T, params url.Values)
 		modifyRequestHeaders func(r *http.Request)
-		modifyStorage        func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request)
+		modifyStorage        func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request)
 		requestedAudience    string
 		kubeResources        func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 
-		wantStatus               int
-		wantResponseBodyContains string
+		wantStatus            int
+		wantErrorType         string
+		wantErrorDescContains string
 	}{
 		{
 			name:              "happy path",
@@ -1038,9 +1039,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'.`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "unauthorized_client",
+			wantErrorDescContains: `The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'.`,
 		},
 		{
 			name:          "dynamic client did not ask for the pinniped:request-audience scope in the original authorization request, so the access token submitted during token exchange lacks the scope",
@@ -1067,9 +1069,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `The resource owner or authorization server denied the request. missing the 'pinniped:request-audience' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `The resource owner or authorization server denied the request. Missing the 'pinniped:request-audience' scope.`,
 		},
 		{
 			name:          "dynamic client did not ask for the openid scope in the original authorization request, so the access token submitted during token exchange lacks the scope",
@@ -1096,9 +1099,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `The resource owner or authorization server denied the request. missing the 'openid' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `The resource owner or authorization server denied the request. Missing the 'openid' scope.`,
 		},
 		{
 			name:          "dynamic client did not ask for the username scope in the original authorization request, so the session during token exchange has no username associated with it",
@@ -1125,37 +1129,42 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `The resource owner or authorization server denied the request. No username found in session. Ensure that the 'username' scope was requested and granted at the authorization endpoint.`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `The resource owner or authorization server denied the request. No username found in session. Ensure that the 'username' scope was requested and granted at the authorization endpoint.`,
 		},
 		{
-			name:                     "missing audience",
-			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "missing audience parameter",
+			name:                  "missing audience",
+			authcodeExchange:      doValidAuthCodeExchange,
+			requestedAudience:     "",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "Missing 'audience' parameter.",
 		},
 		{
-			name:                     "bad requested audience when it looks like the name of an OIDCClient CR",
-			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "client.oauth.pinniped.dev-some-client-abc123",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
+			name:                  "bad requested audience when it looks like the name of an OIDCClient CR",
+			authcodeExchange:      doValidAuthCodeExchange,
+			requestedAudience:     "client.oauth.pinniped.dev-some-client-abc123",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "requested audience cannot contain '.pinniped.dev'",
 		},
 		{
-			name:                     "bad requested audience when it contains the substring .pinniped.dev because it is reserved for potential future usage",
-			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "something.pinniped.dev/some_aud",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "requested audience cannot contain '.pinniped.dev'",
+			name:                  "bad requested audience when it contains the substring .pinniped.dev because it is reserved for potential future usage",
+			authcodeExchange:      doValidAuthCodeExchange,
+			requestedAudience:     "something.pinniped.dev/some_aud",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "requested audience cannot contain '.pinniped.dev'",
 		},
 		{
-			name:                     "bad requested audience when it is the same name as the static public client pinniped-cli",
-			authcodeExchange:         doValidAuthCodeExchange,
-			requestedAudience:        "pinniped-cli",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "requested audience cannot equal 'pinniped-cli'",
+			name:                  "bad requested audience when it is the same name as the static public client pinniped-cli",
+			authcodeExchange:      doValidAuthCodeExchange,
+			requestedAudience:     "pinniped-cli",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "requested audience cannot equal 'pinniped-cli'",
 		},
 		{
 			name:              "missing subject_token",
@@ -1164,8 +1173,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("subject_token")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: "missing subject_token parameter",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: "Missing 'subject_token' parameter.",
 		},
 		{
 			name:              "wrong subject_token_type",
@@ -1174,8 +1184,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token_type", "invalid")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported subject_token_type parameter value`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported 'subject_token_type' parameter value, must be 'urn:ietf:params:oauth:token-type:access_token'.`,
 		},
 		{
 			name:              "wrong requested_token_type",
@@ -1184,8 +1195,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("requested_token_type", "invalid")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported requested_token_type parameter value`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported 'requested_token_type' parameter value, must be 'urn:ietf:params:oauth:token-type:jwt'.`,
 		},
 		{
 			name:              "unsupported RFC8693 parameter",
@@ -1194,8 +1206,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("resource", "some-resource-parameter-value")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `unsupported parameter resource`,
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_request",
+			wantErrorDescContains: `Unsupported parameter 'resource'.`,
 		},
 		{
 			name:              "bogus access token",
@@ -1204,8 +1217,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token", "some-bogus-value")
 			},
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `Invalid token format`,
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "request_unauthorized",
+			wantErrorDescContains: `The request could not be authorized. Invalid 'subject_token' parameter value.`,
 		},
 		{
 			name:              "bad client ID",
@@ -1214,8 +1228,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("client_id", "some-bogus-value")
 			},
-			wantStatus:               http.StatusUnauthorized,
-			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "invalid_client",
+			wantErrorDescContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
 		},
 		{
 			name:             "dynamic client uses wrong client secret",
@@ -1227,9 +1242,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, "bad client secret")
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusUnauthorized,
-			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "invalid_client",
+			wantErrorDescContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).`,
 		},
 		{
 			name:             "dynamic client uses wrong auth method (must use basic auth)",
@@ -1243,9 +1259,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				// would usually set the basic auth header here, but we don't for this test case
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusUnauthorized,
-			wantResponseBodyContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client supports client authentication method 'client_secret_basic', but method 'client_secret_post' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_post'.`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "invalid_client",
+			wantErrorDescContains: `Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The OAuth 2.0 Client supports client authentication method 'client_secret_basic', but method 'client_secret_post' was requested. You must configure the OAuth 2.0 client's 'token_endpoint_auth_method' value to accept 'client_secret_post'.`,
 		},
 		{
 			name:             "different client used between authorize/authcode calls and the call to token exchange",
@@ -1257,21 +1274,71 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			modifyRequestHeaders: func(r *http.Request) {
 				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1) // use dynamic client for token exchange
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusBadRequest,
-			wantResponseBodyContains: `The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request.`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusBadRequest,
+			wantErrorType:         "invalid_grant",
+			wantErrorDescContains: `The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The OAuth 2.0 Client ID from this request does not match the one from the authorize request.`,
 		},
 		{
-			name:              "valid access token, but deleted from storage",
+			name:              "valid access token, but it was already deleted from storage",
 			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
-			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request) {
+			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request) {
 				parts := strings.Split(pendingRequest.Form.Get("subject_token"), ".")
 				require.Len(t, parts, 2)
 				require.NoError(t, storage.DeleteAccessTokenSession(context.Background(), parts[1]))
 			},
-			wantStatus:               http.StatusUnauthorized,
-			wantResponseBodyContains: `invalid subject_token`,
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "request_unauthorized",
+			wantErrorDescContains: `Invalid 'subject_token' parameter value.`,
+		},
+		{
+			name:              "valid access token, but it has already expired",
+			authcodeExchange:  doValidAuthCodeExchange,
+			requestedAudience: "some-workload-cluster",
+			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, secrets v1.SecretInterface, pendingRequest *http.Request) {
+				// The fosite storage APIs don't offer a way to update an access token, so we will instead find the underlying
+				// storage Secret and update it in a more manual way. First get the access token's signature.
+				parts := strings.Split(pendingRequest.Form.Get("subject_token"), ".")
+				require.Len(t, parts, 2)
+				// Find the storage Secret for the access token by using its signature to compute the Secret name.
+				accessTokenSignature := parts[1]
+				accessTokenSecretName := getSecretNameFromSignature(t, accessTokenSignature, "access-token") // "access-token" is the storage type used in the Secret's name
+				accessTokenSecret, err := secrets.Get(context.Background(), accessTokenSecretName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Parse the session from the storage Secret.
+				savedSessionJSON := accessTokenSecret.Data["pinniped-storage-data"]
+				// Declare the appropriate empty struct, similar to how our kubestorage implementation
+				// of GetAccessTokenSession() does when parsing a session from a storage Secret.
+				accessTokenSession := &accesstoken.Session{
+					Request: &fosite.Request{
+						Client:  &clientregistry.Client{},
+						Session: &psession.PinnipedSession{},
+					},
+				}
+				// Parse the session JSON and fill the empty struct with its data.
+				err = json.Unmarshal(savedSessionJSON, accessTokenSession)
+				require.NoError(t, err)
+				// Change the access token's expiration time to be one hour ago, so it will be considered already expired.
+				oneHourAgoInUTC := time.Now().UTC().Add(-1 * time.Hour)
+				accessTokenSession.Request.Session.(*psession.PinnipedSession).Fosite.SetExpiresAt(fosite.AccessToken, oneHourAgoInUTC)
+				// Write the updated session back to the access token's storage Secret.
+				updatedSessionJSON, err := json.Marshal(accessTokenSession)
+				require.NoError(t, err)
+				accessTokenSecret.Data["pinniped-storage-data"] = updatedSessionJSON
+				_, err = secrets.Update(context.Background(), accessTokenSecret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				// Just to be sure that this test setup is valid, confirm that the code above correctly updated the
+				// access token's expiration time by reading it again, this time performing the read using the
+				// kubestorage API instead of the manual/direct approach used above.
+				session, err := storage.GetAccessTokenSession(context.Background(), accessTokenSignature, nil)
+				require.NoError(t, err)
+				expiresAt := session.GetSession().GetExpiresAt(fosite.AccessToken)
+				require.Equal(t, oneHourAgoInUTC, expiresAt)
+			},
+			wantStatus:            http.StatusUnauthorized,
+			wantErrorType:         "invalid_token",
+			wantErrorDescContains: `Token expired. Access token expired at `,
 		},
 		{
 			name: "access token missing pinniped:request-audience scope",
@@ -1289,9 +1356,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 				},
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the 'pinniped:request-audience' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `Missing the 'pinniped:request-audience' scope.`,
 		},
 		{
 			name: "access token missing openid scope",
@@ -1309,9 +1377,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 				},
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the 'openid' scope`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusForbidden,
+			wantErrorType:         "access_denied",
+			wantErrorDescContains: `Missing the 'openid' scope.`,
 		},
 		{
 			name: "token minting failure",
@@ -1323,9 +1392,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
 				want:           successfulAuthCodeExchange,
 			},
-			requestedAudience:        "some-workload-cluster",
-			wantStatus:               http.StatusServiceUnavailable,
-			wantResponseBodyContains: `The authorization server is currently unable to handle the request`,
+			requestedAudience:     "some-workload-cluster",
+			wantStatus:            http.StatusServiceUnavailable,
+			wantErrorType:         "temporarily_unavailable",
+			wantErrorDescContains: `The authorization server is currently unable to handle the request`,
 		},
 	}
 	for _, test := range tests {
@@ -1341,13 +1411,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			request := happyTokenExchangeRequest(test.requestedAudience, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			if test.modifyStorage != nil {
-				test.modifyStorage(t, storage, request)
+				test.modifyStorage(t, storage, secrets, request)
 			}
 			if test.modifyRequestParams != nil {
 				test.modifyRequestParams(t, request.Form)
 			}
 
-			req := httptest.NewRequest("POST", "/path/shouldn't/matter", body(request.Form).ReadCloser())
+			req := httptest.NewRequest("POST", "/token/exchange/path/shouldn't/matter", body(request.Form).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rsp = httptest.NewRecorder()
 
@@ -1369,12 +1439,23 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
-			if test.wantResponseBodyContains != "" {
-				require.Contains(t, rsp.Body.String(), test.wantResponseBodyContains)
-			}
 
-			// The remaining assertions apply only to the happy path.
+			var parsedResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
+
 			if rsp.Code != http.StatusOK {
+				// All error responses should have two JSON keys.
+				require.Len(t, parsedResponseBody, 2)
+
+				errorType := parsedResponseBody["error"]
+				require.NotEmpty(t, errorType)
+				require.Equal(t, test.wantErrorType, errorType)
+
+				errorDesc := parsedResponseBody["error_description"]
+				require.NotEmpty(t, errorDesc)
+				require.Contains(t, errorDesc, test.wantErrorDescContains)
+
+				// The remaining assertions apply only to the happy path.
 				return
 			}
 
@@ -1384,15 +1465,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			err = firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
 			require.NoError(t, err)
 
-			var responseBody map[string]interface{}
-			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &responseBody))
-
-			require.Contains(t, responseBody, "access_token")
-			require.Equal(t, "N_A", responseBody["token_type"])
-			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", responseBody["issued_token_type"])
+			require.Contains(t, parsedResponseBody, "access_token")
+			require.Equal(t, "N_A", parsedResponseBody["token_type"])
+			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", parsedResponseBody["issued_token_type"])
 
 			// Parse the returned token.
-			parsedJWT, err := jose.ParseSigned(responseBody["access_token"].(string))
+			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string))
 			require.NoError(t, err)
 			var tokenClaims map[string]interface{}
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
@@ -1674,7 +1752,7 @@ func TestRefreshGrant(t *testing.T) {
 		kubeResources             func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		authcodeExchange          authcodeExchangeInputs
 		refreshRequest            refreshRequestInputs
-		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string)
+		modifyRefreshTokenStorage func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string)
 	}{
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
@@ -2445,6 +2523,55 @@ func TestRefreshGrant(t *testing.T) {
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 				),
+			},
+		},
+		{
+			name:             "when a valid refresh token is sent in the refresh request, but the token has already expired",
+			idps:             oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
+				// The fosite storage APIs don't offer a way to update a refresh token, so we will instead find the underlying
+				// storage Secret and update it in a more manual way. First get the refresh token's signature.
+				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
+				// Find the storage Secret for the refresh token by using its signature to compute the Secret name.
+				refreshTokenSecretName := getSecretNameFromSignature(t, refreshTokenSignature, "refresh-token") // "refresh-token" is the storage type used in the Secret's name
+				refreshTokenSecret, err := secrets.Get(context.Background(), refreshTokenSecretName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Parse the session from the storage Secret.
+				savedSessionJSON := refreshTokenSecret.Data["pinniped-storage-data"]
+				// Declare the appropriate empty struct, similar to how our kubestorage implementation
+				// of GetRefreshTokenSession() does when parsing a session from a storage Secret.
+				refreshTokenSession := &refreshtoken.Session{
+					Request: &fosite.Request{
+						Client:  &clientregistry.Client{},
+						Session: &psession.PinnipedSession{},
+					},
+				}
+				// Parse the session JSON and fill the empty struct with its data.
+				err = json.Unmarshal(savedSessionJSON, refreshTokenSession)
+				require.NoError(t, err)
+				// Change the refresh token's expiration time to be one hour ago, so it will be considered already expired.
+				oneHourAgoInUTC := time.Now().UTC().Add(-1 * time.Hour)
+				refreshTokenSession.Request.Session.(*psession.PinnipedSession).Fosite.SetExpiresAt(fosite.RefreshToken, oneHourAgoInUTC)
+				// Write the updated session back to the refresh token's storage Secret.
+				updatedSessionJSON, err := json.Marshal(refreshTokenSession)
+				require.NoError(t, err)
+				refreshTokenSecret.Data["pinniped-storage-data"] = updatedSessionJSON
+				_, err = secrets.Update(context.Background(), refreshTokenSecret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				// Just to be sure that this test setup is valid, confirm that the code above correctly updated the
+				// refresh token's expiration time by reading it again, this time performing the read using the
+				// kubestorage API instead of the manual/direct approach used above.
+				session, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
+				require.NoError(t, err)
+				expiresAt := session.GetSession().GetExpiresAt(fosite.RefreshToken)
+				require.Equal(t, oneHourAgoInUTC, expiresAt)
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				},
 			},
 		},
 		{
@@ -3354,7 +3481,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -3391,7 +3518,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -3428,7 +3555,7 @@ func TestRefreshGrant(t *testing.T) {
 					happyLDAPCustomSessionData,
 				),
 			},
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -3505,7 +3632,7 @@ func TestRefreshGrant(t *testing.T) {
 				URL:         ldapUpstreamURL,
 			}),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
-			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, refreshToken string) {
+			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
 				firstRequester, err := oauthStore.GetRefreshTokenSession(context.Background(), refreshTokenSignature, nil)
 				require.NoError(t, err)
@@ -3560,7 +3687,7 @@ func TestRefreshGrant(t *testing.T) {
 			require.NotEmpty(t, firstRefreshToken)
 
 			if test.modifyRefreshTokenStorage != nil {
-				test.modifyRefreshTokenStorage(t, oauthStore, firstRefreshToken)
+				test.modifyRefreshTokenStorage(t, oauthStore, secrets, firstRefreshToken)
 			}
 
 			reqContextWarningRecorder := &TestWarningRecorder{}
@@ -3899,7 +4026,7 @@ func (b body) WithPKCE(verifier string) body {
 }
 
 func (b body) ReadCloser() io.ReadCloser {
-	return ioutil.NopCloser(strings.NewReader(url.Values(b).Encode()))
+	return io.NopCloser(strings.NewReader(url.Values(b).Encode()))
 }
 
 func (b body) with(param, value string) body {
@@ -4572,4 +4699,15 @@ func (t *TestWarningRecorder) AddWarning(agent, text string) {
 		Agent: agent,
 		Text:  text,
 	})
+}
+
+func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string) string {
+	t.Helper()
+	// try to decode base64 signatures to prevent double encoding of binary data
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(signature)
+	require.NoError(t, err)
+	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
+	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
+	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
+	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
 }

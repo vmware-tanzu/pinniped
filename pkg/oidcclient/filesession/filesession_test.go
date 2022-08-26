@@ -1,11 +1,10 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package filesession
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,7 +48,7 @@ func TestGetToken(t *testing.T) {
 		},
 		{
 			name:         "file lock error",
-			makeTestFile: func(t *testing.T, tmp string) { require.NoError(t, ioutil.WriteFile(tmp, []byte(""), 0600)) },
+			makeTestFile: func(t *testing.T, tmp string) { require.NoError(t, os.WriteFile(tmp, []byte(""), 0600)) },
 			trylockFunc:  func(t *testing.T) error { return fmt.Errorf("some lock error") },
 			unlockFunc:   func(t *testing.T) error { require.Fail(t, "should not be called"); return nil },
 			key:          oidcclient.SessionCacheKey{},
@@ -58,7 +57,7 @@ func TestGetToken(t *testing.T) {
 		{
 			name: "invalid file",
 			makeTestFile: func(t *testing.T, tmp string) {
-				require.NoError(t, ioutil.WriteFile(tmp, []byte("invalid yaml"), 0600))
+				require.NoError(t, os.WriteFile(tmp, []byte("invalid yaml"), 0600))
 			},
 			key: oidcclient.SessionCacheKey{},
 			wantErrors: []string{
@@ -67,7 +66,7 @@ func TestGetToken(t *testing.T) {
 		},
 		{
 			name:         "invalid file, fail to unlock",
-			makeTestFile: func(t *testing.T, tmp string) { require.NoError(t, ioutil.WriteFile(tmp, []byte("invalid"), 0600)) },
+			makeTestFile: func(t *testing.T, tmp string) { require.NoError(t, os.WriteFile(tmp, []byte("invalid"), 0600)) },
 			trylockFunc:  func(t *testing.T) error { return nil },
 			unlockFunc:   func(t *testing.T) error { return fmt.Errorf("some unlock error") },
 			key:          oidcclient.SessionCacheKey{},
@@ -262,7 +261,7 @@ func TestPutToken(t *testing.T) {
 		{
 			name: "fail to create directory",
 			makeTestFile: func(t *testing.T, tmp string) {
-				require.NoError(t, ioutil.WriteFile(filepath.Dir(tmp), []byte{}, 0600))
+				require.NoError(t, os.WriteFile(filepath.Dir(tmp), []byte{}, 0600))
 			},
 			wantErrors: []string{
 				"could not create session cache directory: mkdir TEMPDIR: not a directory",

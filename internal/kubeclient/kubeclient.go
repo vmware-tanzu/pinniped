@@ -211,7 +211,7 @@ func AssertSecureTransport(rt http.RoundTripper) error {
 	tlsConfigCopy := tlsConfig.Clone()
 	ptls.Merge(ptls.Secure, tlsConfigCopy) // only mutate the copy
 
-	//nolint: gosec // the empty TLS config here is not used
+	//nolint:gosec // the empty TLS config here is not used
 	if diff := cmp.Diff(tlsConfigCopy, tlsConfig,
 		cmpopts.IgnoreUnexported(tls.Config{}, x509.CertPool{}),
 		cmpopts.IgnoreFields(tls.Config{}, "GetClientCertificate"),

@@ -1,11 +1,11 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package securityheader
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -74,7 +74,7 @@ func TestWrap(t *testing.T) {
 			defer resp.Body.Close()
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			respBody, err := ioutil.ReadAll(resp.Body)
+			respBody, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
 			require.Equal(t, "hello world", string(respBody))
 

@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -2305,7 +2305,7 @@ func requestAuthorizationUsingCLIPasswordFlow(t *testing.T, downstreamAuthorizeU
 			return false, nil
 		}
 		defer func() { _ = authResponse.Body.Close() }()
-		responseBody, err = ioutil.ReadAll(authResponse.Body)
+		responseBody, err = io.ReadAll(authResponse.Body)
 		if err != nil {
 			return false, nil
 		}
@@ -2402,7 +2402,7 @@ func doTokenExchange(
 
 	// If a function was passed, call it, so it can make the desired assertions.
 	if wantTokenExchangeResponse != nil {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		wantTokenExchangeResponse(t, resp.StatusCode, string(body))
 		return // the above call should have made all desired assertions about the response, so return

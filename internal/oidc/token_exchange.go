@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
-	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
+	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" //nolint:gosec
+	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"          //nolint:gosec
 )
 
 type stsParams struct {
@@ -83,10 +83,10 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 
 	// Require that the incoming access token has the pinniped:request-audience and OpenID scopes.
 	if !originalRequester.GetGrantedScopes().Has(oidcapi.ScopeRequestAudience) {
-		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidcapi.ScopeRequestAudience))
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing the %q scope.", oidcapi.ScopeRequestAudience))
 	}
 	if !originalRequester.GetGrantedScopes().Has(oidcapi.ScopeOpenID) {
-		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidcapi.ScopeOpenID))
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing the %q scope.", oidcapi.ScopeOpenID))
 	}
 
 	// Check that the stored session meets the minimum requirements for token exchange.
@@ -135,19 +135,19 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 	// Validate some required parameters.
 	result.requestedAudience = params.Get("audience")
 	if result.requestedAudience == "" {
-		return nil, fosite.ErrInvalidRequest.WithHint("missing audience parameter")
+		return nil, fosite.ErrInvalidRequest.WithHint("Missing 'audience' parameter.")
 	}
 	result.subjectAccessToken = params.Get("subject_token")
 	if result.subjectAccessToken == "" {
-		return nil, fosite.ErrInvalidRequest.WithHint("missing subject_token parameter")
+		return nil, fosite.ErrInvalidRequest.WithHint("Missing 'subject_token' parameter.")
 	}
 
 	// Validate some parameters with hardcoded values we support.
 	if params.Get("subject_token_type") != tokenTypeAccessToken {
-		return nil, fosite.ErrInvalidRequest.WithHintf("unsupported subject_token_type parameter value, must be %q", tokenTypeAccessToken)
+		return nil, fosite.ErrInvalidRequest.WithHintf("Unsupported 'subject_token_type' parameter value, must be %q.", tokenTypeAccessToken)
 	}
 	if params.Get("requested_token_type") != tokenTypeJWT {
-		return nil, fosite.ErrInvalidRequest.WithHintf("unsupported requested_token_type parameter value, must be %q", tokenTypeJWT)
+		return nil, fosite.ErrInvalidRequest.WithHintf("Unsupported 'requested_token_type' parameter value, must be %q.", tokenTypeJWT)
 	}
 
 	// Validate that none of these unsupported parameters were sent. These are optional and we do not currently support them.
@@ -158,7 +158,7 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 		"actor_token_type",
 	} {
 		if params.Get(param) != "" {
-			return nil, fosite.ErrInvalidRequest.WithHintf("unsupported parameter %s", param)
+			return nil, fosite.ErrInvalidRequest.WithHintf("Unsupported parameter %q.", param)
 		}
 	}
 
@@ -184,13 +184,16 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 }
 
 func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requester fosite.AccessRequester, accessToken string) (fosite.Requester, error) {
-	if err := t.accessTokenStrategy.ValidateAccessToken(ctx, requester, accessToken); err != nil {
-		return nil, errors.WithStack(err)
-	}
+	// Look up the access token's stored session data.
 	signature := t.accessTokenStrategy.AccessTokenSignature(accessToken)
 	originalRequester, err := t.accessTokenStorage.GetAccessTokenSession(ctx, signature, requester.GetSession())
 	if err != nil {
-		return nil, fosite.ErrRequestUnauthorized.WithWrap(err).WithHint("invalid subject_token")
+		// The access token was not found, or there was some other error while reading it.
+		return nil, fosite.ErrRequestUnauthorized.WithWrap(err).WithHint("Invalid 'subject_token' parameter value.")
+	}
+	// Validate the access token using its stored session data, which includes its expiration time.
+	if err := t.accessTokenStrategy.ValidateAccessToken(ctx, originalRequester, accessToken); err != nil {
+		return nil, errors.WithStack(err)
 	}
 	return originalRequester, nil
 }

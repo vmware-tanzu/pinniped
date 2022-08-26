@@ -7,8 +7,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -34,12 +34,12 @@ func TestGetKubeconfig(t *testing.T) {
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	testOIDCCABundlePath := filepath.Join(tmpdir, "testca.pem")
-	require.NoError(t, ioutil.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
+	require.NoError(t, os.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
 
 	testConciergeCA, err := certauthority.New("Test Concierge CA", 1*time.Hour)
 	require.NoError(t, err)
 	testConciergeCABundlePath := filepath.Join(tmpdir, "testconciergeca.pem")
-	require.NoError(t, ioutil.WriteFile(testConciergeCABundlePath, testConciergeCA.Bundle(), 0600))
+	require.NoError(t, os.WriteFile(testConciergeCABundlePath, testConciergeCA.Bundle(), 0600))
 
 	credentialIssuer := func() runtime.Object {
 		return &configv1alpha1.CredentialIssuer{
@@ -2960,7 +2960,7 @@ func TestGetKubeconfig(t *testing.T) {
 			})
 			issuerEndpointPtr = &issuerEndpoint
 
-			testLog := testlogger.NewLegacy(t) // nolint: staticcheck  // old test with lots of log statements
+			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			cmd := kubeconfigCommand(kubeconfigDeps{
 				getPathToSelf: func() (string, error) {
 					if tt.getPathToSelfErr != nil {

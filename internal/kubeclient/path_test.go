@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -6,7 +6,7 @@ package kubeclient
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -142,7 +142,7 @@ func Test_updatePathNewGVK(t *testing.T) {
 }
 
 func Test_reqWithoutPrefix(t *testing.T) {
-	body := ioutil.NopCloser(bytes.NewBuffer([]byte("some body")))
+	body := io.NopCloser(bytes.NewBuffer([]byte("some body")))
 	newReq := func(rawurl string) *http.Request {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, rawurl, body)
 		require.NoError(t, err)

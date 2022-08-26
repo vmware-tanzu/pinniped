@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -127,14 +127,14 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 					requireEventually.Equalf(v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
 				}
 				requireEventually.Equal(env.ConciergeAppName, secret.Labels["app"])
-			}, time.Minute, 250*time.Millisecond)
+			}, 2*time.Minute, 250*time.Millisecond)
 
 			// Expect that the APIService was also updated with the new CA.
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
 				requireEventually.NoErrorf(err, "get for APIService %q returned error", apiServiceName)
 				requireEventually.Equalf(regeneratedCACert, apiService.Spec.CABundle, "CA bundle in APIService %q does not yet have the expected value", apiServiceName)
-			}, time.Minute, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
+			}, 2*time.Minute, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
 
 			// Check that we can still make requests to the aggregated API through the kube API server,
 			// because the kube API server uses these certs when proxying requests to the aggregated API server,

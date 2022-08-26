@@ -412,7 +412,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				client.ManagedFields = nil
 				client.CreationTimestamp = metav1.Time{}
 				client.Generation = 0
-				client.SelfLink = "" // nolint: staticcheck  // old API servers still set this field
+				client.SelfLink = "" //nolint:staticcheck  // old API servers still set this field
 
 				require.Equal(t, tt.client, client)
 				return

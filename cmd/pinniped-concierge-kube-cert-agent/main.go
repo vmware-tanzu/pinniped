@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"os"
@@ -18,7 +17,7 @@ import (
 	_ "go.pinniped.dev/internal/crypto/ptls"
 )
 
-//nolint: gochecknoglobals // these are swapped during unit tests.
+//nolint:gochecknoglobals // these are swapped during unit tests.
 var (
 	getenv = os.Getenv
 	fail   = log.Fatalf
@@ -35,11 +34,11 @@ func main() {
 	case "sleep":
 		sleep(math.MaxInt64)
 	case "print":
-		certBytes, err := ioutil.ReadFile(getenv("CERT_PATH"))
+		certBytes, err := os.ReadFile(getenv("CERT_PATH"))
 		if err != nil {
 			fail("could not read CERT_PATH: %v", err)
 		}
-		keyBytes, err := ioutil.ReadFile(getenv("KEY_PATH"))
+		keyBytes, err := os.ReadFile(getenv("KEY_PATH"))
 		if err != nil {
 			fail("could not read KEY_PATH: %v", err)
 		}

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -71,7 +71,7 @@ func (r *request) Namespace() string {
 	return r.namespace
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var namespaceGVR = corev1.SchemeGroupVersion.WithResource("namespaces")
 
 func (r *request) NamespaceScoped() bool {

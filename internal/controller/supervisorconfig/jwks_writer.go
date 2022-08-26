@@ -50,8 +50,7 @@ const (
 )
 
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
-//nolint:gochecknoglobals
-var generateKey = generateECKey
+var generateKey = generateECKey //nolint:gochecknoglobals
 
 func generateECKey(r io.Reader) (interface{}, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), r)

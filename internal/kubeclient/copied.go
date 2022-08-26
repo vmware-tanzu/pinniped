@@ -15,8 +15,7 @@ import (
 )
 
 // defaultServerUrlFor was copied from k8s.io/client-go/rest/url_utils.go.
-//nolint:revive
-func defaultServerUrlFor(config *restclient.Config) (*url.URL, string, error) {
+func defaultServerUrlFor(config *restclient.Config) (*url.URL, string, error) { //nolint:revive
 	hasCA := len(config.CAFile) != 0 || len(config.CAData) != 0
 	hasCert := len(config.CertFile) != 0 || len(config.CertData) != 0
 	defaultTLS := hasCA || hasCert || config.Insecure

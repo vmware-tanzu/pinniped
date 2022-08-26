@@ -68,7 +68,7 @@ const (
 )
 
 var (
-	disallowedAdditionalAuthorizeParameters = map[string]bool{ // nolint: gochecknoglobals
+	disallowedAdditionalAuthorizeParameters = map[string]bool{ //nolint:gochecknoglobals
 		// Reject these AdditionalAuthorizeParameters to avoid allowing the user's config to overwrite the parameters
 		// that are always used by Pinniped in authcode authorization requests. The OIDC library used would otherwise
 		// happily treat the user's config as an override. Users can already set the "client_id" and "scope" params

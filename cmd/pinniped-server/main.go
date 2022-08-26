@@ -22,7 +22,7 @@ import (
 	supervisor "go.pinniped.dev/internal/supervisor/server"
 )
 
-// nolint: gochecknoglobals // these are swapped during unit tests.
+//nolint:gochecknoglobals // these are swapped during unit tests.
 var (
 	fail        = plog.Fatal
 	subcommands = map[string]func(){

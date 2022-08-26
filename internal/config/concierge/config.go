@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package concierge contains functionality to load/store Config's from/to
@@ -8,7 +8,7 @@ package concierge
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"k8s.io/utils/pointer"
@@ -43,7 +43,7 @@ const (
 // This function will decode that base64-encoded data to PEM bytes to be stored
 // in the Config.
 func FromPath(ctx context.Context, path string) (*Config, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package leaderelection
@@ -184,7 +184,7 @@ func (t *isLeaderTracker) start() {
 }
 
 func (t *isLeaderTracker) stop() (didStop bool) {
-	return t.tracker.CAS(true, false)
+	return t.tracker.CompareAndSwap(true, false)
 }
 
 // note that resourcelock.Interface is an internal, unstable interface.

@@ -33,7 +33,7 @@ To load completions for every new session, execute once:
 
 #### macOS:
 
-	pinniped completion bash > /usr/local/etc/bash_completion.d/pinniped
+	pinniped completion bash > $(brew --prefix)/etc/bash_completion.d/pinniped
 
 You will need to start a new shell for this setup to take effect.
 
@@ -131,6 +131,10 @@ to enable it.  You can execute the following once:
 
 	echo "autoload -U compinit; compinit" >> ~/.zshrc
 
+To load completions in your current shell session:
+
+	source <(pinniped completion zsh); compdef _pinniped pinniped
+
 To load completions for every new session, execute once:
 
 #### Linux:
@@ -139,7 +143,7 @@ To load completions for every new session, execute once:
 
 #### macOS:
 
-	pinniped completion zsh > /usr/local/share/zsh/site-functions/_pinniped
+	pinniped completion zsh > $(brew --prefix)/share/zsh/site-functions/_pinniped
 
 You will need to start a new shell for this setup to take effect.
 

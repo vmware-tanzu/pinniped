@@ -38,7 +38,7 @@ import (
 // This value is expected to be increased over time to match CPU improvements.
 const cost = 12
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var tableConvertor = func() rest.TableConvertor {
 	// sadly this is not useful at the moment because `kubectl create` does not support table output
 	columns := []apiextensionsv1.CustomResourceColumnDefinition{

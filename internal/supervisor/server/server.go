@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	kubeinformers "k8s.io/client-go/informers"
@@ -41,6 +42,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/apicerts"
@@ -607,6 +609,10 @@ func getAggregatedAPIServerConfig(
 	}
 
 	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+	// Add the generated openapi docs to the server config. Publishing openapi docs allows
+	// `kubectl explain` to work for the Supervisor's aggregated API resources.
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
+		supervisoropenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`

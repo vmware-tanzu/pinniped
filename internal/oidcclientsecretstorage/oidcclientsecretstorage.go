@@ -49,19 +49,29 @@ func New(secrets corev1client.SecretInterface) *OIDCClientSecretStorage {
 	}
 }
 
+// Get returns the resourceVersion of the storage secret, the hashes within the secret, and an error.
+// When the storage secret is not found, it will simply return "", nil, nil to make it easy to pass the
+// results of Get directly to Set.
 func (s *OIDCClientSecretStorage) Get(ctx context.Context, oidcClientUID types.UID) (string, []string, error) {
-	secret := &storedClientSecret{}
-	rv, err := s.storage.Get(ctx, uidToName(oidcClientUID), secret)
+	clientSecret := &storedClientSecret{}
+	rv, err := s.storage.Get(ctx, uidToName(oidcClientUID), clientSecret)
 	if errors.IsNotFound(err) {
 		return "", nil, nil
 	}
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get client secret for uid %s: %w", oidcClientUID, err)
 	}
-
-	return rv, secret.SecretHashes, nil
+	if clientSecret.Version != oidcClientSecretStorageVersion {
+		return "", nil, fmt.Errorf("%w: OIDC client secret storage has version %s instead of %s",
+			ErrOIDCClientSecretStorageVersion, clientSecret.Version, oidcClientSecretStorageVersion)
+	}
+	return rv, clientSecret.SecretHashes, nil
 }
 
+// Set will create or update the values of the storage secret associated with an OIDCClient.
+// Set takes the resourceVersion to know if we are doing a create or update and to ensure we do not edit an old version of the storage secret.
+// Set takes the oidcClientName to set up the owner reference of the storage secret to that of the OIDCClient.
+// Set takes the oidcClientUID to find the correct storage secret.
 func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidcClientName string, oidcClientUID types.UID, secretHashes []string) error {
 	secret := &storedClientSecret{
 		SecretHashes: secretHashes,

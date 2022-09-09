@@ -30,7 +30,7 @@ goals. Priorities and requirements change based on community feedback, roadblock
 etc. If you depend on a specific item, we encourage you to reach out for updated status information, or help us deliver
 that feature by [contributing](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md) to Pinniped.
 
-Last Updated: May 2022
+Last Updated: Sept 2022
 |Theme|Description|Timeline|
 |--|--|--|
 |Improving Usability|Dynamic Oauth Client Support for integrating with UI/Dashboards |Sept/Oct 2022|

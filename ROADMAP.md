@@ -33,8 +33,9 @@ that feature by [contributing](https://github.com/vmware-tanzu/pinniped/blob/mai
 Last Updated: May 2022
 |Theme|Description|Timeline|
 |--|--|--|
-|Improving Security Posture|Support Audit logging of security events related to Authentication |May/June 2022|
-|Improving Usability|Support for integrating with UI/Dashboards |May/June 2022|
-|Improving Security Posture| Secrets Rotation and Management |Q3 2022|
-|Improving Security Posture|Session Management |Q4 2022|
-|Improving Security Posture|TLS hardening contd|Q4 2022|
+|Improving Usability|Dynamic Oauth Client Support for integrating with UI/Dashboards |Sept/Oct 2022|
+|Improving Usability|Support for custom claim mappings in OIDCIdentityProvider |Q4 2022|
+|Improving Usability|Support for Multiple Identity Providers |Q4 2022|
+|Improving Security Posture|Support Audit logging of security events related to Authentication |Q4 2022|
+|Improving Security Posture|Session Management |2022/2023|
+|Improving Security Posture|Secrets Rotation and Management |2022/2023|

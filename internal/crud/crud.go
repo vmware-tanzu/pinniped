@@ -14,10 +14,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
@@ -95,6 +93,8 @@ func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (
 	return secret.ResourceVersion, nil
 }
 
+// Update takes a resourceVersion because it assumes Get has been recently called to obtain the latest resource version.
+// This is to ensure that concurrent edits are treated as conflict errors (only one will win).
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
 	secret, err := s.toSecret(signature, resourceVersion, data, nil, nil)
 	if err != nil {
@@ -104,11 +104,6 @@ func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion 
 	oldSecret, err := s.secrets.Get(ctx, secret.Name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get %s for signature %s: %w", s.resource, signature, err)
-	}
-	// do not assume that our secret client does live reads
-	if oldSecret.ResourceVersion != resourceVersion {
-		return "", errors.NewConflict(schema.GroupResource{Resource: "Secret"}, secret.Name,
-			fmt.Errorf("resource version %s does not match expected value: %s", oldSecret.ResourceVersion, resourceVersion))
 	}
 
 	// preserve these fields - they are effectively immutable on update

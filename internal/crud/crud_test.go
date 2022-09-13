@@ -13,6 +13,7 @@ import (
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +65,7 @@ func TestStorage(t *testing.T) {
 		mocks       func(*testing.T, mocker)
 		lifetime    func() time.Duration
 		run         func(*testing.T, Storage, *clocktesting.FakeClock) error
+		useNilClock bool
 		wantActions []coretesting.Action
 		wantSecrets []corev1.Secret
 		wantErr     string
@@ -270,69 +272,129 @@ func TestStorage(t *testing.T) {
 			wantErr: "",
 		},
 		{
-			name:     "create and get with additional labels",
-			resource: "access-tokens",
-			mocks:    nil,
+			name:     "create and get and update with additional labels, annotations, and ownerRefs",
+			resource: "kittens",
+			mocks: func(t *testing.T, mock mocker) {
+				mock.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					secret := action.(coretesting.UpdateAction).GetObject().(*corev1.Secret)
+					secret.ResourceVersion = "1"
+					return false, nil, nil
+				})
+
+				mock.PrependReactor("update", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					secret := action.(coretesting.UpdateAction).GetObject().(*corev1.Secret)
+					secret.ResourceVersion = "45"
+					return false, nil, nil
+				})
+			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, map[string]string{"label1": "value1", "label2": "value2"}, nil)
-				require.Empty(t, rv1) // fake client does not set this
+				rv1, err := storage.Create(ctx, signature, data, map[string]string{"label1": "value1", "label2": "value2"}, []metav1.OwnerReference{{
+					APIVersion: "some-api-version",
+					Kind:       "some-kind",
+					Name:       "some-owner",
+					UID:        "123",
+				}})
+				require.Equal(t, "1", rv1)
 				require.NoError(t, err)
 
 				out := &testJSON{}
 				rv2, err := storage.Get(ctx, signature, out)
-				require.Empty(t, rv2) // fake client does not set this
+				require.Equal(t, "1", rv2)
 				require.NoError(t, err)
 				require.Equal(t, data, out)
+
+				newData := &testJSON{Data: "performed-an-update"}
+				rv3, err := storage.Update(ctx, signature, rv2, newData)
+				require.Equal(t, "45", rv3)
+				require.NoError(t, err)
 
 				return nil
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						Name:            "pinniped-storage-kittens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev/type": "access-tokens",
+							"storage.pinniped.dev/type": "kittens",
 							"label1":                    "value1",
 							"label2":                    "value2",
 						},
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
+						OwnerReferences: []metav1.OwnerReference{{
+							APIVersion: "some-api-version",
+							Kind:       "some-kind",
+							Name:       "some-owner",
+							UID:        "123",
+						}},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
-					Type: "storage.pinniped.dev/access-tokens",
+					Type: "storage.pinniped.dev/kittens",
 				}),
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-kittens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-kittens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-kittens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						ResourceVersion: "1",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "kittens",
+							"label1":                    "value1",
+							"label2":                    "value2",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+						OwnerReferences: []metav1.OwnerReference{{
+							APIVersion: "some-api-version",
+							Kind:       "some-kind",
+							Name:       "some-owner",
+							UID:        "123",
+						}},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"performed-an-update"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/kittens",
+				}),
 			},
 			wantSecrets: []corev1.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						Name:            "pinniped-storage-kittens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
 						Namespace:       namespace,
-						ResourceVersion: "",
+						ResourceVersion: "45",
 						Labels: map[string]string{
-							"storage.pinniped.dev/type": "access-tokens",
+							"storage.pinniped.dev/type": "kittens",
 							"label1":                    "value1",
 							"label2":                    "value2",
 						},
 						Annotations: map[string]string{
 							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
+						OwnerReferences: []metav1.OwnerReference{{
+							APIVersion: "some-api-version",
+							Kind:       "some-kind",
+							Name:       "some-owner",
+							UID:        "123",
+						}},
 					},
 					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-data":    []byte(`{"Data":"performed-an-update"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
-					Type: "storage.pinniped.dev/access-tokens",
+					Type: "storage.pinniped.dev/kittens",
 				},
 			},
 			wantErr: "",
@@ -492,6 +554,92 @@ func TestStorage(t *testing.T) {
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"shirts"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/stores",
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name:     "update failed, correctly wrap kubernetes conflict error",
+			resource: "stores",
+			mocks: func(t *testing.T, mock mocker) {
+				err := mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",
+						Namespace:       namespace,
+						ResourceVersion: "35",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"pants"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/stores",
+				})
+				require.NoError(t, err)
+
+				mock.PrependReactor("update", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, apierrors.NewConflict(schema.GroupResource{
+						Group:    corev1.GroupName,
+						Resource: "secrets",
+					}, "v1.", fmt.Errorf("there was a conflict"))
+				})
+			},
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
+				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				require.NotEmpty(t, signature)
+				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
+
+				newData := &testJSON{Data: "shirts"}
+				rv2, err := storage.Update(ctx, signature, "35", newData)
+				require.Empty(t, rv2)
+				require.EqualError(t, err, "failed to update stores for signature 5aUhdNmfWLW3yKX8Zfz5ztS5IiiWBgu36Gja-o2xl0I at resource version 35: Operation cannot be fulfilled on secrets \"v1.\": there was a conflict")
+				require.True(t, apierrors.IsConflict(err))
+
+				return nil
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba"),
+				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",
+						ResourceVersion: "35", // update at initial RV
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"shirts"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/stores",
+				}),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",
+						Namespace:       namespace,
+						ResourceVersion: "35",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"pants"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
 					Type: "storage.pinniped.dev/stores",
@@ -1077,6 +1225,68 @@ func TestStorage(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name:        "create and get with infinite lifetime when lifetime is specified as zero and clock is specified as nil",
+			resource:    "access-tokens",
+			useNilClock: true,
+			mocks:       nil,
+			lifetime:    func() time.Duration { return 0 }, // 0 == infinity
+			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
+				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				require.NotEmpty(t, signature)
+				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
+
+				data := &testJSON{Data: "create-and-get"}
+				rv1, err := storage.Create(ctx, signature, data, nil, nil)
+				require.Empty(t, rv1) // fake client does not set this
+				require.NoError(t, err)
+
+				out := &testJSON{}
+				rv2, err := storage.Get(ctx, signature, out)
+				require.Empty(t, rv2) // fake client does not set this
+				require.NoError(t, err)
+				require.Equal(t, data, out)
+
+				return nil
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						ResourceVersion: "",
+						// No garbage collection annotation was added.
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				}),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						// No garbage collection annotation was added.
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				},
+			},
+			wantErr: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1093,8 +1303,15 @@ func TestStorage(t *testing.T) {
 				useLifetime = tt.lifetime()
 			}
 			secrets := client.CoreV1().Secrets(namespace)
+
 			fakeClock := clocktesting.NewFakeClock(fakeNow)
-			storage := New(tt.resource, secrets, fakeClock.Now, useLifetime)
+			clock := fakeClock.Now
+			if tt.useNilClock {
+				fakeClock = nil
+				clock = nil
+			}
+
+			storage := New(tt.resource, secrets, clock, useLifetime)
 
 			err := tt.run(t, storage, fakeClock)
 

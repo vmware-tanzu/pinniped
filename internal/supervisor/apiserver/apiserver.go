@@ -80,7 +80,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			clientSecretReqGVR := c.ExtraConfig.ClientSecretSupervisorGroupVersion.WithResource("oidcclientsecretrequests")
-			clientSecretReqStorage := clientsecretrequest.NewREST(c.ExtraConfig.Secrets, c.ExtraConfig.OIDCClients, c.ExtraConfig.Namespace)
+			clientSecretReqStorage := clientsecretrequest.NewREST(clientSecretReqGVR.GroupResource(), c.ExtraConfig.Secrets, c.ExtraConfig.OIDCClients, c.ExtraConfig.Namespace, clientsecretrequest.Cost)
 			return clientSecretReqGVR, clientSecretReqStorage
 		},
 	} {

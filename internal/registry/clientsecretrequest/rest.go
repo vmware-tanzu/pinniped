@@ -6,15 +6,12 @@ package clientsecretrequest
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
@@ -34,48 +31,27 @@ import (
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
-// cost is a good bcrypt cost for 2022, should take about 250 ms to validate.
+// Cost is a good bcrypt cost for 2022, should take about 250 ms to validate.
 // This value is expected to be increased over time to match CPU improvements.
-const cost = 12
+const Cost = 12
 
-//nolint:gochecknoglobals
-var tableConvertor = func() rest.TableConvertor {
-	// sadly this is not useful at the moment because `kubectl create` does not support table output
-	columns := []apiextensionsv1.CustomResourceColumnDefinition{
-		{
-			Name:        "Secret",
-			Type:        "string",
-			Description: "", // TODO generate SwaggerDoc() method to fill this field
-			JSONPath:    ".status.generatedSecret",
-		},
-		{
-			Name:        "Total",
-			Type:        "integer",
-			Description: "", // TODO generate SwaggerDoc() method to fill this field
-			JSONPath:    ".status.totalClientSecrets",
-		},
-	}
-	tc, err := tableconvertor.New(columns) // just re-use the CRD table code so we do not have to implement the interface ourselves
-	if err != nil {
-		panic(err) // inputs are static so this should never happen
-	}
-	return tc
-}()
-
-func NewREST(secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string) *REST {
+func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string, cost int) *REST {
 	return &REST{
-		secretStorage: oidcclientsecretstorage.New(secrets),
-		clients:       clients,
-		namespace:     namespace,
-		rand:          rand.Reader,
+		secretStorage:  oidcclientsecretstorage.New(secrets),
+		clients:        clients,
+		namespace:      namespace,
+		cost:           cost,
+		tableConvertor: rest.NewDefaultTableConvertor(resource),
 	}
 }
 
 type REST struct {
-	secretStorage *oidcclientsecretstorage.OIDCClientSecretStorage
-	clients       configv1alpha1clientset.OIDCClientInterface
-	namespace     string
-	rand          io.Reader
+	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
+	clients        configv1alpha1clientset.OIDCClientInterface
+	namespace      string
+	rand           io.Reader
+	cost           int
+	tableConvertor rest.TableConvertor
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -111,7 +87,7 @@ func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtim
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return tableConvertor.ConvertToTable(ctx, obj, tableOptions)
+	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions)
 }
 
 func (*REST) NamespaceScoped() bool {
@@ -130,6 +106,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	defer t.Log()
 
 	// Validate the create request before honoring it.
+	// This function is provided from kube kube-api server calling validating admission webhooks if there are any registered.
 	req, err := r.validateRequest(ctx, obj, createValidation, options, t)
 	if err != nil {
 		return nil, err
@@ -168,7 +145,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 		t.Step("generateSecret")
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(secret), cost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(secret), r.cost)
 		if err != nil {
 			traceFailureWithError(t, "bcrypt.GenerateFromPassword", err)
 			return nil, apierrors.NewInternalError(fmt.Errorf("hash generation failed"))

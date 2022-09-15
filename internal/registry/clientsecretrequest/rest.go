@@ -11,7 +11,6 @@ import (
 	"io"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
@@ -35,23 +34,36 @@ import (
 // This value is expected to be increased over time to match CPU improvements.
 const Cost = 12
 
-func NewREST(resource schema.GroupResource, secrets corev1client.SecretInterface, clients configv1alpha1clientset.OIDCClientInterface, namespace string, cost int) *REST {
+type byteHasher func(password []byte, cost int) ([]byte, error)
+
+func NewREST(
+	resource schema.GroupResource,
+	secretsClient corev1client.SecretInterface,
+	oidcClientsClient configv1alpha1clientset.OIDCClientInterface,
+	namespace string,
+	cost int,
+	randByteGenerator io.Reader,
+	byteHasher byteHasher,
+) *REST {
 	return &REST{
-		secretStorage:  oidcclientsecretstorage.New(secrets),
-		clients:        clients,
-		namespace:      namespace,
-		cost:           cost,
-		tableConvertor: rest.NewDefaultTableConvertor(resource),
+		secretStorage:     oidcclientsecretstorage.New(secretsClient),
+		oidcClientsClient: oidcClientsClient,
+		namespace:         namespace,
+		cost:              cost,
+		randByteGenerator: randByteGenerator,
+		byteHasher:        byteHasher,
+		tableConvertor:    rest.NewDefaultTableConvertor(resource),
 	}
 }
 
 type REST struct {
-	secretStorage  *oidcclientsecretstorage.OIDCClientSecretStorage
-	clients        configv1alpha1clientset.OIDCClientInterface
-	namespace      string
-	rand           io.Reader
-	cost           int
-	tableConvertor rest.TableConvertor
+	secretStorage     *oidcclientsecretstorage.OIDCClientSecretStorage
+	oidcClientsClient configv1alpha1clientset.OIDCClientInterface
+	namespace         string
+	randByteGenerator io.Reader
+	cost              int
+	byteHasher        byteHasher
+	tableConvertor    rest.TableConvertor
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -114,17 +126,17 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	t.Step("validateRequest")
 
 	// Find the specified OIDCClient.
-	oidcClient, err := r.clients.Get(ctx, req.Name, metav1.GetOptions{})
+	oidcClient, err := r.oidcClientsClient.Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			traceValidationFailure(t, fmt.Sprintf("client %q does not exist", req.Name))
 			errs := field.ErrorList{field.NotFound(field.NewPath("metadata", "name"), req.Name)}
 			return nil, apierrors.NewInvalid(kindFromContext(ctx), req.Name, errs)
 		}
-		traceFailureWithError(t, "clients.Get", err)
+		traceFailureWithError(t, "oidcClientsClient.Get", err)
 		return nil, apierrors.NewInternalError(fmt.Errorf("getting client %q failed", req.Name))
 	}
-	t.Step("clients.Get")
+	t.Step("oidcClientsClient.Get")
 
 	// Using the OIDCClient's UID, check to see if the storage Secret for its client secrets already exists.
 	// Note that when it does not exist, this Get() function will not return an error, and will return nil rv and hashes.
@@ -138,14 +150,14 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	// If requested, generate a new client secret and add it to the list.
 	var secret string
 	if req.Spec.GenerateNewSecret {
-		secret, err = generateSecret(r.rand)
+		secret, err = generateSecret(r.randByteGenerator)
 		if err != nil {
 			traceFailureWithError(t, "generateSecret", err)
 			return nil, apierrors.NewInternalError(fmt.Errorf("client secret generation failed"))
 		}
 		t.Step("generateSecret")
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(secret), r.cost)
+		hash, err := r.byteHasher([]byte(secret), r.cost)
 		if err != nil {
 			traceFailureWithError(t, "bcrypt.GenerateFromPassword", err)
 			return nil, apierrors.NewInternalError(fmt.Errorf("hash generation failed"))
@@ -165,8 +177,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if req.Spec.GenerateNewSecret || needsRevoke {
 		// Each bcrypt comparison is expensive, and we do not want a large list to cause wasted CPU.
 		if len(hashes) > 5 {
-			return nil, apierrors.NewRequestEntityTooLargeError(
-				fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name))
+			return nil, apierrors.NewBadRequest(
+				fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name),
+			)
 		}
 
 		// Create or update the storage Secret for client secrets.

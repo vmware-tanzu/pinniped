@@ -5,9 +5,11 @@ package apiserver
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sync"
 
+	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -80,7 +82,15 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			clientSecretReqGVR := c.ExtraConfig.ClientSecretSupervisorGroupVersion.WithResource("oidcclientsecretrequests")
-			clientSecretReqStorage := clientsecretrequest.NewREST(clientSecretReqGVR.GroupResource(), c.ExtraConfig.Secrets, c.ExtraConfig.OIDCClients, c.ExtraConfig.Namespace, clientsecretrequest.Cost)
+			clientSecretReqStorage := clientsecretrequest.NewREST(
+				clientSecretReqGVR.GroupResource(),
+				c.ExtraConfig.Secrets,
+				c.ExtraConfig.OIDCClients,
+				c.ExtraConfig.Namespace,
+				clientsecretrequest.Cost,
+				rand.Reader,
+				bcrypt.GenerateFromPassword,
+			)
 			return clientSecretReqGVR, clientSecretReqStorage
 		},
 	} {

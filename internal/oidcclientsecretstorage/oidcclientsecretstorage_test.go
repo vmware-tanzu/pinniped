@@ -266,38 +266,6 @@ func TestSet(t *testing.T) {
 			wantErr: "failed to create client secret for uid some-example-uid1: failed to create oidc-client-secret for signature c29tZS1leGFtcGxlLXVpZDE: some create error",
 		},
 		{
-			name:           "conflict: editing wrong resource version",
-			rv:             "22",
-			oidcClientName: "some-client",
-			oidcClientUID:  types.UID("some-example-uid1"),
-			hashes:         []string{"foo", "bar"},
-			seedSecret: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "pinniped-storage-oidc-client-secret-onxw2zjnmv4gc3lqnrss25ljmqyq",
-					Namespace: namespace,
-					Labels: map[string]string{
-						"storage.pinniped.dev/type": "oidc-client-secret",
-					},
-					ResourceVersion: "23",
-					OwnerReferences: []metav1.OwnerReference{{
-						APIVersion: "config.supervisor.pinniped.dev/v1alpha1",
-						Kind:       "OIDCClient",
-						Name:       "some-client",
-						UID:        "some-example-uid1",
-					}},
-				},
-				Type: "storage.pinniped.dev/oidc-client-secret",
-				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"hashes":["foo"],"version":"1"}`),
-					"pinniped-storage-version": []byte("1"),
-				},
-			},
-			wantActions: []coretesting.Action{
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-oidc-client-secret-onxw2zjnmv4gc3lqnrss25ljmqyq"),
-			},
-			wantErr: "failed to update client secret for uid some-example-uid1: Operation cannot be fulfilled on Secret \"pinniped-storage-oidc-client-secret-onxw2zjnmv4gc3lqnrss25ljmqyq\": resource version 23 does not match expected value: 22",
-		},
-		{
 			name:           "failed to update",
 			rv:             "23",
 			oidcClientName: "some-client",
@@ -326,7 +294,7 @@ func TestSet(t *testing.T) {
 			},
 			addReactors: func(clientSet *fake.Clientset) {
 				clientSet.PrependReactor("update", "secrets", func(action coretesting.Action) (bool, runtime.Object, error) {
-					return true, nil, errors.New("some update error")
+					return true, nil, errors.New("some update error maybe a conflict or something else")
 				})
 			},
 			wantActions: []coretesting.Action{
@@ -352,7 +320,7 @@ func TestSet(t *testing.T) {
 					},
 				}),
 			},
-			wantErr: "failed to update client secret for uid some-example-uid1: failed to update oidc-client-secret for signature c29tZS1leGFtcGxlLXVpZDE at resource version 23: some update error",
+			wantErr: "failed to update client secret for uid some-example-uid1: failed to update oidc-client-secret for signature c29tZS1leGFtcGxlLXVpZDE at resource version 23: some update error maybe a conflict or something else",
 		},
 	}
 

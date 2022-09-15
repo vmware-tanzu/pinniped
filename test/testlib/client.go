@@ -18,14 +18,14 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
-
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
+	"k8s.io/utils/pointer"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -524,6 +524,19 @@ func CreateTokenCredentialRequest(ctx context.Context, t *testing.T, spec v1alph
 	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx,
 		&v1alpha1.TokenCredentialRequest{Spec: spec}, metav1.CreateOptions{},
 	)
+}
+
+// RestrictiveSecurityContext returns a container SecurityContext which will be allowed by the most
+// restrictive level of Pod Security Admission policy (as of Kube v1.25's policies).
+func RestrictiveSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+		RunAsNonRoot:             pointer.Bool(true),
+		AllowPrivilegeEscalation: pointer.Bool(false),
+		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
 }
 
 func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec corev1.PodSpec) *corev1.Pod {

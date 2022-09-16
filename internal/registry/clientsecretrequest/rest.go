@@ -128,12 +128,11 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	// Find the specified OIDCClient.
 	oidcClient, err := r.oidcClientsClient.Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
+		traceFailureWithError(t, "oidcClientsClient.Get", err)
 		if apierrors.IsNotFound(err) {
-			traceValidationFailure(t, fmt.Sprintf("client %q does not exist", req.Name))
 			errs := field.ErrorList{field.NotFound(field.NewPath("metadata", "name"), req.Name)}
 			return nil, apierrors.NewInvalid(kindFromContext(ctx), req.Name, errs)
 		}
-		traceFailureWithError(t, "oidcClientsClient.Get", err)
 		return nil, apierrors.NewInternalError(fmt.Errorf("getting client %q failed", req.Name))
 	}
 	t.Step("oidcClientsClient.Get")
@@ -177,14 +176,15 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if req.Spec.GenerateNewSecret || needsRevoke {
 		// Each bcrypt comparison is expensive, and we do not want a large list to cause wasted CPU.
 		if len(hashes) > 5 {
-			return nil, apierrors.NewBadRequest(
-				fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name),
-			)
+			msg := fmt.Sprintf("OIDCClient %s has too many secrets, spec.revokeOldSecrets must be true", oidcClient.Name)
+			traceFailure(t, "secretStorage.Set", msg)
+			return nil, apierrors.NewBadRequest(msg)
 		}
 
 		// Create or update the storage Secret for client secrets.
 		if err := r.secretStorage.Set(ctx, rv, oidcClient.Name, oidcClient.UID, hashes); err != nil {
 			if apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err) {
+				traceFailureWithError(t, "secretStorage.Set", err)
 				return nil, apierrors.NewConflict(qualifiedResourceFromContext(ctx), req.Name,
 					fmt.Errorf("multiple concurrent secret generation requests for same client"))
 			}
@@ -209,26 +209,29 @@ func (r *REST) validateRequest(
 	obj runtime.Object,
 	createValidation rest.ValidateObjectFunc,
 	options *metav1.CreateOptions,
-	t *trace.Trace,
+	tracer *trace.Trace,
 ) (*clientsecretapi.OIDCClientSecretRequest, error) {
 	clientSecretRequest, ok := obj.(*clientsecretapi.OIDCClientSecretRequest)
 	if !ok {
-		traceValidationFailure(t, "not an OIDCClientSecretRequest")
+		traceValidationFailure(tracer, "not an OIDCClientSecretRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not an OIDCClientSecretRequest: %#v", obj))
 	}
 
 	// Ensure namespace on the object is correct, or error if a conflicting namespace was set in the object.
 	requestNamespace, ok := genericapirequest.NamespaceFrom(ctx)
 	if !ok {
-		return nil, apierrors.NewInternalError(fmt.Errorf("no namespace information found in request context"))
+		msg := "no namespace information found in request context"
+		traceValidationFailure(tracer, msg)
+		return nil, apierrors.NewInternalError(fmt.Errorf(msg))
 	}
 	if err := rest.EnsureObjectNamespaceMatchesRequestNamespace(requestNamespace, clientSecretRequest); err != nil {
+		traceValidationFailure(tracer, err.Error())
 		return nil, err
 	}
 	// Making client secrets outside the supervisor's namespace does not make sense.
 	if requestNamespace != r.namespace {
 		msg := fmt.Sprintf("namespace must be %s on OIDCClientSecretRequest, was %s", r.namespace, requestNamespace)
-		traceValidationFailure(t, msg)
+		traceValidationFailure(tracer, msg)
 		return nil, apierrors.NewBadRequest(msg)
 	}
 
@@ -250,13 +253,14 @@ func (r *REST) validateRequest(
 		},
 		field.NewPath("metadata"),
 	); len(errs) > 0 {
+		traceValidationFailure(tracer, errs.ToAggregate().Error())
 		return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 	}
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {
 		if len(options.DryRun) != 0 {
-			traceValidationFailure(t, "dryRun not supported")
+			traceValidationFailure(tracer, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
 			return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 		}
@@ -264,7 +268,7 @@ func (r *REST) validateRequest(
 
 	if createValidation != nil {
 		if err := createValidation(ctx, obj.DeepCopyObject()); err != nil {
-			traceFailureWithError(t, "validation webhook", err)
+			traceFailureWithError(tracer, "validation webhook", err)
 			return nil, err
 		}
 	}
@@ -272,11 +276,15 @@ func (r *REST) validateRequest(
 	return clientSecretRequest, nil
 }
 
-func traceValidationFailure(t *trace.Trace, msg string) {
+func traceFailure(t *trace.Trace, failureType string, msg string) {
 	t.Step("failure",
-		trace.Field{Key: "failureType", Value: "request validation"},
+		trace.Field{Key: "failureType", Value: failureType},
 		trace.Field{Key: "msg", Value: msg},
 	)
+}
+
+func traceValidationFailure(t *trace.Trace, msg string) {
+	traceFailure(t, "request validation", msg)
 }
 
 func traceFailureWithError(t *trace.Trace, failureType string, err error) {

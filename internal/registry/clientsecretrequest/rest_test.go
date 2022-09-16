@@ -4,8 +4,10 @@
 package clientsecretrequest
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,11 +26,13 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	"k8s.io/klog/v2"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
+	"go.pinniped.dev/internal/plog"
 )
 
 func TestNew(t *testing.T) {
@@ -103,6 +107,7 @@ func TestCreate(t *testing.T) {
 		want              runtime.Object
 		wantErrStatus     *metav1.Status
 		wantHashes        *wantHashes
+		wantLogLines      []string
 	}{
 		{
 			name: "wrong type of request object provided",
@@ -118,6 +123,11 @@ func TestCreate(t *testing.T) {
 					` Status:"", Message:"", Reason:"", Details:(*v1.StatusDetails)(nil), Code:0}`,
 				Reason: metav1.StatusReasonBadRequest,
 				Code:   http.StatusBadRequest,
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:not an OIDCClientSecretRequest`,
+				`END`,
 			},
 		},
 		{
@@ -149,6 +159,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:dryRun not supported`,
+				`END`,
+			},
 		},
 		{
 			name: "incorrect namespace on request context",
@@ -166,6 +181,11 @@ func TestCreate(t *testing.T) {
 				Message: `namespace must be some-namespace on OIDCClientSecretRequest, was wrong-namespace`,
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:namespace must be some-namespace on OIDCClientSecretRequest, was wrong-namespace`,
+				`END`,
 			},
 		},
 		{
@@ -193,6 +213,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:validation webhook,msg:Internal error occurred: some-error-here`,
+				`END`,
+			},
 		},
 		{
 			name: "create validation: no namespace on the request context",
@@ -216,6 +241,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:no namespace information found in request context`,
+				`END`,
+			},
 		},
 		{
 			name: "create validation: namespace on object does not match namespace on request",
@@ -234,6 +264,11 @@ func TestCreate(t *testing.T) {
 				Message: "the namespace of the provided object does not match the namespace sent on the request",
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:the namespace of the provided object does not match the namespace sent on the request`,
+				`END`,
 			},
 		},
 		{
@@ -268,6 +303,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:[metadata.generateName: Invalid value: "foo": generateName is not supported, metadata.name: Required value: name or generateName is required]`,
+				`END`,
+			},
 		},
 		{
 			name: "create validation: name cannot exactly match client.oauth.pinniped.dev-",
@@ -296,6 +336,11 @@ func TestCreate(t *testing.T) {
 						Field:   "metadata.name",
 					}},
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:metadata.name: Invalid value: "client.oauth.pinniped.dev-": must not equal 'client.oauth.pinniped.dev-'`,
+				`END`,
 			},
 		},
 		{
@@ -326,6 +371,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:metadata.name: Invalid value: "does-not-contain-the-prefix": must start with 'client.oauth.pinniped.dev-'`,
+				`END`,
+			},
 		},
 		{
 			name: "create validation: name with invalid characters should error",
@@ -354,6 +404,11 @@ func TestCreate(t *testing.T) {
 						Field:   "metadata.name",
 					}},
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:metadata.name: Invalid value: "client.oauth.pinniped.dev-contains/invalid/characters": may not contain '/'`,
+				`END`,
 			},
 		},
 		{
@@ -395,6 +450,11 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`failureType:request validation,msg:[metadata.generateName: Invalid value: "no-generate-allowed": generateName is not supported, metadata.name: Invalid value: "multiple/errors/aggregated": must start with 'client.oauth.pinniped.dev-', metadata.name: Invalid value: "multiple/errors/aggregated": may not contain '/']`,
+				`END`,
+			},
 		},
 		{
 			name: "oidcClient does not exist 404",
@@ -424,6 +484,12 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`failureType:oidcClientsClient.Get,msg:oidcclients.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-oidc-client-does-not-exist-404" not found`,
+				`END`,
+			},
 		},
 		{
 			name: "unexpected error getting oidcClient 500",
@@ -450,6 +516,12 @@ func TestCreate(t *testing.T) {
 						Message: `getting client "client.oauth.pinniped.dev-internal-error-could-not-get-client" failed`,
 					}},
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`failureType:oidcClientsClient.Get,msg:unexpected error darn`,
+				`END`,
 			},
 		},
 		{
@@ -484,6 +556,13 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`failureType:secretStorage.Get,msg:failed to get client secret for uid : failed to get oidc-client-secret for signature : sadly no secrets`,
+				`END`,
+			},
 		},
 		{
 			name: "failed to generate new client secret for oidcClient",
@@ -516,6 +595,14 @@ func TestCreate(t *testing.T) {
 						Message: `client secret generation failed`,
 					}},
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`failureType:generateSecret,msg:could not generate client secret: always errors`,
+				`END`,
 			},
 		},
 		{
@@ -552,6 +639,15 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`failureType:bcrypt.GenerateFromPassword,msg:can't hash stuff`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path: no secrets exist, create secret and hash for found oidcclient",
@@ -586,6 +682,16 @@ func TestCreate(t *testing.T) {
 				hashes: []string{
 					fakeBcryptRandomBytes,
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
 			},
 		},
 		{
@@ -637,6 +743,16 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 3,
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path: secret exists, append new secret hash to secret and revoke old for found oidcclient",
@@ -684,6 +800,16 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path: secret exists, revoke old secrets but retain latest for found oidcclient",
@@ -730,6 +856,14 @@ func TestCreate(t *testing.T) {
 					GeneratedSecret:    "",
 					TotalClientSecrets: 1,
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`secretStorage.Set`,
+				`END`,
 			},
 		},
 		{
@@ -784,6 +918,16 @@ func TestCreate(t *testing.T) {
 				Message: `OIDCClient client.oauth.pinniped.dev-some-client has too many secrets, spec.revokeOldSecrets must be true`,
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`failureType:secretStorage.Set,msg:OIDCClient client.oauth.pinniped.dev-some-client has too many secrets, spec.revokeOldSecrets must be true`,
+				`END`,
 			},
 		},
 		{
@@ -841,6 +985,16 @@ func TestCreate(t *testing.T) {
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`failureType:secretStorage.Set,msg:OIDCClient client.oauth.pinniped.dev-some-client has too many secrets, spec.revokeOldSecrets must be true`,
+				`END`,
+			},
 		},
 		{
 			name: "attempted to create storage secret because it did not initially exist but was created by someone else while generating new client secret & hash",
@@ -880,6 +1034,16 @@ func TestCreate(t *testing.T) {
 					Kind:  "oidcclientsecretrequests",
 					Name:  "client.oauth.pinniped.dev-some-client",
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`failureType:secretStorage.Set,msg:failed to create client secret for uid 12345: failed to create oidc-client-secret for signature MTIzNDU: secrets "pinniped-storage-oidc-client-secret-gezdgnbv" already exists`,
+				`END`,
 			},
 		},
 		{
@@ -925,6 +1089,16 @@ func TestCreate(t *testing.T) {
 					Name:  "client.oauth.pinniped.dev-some-client",
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`failureType:secretStorage.Set,msg:failed to create client secret for uid 12345: failed to create oidc-client-secret for signature MTIzNDU: Operation cannot be fulfilled on secrets "pinniped-storage-oidc-client-secret-gezdgnbv": something deeply conflicted`,
+				`END`,
+			},
 		},
 		{
 			name: "attempted to create storage secret but received an unknown error",
@@ -963,6 +1137,16 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`failureType:secretStorage.Set,msg:failed to create client secret for uid 12345: failed to create oidc-client-secret for signature MTIzNDU: some random error`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path noop: do not create a new secret, revoke old secrets, but there is no existing storage secret",
@@ -991,6 +1175,13 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 0,
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path noop: do not create a new secret, revoke old secrets, but there is no existing storage secret",
@@ -1018,6 +1209,13 @@ func TestCreate(t *testing.T) {
 					GeneratedSecret:    "",
 					TotalClientSecrets: 0,
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`END`,
 			},
 		},
 		{
@@ -1067,6 +1265,13 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 2,
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`END`,
+			},
 		},
 		{
 			name: "happy path: generate new secret and revoking old secret when there was a single secret hash to start with",
@@ -1112,6 +1317,16 @@ func TestCreate(t *testing.T) {
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
 			},
 		},
 		{
@@ -1162,6 +1377,16 @@ func TestCreate(t *testing.T) {
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
 				},
+			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
 			},
 		},
 		{
@@ -1214,12 +1439,28 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
+			wantLogLines: []string{
+				`"create"`,
+				`"validateRequest"`,
+				`oidcClientsClient.Get`,
+				`secretStorage.Get`,
+				`generateSecret`,
+				`bcrypt.GenerateFromPassword`,
+				`secretStorage.Set`,
+				`END`,
+			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel() should not be used because we are mutating the global logger.
+			var log bytes.Buffer
+			logger := plog.TestZapr(t, &log)
+			klog.SetLogger(logger)
+			t.Cleanup(func() {
+				klog.ClearLogger()
+			})
 
 			kubeClient := kubefake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets(namespace)
@@ -1297,6 +1538,8 @@ func TestCreate(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, secrets.Items)
 			}
+
+			requireLogLinesContain(t, log.String(), tt.wantLogLines)
 		})
 	}
 }
@@ -1305,4 +1548,23 @@ type readerAlwaysErrors struct{}
 
 func (r readerAlwaysErrors) Read(p []byte) (n int, err error) {
 	return 0, errors.New("always errors")
+}
+
+func requireLogLinesContain(t *testing.T, fullLog string, wantLines []string) {
+	if len(wantLines) == 0 {
+		require.Empty(t, fullLog)
+		return
+	}
+	var jsonLog map[string]interface{}
+	err := json.Unmarshal([]byte(fullLog), &jsonLog)
+	require.NoError(t, err)
+	require.Contains(t, jsonLog, "message")
+	message := jsonLog["message"]
+	require.IsType(t, "type of string", message)
+	lines := strings.Split(strings.TrimSpace(message.(string)), "\n")
+
+	require.Lenf(t, lines, len(wantLines), "actual log lines length should match expected length, actual lines:\n\n%s", strings.Join(lines, "\n"))
+	for i := range wantLines {
+		require.Containsf(t, lines[i], wantLines[i], "log line at index %d should have contained expected output", i)
+	}
 }

@@ -90,6 +90,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 				clientsecretrequest.Cost,
 				rand.Reader,
 				bcrypt.GenerateFromPassword,
+				metav1.Now,
 			)
 			return clientSecretReqGVR, clientSecretReqStorage
 		},

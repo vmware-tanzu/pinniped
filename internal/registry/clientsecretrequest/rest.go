@@ -35,6 +35,7 @@ import (
 const Cost = 12
 
 type byteHasher func(password []byte, cost int) ([]byte, error)
+type timeNowFunc func() metav1.Time
 
 func NewREST(
 	resource schema.GroupResource,
@@ -44,6 +45,7 @@ func NewREST(
 	cost int,
 	randByteGenerator io.Reader,
 	byteHasher byteHasher,
+	timeNowFunc timeNowFunc,
 ) *REST {
 	return &REST{
 		secretStorage:     oidcclientsecretstorage.New(secretsClient),
@@ -53,6 +55,7 @@ func NewREST(
 		randByteGenerator: randByteGenerator,
 		byteHasher:        byteHasher,
 		tableConvertor:    rest.NewDefaultTableConvertor(resource),
+		timeNowFunc:       timeNowFunc,
 	}
 }
 
@@ -64,6 +67,7 @@ type REST struct {
 	cost              int
 	byteHasher        byteHasher
 	tableConvertor    rest.TableConvertor
+	timeNowFunc       timeNowFunc
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -197,6 +201,11 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	// Return the new secret in plaintext, if one was generated, along with the total number of secrets.
 	return &clientsecretapi.OIDCClientSecretRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              req.Name,
+			Namespace:         req.Namespace,
+			CreationTimestamp: r.timeNowFunc(),
+		},
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{
 			GeneratedSecret:    secret,
 			TotalClientSecrets: len(hashes),

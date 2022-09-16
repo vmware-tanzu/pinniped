@@ -36,7 +36,16 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	r := NewREST(schema.GroupResource{Group: "bears", Resource: "panda"}, nil, nil, "foobar", 4, nil, nil)
+	r := NewREST(
+		schema.GroupResource{Group: "bears", Resource: "panda"},
+		nil,
+		nil,
+		"foobar",
+		4,
+		nil,
+		nil,
+		nil,
+	)
 
 	require.NotNil(t, r)
 	require.True(t, r.NamespaceScoped())
@@ -95,6 +104,9 @@ func TestCreate(t *testing.T) {
 	fakeRandomBytes := "0123456789abcdefghijklmnopqrstuv"
 	fakeHexEncodedRandomBytes := hex.EncodeToString([]byte(fakeRandomBytes))
 	fakeBcryptRandomBytes := fakeHexEncodedRandomBytes + ":4-fake-hash"
+
+	fakeNow := metav1.Now()
+	fakeTimeNowFunc := func() metav1.Time { return fakeNow }
 
 	tests := []struct {
 		name              string
@@ -671,6 +683,11 @@ func TestCreate(t *testing.T) {
 				},
 			}},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-happy-new-secret",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -738,6 +755,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-append-new-secret-hash",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 3,
@@ -795,6 +817,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-append-new-secret-hash",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -852,6 +879,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 1,
@@ -1170,6 +1202,11 @@ func TestCreate(t *testing.T) {
 				},
 			}},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-happy-new-secret",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 0,
@@ -1205,6 +1242,11 @@ func TestCreate(t *testing.T) {
 				},
 			}},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 0,
@@ -1260,6 +1302,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 2,
@@ -1313,6 +1360,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -1373,6 +1425,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -1434,6 +1491,11 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			want: &clientsecretapi.OIDCClientSecretRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "client.oauth.pinniped.dev-some-client",
+					Namespace:         namespace,
+					CreationTimestamp: fakeNow,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -1509,6 +1571,7 @@ func TestCreate(t *testing.T) {
 				4,
 				fakeByteGenerator,
 				fakeHasher,
+				fakeTimeNowFunc,
 			)
 
 			got, err := r.Create(tt.args.ctx, tt.args.obj, tt.args.createValidation, tt.args.options)

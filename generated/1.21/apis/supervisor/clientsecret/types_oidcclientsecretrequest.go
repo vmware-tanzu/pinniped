@@ -13,16 +13,20 @@ type OIDCClientSecretRequest struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta // metadata.name must be set to the client ID
 
-	Spec   OIDCClientSecretRequestSpec
+	Spec OIDCClientSecretRequestSpec
+
+	// +optional
 	Status OIDCClientSecretRequestStatus
 }
 
 // Spec of the OIDCClientSecretRequest.
 type OIDCClientSecretRequestSpec struct {
 	// Request a new client secret to for the OIDCClient referenced by the metadata.name field.
+	// +optional
 	GenerateNewSecret bool
 
 	// Revoke the old client secrets associated with the OIDCClient referenced by the metadata.name field.
+	// +optional
 	RevokeOldSecrets bool
 }
 

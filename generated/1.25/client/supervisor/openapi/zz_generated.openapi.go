@@ -117,7 +117,7 @@ func schema_apis_supervisor_clientsecret_v1alpha1_OIDCClientSecretRequest(ref co
 						},
 					},
 				},
-				Required: []string{"spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -199,7 +199,6 @@ func schema_apis_supervisor_clientsecret_v1alpha1_OIDCClientSecretRequestSpec(re
 						},
 					},
 				},
-				Required: []string{"generateNewSecret", "revokeOldSecrets"},
 			},
 		},
 	}

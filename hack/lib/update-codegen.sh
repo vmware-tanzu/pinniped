@@ -136,7 +136,7 @@ echo "generating API-related code for our public API groups..."
 echo "generating API-related code for our internal API groups..."
 (cd apis &&
     OPENAPI_EXTRA_PACKAGES="k8s.io/api/core/v1" \
-    bash -x "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
+    bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
         "deepcopy,defaulter,conversion,openapi" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \

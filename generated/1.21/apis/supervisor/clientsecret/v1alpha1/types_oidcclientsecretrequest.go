@@ -16,16 +16,20 @@ type OIDCClientSecretRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"` // metadata.name must be set to the client ID
 
-	Spec   OIDCClientSecretRequestSpec   `json:"spec"`
+	Spec OIDCClientSecretRequestSpec `json:"spec"`
+
+	// +optional
 	Status OIDCClientSecretRequestStatus `json:"status"`
 }
 
 // Spec of the OIDCClientSecretRequest.
 type OIDCClientSecretRequestSpec struct {
 	// Request a new client secret to for the OIDCClient referenced by the metadata.name field.
+	// +optional
 	GenerateNewSecret bool `json:"generateNewSecret"`
 
 	// Revoke the old client secrets associated with the OIDCClient referenced by the metadata.name field.
+	// +optional
 	RevokeOldSecrets bool `json:"revokeOldSecrets"`
 }
 

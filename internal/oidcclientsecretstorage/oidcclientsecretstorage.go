@@ -80,16 +80,16 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidc
 	name := uidToName(oidcClientUID)
 
 	if mustBeCreate := len(resourceVersion) == 0; mustBeCreate {
-		ownerReferences := []metav1.OwnerReference{
-			{
-				APIVersion:         configv1alpha1.SchemeGroupVersion.String(),
-				Kind:               "OIDCClient",
-				Name:               oidcClientName,
-				UID:                oidcClientUID,
-				Controller:         nil, // TODO should this be true?
-				BlockOwnerDeletion: nil,
-			},
-		}
+		// Setup an owner reference for garbage collection purposes. When the OIDCClient is deleted, then this
+		// corresponding client secret storage secret should also be automatically deleted (by Kube garbage collection).
+		ownerReferences := []metav1.OwnerReference{{
+			APIVersion:         configv1alpha1.SchemeGroupVersion.String(),
+			Kind:               "OIDCClient",
+			Name:               oidcClientName,
+			UID:                oidcClientUID,
+			Controller:         nil, // doesn't seem to matter, and there is no particular controller owning this
+			BlockOwnerDeletion: nil,
+		}}
 		if _, err := s.storage.Create(ctx, name, secret, nil, ownerReferences); err != nil {
 			return fmt.Errorf("failed to create client secret for uid %s: %w", oidcClientUID, err)
 		}

@@ -14,10 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
-
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/bcrypt"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -31,13 +28,13 @@ import (
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/oidcclientsecretstorage"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.
@@ -424,43 +421,34 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 }
 
 func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClient) string {
-	// TODO Replace this with a call to the real Supervisor API for creating client secrets after that gets implemented.
-	//   For now, just manually create a Secret with the right format so the tests can work.
 	t.Helper()
 	env := IntegrationEnv(t)
-	kubeClient := NewKubernetesClientset(t)
+	supervisorClient := NewSupervisorClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	var buf [32]byte
-	_, err := io.ReadFull(rand.Reader, buf[:])
-	require.NoError(t, err)
-	randomSecret := hex.EncodeToString(buf[:])
-	hashedRandomSecret, err := bcrypt.GenerateFromPassword([]byte(randomSecret), oidcclientvalidator.DefaultMinBcryptCost)
-	require.NoError(t, err)
-
-	created, err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Create(ctx, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        oidcclientsecretstorage.New(nil).GetName(forOIDCClient.UID), // use the required name
-			Labels:      map[string]string{"storage.pinniped.dev/type": "oidc-client-secret", "pinniped.dev/test": ""},
-			Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
+	// Call the OIDCClientSecretRequest using the "create" verb to generate a new random client secret for the
+	// client of the given name.
+	secretRequest, err := supervisorClient.ClientsecretV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
+		&clientsecretv1alpha1.OIDCClientSecretRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: forOIDCClient.Name,
+			},
+			Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
+				GenerateNewSecret: true,
+				RevokeOldSecrets:  false,
+			},
 		},
-		Type: "storage.pinniped.dev/oidc-client-secret",
-		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"version":"1","hashes":["` + string(hashedRandomSecret) + `"]}`),
-			"pinniped-storage-version": []byte("1"),
-		},
-	}, metav1.CreateOptions{})
+		metav1.CreateOptions{},
+	)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
-		err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	})
+	// The response should be present in the status.
+	generatedSecret := secretRequest.Status.GeneratedSecret
+	require.Len(t, generatedSecret, 64) // randomly generated long secret
+	require.Equal(t, 1, secretRequest.Status.TotalClientSecrets)
 
-	t.Logf("created test Secret %s", created.Name)
-	return randomSecret
+	return generatedSecret
 }
 
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {

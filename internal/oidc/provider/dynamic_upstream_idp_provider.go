@@ -61,6 +61,9 @@ type UpstreamOIDCIdentityProviderI interface {
 	// GetAdditionalAuthcodeParams returns additional params to be sent on authcode requests.
 	GetAdditionalAuthcodeParams() map[string]string
 
+	// GetAdditionalClaimMappings returns additional claims to be mapped from the upstream ID token.
+	GetAdditionalClaimMappings() map[string]string
+
 	// PasswordCredentialsGrantAndValidateTokens performs upstream OIDC resource owner password credentials grant and
 	// token validation. Returns the validated raw tokens as well as the parsed claims of the ID token.
 	PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error)

@@ -43,6 +43,7 @@ type ProviderConfig struct {
 	Client                   *http.Client
 	AllowPasswordGrant       bool
 	AdditionalAuthcodeParams map[string]string
+	AdditionalClaimMappings  map[string]string
 	RevocationURL            *url.URL // will commonly be nil: many providers do not offer this
 	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
@@ -76,6 +77,10 @@ func (p *ProviderConfig) HasUserInfoURL() bool {
 
 func (p *ProviderConfig) GetAdditionalAuthcodeParams() map[string]string {
 	return p.AdditionalAuthcodeParams
+}
+
+func (p *ProviderConfig) GetAdditionalClaimMappings() map[string]string {
+	return p.AdditionalClaimMappings
 }
 
 func (p *ProviderConfig) GetName() string {

@@ -999,6 +999,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					GroupsClaim:              testGroupsClaim,
 					AllowPasswordGrant:       true,
 					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
 					ResourceUID:              testUID,
 				},
 			},
@@ -1054,6 +1055,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					GroupsClaim:              testGroupsClaim,
 					AllowPasswordGrant:       false,
 					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
 					ResourceUID:              testUID,
 				},
 			},
@@ -1109,6 +1111,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					GroupsClaim:              testGroupsClaim,
 					AllowPasswordGrant:       false,
 					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
 					ResourceUID:              testUID,
 				},
 			},
@@ -1167,6 +1170,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					GroupsClaim:              testGroupsClaim,
 					AllowPasswordGrant:       false,
 					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
 					ResourceUID:              testUID,
 				},
 			},
@@ -1195,7 +1199,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						AdditionalAuthorizeParameters: testAdditionalParams,
 						AllowPasswordGrant:            true,
 					},
-					Claims: v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+					Claims: v1alpha1.OIDCClaims{
+						Groups:   testGroupsClaim,
+						Username: testUsernameClaim,
+						AdditionalClaimMappings: map[string]string{
+							"downstream": "upstream",
+						},
+					},
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
@@ -1227,7 +1237,10 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					GroupsClaim:              testGroupsClaim,
 					AllowPasswordGrant:       true,
 					AdditionalAuthcodeParams: testExpectedAdditionalParams,
-					ResourceUID:              testUID,
+					AdditionalClaimMappings: map[string]string{
+						"downstream": "upstream",
+					},
+					ResourceUID: testUID,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -1442,6 +1455,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				require.Equal(t, tt.wantResultingCache[i].GetGroupsClaim(), actualIDP.GetGroupsClaim())
 				require.Equal(t, tt.wantResultingCache[i].AllowsPasswordGrant(), actualIDP.AllowsPasswordGrant())
 				require.Equal(t, tt.wantResultingCache[i].GetAdditionalAuthcodeParams(), actualIDP.GetAdditionalAuthcodeParams())
+				require.Equal(t, tt.wantResultingCache[i].GetAdditionalClaimMappings(), actualIDP.GetAdditionalClaimMappings())
 				require.Equal(t, tt.wantResultingCache[i].GetResourceUID(), actualIDP.GetResourceUID())
 				require.Equal(t, tt.wantResultingCache[i].GetRevocationURL(), actualIDP.GetRevocationURL())
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())

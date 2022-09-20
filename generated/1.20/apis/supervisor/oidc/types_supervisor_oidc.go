@@ -40,6 +40,10 @@ const (
 	// group names which were mapped from the upstream identity provider.
 	IDTokenClaimGroups = "groups"
 
+	// IDTokenClaimAdditionalClaims is the top level claim used to hold additional claims in the downstream ID
+	// token, if any claims are present.
+	IDTokenClaimAdditionalClaims = "additionalClaims"
+
 	// GrantTypeAuthorizationCode is the name of the grant type for authorization code flows defined by the OIDC spec.
 	GrantTypeAuthorizationCode = "authorization_code"
 

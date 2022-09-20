@@ -215,6 +215,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		GroupsClaim:              upstream.Spec.Claims.Groups,
 		AllowPasswordGrant:       authorizationConfig.AllowPasswordGrant,
 		AdditionalAuthcodeParams: additionalAuthcodeAuthorizeParameters,
+		AdditionalClaimMappings:  upstream.Spec.Claims.AdditionalClaimMappings,
 		ResourceUID:              upstream.UID,
 	}
 

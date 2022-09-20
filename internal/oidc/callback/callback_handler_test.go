@@ -189,6 +189,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
+		wantAdditionalClaims              map[string]interface{}
 
 		wantAuthcodeExchangeCall *expectedAuthcodeExchange
 	}{
@@ -221,6 +222,49 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "GET with good state and cookie with additional params",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().
+				WithAdditionalClaimMappings(map[string]string{
+					"downstreamCustomClaim":  "upstreamCustomClaim",
+					"downstreamOtherClaim":   "upstreamOtherClaim",
+					"downstreamMissingClaim": "upstreamMissingClaim",
+				}).
+				WithIDTokenClaim("upstreamCustomClaim", "i am a claim value").
+				WithIDTokenClaim("upstreamOtherClaim", "other claim value").
+				Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{"response_mode": "form_post"},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusOK,
+			wantContentType:                   "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+			wantAdditionalClaims: map[string]interface{}{
+				"downstreamCustomClaim": "i am a claim value",
+				"downstreamOtherClaim":  "other claim value",
 			},
 		},
 		{
@@ -1463,6 +1507,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
+					test.wantAdditionalClaims,
 				)
 
 			// Otherwise, expect an empty response body.
@@ -1490,6 +1535,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
+					test.wantAdditionalClaims,
 				)
 			}
 		})

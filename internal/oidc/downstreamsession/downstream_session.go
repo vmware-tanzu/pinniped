@@ -48,6 +48,7 @@ func MakeDownstreamSession(
 	grantedScopes []string,
 	clientID string,
 	custom *psession.CustomSessionData,
+	additionalClaims map[string]interface{},
 ) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
@@ -71,6 +72,9 @@ func MakeDownstreamSession(
 	}
 	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
 		extras[oidcapi.IDTokenClaimGroups] = groups
+	}
+	if len(additionalClaims) > 0 {
+		extras[oidcapi.IDTokenClaimAdditionalClaims] = additionalClaims
 	}
 	openIDSession.IDTokenClaims().Extra = extras
 
@@ -210,6 +214,27 @@ func GetDownstreamIdentityFromUpstreamIDToken(
 	}
 
 	return subject, username, groups, err
+}
+
+// MapAdditionalClaimsFromUpstreamIDToken returns the additionalClaims mapped from the upstream token, if any.
+func MapAdditionalClaimsFromUpstreamIDToken(
+	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	idTokenClaims map[string]interface{},
+) map[string]interface{} {
+	mapped := make(map[string]interface{}, len(upstreamIDPConfig.GetAdditionalClaimMappings()))
+	for downstreamClaimName, upstreamClaimName := range upstreamIDPConfig.GetAdditionalClaimMappings() {
+		upstreamClaimValue, ok := idTokenClaims[upstreamClaimName]
+		if !ok {
+			plog.Warning(
+				"additionalClaims mapping claim in upstream ID token missing",
+				"upstreamName", upstreamIDPConfig.GetName(),
+				"claimName", upstreamClaimName,
+			)
+		} else {
+			mapped[downstreamClaimName] = upstreamClaimValue
+		}
+	}
+	return mapped
 }
 
 func getSubjectAndUsernameFromUpstreamIDToken(

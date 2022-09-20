@@ -1027,6 +1027,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
+					map[string]interface{}{},
 				)
 			case tt.wantRedirectToLoginPageError != "":
 				// Expecting an error redirect to the login UI page.
@@ -1062,6 +1063,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
+					map[string]interface{}{},
 				)
 			default:
 				require.Failf(t, "test should have expected a redirect or form body",

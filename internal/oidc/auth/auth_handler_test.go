@@ -582,6 +582,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		wantUnnecessaryStoredRecords      int
 		wantPasswordGrantCall             *expectedPasswordGrant
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
+		wantAdditionalClaims              map[string]interface{}
 	}
 	tests := []testCase{
 		{
@@ -710,6 +711,68 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+		},
+		{
+			name: "OIDC upstream password grant happy path using GET with additional claim mappings",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().
+				WithAdditionalClaimMappings(map[string]string{
+					"downstreamCustomClaim":  "upstreamCustomClaim",
+					"downstreamOtherClaim":   "upstreamOtherClaim",
+					"downstreamMissingClaim": "upstreamMissingClaim",
+				}).
+				WithIDTokenClaim("upstreamCustomClaim", "i am a claim value").
+				WithIDTokenClaim("upstreamOtherClaim", "other claim value").
+				Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.String(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.String(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantAdditionalClaims: map[string]interface{}{
+				"downstreamCustomClaim": "i am a claim value",
+				"downstreamOtherClaim":  "other claim value",
+			},
+		},
+		{
+			name: "OIDC upstream password grant happy path using GET with additional claim mappings, when upstream claims are not available",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().
+				WithAdditionalClaimMappings(map[string]string{
+					"downstream": "upstream",
+				}).
+				WithIDTokenClaim("not-upstream", "value").
+				Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.String(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.String(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantAdditionalClaims:              nil, // downstream claims are empty
 		},
 		{
 			name:                              "LDAP cli upstream happy path using GET",
@@ -3126,6 +3189,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				test.wantDownstreamClientID,
 				test.wantDownstreamRedirectURI,
 				test.wantDownstreamCustomSessionData,
+				test.wantAdditionalClaims,
 			)
 		default:
 			require.Empty(t, rsp.Header().Values("Location"))
@@ -3176,9 +3240,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
 			oauthHelperWithRealStorage, kubeOauthStore := createOauthHelperWithRealStorage(secretsClient, oidcClientsClient)
 			oauthHelperWithNullStorage, _ := createOauthHelperWithNullStorage(secretsClient, oidcClientsClient)
+
+			idps := test.idps.Build()
+			if len(test.wantAdditionalClaims) > 0 {
+				require.True(t, len(idps.GetOIDCIdentityProviders()) > 0, "wantAdditionalClaims requires at least one OIDC IDP")
+			}
+
 			subject := NewHandler(
 				downstreamIssuer,
-				test.idps.Build(),
+				idps,
 				oauthHelperWithNullStorage, oauthHelperWithRealStorage,
 				test.generateCSRF, test.generatePKCE, test.generateNonce,
 				test.stateEncoder, test.cookieEncoder,

@@ -70,7 +70,7 @@ func NewHandler(issuerURL string) http.Handler {
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
 		CodeChallengeMethodsSupported:     []string{"S256"},
 		ScopesSupported:                   []string{oidcapi.ScopeOpenID, oidcapi.ScopeOfflineAccess, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups},
-		ClaimsSupported:                   []string{oidcapi.IDTokenClaimUsername, oidcapi.IDTokenClaimGroups},
+		ClaimsSupported:                   []string{oidcapi.IDTokenClaimUsername, oidcapi.IDTokenClaimGroups, oidcapi.IDTokenClaimAdditionalClaims},
 	}
 
 	var b bytes.Buffer

@@ -688,6 +688,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  false,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -760,6 +764,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  false,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 3,
@@ -822,6 +830,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  true,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -883,6 +895,10 @@ func TestCreate(t *testing.T) {
 					Name:              "client.oauth.pinniped.dev-some-client",
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
+				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: false,
+					RevokeOldSecrets:  true,
 				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
@@ -961,6 +977,7 @@ func TestCreate(t *testing.T) {
 				`failureType:secretStorage.Set,msg:OIDCClient client.oauth.pinniped.dev-some-client has too many secrets, spec.revokeOldSecrets must be true`,
 				`END`,
 			},
+			want: nil,
 		},
 		{
 			name: "secret exists but oidcclient secret has too many hashes, fails to create when RevokeOldSecrets:false (greater than 5), secret is not updated",
@@ -1207,6 +1224,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: false,
+					RevokeOldSecrets:  true,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 0,
@@ -1246,6 +1267,10 @@ func TestCreate(t *testing.T) {
 					Name:              "client.oauth.pinniped.dev-some-client",
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
+				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: false,
+					RevokeOldSecrets:  false,
 				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
@@ -1307,6 +1332,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: false,
+					RevokeOldSecrets:  false,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    "",
 					TotalClientSecrets: 2,
@@ -1364,6 +1393,10 @@ func TestCreate(t *testing.T) {
 					Name:              "client.oauth.pinniped.dev-some-client",
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
+				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  true,
 				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
@@ -1430,6 +1463,10 @@ func TestCreate(t *testing.T) {
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
 				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  true,
+				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
 					TotalClientSecrets: 1,
@@ -1495,6 +1532,10 @@ func TestCreate(t *testing.T) {
 					Name:              "client.oauth.pinniped.dev-some-client",
 					Namespace:         namespace,
 					CreationTimestamp: fakeNow,
+				},
+				Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+					GenerateNewSecret: true,
+					RevokeOldSecrets:  true,
 				},
 				Status: clientsecretapi.OIDCClientSecretRequestStatus{
 					GeneratedSecret:    fakeHexEncodedRandomBytes,
@@ -1610,7 +1651,7 @@ func TestCreate(t *testing.T) {
 
 type readerAlwaysErrors struct{}
 
-func (r readerAlwaysErrors) Read(p []byte) (n int, err error) {
+func (r readerAlwaysErrors) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("always errors")
 }
 

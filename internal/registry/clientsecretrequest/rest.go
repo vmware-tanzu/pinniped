@@ -206,6 +206,10 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			Namespace:         req.Namespace,
 			CreationTimestamp: r.timeNowFunc(),
 		},
+		Spec: clientsecretapi.OIDCClientSecretRequestSpec{
+			GenerateNewSecret: req.Spec.GenerateNewSecret,
+			RevokeOldSecrets:  req.Spec.RevokeOldSecrets,
+		},
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{
 			GeneratedSecret:    secret,
 			TotalClientSecrets: len(hashes),

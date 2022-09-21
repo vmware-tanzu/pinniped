@@ -1181,7 +1181,7 @@ func TestCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "happy path noop: do not create a new secret, revoke old secrets, but there is no existing storage secret",
+			name: "happy path noop: do not create a new secret, do not revoke old secrets, but there is no existing storage secret",
 			args: args{
 				ctx: namespacedContext,
 				obj: &clientsecretapi.OIDCClientSecretRequest{
@@ -1515,6 +1515,7 @@ func TestCreate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			// t.Parallel() should not be used because we are mutating the global logger.
 			var log bytes.Buffer

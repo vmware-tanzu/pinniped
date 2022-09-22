@@ -220,6 +220,13 @@ func getRestartCounts(ctx context.Context, t *testing.T, kubeClient kubernetes.I
 
 	restartCounts := make(containerRestartMap)
 	for _, pod := range pods.Items {
+		// Ignore pods that are already terminating at the start of the test. The app may have been redeployed
+		// just before the tests were invoked, so it would be normal for some pods to still be terminating
+		// in that situation. Note that terminating pods in this situation do not count as a "restart" anyway.
+		if pod.ObjectMeta.DeletionTimestamp != nil {
+			continue
+		}
+
 		for _, container := range pod.Status.ContainerStatuses {
 			key := containerRestartKey{
 				namespace: pod.Namespace,

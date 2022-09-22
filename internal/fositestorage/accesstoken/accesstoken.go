@@ -85,6 +85,7 @@ func (a *accessTokenStorage) CreateAccessTokenSession(ctx context.Context, signa
 		signature,
 		&Session{Request: request, Version: accessTokenStorageVersion},
 		map[string]string{fositestorage.StorageRequestIDLabelName: requester.GetID()},
+		nil,
 	)
 	return err
 }

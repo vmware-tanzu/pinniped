@@ -51,8 +51,11 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 		}),
 
 		kubeclient.MiddlewareFunc(func(_ context.Context, rt kubeclient.RoundTrip) {
-			// we should not mess with owner refs on things we did not create
-			if rt.Verb() != kubeclient.VerbCreate {
+			// Only mess with ownerRefs on requests to perform edits.
+			// Not needed on deletes since the object is getting deleted anyway.
+			// WARNING: This code might need to be enhanced to handle the patch verb
+			// if we start using patches for objects that have ownerRefs.
+			if rt.Verb() != kubeclient.VerbCreate && rt.Verb() != kubeclient.VerbUpdate {
 				return
 			}
 

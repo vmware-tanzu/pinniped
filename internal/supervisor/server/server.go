@@ -27,10 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
@@ -38,7 +40,9 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/apicerts"
@@ -475,6 +479,9 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		*cfg.AggregatedAPIServerPort,
 		scheme,
 		clientSecretGV,
+		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace),
+		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
+		serverInstallationNamespace,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -568,7 +575,6 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 	return nil
 }
 
-// Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Private,
 	buildControllers controllerinit.RunnerBuilder,
@@ -576,6 +582,9 @@ func getAggregatedAPIServerConfig(
 	aggregatedAPIServerPort int64,
 	scheme *runtime.Scheme,
 	clientSecretSupervisorGroupVersion schema.GroupVersion,
+	secrets corev1client.SecretInterface,
+	oidcClients v1alpha1.OIDCClientInterface,
+	serverInstallationNamespace string,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -600,6 +609,10 @@ func getAggregatedAPIServerConfig(
 	}
 
 	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+	// Add the generated openapi docs to the server config. Publishing openapi docs allows
+	// `kubectl explain` to work for the Supervisor's aggregated API resources.
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
+		supervisoropenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`
@@ -620,6 +633,9 @@ func getAggregatedAPIServerConfig(
 			Scheme:                             scheme,
 			NegotiatedSerializer:               codecs,
 			ClientSecretSupervisorGroupVersion: clientSecretSupervisorGroupVersion,
+			Secrets:                            secrets,
+			OIDCClients:                        oidcClients,
+			Namespace:                          serverInstallationNamespace,
 		},
 	}
 	return apiServerConfig, nil

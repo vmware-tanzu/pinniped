@@ -5,7 +5,6 @@ package oidc
 
 import (
 	"context"
-	"time"
 
 	"github.com/ory/fosite"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -32,7 +31,7 @@ func NewNullStorage(
 	minBcryptCost int,
 ) *NullStorage {
 	return &NullStorage{
-		ClientManager: clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets, time.Now), minBcryptCost),
+		ClientManager: clientregistry.NewClientManager(oidcClientsClient, oidcclientsecretstorage.New(secrets), minBcryptCost),
 	}
 }
 

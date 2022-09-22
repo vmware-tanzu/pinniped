@@ -1404,7 +1404,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.Equal(t, http.StatusForbidden, status)
 				require.Equal(t,
 					`{"error":"access_denied","error_description":"The resource owner or authorization server denied the request. `+
-						`missing the 'pinniped:request-audience' scope"}`,
+						`Missing the 'pinniped:request-audience' scope."}`,
 					body)
 			},
 		},

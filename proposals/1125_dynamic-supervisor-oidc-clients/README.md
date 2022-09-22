@@ -1,9 +1,9 @@
 ---
 title: "Dynamic Supervisor OIDC Clients"
 authors: [ "@cfryanr", "@enj" ]
-status: "in-review"
+status: "approved"
 sponsor: [ ]
-approval_date: ""
+approval_date: "Jul 26, 2022"
 ---
 
 *Disclaimer*: Proposals are point-in-time designs and decisions. Once approved and implemented, they become historical

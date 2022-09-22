@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package groupsuffix
@@ -302,7 +302,7 @@ func TestMiddlware(t *testing.T) {
 			wantResponseObj:     podWithPinnipedOwner,
 		},
 		{
-			// test that multiple of our middleware request mutations play nicely with each other
+			// test that multiple of our middleware request mutations play nicely with each other on create
 			name:           "create resource with pinniped.dev and with owner ref that has pinniped.dev owner",
 			apiGroupSuffix: newSuffix,
 			rt: (&testutil.RoundTrip{}).
@@ -317,25 +317,57 @@ func TestMiddlware(t *testing.T) {
 			wantResponseObj:     federationDomainWithNewGroupAndPinnipedOwner, // the middleware will reset object GVK for us
 		},
 		{
-			name:           "update resource without pinniped.dev",
+			// test that multiple of our middleware request mutations play nicely with each other on update
+			name:           "update resource with pinniped.dev and with owner ref that has pinniped.dev owner",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbUpdate).
+				WithNamespace("some-namespace").
+				WithResource(configv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
+			requestObj:          federationDomainWithPinnipedOwner,
+			responseObj:         federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
+			wantMutateRequests:  2,
+			wantMutateResponses: 1,
+			wantRequestObj:      federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
+			wantResponseObj:     federationDomainWithNewGroupAndPinnipedOwner, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "update resource without pinniped.dev and without owner ref",
 			apiGroupSuffix: newSuffix,
 			rt: (&testutil.RoundTrip{}).
 				WithVerb(kubeclient.VerbUpdate).
 				WithNamespace("some-namespace").
 				WithResource(corev1.SchemeGroupVersion.WithResource("pods")),
+			requestObj:          podWithoutOwner,
 			responseObj:         podWithoutOwner,
+			wantMutateRequests:  1,
 			wantMutateResponses: 1,
+			wantRequestObj:      podWithoutOwner,
 			wantResponseObj:     podWithoutOwner,
 		},
 		{
-			name:           "update resource with pinniped.dev",
+			name:           "update resource without pinniped.dev and with owner ref that has pinniped.dev owner",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbUpdate).
+				WithNamespace("some-namespace").
+				WithResource(corev1.SchemeGroupVersion.WithResource("pods")),
+			requestObj:          podWithPinnipedOwner,
+			responseObj:         podWithPinnipedOwnerWithNewGroup,
+			wantMutateRequests:  1,
+			wantMutateResponses: 1,
+			wantRequestObj:      podWithPinnipedOwnerWithNewGroup,
+			wantResponseObj:     podWithPinnipedOwner,
+		},
+		{
+			name:           "update resource with pinniped.dev and without owner ref",
 			apiGroupSuffix: newSuffix,
 			rt: (&testutil.RoundTrip{}).
 				WithVerb(kubeclient.VerbUpdate).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
 			requestObj:          tokenCredentialRequest,
 			responseObj:         tokenCredentialRequestWithNewGroup,
-			wantMutateRequests:  1,
+			wantMutateRequests:  2,
 			wantMutateResponses: 1,
 			wantRequestObj:      tokenCredentialRequestWithNewGroup,
 			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us

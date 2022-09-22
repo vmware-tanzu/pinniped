@@ -186,6 +186,8 @@ The Supervisor's endpoints are:
 
 - A global `/healthz` which always returns 200 OK
 - And a number of endpoints for each FederationDomain that is configured by the user.
+- Starting in release v0.20.0, the Supervisor has aggregated API endpoints, which makes them appear to a client
+  almost as if they were built into Kubernetes itself.
 
 Each FederationDomain's endpoints are mounted under the path of the FederationDomain's `spec.issuer`,
 if the `spec.issuer` URL has a path component specified. If the issuer has no path, then they are mounted under `/`.
@@ -215,6 +217,11 @@ The per-FederationDomain endpoints are:
 
 The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).
 
+The aggregated API endpoints are:
+
+- `OIDCClientSecretRequest` may be used to create client secrets for OIDCClients.
+  It is in [internal/registry/clientsecretrequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/clientsecretrequest/rest.go).
+
 ## Kubernetes API group names
 
 The Kubernetes API groups used by the Pinniped CRDs and the Concierge's aggregated API endpoints are configurable
@@ -225,3 +232,5 @@ Making this group name configurable is not a common pattern in Kubernetes apps, 
 A discussion of this feature, including its implementation details, can be found in the
 [blog post for release v0.5.0]({{< ref "2021-02-04-multiple-pinnipeds" >}}). Similar to leader election,
 much of this behavior is implemented in client middleware, and will not be obvious when reading the code.
+The middleware will automatically replace the API group names as needed on each request/response to/from the Kubernetes API server.
+The middleware logic can be found in [internal/groupsuffix/groupsuffix.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/groupsuffix/groupsuffix.go).

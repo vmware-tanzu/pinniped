@@ -16,11 +16,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 
+	conciergeopenapi "go.pinniped.dev/generated/latest/client/concierge/openapi"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
@@ -222,6 +224,10 @@ func getAggregatedAPIServerConfig(
 	}
 
 	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+	// Add the generated openapi docs to the server config. Publishing openapi docs allows
+	// `kubectl explain` to work for the Concierge's aggregated API resources.
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
+		conciergeopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`

@@ -362,6 +362,53 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "zone" is invalid: [metadata.name: Invalid value: "zone": metadata.name in body should match '^client\.oauth\.pinniped\.dev-', spec.allowedGrantTypes[0]: Unsupported value: "the": supported values: "authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange", spec.allowedRedirectURIs[0]: Invalid value: "of": spec.allowedRedirectURIs[0] in body should match '^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/', spec.allowedScopes[0]: Unsupported value: "enders": supported values: "openid", "offline_access", "username", "groups", "pinniped:request-audience"]`,
 		},
 		{
+			name: "just the prefix is not valid",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "client.oauth.pinniped.dev-",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{
+						"https://example.com",
+						"http://127.0.0.1/yoyo",
+					},
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{
+						"authorization_code",
+						"refresh_token",
+						"urn:ietf:params:oauth:grant-type:token-exchange",
+					},
+					AllowedScopes: []supervisorconfigv1alpha1.Scope{
+						"openid",
+						"offline_access",
+						"username",
+						"groups",
+						"pinniped:request-audience",
+					},
+				},
+			},
+			fixWant: func(t *testing.T, err error, want string) string {
+				require.Error(t, err)
+				prefix := `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-" is invalid: metadata.name: Invalid value: "client.oauth.pinniped.dev-": `
+				suffix := ` must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')`
+
+				oldErrContains := `a DNS-1123 subdomain`           // Kube 1.19 and before used this error text
+				newErrContains := `a lowercase RFC 1123 subdomain` // Newer versions of Kube use this error text
+
+				gotErr := err.Error()
+				switch {
+				case strings.Contains(gotErr, oldErrContains):
+					return prefix + oldErrContains + suffix
+				case strings.Contains(gotErr, newErrContains):
+					return prefix + newErrContains + suffix
+				default:
+					require.Failf(t, "the error message did not contain %q or %q. actual message was: %s",
+						oldErrContains, newErrContains, gotErr)
+					return ""
+				}
+			},
+			wantErr: `this will be replaced by fixWant()`,
+		},
+		{
 			name: "everything valid",
 			client: &supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{
@@ -606,7 +653,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 
 			if tt.secret != nil {
 				// Force the Secret's name to match the client created above.
-				tt.secret.Name = oidcclientsecretstorage.New(nil, nil).GetName(client.UID)
+				tt.secret.Name = oidcclientsecretstorage.New(nil).GetName(client.UID)
 				secret, err := secrets.Create(ctx, tt.secret, metav1.CreateOptions{})
 				require.NoError(t, err)
 				t.Cleanup(func() {

@@ -96,6 +96,15 @@ spec:
             - /etc/config/pinniped.yaml
           securityContext:
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ "ALL" ]
+            #! seccompProfile was introduced in Kube v1.19. Using it on an older Kube version will result in a
+            #! kubectl validation error when installing via `kubectl apply`, which can be ignored using kubectl's
+            #! `--validate=false` flag. Note that installing via `kapp` does not complain about this validation error.
+            seccompProfile:
+              type: "RuntimeDefault"
           resources:
             requests:
               #! If OIDCClient CRs are being used, then the Supervisor needs enough CPU to run expensive bcrypt

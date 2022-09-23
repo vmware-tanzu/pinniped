@@ -173,7 +173,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.Empty(t, stdOutString)
 			},
 			assertOnStdErr: func(t *testing.T, oidcClientName, tempFileName, stdErrString string) {
-				require.Contains(t, fmt.Sprintf("Error from server (NotFound): error when deleting \"%s\": the server could not find the requested resource\n", tempFileName), stdErrString)
+				require.Contains(t, stdErrString, fmt.Sprintf("Error from server (NotFound): error when deleting \"%s\": the server could not find the requested resource\n", tempFileName))
 			},
 			wantErr: `exit status 1`,
 		},

@@ -1791,7 +1791,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-jwt\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr: `failed to exchange token: received invalid JWT: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts`,
+			wantErr: `failed to exchange token: received invalid JWT: oidc: malformed jwt: oidc: malformed jwt, expected 3 parts got 1`,
 		},
 		{
 			name:     "with requested audience, session cache hit with valid token, and token exchange request succeeds",

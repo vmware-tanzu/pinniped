@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -176,6 +176,8 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 					Image:           env.ShellContainerImage,
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					Command:         []string{"sh", "-c", "sleep 3600"},
+					// Use a restrictive security context just in case the test cluster has PSAs enabled.
+					SecurityContext: testlib.RestrictiveSecurityContext(),
 				},
 			},
 			ServiceAccountName: sa.Name,

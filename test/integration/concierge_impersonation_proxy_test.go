@@ -949,6 +949,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 							Image:           env.ShellContainerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"sh", "-c", "sleep 3600"},
+							// Use a restrictive security context just in case the test cluster has PSAs enabled.
+							SecurityContext: testlib.RestrictiveSecurityContext(),
 						},
 					},
 					ServiceAccountName: saName,
@@ -1090,6 +1092,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 						corev1.ResourceCPU:    resource.MustParse("10m"),
 					},
 				},
+				// Use a restrictive security context just in case the test cluster has PSAs enabled.
+				SecurityContext: testlib.RestrictiveSecurityContext(),
 			}}})
 
 			// Try "kubectl exec" through the impersonation proxy.

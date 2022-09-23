@@ -1,4 +1,4 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 ---
@@ -6,3 +6,8 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: tools
+  labels:
+    # When deploying onto a cluster which has PSAs enabled by default for namespaces,
+    # effectively disable them for this namespace. This namespace is only for integration
+    # testing helper tools, and should never be deployed in production installs.
+    pod-security.kubernetes.io/enforce: privileged

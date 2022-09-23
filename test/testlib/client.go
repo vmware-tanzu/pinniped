@@ -29,6 +29,7 @@ import (
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -83,6 +84,12 @@ func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
+}
+
+func NewAnonymousSupervisorClientset(t *testing.T) supervisorclientset.Interface {
+	t.Helper()
+
+	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedSupervisor
 }
 
 func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {
@@ -371,6 +378,80 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	)
 }
 
+func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expectedPhase configv1alpha1.OIDCClientPhase) (string, string) {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	oidcClientClient := client.ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+
+	// Create the OIDCClient using GenerateName to get a random name.
+	created, err := oidcClientClient.Create(ctx, &configv1alpha1.OIDCClient{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "client.oauth.pinniped.dev-test-", // use the required name prefix
+			Labels:       map[string]string{"pinniped.dev/test": ""},
+			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Spec: spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test OIDCClient %s/%s", created.Namespace, created.Name)
+		err := oidcClientClient.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test OIDCClient %s", created.Name)
+
+	// Create a client secret for the new OIDCClient.
+	clientSecret := createOIDCClientSecret(t, created)
+
+	// Wait for the OIDCClient to enter the expected phase (or time out).
+	var result *configv1alpha1.OIDCClient
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		var err error
+		result, err = oidcClientClient.Get(ctx, created.Name, metav1.GetOptions{})
+		requireEventually.NoErrorf(err, "error while getting OIDCClient %s/%s", created.Namespace, created.Name)
+		requireEventually.Equal(expectedPhase, result.Status.Phase)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCClient to go into phase %s, OIDCClient was: %s", expectedPhase, Sdump(result))
+
+	return created.Name, clientSecret
+}
+
+func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClient) string {
+	t.Helper()
+	env := IntegrationEnv(t)
+	supervisorClient := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Call the OIDCClientSecretRequest using the "create" verb to generate a new random client secret for the
+	// client of the given name.
+	secretRequest, err := supervisorClient.ClientsecretV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
+		&clientsecretv1alpha1.OIDCClientSecretRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: forOIDCClient.Name,
+			},
+			Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
+				GenerateNewSecret: true,
+				RevokeOldSecrets:  false,
+			},
+		},
+		metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+
+	// The response should be present in the status.
+	generatedSecret := secretRequest.Status.GeneratedSecret
+	require.Len(t, generatedSecret, 64) // randomly generated long secret
+	require.Equal(t, 1, secretRequest.Status.TotalClientSecrets)
+
+	return generatedSecret
+}
+
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
 	env := IntegrationEnv(t)
@@ -378,9 +459,9 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 
+	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
 		Spec:       spec,
@@ -413,9 +494,9 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the LDAPIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace)
 
+	// Create the LDAPIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.LDAPIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-ldap-idp"),
 		Spec:       spec,
@@ -454,9 +535,9 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace)
 
+	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.ActiveDirectoryIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream-ad-idp"),
 		Spec:       spec,
@@ -494,9 +575,9 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	// Create the ClusterRoleBinding using GenerateName to get a random name.
 	clusterRoles := client.RbacV1().ClusterRoleBindings()
 
+	// Create the ClusterRoleBinding using GenerateName to get a random name.
 	created, err := clusterRoles.Create(ctx, &rbacv1.ClusterRoleBinding{
 		ObjectMeta: testObjectMeta(t, "cluster-role"),
 		Subjects:   []rbacv1.Subject{subject},

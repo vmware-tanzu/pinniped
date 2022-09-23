@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -30,6 +29,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -118,6 +118,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
@@ -170,7 +171,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,
@@ -184,9 +185,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// using the refresh token signature contained in the cache, get the refresh token session
 		// out of kube secret storage.
-		kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
-		oauthStore := oidc.NewKubeStorage(kubeClient.Secrets(env.SupervisorNamespace), oidc.DefaultOIDCTimeoutsConfiguration())
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)
 
@@ -244,9 +246,6 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 
 		expectedUsername, password := testlib.CreateFreshADTestUser(t, env)
-		t.Cleanup(func() {
-			testlib.DeleteTestADUser(t, env, expectedUsername)
-		})
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
@@ -261,6 +260,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 		})
 
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
@@ -305,9 +305,6 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// create an active directory group, and add our user to it.
 		groupName := testlib.CreateFreshADTestGroup(t, env)
-		t.Cleanup(func() {
-			testlib.DeleteTestADUser(t, env, groupName)
-		})
 		testlib.AddTestUserToGroup(t, env, groupName, expectedUsername)
 
 		// remove the credential cache, which includes the cached cert, so it won't be reused and the refresh flow will be triggered.
@@ -404,6 +401,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--oidc-scopes", "offline_access,openid,pinniped:request-audience,groups",
 			"--credential-cache", credentialCachePath,
 		})
 
@@ -481,7 +479,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}))
 
 		// construct the cache key
-		downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
 			Issuer:      downstream.Spec.Issuer,
@@ -495,9 +493,10 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// using the refresh token signature contained in the cache, get the refresh token session
 		// out of kube secret storage.
-		kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
+		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
+		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
+		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
-		oauthStore := oidc.NewKubeStorage(kubeClient.Secrets(env.SupervisorNamespace), oidc.DefaultOIDCTimeoutsConfiguration())
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)
 

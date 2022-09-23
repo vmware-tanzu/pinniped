@@ -30,7 +30,8 @@ const (
 
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
-	authorizeCodeStorageVersion = "2"
+	// Version 3 is when we added the Username field to the psession.CustomSessionData.
+	authorizeCodeStorageVersion = "3"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -88,7 +89,7 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	//      of the consent authorization request. It is used to identify the session.
 	//  signature for lookup in the DB
 
-	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil)
+	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil, nil)
 	return err
 }
 
@@ -369,45 +370,43 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"Subject": "\u0026¥潝邎Ȗ莅ŝǔ盕戙鵮碡ʯiŬŽ"
 			},
 			"custom": {
-				"providerUID": "Ĝ眧Ĭ",
-				"providerName": "ŉ2ƋŢ觛ǂ焺nŐǛ",
-				"providerType": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
+				"username": "Ĝ眧Ĭ",
+				"providerUID": "ŉ2ƋŢ觛ǂ焺nŐǛ",
+				"providerName": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
+				"providerType": "ȣ掘ʃƸ澺淗a紽ǒ|鰽",
 				"warnings": [
-					"掘ʃƸ澺淗a紽ǒ|鰽ŋ猊",
-					"毇妬\u003e6鉢緋uƴŤȱʀļÂ?"
+					"t毇妬\u003e6鉢緋uƴŤȱʀļÂ",
+					"虝27就伒犘c钡ɏȫ齁š"
 				],
 				"oidc": {
-					"upstreamRefreshToken": "\u003cƬb",
-					"upstreamAccessToken": "犘c钡ɏȫ",
-					"upstreamSubject": "鬌",
-					"upstreamIssuer": "%OpKȱ藚ɏ¬Ê蒭堜"
+					"upstreamRefreshToken": "OpKȱ藚ɏ¬Ê蒭堜]ȗ韚ʫ繕ȫ碰+ʫ",
+					"upstreamAccessToken": "k9帴",
+					"upstreamSubject": "磊ůď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ",
+					"upstreamIssuer": "4İ"
 				},
 				"ldap": {
-					"userDN": "ȗ韚ʫ繕ȫ碰+",
+					"userDN": "×",
 					"extraRefreshAttributes": {
-						"+î艔垎0": "ĝ",
-						"4İ": "墀jMʥ",
-						"k9帴": "磊ůď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ"
+						"ʥ笿0D": "s"
 					}
 				},
 				"activedirectory": {
-					"userDN": "%Ä摱ìÓȐĨf跞@)¿,ɭS隑i",
+					"userDN": "ĝ",
 					"extraRefreshAttributes": {
-						" 皦pSǬŝ社Vƅȭǝ*擦28ǅ": "vư",
-						"艱iYn面@yȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
+						"IȽ齤士bEǎ": "跞@)¿,ɭS隑ip偶宾儮猷V麹",
+						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"置b",
-			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
+			" 皦pSǬŝ社Vƅȭǝ*擦28ǅ",
+			"vư"
 		],
 		"grantedAudience": [
-			"jÃ轘屔挝",
-			"Œų崓ļ憽-蹐È_¸]fś",
-			"ɵʮGɃɫ囤1+,Ȳ"
+			"置b",
+			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
 		]
 	},
-	"version": "2"
+	"version": "3"
 }`

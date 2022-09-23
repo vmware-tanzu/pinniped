@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -17,8 +16,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
-	"k8s.io/utils/strings/slices"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crud"
@@ -204,7 +203,7 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 			return err
 		}
 		pinnipedSession := accessTokenSession.Request.Session.(*psession.PinnipedSession)
-		if slices.Contains(accessTokenSession.Request.GetGrantedScopes(), coreosoidc.ScopeOfflineAccess) {
+		if accessTokenSession.Request.GetGrantedScopes().Has(oidcapi.ScopeOfflineAccess) {
 			return nil
 		}
 		return c.tryRevokeUpstreamOIDCToken(ctx, pinnipedSession.Custom, secret)

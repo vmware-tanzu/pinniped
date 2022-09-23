@@ -40,12 +40,15 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		if err != nil {
 			// This shouldn't really happen because the authorization endpoint has already validated these params
 			// by calling NewAuthorizeRequest() itself.
-			plog.Error("error using state downstream auth params", err)
+			plog.Error("error using state downstream auth params", err,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester)
+		// Automatically grant certain scopes, but only if they were requested.
+		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
+		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
+		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		// Get the username and password form params from the POST body.
 		username := r.PostFormValue(usernameParamName)
@@ -59,7 +62,7 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		}
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password)
+		authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
 		if err != nil {
 			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 			// There was some problem during authentication with the upstream, aside from bad username/password.
@@ -79,8 +82,9 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
 		username = authenticateResponse.User.GetName()
 		groups := authenticateResponse.User.GetGroups()
-		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse)
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)
 
 		return nil

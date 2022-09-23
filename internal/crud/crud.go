@@ -40,11 +40,12 @@ const (
 )
 
 type Storage interface {
-	Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (resourceVersion string, err error)
+	Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (resourceVersion string, err error)
 	Get(ctx context.Context, signature string, data JSON) (resourceVersion string, err error)
 	Update(ctx context.Context, signature, resourceVersion string, data JSON) (newResourceVersion string, err error)
 	Delete(ctx context.Context, signature string) error
 	DeleteByLabel(ctx context.Context, labelName string, labelValue string) error
+	GetName(signature string) string
 }
 
 type JSON interface{} // document that we need valid JSON types
@@ -67,8 +68,8 @@ type secretsStorage struct {
 	lifetime   time.Duration
 }
 
-func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (string, error) {
-	secret, err := s.toSecret(signature, "", data, additionalLabels)
+func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (string, error) {
+	secret, err := s.toSecret(signature, "", data, additionalLabels, ownerReferences)
 	if err != nil {
 		return "", err
 	}
@@ -80,7 +81,7 @@ func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON
 }
 
 func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (string, error) {
-	secret, err := s.secrets.Get(ctx, s.getName(signature), metav1.GetOptions{})
+	secret, err := s.secrets.Get(ctx, s.GetName(signature), metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get %s for signature %s: %w", s.resource, signature, err)
 	}
@@ -92,15 +93,24 @@ func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (
 	return secret.ResourceVersion, nil
 }
 
+// Update takes a resourceVersion because it assumes Get has been recently called to obtain the latest resource version.
+// This is to ensure that concurrent edits are treated as conflict errors (only one will win).
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
-	// Note: There may be a small bug here in that toSecret will move the SecretLifetimeAnnotationKey date forward
-	// instead of keeping the storage resource's original SecretLifetimeAnnotationKey value. However, we only use
-	// this Update method in one place, and it doesn't matter in that place. Be aware that it might need improvement
-	// if we start using this Update method in more places.
-	secret, err := s.toSecret(signature, resourceVersion, data, nil)
+	secret, err := s.toSecret(signature, resourceVersion, data, nil, nil)
 	if err != nil {
 		return "", err
 	}
+
+	oldSecret, err := s.secrets.Get(ctx, secret.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get %s for signature %s: %w", s.resource, signature, err)
+	}
+
+	// preserve these fields - they are effectively immutable on update
+	secret.Labels = oldSecret.Labels
+	secret.Annotations = oldSecret.Annotations
+	secret.OwnerReferences = oldSecret.OwnerReferences
+
 	secret, err = s.secrets.Update(ctx, secret, metav1.UpdateOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to update %s for signature %s at resource version %s: %w", s.resource, signature, resourceVersion, err)
@@ -109,7 +119,7 @@ func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion 
 }
 
 func (s *secretsStorage) Delete(ctx context.Context, signature string) error {
-	if err := s.secrets.Delete(ctx, s.getName(signature), metav1.DeleteOptions{}); err != nil {
+	if err := s.secrets.Delete(ctx, s.GetName(signature), metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete %s for signature %s: %w", s.resource, signature, err)
 	}
 	return nil
@@ -171,7 +181,7 @@ func validateSecret(resource string, secret *corev1.Secret) error {
 //nolint:gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-func (s *secretsStorage) getName(signature string) string {
+func (s *secretsStorage) GetName(signature string) string {
 	// try to decode base64 signatures to prevent double encoding of binary data
 	signatureBytes := maybeBase64Decode(signature)
 	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
@@ -179,28 +189,32 @@ func (s *secretsStorage) getName(signature string) string {
 	return fmt.Sprintf(secretNameFormat, s.resource, signatureAsValidName)
 }
 
-func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string) (*corev1.Secret, error) {
+func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (*corev1.Secret, error) {
 	buf, err := json.Marshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.getName(signature), err)
+		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.GetName(signature), err)
 	}
 
-	labelsToAdd := map[string]string{
-		SecretLabelKey: s.resource, // make it easier to find this stuff via kubectl
-	}
+	labelsToAdd := make(map[string]string, len(additionalLabels)+1)
 	for labelName, labelValue := range additionalLabels {
 		labelsToAdd[labelName] = labelValue
+	}
+	labelsToAdd[SecretLabelKey] = s.resource // make it easier to find this stuff via kubectl
+
+	var annotations map[string]string
+	if s.lifetime > 0 {
+		annotations = map[string]string{
+			SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
+		}
 	}
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            s.getName(signature),
+			Name:            s.GetName(signature),
 			ResourceVersion: resourceVersion,
 			Labels:          labelsToAdd,
-			Annotations: map[string]string{
-				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
-			},
-			OwnerReferences: nil,
+			Annotations:     annotations,
+			OwnerReferences: ownerReferences,
 		},
 		Data: map[string][]byte{
 			secretDataKey:    buf,

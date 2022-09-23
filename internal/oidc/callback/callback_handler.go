@@ -47,12 +47,15 @@ func NewHandler(
 		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {
-			plog.Error("error using state downstream auth params", err)
+			plog.Error("error using state downstream auth params", err,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
-		downstreamsession.GrantScopesIfRequested(authorizeRequester)
+		// Automatically grant certain scopes, but only if they were requested.
+		// This is instead of asking the user to approve these scopes. Note that `NewAuthorizeRequest` would have returned
+		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
+		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -71,16 +74,18 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token)
+		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token, username)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups, customSessionData)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
+			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
-			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
+			plog.WarningErr("error while generating and saving authcode", err,
+				"upstreamName", upstreamIDPConfig.GetName(), "fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 

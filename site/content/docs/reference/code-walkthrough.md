@@ -186,9 +186,11 @@ The Supervisor's endpoints are:
 
 - A global `/healthz` which always returns 200 OK
 - And a number of endpoints for each FederationDomain that is configured by the user.
+- Starting in release v0.20.0, the Supervisor has aggregated API endpoints, which makes them appear to a client
+  almost as if they were built into Kubernetes itself.
 
 Each FederationDomain's endpoints are mounted under the path of the FederationDomain's `spec.issuer`,
-if the issuer as a path specified in its URL. If the issuer has no path, then they are mounted under `/`.
+if the `spec.issuer` URL has a path component specified. If the issuer has no path, then they are mounted under `/`.
 These per-FederationDomain endpoint are all mounted by the code in
 [internal/oidc/provider/manager/manager.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/provider/manager/manager.go).
 
@@ -202,6 +204,10 @@ The per-FederationDomain endpoints are:
   See [internal/oidc/auth/auth_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/auth/auth_handler.go).
 - `<issuer_path>/oauth2/token` is the standard OIDC token endpoint.
   See [internal/oidc/token/token_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token/token_handler.go).
+  The token endpoint can handle the standard OIDC `authorization_code` and `refresh_token` grant types, and has also been
+  extended in [internal/oidc/token_exchange.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token_exchange.go)
+  to handle an additional grant type for [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) token exchanges to
+  reduce the applicable scope (technically, the `aud` claim) of ID tokens.
 - `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider custom resource.
   See [internal/oidc/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
@@ -210,6 +216,11 @@ The per-FederationDomain endpoints are:
   See [internal/oidc/login/login_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/login/login_handler.go).
 
 The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).
+
+The aggregated API endpoints are:
+
+- `OIDCClientSecretRequest` may be used to create client secrets for OIDCClients.
+  It is in [internal/registry/clientsecretrequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/clientsecretrequest/rest.go).
 
 ## Kubernetes API group names
 
@@ -221,3 +232,5 @@ Making this group name configurable is not a common pattern in Kubernetes apps, 
 A discussion of this feature, including its implementation details, can be found in the
 [blog post for release v0.5.0]({{< ref "2021-02-04-multiple-pinnipeds" >}}). Similar to leader election,
 much of this behavior is implemented in client middleware, and will not be obvious when reading the code.
+The middleware will automatically replace the API group names as needed on each request/response to/from the Kubernetes API server.
+The middleware logic can be found in [internal/groupsuffix/groupsuffix.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/groupsuffix/groupsuffix.go).

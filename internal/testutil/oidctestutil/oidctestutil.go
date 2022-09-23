@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	kubetesting "k8s.io/client-go/testing"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crud"
@@ -91,7 +93,7 @@ type ValidateTokenAndMergeWithUserInfoArgs struct {
 type ValidateRefreshArgs struct {
 	Ctx              context.Context
 	Tok              *oauth2.Token
-	StoredAttributes provider.StoredRefreshAttributes
+	StoredAttributes provider.RefreshAttributes
 }
 
 type TestUpstreamLDAPIdentityProvider struct {
@@ -115,7 +117,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
+func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*authenticators.Response, bool, error) {
 	return u.AuthenticateFunc(ctx, username, password)
 }
 
@@ -123,7 +125,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.StoredRefreshAttributes) ([]string, error) {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.RefreshAttributes) ([]string, error) {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
@@ -953,7 +955,7 @@ func RequireAuthCodeRegexpMatch(
 	if includesOpenIDScope(wantDownstreamGrantedScopes) {
 		expectedNumberOfCreatedSecrets++
 	}
-	require.Len(t, kubeClient.Actions(), expectedNumberOfCreatedSecrets)
+	require.Len(t, FilterClientSecretCreateActions(kubeClient.Actions()), expectedNumberOfCreatedSecrets)
 
 	// One authcode should have been stored.
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secretsClient, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -1060,13 +1062,31 @@ func validateAuthcodeStorage(
 	// Now confirm the ID token claims.
 	actualClaims := storedSessionFromAuthcode.Fosite.Claims
 
+	// Should always have an azp claim.
+	require.Equal(t, wantDownstreamClientID, actualClaims.Extra["azp"])
+	wantDownstreamIDTokenExtraClaimsCount := 1 // should always have azp claim
+
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
-	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
-	require.Len(t, actualClaims.Extra, 2)
-	actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
-	require.NotNil(t, actualDownstreamIDTokenGroups)
-	require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
+	if wantDownstreamIDTokenUsername == "" {
+		require.NotContains(t, actualClaims.Extra, "username")
+	} else {
+		wantDownstreamIDTokenExtraClaimsCount++ // should also have username claim
+		require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
+	}
+	if slices.Contains(wantDownstreamGrantedScopes, "groups") {
+		wantDownstreamIDTokenExtraClaimsCount++ // should also have groups claim
+		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
+		require.NotNil(t, actualDownstreamIDTokenGroups)
+		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
+	} else {
+		require.Emptyf(t, wantDownstreamIDTokenGroups, "test case did not want the groups scope to be granted, "+
+			"but wanted something in the groups claim, which doesn't make sense. please review the test case's expectations.")
+		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
+		require.Nil(t, actualDownstreamIDTokenGroups)
+	}
+	// Make sure that we asserted on every extra claim.
+	require.Len(t, actualClaims.Extra, wantDownstreamIDTokenExtraClaimsCount)
 
 	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
 	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
@@ -1156,4 +1176,21 @@ func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requ
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &psession.PinnipedSession{})
 
 	return storedRequest, storedSession
+}
+
+// FilterClientSecretCreateActions ignores any reads made to get a storage secret corresponding to an OIDCClient, since these
+// are normal actions when the request is using a dynamic client's client_id, and we don't need to make assertions
+// about these Secrets since they are not related to session storage.
+func FilterClientSecretCreateActions(actions []kubetesting.Action) []kubetesting.Action {
+	filtered := make([]kubetesting.Action, 0, len(actions))
+	for _, action := range actions {
+		if action.Matches("get", "secrets") {
+			getAction := action.(kubetesting.GetAction)
+			if strings.HasPrefix(getAction.GetName(), "pinniped-storage-oidc-client-secret-") {
+				continue // filter out OIDCClient's storage secret reads
+			}
+		}
+		filtered = append(filtered, action) // otherwise include the action
+	}
+	return filtered
 }

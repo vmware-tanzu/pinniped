@@ -42,6 +42,7 @@ func TestFromPath(t *testing.T) {
 					address: 127.0.0.1:1234
 				insecureAcceptExternalUnencryptedHttpRequests: false
 				logLevel: trace
+				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -67,6 +68,7 @@ func TestFromPath(t *testing.T) {
 				Log: plog.LogSpec{
 					Level: plog.LevelTrace,
 				},
+				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
 			},
 		},
 		{
@@ -90,6 +92,7 @@ func TestFromPath(t *testing.T) {
 				log:
 				  level: info
 				  format: text
+				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -115,6 +118,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelInfo,
 					Format: plog.FormatText,
 				},
+				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
 			},
 		},
 		{
@@ -165,6 +169,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelTrace,
 					Format: plog.FormatText,
 				},
+				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
 			},
 		},
 		{
@@ -201,7 +206,8 @@ func TestFromPath(t *testing.T) {
 						Network: "disabled",
 					},
 				},
-				AllowExternalHTTP: false,
+				AllowExternalHTTP:       false,
+				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
 			},
 		},
 		{
@@ -331,7 +337,8 @@ func TestFromPath(t *testing.T) {
 						Address: ":1234",
 					},
 				},
-				AllowExternalHTTP: true,
+				AllowExternalHTTP:       true,
+				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
 			},
 		},
 		{
@@ -362,7 +369,8 @@ func TestFromPath(t *testing.T) {
 						Address: ":1234",
 					},
 				},
-				AllowExternalHTTP: true,
+				AllowExternalHTTP:       true,
+				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
 			},
 		},
 		{
@@ -418,6 +426,22 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantError: "validate apiGroupSuffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+		},
+		{
+			name: "AggregatedAPIServerPortDefault too small",
+			yaml: here.Doc(`
+				---
+				aggregatedAPIServerPort: 1023
+			`),
+			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
+		},
+		{
+			name: "AggregatedAPIServerPortDefault too large",
+			yaml: here.Doc(`
+				---
+				aggregatedAPIServerPort: 65536
+			`),
+			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
 		},
 	}
 	for _, test := range tests {

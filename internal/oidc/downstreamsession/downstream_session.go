@@ -10,12 +10,13 @@ import (
 	"net/url"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/strings/slices"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc"
@@ -27,7 +28,7 @@ import (
 
 const (
 	// The name of the email claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
-	emailClaimName = "email"
+	emailClaimName = oidcapi.ScopeEmail
 
 	// The name of the email_verified claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
 	emailVerifiedClaimName = "email_verified"
@@ -40,7 +41,14 @@ const (
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(subject string, username string, groups []string, custom *psession.CustomSessionData) *psession.PinnipedSession {
+func MakeDownstreamSession(
+	subject string,
+	username string,
+	groups []string,
+	grantedScopes []string,
+	clientID string,
+	custom *psession.CustomSessionData,
+) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
@@ -55,10 +63,17 @@ func MakeDownstreamSession(subject string, username string, groups []string, cus
 	if groups == nil {
 		groups = []string{}
 	}
-	openIDSession.IDTokenClaims().Extra = map[string]interface{}{
-		oidc.DownstreamUsernameClaim: username,
-		oidc.DownstreamGroupsClaim:   groups,
+
+	extras := map[string]interface{}{}
+	extras[oidcapi.IDTokenClaimAuthorizedParty] = clientID
+	if slices.Contains(grantedScopes, oidcapi.ScopeUsername) {
+		extras[oidcapi.IDTokenClaimUsername] = username
 	}
+	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
+		extras[oidcapi.IDTokenClaimGroups] = groups
+	}
+	openIDSession.IDTokenClaims().Extra = extras
+
 	return openIDSession
 }
 
@@ -66,8 +81,10 @@ func MakeDownstreamLDAPOrADCustomSessionData(
 	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
 	idpType psession.ProviderType,
 	authenticateResponse *authenticators.Response,
+	username string,
 ) *psession.CustomSessionData {
 	customSessionData := &psession.CustomSessionData{
+		Username:     username,
 		ProviderUID:  ldapUpstream.GetResourceUID(),
 		ProviderName: ldapUpstream.GetName(),
 		ProviderType: idpType,
@@ -90,17 +107,22 @@ func MakeDownstreamLDAPOrADCustomSessionData(
 	return customSessionData
 }
 
-func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdentityProviderI, token *oidctypes.Token) (*psession.CustomSessionData, error) {
-	upstreamSubject, err := ExtractStringClaimValue(oidc.IDTokenSubjectClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+func MakeDownstreamOIDCCustomSessionData(
+	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+	token *oidctypes.Token,
+	username string,
+) (*psession.CustomSessionData, error) {
+	upstreamSubject, err := ExtractStringClaimValue(oidcapi.IDTokenClaimSubject, oidcUpstream.GetName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, err
 	}
-	upstreamIssuer, err := ExtractStringClaimValue(oidc.IDTokenIssuerClaim, oidcUpstream.GetName(), token.IDToken.Claims)
+	upstreamIssuer, err := ExtractStringClaimValue(oidcapi.IDTokenClaimIssuer, oidcUpstream.GetName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, err
 	}
 
 	customSessionData := &psession.CustomSessionData{
+		Username:     username,
 		ProviderUID:  oidcUpstream.GetResourceUID(),
 		ProviderName: oidcUpstream.GetName(),
 		ProviderType: psession.ProviderTypeOIDC,
@@ -146,11 +168,30 @@ func MakeDownstreamOIDCCustomSessionData(oidcUpstream provider.UpstreamOIDCIdent
 	return customSessionData, nil
 }
 
-// GrantScopesIfRequested auto-grants the scopes for which we do not require end-user approval, if they were requested.
-func GrantScopesIfRequested(authorizeRequester fosite.AuthorizeRequester) {
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
-	oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
+// AutoApproveScopes auto-grants the scopes which we support and for which we do not require end-user approval,
+// if they were requested. This should only be called after it has been validated that the client is allowed to request
+// the scopes that it requested (which is a check performed by fosite).
+func AutoApproveScopes(authorizeRequester fosite.AuthorizeRequester) {
+	for _, scope := range []string{
+		oidcapi.ScopeOpenID,
+		oidcapi.ScopeOfflineAccess,
+		oidcapi.ScopeRequestAudience,
+		oidcapi.ScopeUsername,
+		oidcapi.ScopeGroups,
+	} {
+		oidc.GrantScopeIfRequested(authorizeRequester, scope)
+	}
+
+	// For backwards-compatibility with old pinniped CLI binaries which never request the username and groups scopes
+	// (because those scopes did not exist yet when those CLIs were released), grant/approve the username and groups
+	// scopes even if the CLI did not request them. Basically, pretend that the CLI requested them and auto-approve
+	// them. Newer versions of the CLI binaries will request these scopes, so after enough time has passed that
+	// we can assume the old versions of the CLI are no longer in use in the wild, then we can remove this code and
+	// just let the above logic handle all clients.
+	if authorizeRequester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI {
+		authorizeRequester.GrantScope(oidcapi.ScopeUsername)
+		authorizeRequester.GrantScope(oidcapi.ScopeGroups)
+	}
 }
 
 // GetDownstreamIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
@@ -177,11 +218,11 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer, err := ExtractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamIssuer, err := ExtractStringClaimValue(oidcapi.IDTokenClaimIssuer, upstreamIDPConfig.GetName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
-	upstreamSubject, err := ExtractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamSubject, err := ExtractStringClaimValue(oidcapi.IDTokenClaimSubject, upstreamIDPConfig.GetName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -264,13 +305,13 @@ func DownstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentit
 
 func DownstreamLDAPSubject(uid string, ldapURL url.URL) string {
 	q := ldapURL.Query()
-	q.Set(oidc.IDTokenSubjectClaim, uid)
+	q.Set(oidcapi.IDTokenClaimSubject, uid)
 	ldapURL.RawQuery = q.Encode()
 	return ldapURL.String()
 }
 
 func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
-	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
+	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidcapi.IDTokenClaimSubject, url.QueryEscape(upstreamSubject))
 }
 
 // GetGroupsFromUpstreamIDToken returns mapped group names coerced into a slice of strings.

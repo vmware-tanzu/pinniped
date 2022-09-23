@@ -8,6 +8,7 @@ package versioned
 import (
 	"fmt"
 
+	clientsecretv1alpha1 "go.pinniped.dev/generated/1.21/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.21/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.21/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
@@ -17,6 +18,7 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
+	ClientsecretV1alpha1() clientsecretv1alpha1.ClientsecretV1alpha1Interface
 	ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface
 	IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface
 }
@@ -25,8 +27,14 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	configV1alpha1 *configv1alpha1.ConfigV1alpha1Client
-	iDPV1alpha1    *idpv1alpha1.IDPV1alpha1Client
+	clientsecretV1alpha1 *clientsecretv1alpha1.ClientsecretV1alpha1Client
+	configV1alpha1       *configv1alpha1.ConfigV1alpha1Client
+	iDPV1alpha1          *idpv1alpha1.IDPV1alpha1Client
+}
+
+// ClientsecretV1alpha1 retrieves the ClientsecretV1alpha1Client
+func (c *Clientset) ClientsecretV1alpha1() clientsecretv1alpha1.ClientsecretV1alpha1Interface {
+	return c.clientsecretV1alpha1
 }
 
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
@@ -60,6 +68,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
+	cs.clientsecretV1alpha1, err = clientsecretv1alpha1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.configV1alpha1, err = configv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -80,6 +92,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
+	cs.clientsecretV1alpha1 = clientsecretv1alpha1.NewForConfigOrDie(c)
 	cs.configV1alpha1 = configv1alpha1.NewForConfigOrDie(c)
 	cs.iDPV1alpha1 = idpv1alpha1.NewForConfigOrDie(c)
 
@@ -90,6 +103,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
+	cs.clientsecretV1alpha1 = clientsecretv1alpha1.New(c)
 	cs.configV1alpha1 = configv1alpha1.New(c)
 	cs.iDPV1alpha1 = idpv1alpha1.New(c)
 

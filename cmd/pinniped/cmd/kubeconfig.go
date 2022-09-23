@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
@@ -27,6 +27,7 @@ import (
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/net/phttp"
@@ -125,9 +126,9 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.Var(&flags.concierge.mode, "concierge-mode", "Concierge mode of operation")
 
 	f.StringVar(&flags.oidc.issuer, "oidc-issuer", "", "OpenID Connect issuer URL (default: autodiscover)")
-	f.StringVar(&flags.oidc.clientID, "oidc-client-id", "pinniped-cli", "OpenID Connect client ID (default: autodiscover)")
+	f.StringVar(&flags.oidc.clientID, "oidc-client-id", oidcapi.ClientIDPinnipedCLI, "OpenID Connect client ID (default: autodiscover)")
 	f.Uint16Var(&flags.oidc.listenPort, "oidc-listen-port", 0, "TCP port for localhost listener (authorization code flow only)")
-	f.StringSliceVar(&flags.oidc.scopes, "oidc-scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "pinniped:request-audience"}, "OpenID Connect scopes to request during login")
+	f.StringSliceVar(&flags.oidc.scopes, "oidc-scopes", []string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups}, "OpenID Connect scopes to request during login")
 	f.BoolVar(&flags.oidc.skipBrowser, "oidc-skip-browser", false, "During OpenID Connect login, skip opening the browser (just print the URL)")
 	f.BoolVar(&flags.oidc.skipListen, "oidc-skip-listen", false, "During OpenID Connect login, skip starting a localhost callback listener (manual copy/paste flow only)")
 	f.StringVar(&flags.oidc.sessionCachePath, "oidc-session-cache", "", "Path to OpenID Connect session cache file")
@@ -329,6 +330,9 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 		execConfig.Args = append(execConfig.Args, "--debug-session-cache")
 	}
 	if flags.oidc.requestAudience != "" {
+		if strings.Contains(flags.oidc.requestAudience, ".pinniped.dev") {
+			return nil, fmt.Errorf("request audience is not allowed to include the substring '.pinniped.dev': %s", flags.oidc.requestAudience)
+		}
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
 	}
 	if flags.oidc.upstreamIDPName != "" {
@@ -783,7 +787,7 @@ func newDiscoveryHTTPClient(caBundleFlag caBundleFlag) (*http.Client, error) {
 }
 
 func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpClient *http.Client) (string, error) {
-	discoveredProvider, err := oidc.NewProvider(oidc.ClientContext(ctx, httpClient), issuer)
+	discoveredProvider, err := coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), issuer)
 	if err != nil {
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}

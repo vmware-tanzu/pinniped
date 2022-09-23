@@ -15,11 +15,15 @@ import (
 
 	"github.com/gorilla/securecookie"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -52,7 +56,9 @@ const (
 
 	downstreamIssuer              = "https://my-downstream-issuer.com/path"
 	downstreamRedirectURI         = "http://127.0.0.1/callback"
-	downstreamClientID            = "pinniped-cli"
+	downstreamPinnipedClientID    = "pinniped-cli"
+	downstreamDynamicClientID     = "client.oauth.pinniped.dev-test-name"
+	downstreamDynamicClientUID    = "fake-client-uid"
 	downstreamNonce               = "some-nonce-value"
 	downstreamPKCEChallenge       = "some-challenge"
 	downstreamPKCEChallengeMethod = "S256"
@@ -62,21 +68,28 @@ const (
 
 var (
 	oidcUpstreamGroupMembership    = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
-	happyDownstreamScopesRequested = []string{"openid"}
-	happyDownstreamScopesGranted   = []string{"openid"}
+	happyDownstreamScopesRequested = []string{"openid", "username", "groups"}
+	happyDownstreamScopesGranted   = []string{"openid", "username", "groups"}
 
 	happyDownstreamRequestParamsQuery = url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
-		"client_id":             []string{downstreamClientID},
+		"client_id":             []string{downstreamPinnipedClientID},
 		"state":                 []string{happyDownstreamState},
 		"nonce":                 []string{downstreamNonce},
 		"code_challenge":        []string{downstreamPKCEChallenge},
 		"code_challenge_method": []string{downstreamPKCEChallengeMethod},
 		"redirect_uri":          []string{downstreamRedirectURI},
 	}
-	happyDownstreamRequestParams     = happyDownstreamRequestParamsQuery.Encode()
+	happyDownstreamRequestParams = happyDownstreamRequestParamsQuery.Encode()
+
+	happyDownstreamRequestParamsQueryForDynamicClient = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+		map[string]string{"client_id": downstreamDynamicClientID},
+	)
+	happyDownstreamRequestParamsForDynamicClient = happyDownstreamRequestParamsQueryForDynamicClient.Encode()
+
 	happyDownstreamCustomSessionData = &psession.CustomSessionData{
+		Username:     oidcUpstreamUsername,
 		ProviderUID:  happyUpstreamIDPResourceUID,
 		ProviderName: happyUpstreamIDPName,
 		ProviderType: psession.ProviderTypeOIDC,
@@ -86,7 +99,15 @@ var (
 			UpstreamSubject:      oidcUpstreamSubject,
 		},
 	}
+	happyDownstreamCustomSessionDataWithUsername = func(wantUsername string) *psession.CustomSessionData {
+		copyOfCustomSession := *happyDownstreamCustomSessionData
+		copyOfOIDC := *(happyDownstreamCustomSessionData.OIDC)
+		copyOfCustomSession.OIDC = &copyOfOIDC
+		copyOfCustomSession.Username = wantUsername
+		return &copyOfCustomSession
+	}
 	happyDownstreamAccessTokenCustomSessionData = &psession.CustomSessionData{
+		Username:     oidcUpstreamUsername,
 		ProviderUID:  happyUpstreamIDPResourceUID,
 		ProviderName: happyUpstreamIDPName,
 		ProviderType: psession.ProviderTypeOIDC,
@@ -120,6 +141,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
 	happyState := happyUpstreamStateParam().Build(t, happyStateCodec)
+	happyStateForDynamicClient := happyUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
@@ -133,15 +155,24 @@ func TestCallbackEndpoint(t *testing.T) {
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
+	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState
+
+	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI,
+			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
+	}
 
 	tests := []struct {
 		name string
 
-		idps       *oidctestutil.UpstreamIDPListerBuilder
-		method     string
-		path       string
-		csrfCookie string
+		idps          *oidctestutil.UpstreamIDPListerBuilder
+		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
+		method        string
+		path          string
+		csrfCookie    string
 
 		wantStatus                        int
 		wantContentType                   string
@@ -154,6 +185,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamIDTokenGroups       []string
 		wantDownstreamRequestedScopes     []string
 		wantDownstreamNonce               string
+		wantDownstreamClientID            string
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
@@ -182,6 +214,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -205,6 +238,32 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code when using dynamic client",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyStateForDynamicClient).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -228,9 +287,45 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamAccessTokenCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:   "form_post happy path without username or groups scopes requested",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"response_mode": "form_post",
+							"scope":         "openid",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                    happyCSRFCookie,
+			wantStatus:                    http.StatusOK,
+			wantContentType:               "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:    `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:  oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername: oidcUpstreamUsername,
+			wantDownstreamRequestedScopes: []string{"openid"},
+			wantDownstreamIDTokenGroups:   oidcUpstreamGroupMembership,
+			// username and groups scopes were not requested but are granted anyway for the pinniped-cli client for backwards compatibility
+			wantDownstreamGrantedScopes:       []string{"openid", "username", "groups"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -251,9 +346,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: &psession.CustomSessionData{
+				Username:     oidcUpstreamUsername,
 				ProviderUID:  happyUpstreamIDPResourceUID,
 				ProviderName: happyUpstreamIDPName,
 				ProviderType: psession.ProviderTypeOIDC,
@@ -286,9 +383,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername(oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -311,9 +409,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe@whitehouse.gov"),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -338,9 +437,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe@whitehouse.gov"),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -366,9 +466,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe"),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -496,9 +597,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername(oidcUpstreamSubject),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -521,6 +623,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -546,6 +649,153 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:          "using dynamic client which is allowed to request username scope, but does not actually request username scope in authorize request, does not get username in ID token",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:        http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParamForDynamicClient().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+						map[string]string{"scope": "openid groups offline_access"}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+groups&state=` + happyDownstreamState,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     "", // username scope was not requested
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     []string{"openid", "groups", "offline_access"},
+			wantDownstreamGrantedScopes:       []string{"openid", "groups", "offline_access"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:          "using dynamic client which is allowed to request groups scope, but does not actually request groups scope in authorize request, does not get groups in ID token",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:        http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParamForDynamicClient().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+						map[string]string{"scope": "openid username offline_access"}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+username&state=` + happyDownstreamState,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       nil, // groups scope was not requested
+			wantDownstreamRequestedScopes:     []string{"openid", "username", "offline_access"},
+			wantDownstreamGrantedScopes:       []string{"openid", "username", "offline_access"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "using dynamic client which is not allowed to request username scope, and does not actually request username scope in authorize request, does not get username in ID token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id": downstreamDynamicClientID,
+							"scope":     "openid offline_access groups",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+groups&state=` + happyDownstreamState,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     "", // username scope was not requested
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     []string{"openid", "groups", "offline_access"},
+			wantDownstreamGrantedScopes:       []string{"openid", "groups", "offline_access"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "using dynamic client which is not allowed to request groups scope, and does not actually request groups scope in authorize request, does not get groups in ID token",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id": downstreamDynamicClientID,
+							"scope":     "openid offline_access username",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+username&state=` + happyDownstreamState,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       nil, // groups scope was not requested
+			wantDownstreamRequestedScopes:     []string{"openid", "username", "offline_access"},
+			wantDownstreamGrantedScopes:       []string{"openid", "username", "offline_access"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -630,7 +880,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
-					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"prompt": "none login"}).Encode()).
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+						map[string]string{"prompt": "none login"}).Encode()).
 					Build(t, happyStateCodec),
 			).String(),
 			csrfCookie: happyCSRFCookie,
@@ -671,8 +922,104 @@ func TestCallbackEndpoint(t *testing.T) {
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
-					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"client_id": ""}).Encode()).
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+						map[string]string{"client_id": ""}).Encode()).
 					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
+			name:   "state's downstream auth params have invalid client_id",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+						map[string]string{"client_id": "bogus"}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
+			name:          "dynamic clients do not allow response_mode=form_post",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			method:        http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id":     downstreamDynamicClientID,
+							"response_mode": "form_post",
+							"scope":         "openid",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
+			name: "using dynamic client which is not allowed to request username scope in authorize request but requests it anyway",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id": downstreamDynamicClientID,
+							"scope":     "openid username",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
+		},
+		{
+			name: "using dynamic client which is not allowed to request groups scope in authorize request but requests it anyway",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{
+							"client_id": downstreamDynamicClientID,
+							"scope":     "openid groups",
+						},
+					).Encode(),
+				).Build(t, happyStateCodec),
 			).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadRequest,
@@ -686,17 +1033,50 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().
 				WithState(
 					happyUpstreamStateParam().
-						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode()).
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+							map[string]string{"scope": "profile username email groups"}).Encode()).
 						Build(t, happyStateCodec),
 				).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
-			wantDownstreamRequestedScopes:     []string{"profile", "email"},
+			wantDownstreamRequestedScopes:     []string{"profile", "email", "username", "groups"},
+			wantDownstreamGrantedScopes:       []string{"username", "groups"},
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name:   "state's downstream auth params does not contain openid, username, or groups scope",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().
+				WithState(
+					happyUpstreamStateParam().
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+							map[string]string{"scope": "profile email"}).Encode()).
+						Build(t, happyStateCodec),
+				).String(),
+			csrfCookie:                    happyCSRFCookie,
+			wantStatus:                    http.StatusSeeOther,
+			wantRedirectLocationRegexp:    downstreamRedirectURI + `\?code=([^&]+)&scope=username\+groups&state=` + happyDownstreamState,
+			wantDownstreamIDTokenUsername: oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:   oidcUpstreamGroupMembership,
+			wantDownstreamIDTokenSubject:  oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamRequestedScopes: []string{"profile", "email"},
+			// username and groups scopes were not requested but are granted anyway for the pinniped-cli client for backwards compatibility
+			wantDownstreamGrantedScopes:       []string{"username", "groups"},
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -712,18 +1092,20 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().
 				WithState(
 					happyUpstreamStateParam().
-						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "openid offline_access"}).Encode()).
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
+							map[string]string{"scope": "openid offline_access username groups"}).Encode()).
 						Build(t, happyStateCodec),
 				).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access\+username\+groups&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
-			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
-			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access", "username", "groups"},
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access", "username", "groups"},
 			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -822,6 +1204,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
@@ -1011,13 +1394,20 @@ func TestCallbackEndpoint(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset()
-			secrets := client.CoreV1().Secrets("some-namespace")
+			kubeClient := fake.NewSimpleClientset()
+			supervisorClient := supervisorfake.NewSimpleClientset()
+			secrets := kubeClient.CoreV1().Secrets("some-namespace")
+			oidcClientsClient := supervisorClient.ConfigV1alpha1().OIDCClients("some-namespace")
+
+			if test.kubeResources != nil {
+				test.kubeResources(t, supervisorClient, kubeClient)
+			}
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
-			oauthStore := oidc.NewKubeStorage(secrets, timeoutsConfiguration)
+			// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
+			oauthStore := oidc.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
@@ -1059,7 +1449,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Body.String(),
 					test.wantBodyFormResponseRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,
@@ -1070,7 +1460,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamPKCEChallenge,
 					test.wantDownstreamPKCEChallengeMethod,
 					test.wantDownstreamNonce,
-					downstreamClientID,
+					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
 				)
@@ -1086,7 +1476,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,
-					client,
+					kubeClient,
 					secrets,
 					oauthStore,
 					test.wantDownstreamGrantedScopes,
@@ -1097,7 +1487,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamPKCEChallenge,
 					test.wantDownstreamPKCEChallengeMethod,
 					test.wantDownstreamNonce,
-					downstreamClientID,
+					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
 				)
@@ -1166,6 +1556,12 @@ func happyUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
 		K: happyDownstreamPKCE,
 		V: happyDownstreamStateVersion,
 	}
+}
+
+func happyUpstreamStateParamForDynamicClient() *oidctestutil.UpstreamStateParamBuilder {
+	p := happyUpstreamStateParam()
+	p.P = happyDownstreamRequestParamsForDynamicClient
+	return p
 }
 
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {

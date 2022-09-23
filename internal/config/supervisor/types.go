@@ -15,15 +15,17 @@ type Config struct {
 	Labels         map[string]string `json:"labels"`
 	NamesConfig    NamesConfigSpec   `json:"names"`
 	// Deprecated: use log.level instead
-	LogLevel          *plog.LogLevel     `json:"logLevel"`
-	Log               plog.LogSpec       `json:"log"`
-	Endpoints         *Endpoints         `json:"endpoints"`
-	AllowExternalHTTP stringOrBoolAsBool `json:"insecureAcceptExternalUnencryptedHttpRequests"`
+	LogLevel                *plog.LogLevel     `json:"logLevel"`
+	Log                     plog.LogSpec       `json:"log"`
+	Endpoints               *Endpoints         `json:"endpoints"`
+	AllowExternalHTTP       stringOrBoolAsBool `json:"insecureAcceptExternalUnencryptedHttpRequests"`
+	AggregatedAPIServerPort *int64             `json:"aggregatedAPIServerPort"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.
 type NamesConfigSpec struct {
 	DefaultTLSCertificateSecret string `json:"defaultTLSCertificateSecret"`
+	APIService                  string `json:"apiService"`
 }
 
 type Endpoints struct {

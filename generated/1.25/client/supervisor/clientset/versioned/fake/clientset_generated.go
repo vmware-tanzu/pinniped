@@ -7,6 +7,8 @@ package fake
 
 import (
 	clientset "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1"
+	fakeclientsecretv1alpha1 "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1/fake"
 	configv1alpha1 "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/typed/config/v1alpha1/fake"
 	idpv1alpha1 "go.pinniped.dev/generated/1.25/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
@@ -67,6 +69,11 @@ var (
 	_ clientset.Interface = &Clientset{}
 	_ testing.FakeClient  = &Clientset{}
 )
+
+// ClientsecretV1alpha1 retrieves the ClientsecretV1alpha1Client
+func (c *Clientset) ClientsecretV1alpha1() clientsecretv1alpha1.ClientsecretV1alpha1Interface {
+	return &fakeclientsecretv1alpha1.FakeClientsecretV1alpha1{Fake: &c.Fake}
+}
 
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
 func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {

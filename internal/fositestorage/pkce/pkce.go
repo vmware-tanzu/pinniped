@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package pkce
@@ -28,7 +28,8 @@ const (
 
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
-	pkceStorageVersion = "2"
+	// Version 3 is when we added the Username field to the psession.CustomSessionData.
+	pkceStorageVersion = "3"
 )
 
 var _ pkce.PKCERequestStorage = &pkceStorage{}
@@ -52,7 +53,7 @@ func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature st
 		return err
 	}
 
-	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: pkceStorageVersion}, nil)
+	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: pkceStorageVersion}, nil, nil)
 	return err
 }
 

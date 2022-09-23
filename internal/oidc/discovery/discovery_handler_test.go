@@ -45,9 +45,9 @@ func TestDiscovery(t *testing.T) {
 				"subject_types_supported": ["public"],
 				"id_token_signing_alg_values_supported": ["ES256"],
 				"token_endpoint_auth_methods_supported": ["client_secret_basic"],
-				"scopes_supported": ["openid", "offline"],
+				"scopes_supported": ["openid", "offline_access", "pinniped:request-audience", "username", "groups"],
 				"code_challenge_methods_supported": ["S256"],
-				"claims_supported": ["groups"],
+				"claims_supported": ["username", "groups"],
 				"discovery.supervisor.pinniped.dev/v1alpha1": {
 					"pinniped_identity_providers_endpoint": "https://some-issuer.com/some/path/v1alpha1/pinniped_identity_providers"
 				}

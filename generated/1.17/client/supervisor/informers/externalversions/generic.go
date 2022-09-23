@@ -43,6 +43,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=config.supervisor.pinniped.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("federationdomains"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().FederationDomains().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("oidcclients"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCClients().Informer()}, nil
 
 		// Group=idp.supervisor.pinniped.dev, Version=v1alpha1
 	case idpv1alpha1.SchemeGroupVersion.WithResource("activedirectoryidentityproviders"):

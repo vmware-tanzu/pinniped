@@ -1,12 +1,15 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +25,7 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-func TestGetAPIResourceList(t *testing.T) {
+func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pretty simple, but there are many
 	env := testlib.IntegrationEnv(t)
 
 	client := testlib.NewKubernetesClientset(t)
@@ -53,6 +56,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
 	configSupervisorGV := makeGV("config", "supervisor")
+	clientSecretSupervisorGV := makeGV("clientsecret", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -112,6 +116,32 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
+				Name: clientSecretSupervisorGV.Group,
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: clientSecretSupervisorGV.String(),
+						Version:      clientSecretSupervisorGV.Version,
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: clientSecretSupervisorGV.String(),
+					Version:      clientSecretSupervisorGV.Version,
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				clientSecretSupervisorGV.String(): {
+					{
+						Name:       "oidcclientsecretrequests",
+						Kind:       "OIDCClientSecretRequest",
+						Verbs:      []string{"create", "list"},
+						Namespaced: true,
+						Categories: []string{"pinniped"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
 				Name: configSupervisorGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
@@ -138,6 +168,20 @@ func TestGetAPIResourceList(t *testing.T) {
 						Name:       "federationdomains/status",
 						Namespaced: true,
 						Kind:       "FederationDomain",
+						Verbs:      []string{"get", "patch", "update"},
+					},
+					{
+						Name:         "oidcclients",
+						SingularName: "oidcclient",
+						Namespaced:   true,
+						Kind:         "OIDCClient",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						Categories:   []string{"pinniped"},
+					},
+					{
+						Name:       "oidcclients/status",
+						Namespaced: true,
+						Kind:       "OIDCClient",
 						Verbs:      []string{"get", "patch", "update"},
 					},
 				},
@@ -339,7 +383,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("every API has a status subresource", func(t *testing.T) {
 		t.Parallel()
 
-		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests")
+		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests", "oidcclientsecretrequests")
 
 		var regular, status []string
 
@@ -362,6 +406,28 @@ func TestGetAPIResourceList(t *testing.T) {
 		}
 
 		assert.Equal(t, regular, status)
+	})
+
+	t.Run("every API can show its docs to the user via kubectl explain, including aggregated APIs, and everything has a description", func(t *testing.T) {
+		t.Parallel()
+
+		for _, r := range resources {
+			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
+				continue
+			}
+
+			for _, a := range r.APIResources {
+				if strings.HasSuffix(a.Name, "/status") {
+					// skip status subresources for this test, as they don't work with `kubectl explain`
+					continue
+				}
+
+				// Note that this test might indirectly depend on the kubectl discovery cache, found in $HOME/.kube/cache/discovery.
+				// If you are working on changing API type struct comments, then you may need to clear your discovery cache
+				// (or wait ~10 minutes for the cache to expire) for the new comments to appear in the `kubectl explain` results.
+				requireKubectlExplainShowsDescriptionForResource(t, a.Name, a.Kind, r.GroupVersion)
+			}
+		}
 	})
 
 	t.Run("Pinniped resources do not have short names", func(t *testing.T) {
@@ -484,10 +550,18 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
+		addSuffix("oidcclients.config.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Privileged Scopes", Type: "string", JSONPath: `.spec.allowedScopes[?(@ == "pinniped:request-audience")]`},
+				{Name: "Client Secrets", Type: "integer", JSONPath: ".status.totalClientSecrets"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
 	}
 
 	actualPinnipedCRDCount := 0
-	expectedPinnipedCRDCount := 7 // the current number of CRDs that we ship as part of Pinniped
+	expectedPinnipedCRDCount := 8 // the current number of CRDs that we ship as part of Pinniped
 
 	for _, crd := range crdList.Items {
 		if !strings.Contains(crd.Spec.Group, env.APIGroupSuffix) {
@@ -511,4 +585,83 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 	// Make sure that the logic of this test did not accidentally skip a CRD that it should have interrogated.
 	require.Equal(t, expectedPinnipedCRDCount, actualPinnipedCRDCount,
 		"did not find expected number of Pinniped CRDs to check for additionalPrinterColumns")
+}
+
+func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName string, resourceKind string, resourceGroupVersion string) {
+	// Run kubectl explain on the resource.
+	output := runKubectlExplain(t, resourceName, resourceGroupVersion)
+
+	// Check that the output is as expected.
+	require.Regexp(t, `(?m)^KIND:\s+`+regexp.QuoteMeta(resourceKind)+`$`, output)
+	require.Regexp(t, `(?m)^VERSION:\s+`+regexp.QuoteMeta(resourceGroupVersion)+`$`, output)
+	require.Regexp(t, `(?m)^DESCRIPTION:$`, output)
+
+	// Use assert here so that the test keeps running when a description is empty, so we can find all the empty descriptions.
+	assert.NotRegexp(t, `(?m)^\s*<empty>\s*$`, output, "resource or field should not have an empty description in kubectl explain")
+
+	if strings.Contains(output, "\nFIELD: ") {
+		// We must have explained a leaf field, which has no children fields.
+		return
+	}
+
+	if resourceName == "whoamirequests.spec" {
+		// This is an exception because this field is declared to be an empty struct in its type definition. It is
+		// not a leaf field because it is a struct, but it also has no children because the struct contains no fields.
+		// So it has neither the `FIELD:` section nor the `FIELDS:` section in the output.
+		return
+	}
+
+	// Otherwise, we must have explained a resource or field which has children fields, so it should have a fields list.
+	require.Contains(t, output, "\nFIELDS:\n")
+
+	// Grab everything after the line that says `FIELDS:`.
+	fieldsSectionMatches := regexp.MustCompile(`(?s).+\nFIELDS:\n(.+)`).FindStringSubmatch(output)
+	require.Len(t, fieldsSectionMatches, 2)
+	allFieldsDescribedText := fieldsSectionMatches[1]
+
+	// Grab the names of all the fields from the fields description.
+	fieldNames := []string{}
+	for _, line := range strings.Split(allFieldsDescribedText, "\n") {
+		if strings.HasPrefix(line, "    ") {
+			// Field names are indented by exactly three spaces.
+			// Skip lines that are indented deeper, which are field descriptions.
+			continue
+		}
+		if len(strings.TrimSpace(line)) == 0 {
+			// Ignore empty lines.
+			continue
+		}
+		// Field name lines start with 3 spaces, then the field name, then some tabs/spaces, then the field type.
+		// Grab just the field name.
+		fieldsNameMatches := regexp.MustCompile(`^ {3}(\S+)\s+`).FindStringSubmatch(line)
+		require.Len(t, fieldsNameMatches, 2, fmt.Sprintf("field name line which did not match: %s", line))
+		fieldNames = append(fieldNames, fieldsNameMatches[1])
+	}
+	require.Greater(t, len(fieldNames), 0, "should have found some field names in the kubectl explain output, but didn't find any")
+
+	// For each field, check to see that docs were provided for that field by making a recursive call to this function.
+	for _, fieldName := range fieldNames {
+		if fieldName == "kind" || fieldName == "metadata" || fieldName == "apiVersion" {
+			// Skip these since the docs are implemented by k8s packages, so we can assume that they are correct.
+			continue
+		}
+		requireKubectlExplainShowsDescriptionForResource(t, fmt.Sprintf("%s.%s", resourceName, fieldName), resourceKind, resourceGroupVersion)
+	}
+}
+
+func runKubectlExplain(t *testing.T, resourceName string, apiVersion string) string {
+	t.Helper()
+	var stdOut, stdErr bytes.Buffer
+	cmd := exec.Command("kubectl", "explain", resourceName, "--api-version", apiVersion)
+	t.Log("Running:", cmd.String())
+	cmd.Stdout = &stdOut
+	cmd.Stderr = &stdErr
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		t.Logf("Running kubectl explain had non-zero exit code."+
+			"\nkubectl explain stdout: %s\nkubectl explain stderr: %s", stdOut.String(), stdErr.String())
+	}
+	require.NoError(t, err)
+	return stdOut.String()
 }

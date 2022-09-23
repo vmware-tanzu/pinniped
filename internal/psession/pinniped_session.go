@@ -27,6 +27,11 @@ var _ openid.Session = &PinnipedSession{}
 // CustomSessionData is the custom session data needed by Pinniped. It should be treated as a union type,
 // where the value of ProviderType decides which other fields to use.
 type CustomSessionData struct {
+	// Username will contain the downstream username determined during initial authorization. We store this
+	// so that we can validate that it does not change upon refresh. This should normally never be empty, since
+	// all users must have a username.
+	Username string `json:"username"`
+
 	// The Kubernetes resource UID of the identity provider CRD for the upstream IDP used to start this session.
 	// This should be validated again upon downstream refresh to make sure that we are not refreshing against
 	// a different identity provider CRD which just happens to have the same name.

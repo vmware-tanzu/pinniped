@@ -29,7 +29,8 @@ const (
 
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
-	refreshTokenStorageVersion = "2"
+	// Version 3 is when we added the Username field to the psession.CustomSessionData.
+	refreshTokenStorageVersion = "3"
 )
 
 type RevocationStorage interface {
@@ -90,6 +91,7 @@ func (a *refreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, sig
 		signature,
 		&Session{Request: request, Version: refreshTokenStorageVersion},
 		map[string]string{fositestorage.StorageRequestIDLabelName: requester.GetID()},
+		nil,
 	)
 	return err
 }

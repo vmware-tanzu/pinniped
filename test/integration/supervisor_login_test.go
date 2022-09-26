@@ -1292,6 +1292,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			name:      "oidc upstream with downstream dynamic client happy path, requesting all scopes",
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {

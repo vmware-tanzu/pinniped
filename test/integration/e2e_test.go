@@ -207,6 +207,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		page := browsertest.Open(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
+		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		testlib.CreateTestClusterRoleBinding(t,
@@ -277,7 +278,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
 		// assert that the expected username and groups claims/values are in the downstream ID token.
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath,
-			pinnipedExe, expectedUsername, []string{}, []string{"offline_access", "openid", "pinniped:request-audience"})
+			pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {

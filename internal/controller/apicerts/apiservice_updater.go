@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -33,7 +33,7 @@ func NewAPIServiceUpdaterController(
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-manager-controller",
+			Name: "api-service-updater-controller",
 			Syncer: &apiServiceUpdaterController{
 				namespace:               namespace,
 				certsSecretResourceName: certsSecretResourceName,

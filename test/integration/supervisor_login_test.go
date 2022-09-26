@@ -1300,7 +1300,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
 					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
 				}
-				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
 				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
@@ -1311,9 +1311,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
-			// the ID token Username should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
@@ -1919,7 +1918,7 @@ func testSupervisorLogin(
 	}, 30*time.Second, 200*time.Millisecond)
 
 	if downstreamScopes == nil {
-		// By default, tests will request all the relevant groups.
+		// By default, tests will request all the relevant scopes.
 		downstreamScopes = []string{"openid", "pinniped:request-audience", "offline_access", "username", "groups"}
 	}
 	if wantDownstreamScopes == nil {

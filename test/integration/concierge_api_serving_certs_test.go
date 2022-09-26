@@ -109,25 +109,30 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 
 			// Expect that the Secret comes back right away with newly minted certs.
 			var regeneratedCACert []byte
-			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-				var err error
-				secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
-				requireEventually.NoError(err)
+			testlib.RequireEventually(t,
+				func(requireEventually *require.Assertions) {
+					var err error
+					secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
+					requireEventually.NoError(err)
 
-				regeneratedCACert = secret.Data["caCertificate"]
-				regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
-				regeneratedCertChain := secret.Data["tlsCertificateChain"]
-				requireEventually.NotEmpty(regeneratedCACert)
-				requireEventually.NotEmpty(regeneratedPrivateKey)
-				requireEventually.NotEmpty(regeneratedCertChain)
-				requireEventually.NotEqual(initialCACert, regeneratedCACert)
-				requireEventually.NotEqual(initialPrivateKey, regeneratedPrivateKey)
-				requireEventually.NotEqual(initialCertChain, regeneratedCertChain)
-				for k, v := range env.ConciergeCustomLabels {
-					requireEventually.Equalf(v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
-				}
-				requireEventually.Equal(env.ConciergeAppName, secret.Labels["app"])
-			}, 2*time.Minute, 250*time.Millisecond)
+					regeneratedCACert = secret.Data["caCertificate"]
+					regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
+					regeneratedCertChain := secret.Data["tlsCertificateChain"]
+					requireEventually.NotEmpty(regeneratedCACert)
+					requireEventually.NotEmpty(regeneratedPrivateKey)
+					requireEventually.NotEmpty(regeneratedCertChain)
+					requireEventually.NotEqual(initialCACert, regeneratedCACert)
+					requireEventually.NotEqual(initialPrivateKey, regeneratedPrivateKey)
+					requireEventually.NotEqual(initialCertChain, regeneratedCertChain)
+					for k, v := range env.ConciergeCustomLabels {
+						requireEventually.Equalf(v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
+					}
+					requireEventually.Equal(env.ConciergeAppName, secret.Labels["app"])
+				},
+				// Wait 5 minutes in case the Concierge was just redeployed, in which case it can take time for
+				// the controllers to be ready again. This test is often run as the very first test in the whole suite.
+				5*time.Minute,
+				250*time.Millisecond)
 
 			// Expect that the APIService was also updated with the new CA.
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {

@@ -1293,6 +1293,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
 				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
 					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
 				}

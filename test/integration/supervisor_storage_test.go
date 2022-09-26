@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	stderrors "errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
@@ -51,11 +51,6 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	// get a session with most of the data filled out
-	session := authorizationcode.NewValidEmptyAuthorizeCodeSession()
-	err := json.Unmarshal([]byte(authorizationcode.ExpectedAuthorizeCodeSessionJSONFromFuzzing), session)
-	require.NoError(t, err)
-
 	sessionStorageLifetime := 5 * time.Minute
 	storage := authorizationcode.New(secrets, time.Now, sessionStorageLifetime)
 
@@ -64,6 +59,23 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, stderrors.Is(err, fosite.ErrNotFound))
 	require.Nil(t, notFoundRequest)
+
+	// Create a fake session to store below. Fill in a few fields to make sure we can get them back.
+	session := authorizationcode.NewValidEmptyAuthorizeCodeSession()
+	session.Request = &fosite.Request{
+		ID:          "abcd-1",
+		RequestedAt: time.Time{},
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID: "pinny",
+				},
+				JSONWebKeysURI:          "where",
+				TokenEndpointAuthMethod: "something",
+			},
+		},
+		Session: testutil.NewFakePinnipedSession(),
+	}
 
 	err = storage.CreateAuthorizeCodeSession(ctx, signature, session.Request)
 	require.NoError(t, err)
@@ -76,7 +88,13 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// check that the data stored in Kube matches what we put in
 	initialSecret, err := secrets.Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
-	require.JSONEq(t, authorizationcode.ExpectedAuthorizeCodeSessionJSONFromFuzzing, string(initialSecret.Data["pinniped-storage-data"]))
+	// Note that CreateAuthorizeCodeSession() sets Active to true and also sets the Version before storing the session,
+	// so expect those here.
+	session.Active = true
+	session.Version = "3" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
+	expectedSessionStorageJSON, err := json.Marshal(session)
+	require.NoError(t, err)
+	require.JSONEq(t, string(expectedSessionStorageJSON), string(initialSecret.Data["pinniped-storage-data"]))
 
 	// check that the Secret got the expected annotations
 	actualGCAfterValue := initialSecret.Annotations["storage.pinniped.dev/garbage-collect-after"]
@@ -100,8 +118,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	err = storage.InvalidateAuthorizeCodeSession(ctx, signature)
 	require.NoError(t, err)
 
-	// trying to use the code session more than once should fail
-	// getting an invalidated session should return an error and the request
+	// trying to get the authcode session after it was invalidated should fail
 	invalidatedRequest, err := storage.GetAuthorizeCodeSession(ctx, signature, nil)
 	require.Error(t, err)
 	require.True(t, stderrors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
@@ -115,7 +132,9 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// the data stored in Kube should be exactly the same but it should be marked as used
 	invalidatedSecret, err := secrets.Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
-	expectedInvalidatedJSON := strings.Replace(authorizationcode.ExpectedAuthorizeCodeSessionJSONFromFuzzing,
-		`"active": true,`, `"active": false,`, 1)
-	require.JSONEq(t, expectedInvalidatedJSON, string(invalidatedSecret.Data["pinniped-storage-data"]))
+	// InvalidateAuthorizeCodeSession() sets Active to false, so update the expected value accordingly.
+	session.Active = false
+	expectedInvalidatedJSON, err := json.Marshal(session)
+	require.NoError(t, err)
+	require.JSONEq(t, string(expectedInvalidatedJSON), string(invalidatedSecret.Data["pinniped-storage-data"]))
 }

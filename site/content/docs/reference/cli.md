@@ -194,7 +194,7 @@ pinniped get kubeconfig [flags]
       --oidc-issuer string                       OpenID Connect issuer URL (default: autodiscover)
       --oidc-listen-port uint16                  TCP port for localhost listener (authorization code flow only)
       --oidc-request-audience string             Request a token with an alternate audience using RFC8693 token exchange
-      --oidc-scopes strings                      OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience])
+      --oidc-scopes strings                      OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience,username,groups])
       --oidc-session-cache string                Path to OpenID Connect session cache file
       --oidc-skip-browser                        During OpenID Connect login, skip opening the browser (just print the URL)
   -o, --output string                            Output file path (default: stdout)

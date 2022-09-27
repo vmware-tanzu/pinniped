@@ -1032,5 +1032,12 @@ func TestOIDCClientSecretRequestUnauthenticated_Parallel(t *testing.T) {
 			},
 		}, metav1.CreateOptions{})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `User "system:anonymous" cannot create resource "oidcclientsecretrequests"`)
+
+	if env.KubernetesDistribution == testlib.AKSDistro {
+		// On AKS the error just says "Unauthorized".
+		require.Contains(t, err.Error(), "Unauthorized")
+	} else {
+		// Clusters which allow anonymous auth will give a more detailed error.
+		require.Contains(t, err.Error(), `User "system:anonymous" cannot create resource "oidcclientsecretrequests"`)
+	}
 }

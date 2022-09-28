@@ -305,9 +305,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			createIDP: func(t *testing.T) string {
 				var additionalScopes []string
 				// keep all the scopes except for offline access so we can test the access token based refresh flow.
-				if len(env.ToolsNamespace) == 0 {
+				if len(env.ToolsNamespace) == 0 || !strings.Contains(env.SupervisorUpstreamLDAP.Host, "tools.svc.cluster.local") {
+					// Not using Dex.
 					additionalScopes = env.SupervisorUpstreamOIDC.AdditionalScopes
 				} else {
+					// Using Dex in the tools namespace.
 					for _, additionalScope := range env.SupervisorUpstreamOIDC.AdditionalScopes {
 						if additionalScope != "offline_access" {
 							additionalScopes = append(additionalScopes, additionalScope)

@@ -20,6 +20,8 @@ func init() {
 	browser.Stdout = os.Stderr
 }
 
+// Hello World!
+// DO_NOT_MERGE
 func main() {
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)

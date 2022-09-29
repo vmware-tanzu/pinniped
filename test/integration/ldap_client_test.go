@@ -35,8 +35,8 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.
-	if len(env.ToolsNamespace) == 0 {
-		t.Skip("Skipping test because it requires the test LDAP server in the tools namespace.")
+	if len(env.ToolsNamespace) == 0 || !strings.Contains(env.SupervisorUpstreamLDAP.Host, "tools.svc.cluster.local") {
+		t.Skip("Skipping test because it requires the test OpenLDAP server in the tools namespace of the target cluster.")
 	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
@@ -681,8 +681,8 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.
-	if len(env.ToolsNamespace) == 0 {
-		t.Skip("Skipping test because it requires the test LDAP server in the tools namespace.")
+	if len(env.ToolsNamespace) == 0 || !strings.Contains(env.SupervisorUpstreamLDAP.Host, "tools.svc.cluster.local") {
+		t.Skip("Skipping test because it requires the test OpenLDAP server in the tools namespace of the target cluster.")
 	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())

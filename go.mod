@@ -55,7 +55,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.42.2
+	github.com/ory/fosite v0.43.0
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
@@ -105,8 +105,11 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/cristalhq/jwt/v4 v4.0.2 // indirect
+	github.com/dave/jennifer v1.4.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
+	github.com/ecordell/optgen v0.0.6 // indirect
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
@@ -123,6 +126,8 @@ require (
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
@@ -138,6 +143,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/ory/go-acc v0.2.8 // indirect
 	github.com/ory/go-convenience v0.1.0 // indirect
 	github.com/ory/viper v1.7.5 // indirect

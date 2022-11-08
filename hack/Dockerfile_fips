@@ -12,7 +12,7 @@
 # any type of fips certification.
 
 # use go-boringcrypto rather than main go
-FROM us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto/golang:1.18.6b7 as build-env
+FROM us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto/golang:1.18.8b7 as build-env
 
 WORKDIR /work
 COPY . .

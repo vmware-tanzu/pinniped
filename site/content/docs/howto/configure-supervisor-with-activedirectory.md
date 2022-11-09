@@ -106,7 +106,7 @@ spec:
     # Specify how to filter the search to find the specific user by username.
     # "{}" will be replaced # by the username that the end-user had typed
     # when they tried to log in.
-    filter: "&(objectClass=person)(userPrincipleName={})"
+    filter: "&(objectClass=person)(userPrincipalName={})"
 
     # Specify which fields from the user entry should be used upon
     # successful login.

@@ -71,7 +71,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
 	golang.org/x/term v0.0.0-20220919170432-7a66f970e087
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.5.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.25.2
 	k8s.io/apiextensions-apiserver v0.25.2

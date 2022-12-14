@@ -151,7 +151,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-	require.Equal(t, pointer.StringPtr("authentication failed"), response.Status.Message)
+	require.Equal(t, pointer.String("authentication failed"), response.Status.Message)
 }
 
 // TCRs are non-mutating and safe to run in parallel with serial tests, see main_test.go.

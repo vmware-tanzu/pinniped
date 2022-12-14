@@ -386,7 +386,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	require.Equal(t, response, &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: nil,
-			Message:    pointer.StringPtr("authentication failed"),
+			Message:    pointer.String("authentication failed"),
 		},
 	})
 }

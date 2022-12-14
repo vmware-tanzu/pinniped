@@ -95,7 +95,7 @@ func TestAgentController(t *testing.T) {
 			Labels:    map[string]string{"extralabel": "labelvalue", "app": "anything"},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32Ptr(1),
+			Replicas: pointer.Int32(1),
 			Selector: metav1.SetAsLabelSelector(map[string]string{
 				"kube-cert-agent.pinniped.dev": "v3",
 			}),
@@ -133,12 +133,12 @@ func TestAgentController(t *testing.T) {
 						ImagePullPolicy: corev1.PullIfNotPresent,
 					}},
 					RestartPolicy:                 corev1.RestartPolicyAlways,
-					TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
+					TerminationGracePeriodSeconds: pointer.Int64(0),
 					ServiceAccountName:            "test-service-account-name",
-					AutomountServiceAccountToken:  pointer.BoolPtr(false),
+					AutomountServiceAccountToken:  pointer.Bool(false),
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsUser:  pointer.Int64Ptr(0),
-						RunAsGroup: pointer.Int64Ptr(0),
+						RunAsUser:  pointer.Int64(0),
+						RunAsGroup: pointer.Int64(0),
 					},
 					ImagePullSecrets: []corev1.LocalObjectReference{{
 						Name: "pinniped-image-pull-secret",
@@ -992,7 +992,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentPod,
 				validClusterInfoConfigMap,
 			},
-			discoveryURLOverride:      pointer.StringPtr("https://overridden-server.example.com/some/path"),
+			discoveryURLOverride:      pointer.String("https://overridden-server.example.com/some/path"),
 			mocks:                     mockExecSucceeds,
 			wantDistinctErrors:        []string{""},
 			wantAgentDeployment:       healthyAgentDeployment,

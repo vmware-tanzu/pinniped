@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
@@ -28,11 +27,12 @@ type stsParams struct {
 	requestedAudience  string
 }
 
-func TokenExchangeFactory(config *compose.Config, storage interface{}, strategy interface{}) interface{} {
+func TokenExchangeFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
 	return &TokenExchangeHandler{
 		idTokenStrategy:     strategy.(openid.OpenIDConnectTokenStrategy),
 		accessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
 		accessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+		fositeConfig:        config,
 	}
 }
 
@@ -40,12 +40,13 @@ type TokenExchangeHandler struct {
 	idTokenStrategy     openid.OpenIDConnectTokenStrategy
 	accessTokenStrategy oauth2.AccessTokenStrategy
 	accessTokenStorage  oauth2.AccessTokenStorage
+	fositeConfig        fosite.Configurator
 }
 
 var _ fosite.TokenEndpointHandler = (*TokenExchangeHandler)(nil)
 
 func (t *TokenExchangeHandler) HandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) error {
-	if !t.CanHandleTokenEndpointRequest(requester) {
+	if !t.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errors.WithStack(fosite.ErrUnknownRequest)
 	}
 	return nil
@@ -110,7 +111,12 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 func (t *TokenExchangeHandler) mintJWT(ctx context.Context, requester fosite.Requester, audience string) (string, error) {
 	downscoped := fosite.NewAccessRequest(requester.GetSession())
 	downscoped.Client.(*fosite.DefaultClient).ID = audience
-	return t.idTokenStrategy.GenerateIDToken(ctx, downscoped)
+
+	// Note: if we wanted to support clients with custom token lifespans, then we would need to call
+	// fosite.GetEffectiveLifespan() to determine the lifespan here.
+	idTokenLifespan := t.fositeConfig.GetIDTokenLifespan(ctx)
+
+	return t.idTokenStrategy.GenerateIDToken(ctx, idTokenLifespan, downscoped)
 }
 
 func (t *TokenExchangeHandler) validateSession(requester fosite.Requester) error {
@@ -185,7 +191,7 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 
 func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requester fosite.AccessRequester, accessToken string) (fosite.Requester, error) {
 	// Look up the access token's stored session data.
-	signature := t.accessTokenStrategy.AccessTokenSignature(accessToken)
+	signature := t.accessTokenStrategy.AccessTokenSignature(ctx, accessToken)
 	originalRequester, err := t.accessTokenStorage.GetAccessTokenSession(ctx, signature, requester.GetSession())
 	if err != nil {
 		// The access token was not found, or there was some other error while reading it.
@@ -198,10 +204,10 @@ func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requeste
 	return originalRequester, nil
 }
 
-func (t *TokenExchangeHandler) CanSkipClientAuth(_ fosite.AccessRequester) bool {
+func (t *TokenExchangeHandler) CanSkipClientAuth(_ context.Context, _ fosite.AccessRequester) bool {
 	return false
 }
 
-func (t *TokenExchangeHandler) CanHandleTokenEndpointRequest(requester fosite.AccessRequester) bool {
+func (t *TokenExchangeHandler) CanHandleTokenEndpointRequest(_ context.Context, requester fosite.AccessRequester) bool {
 	return requester.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange)
 }

@@ -11,20 +11,19 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDynamicOauth2HMACStrategy_Signatures(t *testing.T) {
-	s := &dynamicOauth2HMACStrategy{
-		fositeConfig: &compose.Config{}, // defaults are good enough for this unit test
-		keyFunc:      func() []byte { return []byte("12345678901234567890123456789012") },
-	}
+	s := newDynamicOauth2HMACStrategy(
+		&fosite.Config{}, // defaults are good enough for this unit test
+		func() []byte { return []byte("12345678901234567890123456789012") }, // 32 character secret key
+	)
 
 	tests := []struct {
 		name          string
 		token         string
-		signatureFunc func(token string) (signature string)
+		signatureFunc func(ctx context.Context, token string) (signature string)
 		wantSignature string
 	}{
 		{
@@ -52,21 +51,21 @@ func TestDynamicOauth2HMACStrategy_Signatures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.wantSignature, tt.signatureFunc(tt.token))
+			require.Equal(t, tt.wantSignature, tt.signatureFunc(context.Background(), tt.token))
 		})
 	}
 }
 
 func TestDynamicOauth2HMACStrategy_Generate(t *testing.T) {
-	s := &dynamicOauth2HMACStrategy{
-		fositeConfig: &compose.Config{},                                                   // defaults are good enough for this unit test
-		keyFunc:      func() []byte { return []byte("12345678901234567890123456789012") }, // 32 character secret key
-	}
+	s := newDynamicOauth2HMACStrategy(
+		&fosite.Config{}, // defaults are good enough for this unit test
+		func() []byte { return []byte("12345678901234567890123456789012") }, // 32 character secret key
+	)
 
-	generateTokenErrorCausingStrategy := &dynamicOauth2HMACStrategy{
-		fositeConfig: &compose.Config{},
-		keyFunc:      func() []byte { return []byte("too_short_causes_error") }, // secret key is below required 32 characters
-	}
+	generateTokenErrorCausingStrategy := newDynamicOauth2HMACStrategy(
+		&fosite.Config{},
+		func() []byte { return []byte("too_short_causes_error") }, // secret key is below required 32 characters
+	)
 
 	tests := []struct {
 		name            string
@@ -135,10 +134,10 @@ func TestDynamicOauth2HMACStrategy_Generate(t *testing.T) {
 }
 
 func TestDynamicOauth2HMACStrategy_Validate(t *testing.T) {
-	s := &dynamicOauth2HMACStrategy{
-		fositeConfig: &compose.Config{}, // defaults are good enough for this unit test
-		keyFunc:      func() []byte { return []byte("12345678901234567890123456789012") },
-	}
+	s := newDynamicOauth2HMACStrategy(
+		&fosite.Config{}, // defaults are good enough for this unit test
+		func() []byte { return []byte("12345678901234567890123456789012") }, // 32 character secret key
+	)
 
 	tests := []struct {
 		name         string

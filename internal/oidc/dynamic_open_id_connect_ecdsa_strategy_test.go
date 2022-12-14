@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -12,9 +12,9 @@ import (
 	"errors"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/require"
@@ -95,7 +95,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 				test.jwksProvider(jwksProvider)
 			}
 			s := newDynamicOpenIDConnectECDSAStrategy(
-				&compose.Config{IDTokenIssuer: test.issuer},
+				&fosite.Config{IDTokenIssuer: test.issuer},
 				jwksProvider,
 			)
 
@@ -114,7 +114,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 					"nonce": {goodNonce},
 				},
 			}
-			idToken, err := s.GenerateIDToken(context.Background(), requester)
+			idToken, err := s.GenerateIDToken(context.Background(), 2*time.Hour, requester)
 			if test.wantErrorType != nil {
 				require.True(t, errors.Is(err, test.wantErrorType))
 				require.EqualError(t, err.(*fosite.RFC6749Error).Cause(), test.wantErrorCause)

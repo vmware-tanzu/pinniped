@@ -24,6 +24,7 @@ const (
 
 	ErrOIDCClientSecretStorageVersion = constable.Error("OIDC client secret storage data has wrong version")
 
+	// Version 1 was the initial release of the OIDCClientSecretRequest API, which uses OIDCClientSecretStorage for storage.
 	oidcClientSecretStorageVersion = "1"
 )
 

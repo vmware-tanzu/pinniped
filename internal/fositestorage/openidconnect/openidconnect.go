@@ -31,7 +31,8 @@ const (
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
-	oidcStorageVersion = "3"
+	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
+	oidcStorageVersion = "4"
 )
 
 var _ openid.OpenIDConnectRequestStorage = &openIDConnectRequestStorage{}

@@ -89,7 +89,7 @@ func NewHandler(
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 
-		oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+		oauthHelper.WriteAuthorizeResponse(r.Context(), w, authorizeRequester, authorizeResponder)
 
 		return nil
 	})

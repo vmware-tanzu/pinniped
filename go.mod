@@ -2,21 +2,6 @@ module go.pinniped.dev
 
 go 1.17
 
-// Unfortuntely, having any indirect dependency on github.com/oleiade/reflections@v1.0.0
-// seems to cause Dependabot to stop scanning our dependencies due to a checksum error for the package.
-// The cause of the checksum error is described in https://github.com/oleiade/reflections/issues/14.
-//
-// According to `go mod graph`, this dependency is (currently) coming from:
-// go.pinniped.dev -> github.com/ory/x@v0.0.212 -> github.com/ory/analytics-go/v4@v4.0.0 -> github.com/ory/x@v0.0.110 -> github.com/ory/fosite@v0.29.0 -> github.com/oleiade/reflections@v1.0.0
-// So the issue is that older versions of ory/x had a direct dependency on an old version of Fosite.
-// Newer versions of ory/x do not depend on fosite anymore. We can use a replace directive until none
-// of our indirect dependencies pull in any old versions of ory/x anymore.
-//
-// Whenever we upgrade fosite and ory/x, we can try removing this replace directive and running
-// `go mod download` to see if github.com/oleiade/reflections@v1.0.0 still appears in our go.sum.
-// As long as it does, we probably need to keep this replace directive.
-replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-
 // bumping github.com/ory/x to higher than v0.0.297 breaks k8s.io/apiserver via go.opentelemetry.io/otel/semconv
 // force the use of an old version for now as it seems to allow a newer ory/x without breaking the apiserver lib.
 // all go.opentelemetry.io replace directives are copied from:
@@ -55,23 +40,23 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.42.2
+	github.com/ory/fosite v0.44.0
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/sclevine/spec v1.4.0
-	github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.0
-	github.com/tdewolff/minify/v2 v2.12.2
+	github.com/stretchr/testify v1.8.1
+	github.com/tdewolff/minify/v2 v2.12.4
 	go.uber.org/atomic v1.10.0
-	go.uber.org/zap v1.23.0
-	golang.org/x/crypto v0.0.0-20220919173607-35f4265a4bc0
-	golang.org/x/net v0.0.0-20220923203811-8be639271d50
-	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
-	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7
-	golang.org/x/term v0.0.0-20220919170432-7a66f970e087
-	golang.org/x/text v0.3.7
+	go.uber.org/zap v1.24.0
+	golang.org/x/crypto v0.4.0
+	golang.org/x/net v0.4.0
+	golang.org/x/oauth2 v0.3.0
+	golang.org/x/sync v0.1.0
+	golang.org/x/term v0.3.0
+	golang.org/x/text v0.5.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.25.2
 	k8s.io/apiextensions-apiserver v0.25.2
@@ -79,11 +64,11 @@ require (
 	k8s.io/apiserver v0.25.2
 	k8s.io/client-go v0.25.2
 	k8s.io/component-base v0.25.2
-	k8s.io/gengo v0.0.0-20220913193501-391367153a38
+	k8s.io/gengo v0.0.0-20221011193443-fad74ee6edd9
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kube-aggregator v0.25.2
-	k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea
-	k8s.io/utils v0.0.0-20220922133306-665eaaec4324
+	k8s.io/kube-openapi v0.0.0-20221207184640-f3cff1453715
+	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -105,8 +90,11 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/cristalhq/jwt/v4 v4.0.2 // indirect
+	github.com/dave/jennifer v1.4.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
+	github.com/ecordell/optgen v0.0.6 // indirect
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
@@ -123,9 +111,11 @@ require (
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/joshlf/testutil v0.0.0-20170608050642-b5d8aa79d93d // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -138,6 +128,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/ory/go-acc v0.2.8 // indirect
 	github.com/ory/go-convenience v0.1.0 // indirect
 	github.com/ory/viper v1.7.5 // indirect
@@ -155,7 +146,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.6.3 // indirect
+	github.com/tdewolff/parse/v2 v2.6.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.4 // indirect
@@ -172,7 +163,7 @@ require (
 	go.opentelemetry.io/proto/otlp v0.15.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

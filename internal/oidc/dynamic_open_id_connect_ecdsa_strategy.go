@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"reflect"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
@@ -26,14 +27,14 @@ import (
 // could have an invariant that routes to an FederationDomain's endpoints are only wired up if an
 // FederationDomain has a valid signing key.
 type dynamicOpenIDConnectECDSAStrategy struct {
-	fositeConfig *compose.Config
+	fositeConfig *fosite.Config
 	jwksProvider jwks.DynamicJWKSProvider
 }
 
 var _ openid.OpenIDConnectTokenStrategy = &dynamicOpenIDConnectECDSAStrategy{}
 
 func newDynamicOpenIDConnectECDSAStrategy(
-	fositeConfig *compose.Config,
+	fositeConfig *fosite.Config,
 	jwksProvider jwks.DynamicJWKSProvider,
 ) *dynamicOpenIDConnectECDSAStrategy {
 	return &dynamicOpenIDConnectECDSAStrategy{
@@ -44,6 +45,7 @@ func newDynamicOpenIDConnectECDSAStrategy(
 
 func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 	ctx context.Context,
+	lifespan time.Duration,
 	requester fosite.Requester,
 ) (string, error) {
 	_, activeJwk := s.jwksProvider.GetJWKS(s.fositeConfig.IDTokenIssuer)
@@ -67,5 +69,10 @@ func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 		return "", fosite.ErrServerError.WithWrap(constable.Error("JWK must be of type ecdsa"))
 	}
 
-	return compose.NewOpenIDConnectECDSAStrategy(s.fositeConfig, key).GenerateIDToken(ctx, requester)
+	keyGetter := func(context.Context) (interface{}, error) {
+		return key, nil
+	}
+	strategy := compose.NewOpenIDConnectStrategy(keyGetter, s.fositeConfig)
+
+	return strategy.GenerateIDToken(ctx, lifespan, requester)
 }

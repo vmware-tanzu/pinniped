@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -42,7 +43,7 @@ func TestStorage(t *testing.T) {
 		Tracker() coretesting.ObjectTracker
 	}
 
-	hmac := compose.NewOAuth2HMACStrategy(&compose.Config{}, []byte("super-secret-32-byte-for-testing"), nil)
+	hmac := compose.NewOAuth2HMACStrategy(&fosite.Config{GlobalSecret: []byte("super-secret-32-byte-for-testing")})
 	// test data generation via:
 	// code, signature, err := hmac.GenerateAuthorizeCode(ctx, nil)
 
@@ -117,7 +118,7 @@ func TestStorage(t *testing.T) {
 			resource: "access-tokens",
 			mocks:    nil,
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -288,7 +289,7 @@ func TestStorage(t *testing.T) {
 				})
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -424,7 +425,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -493,7 +494,7 @@ func TestStorage(t *testing.T) {
 				})
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -593,7 +594,7 @@ func TestStorage(t *testing.T) {
 				})
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -672,7 +673,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -934,7 +935,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -998,7 +999,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -1062,7 +1063,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -1126,7 +1127,7 @@ func TestStorage(t *testing.T) {
 				require.NoError(t, err)
 			},
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -1170,7 +1171,7 @@ func TestStorage(t *testing.T) {
 			mocks:    nil,
 			lifetime: func() time.Duration { return 0 }, // 0 == infinity
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
@@ -1232,7 +1233,7 @@ func TestStorage(t *testing.T) {
 			mocks:       nil,
 			lifetime:    func() time.Duration { return 0 }, // 0 == infinity
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
-				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 

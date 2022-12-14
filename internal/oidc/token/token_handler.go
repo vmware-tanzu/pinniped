@@ -35,7 +35,7 @@ func NewHandler(
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
 		if err != nil {
 			plog.Info("token request error", oidc.FositeErrorForLog(err)...)
-			oauthHelper.WriteAccessError(w, accessRequest, err)
+			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 			return nil
 		}
 
@@ -48,7 +48,7 @@ func NewHandler(
 			err = upstreamRefresh(r.Context(), accessRequest, idpLister)
 			if err != nil {
 				plog.Info("upstream refresh error", oidc.FositeErrorForLog(err)...)
-				oauthHelper.WriteAccessError(w, accessRequest, err)
+				oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 				return nil
 			}
 		}
@@ -68,11 +68,11 @@ func NewHandler(
 		accessResponse, err := oauthHelper.NewAccessResponse(r.Context(), accessRequest)
 		if err != nil {
 			plog.Info("token response error", oidc.FositeErrorForLog(err)...)
-			oauthHelper.WriteAccessError(w, accessRequest, err)
+			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 			return nil
 		}
 
-		oauthHelper.WriteAccessResponse(w, accessRequest, accessResponse)
+		oauthHelper.WriteAccessResponse(r.Context(), w, accessRequest, accessResponse)
 
 		return nil
 	})

@@ -31,7 +31,8 @@ const (
 	// Version 1 was the initial release of storage.
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
-	authorizeCodeStorageVersion = "3"
+	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
+	authorizeCodeStorageVersion = "4"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -314,25 +315,25 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 		},
 		"session": {
 			"fosite": {
-				"Claims": {
-					"JTI": "褗6巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢",
-					"Issuer": "j¦鲶H股ƲLŋZ-{",
-					"Subject": "ehpƧ蓟",
-					"Audience": [
+				"id_token_claims": {
+					"jti": "褗6巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢",
+					"iss": "j¦鲶H股ƲLŋZ-{",
+					"sub": "ehpƧ蓟",
+					"aud": [
 						"驜Ŗ~ů崧軒q腟u尿宲!"
 					],
-					"Nonce": "ǎ^嫯R忑隯ƗƋ*L\u0026",
-					"ExpiresAt": "1989-06-02T14:40:29.613836765Z",
-					"IssuedAt": "2052-03-26T02:39:27.882495556Z",
-					"RequestedAt": "2038-04-06T10:46:24.698586972Z",
-					"AuthTime": "2003-01-05T11:30:18.206004879Z",
-					"AccessTokenHash": "ğǫ\\aȊ4ț髄Al",
-					"AuthenticationContextClassReference": "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#",
-					"AuthenticationMethodsReferences": [
+					"nonce": "ǎ^嫯R忑隯ƗƋ*L\u0026",
+					"exp": "1989-06-02T14:40:29.613836765Z",
+					"iat": "2052-03-26T02:39:27.882495556Z",
+					"rat": "2038-04-06T10:46:24.698586972Z",
+					"auth_time": "2003-01-05T11:30:18.206004879Z",
+					"at_hash": "ğǫ\\aȊ4ț髄Al",
+					"acr": "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#",
+					"amr": [
 						"装ƹýĸŴB岺Ð嫹Sx镯荫őł疂ư墫"
 					],
-					"CodeHash": "\u0026鶡",
-					"Extra": {
+					"c_hash": "\u0026鶡",
+					"ext": {
 						"rǓ\\BRë_g\"ʎ啴SƇMǃļū": {
 							"4撎胬龯,t猟i\u0026\u0026Q@ǤǟǗ": [
 								1239190737
@@ -347,8 +348,8 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"鑳绪": 2738428764
 					}
 				},
-				"Headers": {
-					"Extra": {
+				"headers": {
+					"extra": {
 						"d謺錳4帳ŅǃĊ": 663773398,
 						"Ř鸨EJ": {
 							"Ǽǟ迍阊v\"豑觳翢砜": [
@@ -363,11 +364,11 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						}
 					}
 				},
-				"ExpiresAt": {
+				"expires_at": {
 					"韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ": "1970-04-27T04:31:30.902468229Z"
 				},
-				"Username": "髉龳ǽÙ",
-				"Subject": "\u0026¥潝邎Ȗ莅ŝǔ盕戙鵮碡ʯiŬŽ"
+				"username": "髉龳ǽÙ",
+				"subject": "\u0026¥潝邎Ȗ莅ŝǔ盕戙鵮碡ʯiŬŽ"
 			},
 			"custom": {
 				"username": "Ĝ眧Ĭ",
@@ -408,5 +409,5 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
 		]
 	},
-	"version": "3"
+	"version": "4"
 }`

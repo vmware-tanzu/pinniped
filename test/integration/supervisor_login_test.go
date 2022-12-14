@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -2005,7 +2006,7 @@ func testSupervisorLogin(
 	}
 	require.NoError(t, err)
 
-	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "azp"}
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "azp", "at_hash"}
 	if slices.Contains(wantDownstreamScopes, "username") {
 		// If the test wants the username scope to have been granted, then also expect the claim in the ID token.
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "username")
@@ -2052,7 +2053,7 @@ func testSupervisorLogin(
 	refreshedTokenResponse, err := refreshSource.Token()
 	require.NoError(t, err)
 
-	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+	// When refreshing, do not expect a "nonce" claim.
 	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "azp", "at_hash"}
 	if slices.Contains(wantDownstreamScopes, "username") {
 		// If the test wants the username scope to have been granted, then also expect the claim in the refreshed ID token.
@@ -2182,6 +2183,21 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 	// Refresh tokens should start with the custom prefix "pin_rt_" to make them identifiable as refresh tokens when seen by a user out of context.
 	require.True(t, strings.HasPrefix(tokenResponse.RefreshToken, "pin_rt_"), "token %q did not have expected prefix 'pin_rt_'", tokenResponse.RefreshToken)
+
+	// The at_hash claim should be present and should be equal to the hash of the access token.
+	actualAccessTokenHashClaimValue := idTokenClaims["at_hash"]
+	require.NotEmpty(t, actualAccessTokenHashClaimValue)
+	require.Equal(t, hashAccessToken(tokenResponse.AccessToken), actualAccessTokenHashClaimValue)
+}
+
+func hashAccessToken(accessToken string) string {
+	// See https://openid.net/specs/openid-connect-core-1_0.html#CodeIDToken.
+	// "Access Token hash value. Its value is the base64url encoding of the left-most half of
+	// the hash of the octets of the ASCII representation of the access_token value, where the
+	// hash algorithm used is the hash algorithm used in the alg Header Parameter of the ID
+	// Token's JOSE Header."
+	b := sha256.Sum256([]byte(accessToken))
+	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
 }
 
 func requestAuthorizationAndExpectImmediateRedirectToCallback(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, _ *http.Client) {

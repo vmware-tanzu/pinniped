@@ -1433,6 +1433,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			// at and expires at dates which are newer than the old tokens.
 			time.Sleep(1 * time.Second)
 
+			approxRequestTime := time.Now()
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
@@ -1517,6 +1518,16 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Greater(t, tokenClaims["exp"], claimsOfFirstIDToken["exp"])
 			requireClaimsAreNotEqual(t, "iat", claimsOfFirstIDToken, tokenClaims) // issued at
 			require.Greater(t, tokenClaims["iat"], claimsOfFirstIDToken["iat"])
+
+			// Assert that the timestamps in the token are approximately as expected.
+			expiresAtAsFloat, ok := tokenClaims["exp"].(float64)
+			require.True(t, ok, "expected exp claim to be a float64")
+			expiresAt := time.Unix(int64(expiresAtAsFloat), 0)
+			testutil.RequireTimeInDelta(t, approxRequestTime.UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudge)
+			issuedAtAsFloat, ok := tokenClaims["iat"].(float64)
+			require.True(t, ok, "expected iat claim to be a float64")
+			issuedAt := time.Unix(int64(issuedAtAsFloat), 0)
+			testutil.RequireTimeInDelta(t, approxRequestTime.UTC(), issuedAt, timeComparisonFudge)
 
 			// Assert that nothing in storage has been modified.
 			newSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})

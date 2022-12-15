@@ -1149,7 +1149,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					Groups: testGroups,
 					Extra:  testExtra,
 				}, nil, "")
-				ctx := audit.WithAuditContext(req.Context(), nil)
+				ctx := audit.WithAuditContext(req.Context())
 				req = req.WithContext(ctx)
 				return req
 			}(),
@@ -1921,11 +1921,14 @@ func newRequest(t *testing.T, h http.Header, userInfo user.Info, event *auditint
 		ctx = request.WithUser(ctx, userInfo)
 	}
 
+	ctx = audit.WithAuditContext(ctx)
+
 	ae := &auditinternal.Event{Level: auditinternal.LevelMetadata}
 	if event != nil {
 		ae = event
 	}
-	ctx = audit.WithAuditContext(ctx, &audit.AuditContext{Event: ae})
+	ac := audit.AuditContextFrom(ctx)
+	ac.Event = ae
 
 	reqInfo := &request.RequestInfo{
 		IsResourceRequest: false,

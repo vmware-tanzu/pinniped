@@ -5,6 +5,7 @@ package kubecertagent
 
 import (
 	"bytes"
+	"context"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -55,7 +56,7 @@ func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string,
 	}
 
 	var stdoutBuf bytes.Buffer
-	if err := executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf}); err != nil {
+	if err := executor.StreamWithContext(context.Background(), remotecommand.StreamOptions{Stdout: &stdoutBuf}); err != nil {
 		return "", err
 	}
 	return stdoutBuf.String(), nil

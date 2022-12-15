@@ -59,7 +59,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 			return
 		}
 
-		informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, _ = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				object := metaOrDie(obj)
 				if filter.Add(object) {

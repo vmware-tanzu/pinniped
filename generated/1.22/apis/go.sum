@@ -205,10 +205,10 @@ gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b h1:h8qDotaEPuJATrMmW04NCwg7v
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
-k8s.io/api v0.22.13 h1:EddugPvl5jvL9E3iBg2Os6OtGTo0CWJeSaCJtTJMCPg=
-k8s.io/api v0.22.13/go.mod h1:dGiloIKktgnh5XuQWlYJqFEQEZ9AMlTWVi8EyvUBU98=
-k8s.io/apimachinery v0.22.13 h1:WaPxfo5orrh+vdtG/I0bwtuKqZW4oHmhlUyDmkYPD9s=
-k8s.io/apimachinery v0.22.13/go.mod h1:ZvVLP5iLhwVFg2Yx9Gh5W0um0DUauExbRhe+2Z8I1EU=
+k8s.io/api v0.22.15 h1:ersJ+vN3OD+3xutZ+T/VT8hHKpjfzFOftw05li3S2VI=
+k8s.io/api v0.22.15/go.mod h1:sJ9GkTzy/ni7FnB8Rf9o1TAHrlrUIiqD+bW/nlrjjHk=
+k8s.io/apimachinery v0.22.15 h1:Ad8XfYmIwYVHznV2iNatXujRVTEOs0h2RCYm81Ql5EM=
+k8s.io/apimachinery v0.22.15/go.mod h1:ZvVLP5iLhwVFg2Yx9Gh5W0um0DUauExbRhe+2Z8I1EU=
 k8s.io/gengo v0.0.0-20200413195148-3a45101e95ac/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/klog/v2 v2.0.0/go.mod h1:PBfzABfn139FHAV07az/IF9Wp1bkk3vpT2XSJ76fSDE=
 k8s.io/klog/v2 v2.9.0 h1:D7HV+n1V57XeZ0m6tdRkfknthUaM06VFbWldOFh8kzM=

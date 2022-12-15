@@ -34,10 +34,10 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 		name = "pinniped-storage-authcode-jssfhaibxdkiaugxufbsso3bixmfo7fzjvuevxbr35c4xdxolqga"
 	)
 
-	hmac := compose.NewOAuth2HMACStrategy(&compose.Config{}, []byte("super-secret-32-byte-for-testing"), nil)
+	hmac := compose.NewOAuth2HMACStrategy(&fosite.Config{GlobalSecret: []byte("super-secret-32-byte-for-testing")})
 	// test data generation via:
 	// code, signature, err := hmac.GenerateAuthorizeCode(ctx, nil)
-	signature := hmac.AuthorizeCodeSignature(code)
+	signature := hmac.AuthorizeCodeSignature(context.Background(), code)
 
 	secrets := client.CoreV1().Secrets(env.SupervisorNamespace)
 
@@ -91,7 +91,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// Note that CreateAuthorizeCodeSession() sets Active to true and also sets the Version before storing the session,
 	// so expect those here.
 	session.Active = true
-	session.Version = "3" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
+	session.Version = "4" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
 	expectedSessionStorageJSON, err := json.Marshal(session)
 	require.NoError(t, err)
 	require.JSONEq(t, string(expectedSessionStorageJSON), string(initialSecret.Data["pinniped-storage-data"]))

@@ -45,7 +45,7 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				APIGroupSuffix: pointer.String("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -68,7 +68,7 @@ func TestFromPath(t *testing.T) {
 				Log: plog.LogSpec{
 					Level: plog.LevelTrace,
 				},
-				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
+				AggregatedAPIServerPort: pointer.Int64(12345),
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				APIGroupSuffix: pointer.String("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -118,7 +118,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelInfo,
 					Format: plog.FormatText,
 				},
-				AggregatedAPIServerPort: pointer.Int64Ptr(12345),
+				AggregatedAPIServerPort: pointer.Int64(12345),
 			},
 		},
 		{
@@ -145,7 +145,7 @@ func TestFromPath(t *testing.T) {
 				  format: text
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
+				APIGroupSuffix: pointer.String("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -169,7 +169,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelTrace,
 					Format: plog.FormatText,
 				},
-				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
+				AggregatedAPIServerPort: pointer.Int64(10250),
 			},
 		},
 		{
@@ -192,7 +192,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				APIGroupSuffix: pointer.String("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -207,7 +207,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       false,
-				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
+				AggregatedAPIServerPort: pointer.Int64(10250),
 			},
 		},
 		{
@@ -322,7 +322,7 @@ func TestFromPath(t *testing.T) {
 				insecureAcceptExternalUnencryptedHttpRequests: true
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				APIGroupSuffix: pointer.String("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -338,7 +338,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
+				AggregatedAPIServerPort: pointer.Int64(10250),
 			},
 		},
 		{
@@ -354,7 +354,7 @@ func TestFromPath(t *testing.T) {
 				insecureAcceptExternalUnencryptedHttpRequests: "true"
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
+				APIGroupSuffix: pointer.String("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -370,7 +370,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: pointer.Int64Ptr(10250),
+				AggregatedAPIServerPort: pointer.Int64(10250),
 			},
 		},
 		{

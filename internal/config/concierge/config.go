@@ -93,39 +93,39 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 
 func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 	if apiConfig.ServingCertificateConfig.DurationSeconds == nil {
-		apiConfig.ServingCertificateConfig.DurationSeconds = pointer.Int64Ptr(aboutAYear)
+		apiConfig.ServingCertificateConfig.DurationSeconds = pointer.Int64(aboutAYear)
 	}
 
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
-		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = pointer.Int64Ptr(about9Months)
+		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = pointer.Int64(about9Months)
 	}
 }
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = pointer.StringPtr(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = pointer.String(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
 func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
+		*port = pointer.Int64(aggregatedAPIServerPortDefault)
 	}
 }
 
 func maybeSetImpersonationProxyServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64Ptr(impersonationProxyPortDefault)
+		*port = pointer.Int64(impersonationProxyPortDefault)
 	}
 }
 
 func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 	if cfg.NamePrefix == nil {
-		cfg.NamePrefix = pointer.StringPtr("pinniped-kube-cert-agent-")
+		cfg.NamePrefix = pointer.String("pinniped-kube-cert-agent-")
 	}
 
 	if cfg.Image == nil {
-		cfg.Image = pointer.StringPtr("debian:latest")
+		cfg.Image = pointer.String("debian:latest")
 	}
 }
 

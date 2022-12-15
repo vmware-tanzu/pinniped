@@ -5,10 +5,12 @@
 package oidc
 
 import (
+	"context"
 	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/felixge/httpsnoop"
@@ -195,7 +197,11 @@ func FositeOauth2Helper(
 	jwksProvider jwks.DynamicJWKSProvider,
 	timeoutsConfiguration TimeoutsConfiguration,
 ) fosite.OAuth2Provider {
-	oauthConfig := &compose.Config{
+	isRedirectURISecureStrict := func(_ context.Context, uri *url.URL) bool {
+		return fosite.IsRedirectURISecureStrict(uri)
+	}
+
+	oauthConfig := &fosite.Config{
 		IDTokenIssuer: issuer,
 
 		AuthorizeCodeLifespan: timeoutsConfiguration.AuthorizeCodeLifespan,
@@ -217,10 +223,16 @@ func FositeOauth2Helper(
 		MinParameterEntropy: fosite.MinParameterEntropy,
 
 		// do not allow custom scheme redirects, only https and http (on loopback)
-		RedirectSecureChecker: fosite.IsRedirectURISecureStrict,
+		RedirectSecureChecker: isRedirectURISecureStrict,
+
+		// html template for rendering the authorization response when the request has response_mode=form_post
+		FormPostHTMLTemplate: formposthtml.Template(),
+
+		// defaults to using BCrypt when nil
+		ClientSecretsHasher: nil,
 	}
 
-	provider := compose.Compose(
+	oAuth2Provider := compose.Compose(
 		oauthConfig,
 		oauthStore,
 		&compose.CommonStrategy{
@@ -228,7 +240,6 @@ func FositeOauth2Helper(
 			CoreStrategy:               newDynamicOauth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32Func),
 			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
-		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
 		compose.OpenIDConnectExplicitFactory,
@@ -236,8 +247,8 @@ func FositeOauth2Helper(
 		compose.OAuth2PKCEFactory,
 		TokenExchangeFactory, // handle the "urn:ietf:params:oauth:grant-type:token-exchange" grant type
 	)
-	provider.(*fosite.Fosite).FormPostHTMLTemplate = formposthtml.Template()
-	return provider
+
+	return oAuth2Provider
 }
 
 // FositeErrorForLog generates a list of information about the provided Fosite error that can be
@@ -403,7 +414,7 @@ func FindUpstreamIDPByNameAndType(
 
 // WriteAuthorizeError writes an authorization error as it should be returned by the authorization endpoint and other
 // similar endpoints that are the end of the downstream authcode flow. Errors responses are written in the usual fosite style.
-func WriteAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) {
+func WriteAuthorizeError(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester, err error, isBrowserless bool) {
 	if plog.Enabled(plog.LevelTrace) {
 		// When trace level logging is enabled, include the stack trace in the log message.
 		keysAndValues := FositeErrorForLog(err)
@@ -420,7 +431,7 @@ func WriteAuthorizeError(w http.ResponseWriter, oauthHelper fosite.OAuth2Provide
 		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
 	}
 	// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-	oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+	oauthHelper.WriteAuthorizeError(r.Context(), w, authorizeRequester, err)
 }
 
 // PerformAuthcodeRedirect successfully completes a downstream login by creating a session and
@@ -437,13 +448,13 @@ func PerformAuthcodeRedirect(
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
 		plog.WarningErr("error while generating and saving authcode", err, "fositeErr", FositeErrorForLog(err))
-		WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
+		WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, isBrowserless)
 		return
 	}
 	if isBrowserless {
 		w = rewriteStatusSeeOtherToStatusFoundForBrowserless(w)
 	}
-	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+	oauthHelper.WriteAuthorizeResponse(r.Context(), w, authorizeRequester, authorizeResponder)
 }
 
 func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) http.ResponseWriter {

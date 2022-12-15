@@ -4,6 +4,8 @@
 package integration
 
 import (
+	"context"
+	"hash"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -185,11 +187,39 @@ func formpostTemplateServer(t *testing.T, redirectURI string, responseParams url
 	return server.URL
 }
 
+type testHMACStrategyConfigurator struct {
+	secret  []byte
+	entropy int
+}
+
+func newTestHMACStrategyConfigurator(secret []byte, entropy int) hmac.HMACStrategyConfigurator {
+	return &testHMACStrategyConfigurator{
+		secret:  secret,
+		entropy: entropy,
+	}
+}
+
+func (t *testHMACStrategyConfigurator) GetTokenEntropy(_ context.Context) int {
+	return t.entropy
+}
+
+func (t *testHMACStrategyConfigurator) GetGlobalSecret(_ context.Context) ([]byte, error) {
+	return t.secret, nil
+}
+
+func (t *testHMACStrategyConfigurator) GetRotatedGlobalSecrets(_ context.Context) ([][]byte, error) {
+	return nil, nil
+}
+
+func (t *testHMACStrategyConfigurator) GetHMACHasher(_ context.Context) func() hash.Hash {
+	return nil // nil will cause fosite to use a default hasher
+}
+
 // formpostRandomParams is a helper to generate random OAuth2 response parameters for testing.
 func formpostRandomParams(t *testing.T) url.Values {
 	t.Helper()
-	generator := &hmac.HMACStrategy{GlobalSecret: testlib.RandBytes(t, 32), TokenEntropy: 32}
-	authCode, _, err := generator.Generate()
+	generator := &hmac.HMACStrategy{Config: newTestHMACStrategyConfigurator(testlib.RandBytes(t, 32), 32)}
+	authCode, _, err := generator.Generate(context.Background())
 	require.NoError(t, err)
 	return url.Values{
 		"code":  []string{authCode},

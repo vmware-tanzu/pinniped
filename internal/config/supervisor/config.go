@@ -109,7 +109,7 @@ func maybeSetEndpointDefault(endpoint **Endpoint, defaultEndpoint Endpoint) {
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = pointer.StringPtr(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = pointer.String(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
@@ -119,7 +119,7 @@ func validateAPIGroupSuffix(apiGroupSuffix string) error {
 
 func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64Ptr(aggregatedAPIServerPortDefault)
+		*port = pointer.Int64(aggregatedAPIServerPortDefault)
 	}
 }
 

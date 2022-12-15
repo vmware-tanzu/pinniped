@@ -11,6 +11,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -52,7 +53,7 @@ func TestRefreshTokenStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"3"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"4"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -122,7 +123,7 @@ func TestRefreshTokenStorageRevocation(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"3"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"4"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -177,7 +178,7 @@ func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"3"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"4"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -251,7 +252,7 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetRefreshTokenSession(ctx, "fancy-signature", nil)
 
-	require.EqualError(t, err, "refresh token request data has wrong version: refresh token session for fancy-signature has version not-the-right-version instead of 3")
+	require.EqualError(t, err, "refresh token request data has wrong version: refresh token session for fancy-signature has version not-the-right-version instead of 4")
 }
 
 func TestNilSessionRequest(t *testing.T) {
@@ -269,7 +270,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"3"}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"4"}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/refresh-token",
@@ -353,13 +354,13 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"3","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"id_token_claims":{"jti": "xyz"},"headers":{"extra":{"myheader": "foo"}},"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"4","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/refresh-token",
 			},
 			wantSession: &Session{
-				Version: "3",
+				Version: "4",
 				Request: &fosite.Request{
 					ID:     "abcd-1",
 					Client: &clientregistry.Client{},
@@ -367,6 +368,8 @@ func TestReadFromSecret(t *testing.T) {
 						Fosite: &openid.DefaultSession{
 							Username: "snorlax",
 							Subject:  "panda",
+							Claims:   &jwt.IDTokenClaims{JTI: "xyz"},
+							Headers:  &jwt.Headers{Extra: map[string]interface{}{"myheader": "foo"}},
 						},
 						Custom: &psession.CustomSessionData{
 							Username:     "fake-username",
@@ -392,7 +395,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"3","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"4","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/not-refresh-token",
@@ -415,7 +418,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/refresh-token",
 			},
-			wantErr: "refresh token request data has wrong version: refresh token session has version wrong-version-here instead of 3",
+			wantErr: "refresh token request data has wrong version: refresh token session has version wrong-version-here instead of 4",
 		},
 		{
 			name: "missing request",
@@ -428,7 +431,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"version":"3","active": true}`),
+					"pinniped-storage-data":    []byte(`{"version":"4","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/refresh-token",

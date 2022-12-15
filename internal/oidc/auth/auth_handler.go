@@ -125,7 +125,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return nil
 	}
 
-	if !requireStaticClientForUsernameAndPasswordHeaders(w, oauthHelper, authorizeRequester) {
+	if !requireStaticClientForUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester) {
 		return nil
 	}
 
@@ -140,7 +140,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
 	}
 	if !authenticated {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."), true)
 		return nil
 	}
@@ -203,7 +203,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	if !requireStaticClientForUsernameAndPasswordHeaders(w, oauthHelper, authorizeRequester) {
+	if !requireStaticClientForUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester) {
 		return nil
 	}
 
@@ -214,7 +214,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 
 	if !oidcUpstream.AllowsPasswordGrant() {
 		// Return a user-friendly error for this case which is entirely within our control.
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHint(
 				"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."), true)
 		return nil
@@ -229,7 +229,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
 		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
 		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithDebug(err.Error()), true) // WithDebug hides the error from the client
 		return nil
 	}
@@ -237,7 +237,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 		return nil
@@ -245,7 +245,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 
 	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token, username)
 	if err != nil {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
 		)
 		return nil
@@ -321,10 +321,10 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	return nil
 }
 
-func requireStaticClientForUsernameAndPasswordHeaders(w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) bool {
+func requireStaticClientForUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) bool {
 	isStaticClient := authorizeRequester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI
 	if !isStaticClient {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("This client is not allowed to submit username or password headers to this endpoint."), true)
 	}
 	return isStaticClient
@@ -334,7 +334,7 @@ func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseW
 	username := r.Header.Get(oidcapi.AuthorizeUsernameHeaderName)
 	password := r.Header.Get(oidcapi.AuthorizePasswordHeaderName)
 	if username == "" || password == "" {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester,
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."), true)
 		return "", "", false
 	}
@@ -344,7 +344,7 @@ func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseW
 func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, isBrowserless bool) (fosite.AuthorizeRequester, bool) {
 	authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 	if err != nil {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, isBrowserless)
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, isBrowserless)
 		return nil, false
 	}
 
@@ -458,7 +458,7 @@ func handleBrowserFlowAuthRequest(
 		},
 	})
 	if err != nil {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, err, false)
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, false)
 		return nil, nil // already wrote the error response, don't return error
 	}
 
@@ -488,7 +488,7 @@ func handleBrowserFlowAuthRequest(
 
 	promptParam := r.Form.Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, oidcapi.ScopeOpenID) {
-		oidc.WriteAuthorizeError(w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, fosite.ErrLoginRequired, false)
 		return nil, nil // already wrote the error response, don't return error
 	}
 

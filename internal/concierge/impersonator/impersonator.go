@@ -472,7 +472,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 		return nil, fmt.Errorf("could not get http/1.1 anonymous round tripper: %w", err)
 	}
 
-	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2")
+	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2") // TODO figure out why this leads to still supporting http1
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/2.0 round tripper: %w", err)
 	}
@@ -812,15 +812,6 @@ func getTransportForProtocol(restConfig *rest.Config, protocol string) (http.Rou
 		return nil, fmt.Errorf("could not build transport: %w", err)
 	}
 
-	// For clients that support http2, transport.New calls http2.ConfigureTransports,
-	// which configures with both h2 and http/1.1,
-	// even when you explicitly only ask for h2.
-	// Override that change.
-	cfg, err := utilnet.TLSClientConfig(rt)
-	if err != nil {
-		return nil, fmt.Errorf("could not extract TLS config: %w", err)
-	}
-	cfg.NextProtos = []string{protocol}
 	if err := kubeclient.AssertSecureTransport(rt); err != nil {
 		return nil, err // make sure we only use a secure TLS config
 	}

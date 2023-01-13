@@ -40,7 +40,6 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
@@ -347,9 +346,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email username groups") },
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -365,7 +367,10 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGroups:            goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -403,9 +408,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				},
 				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -421,7 +429,10 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGroups:            goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -1015,9 +1026,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -1033,7 +1047,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -1084,9 +1101,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -1103,7 +1123,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGroups:            goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -1631,7 +1654,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				idTokenFields = append(idTokenFields, "groups")
 			}
 			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
-				idTokenFields = append(idTokenFields, oidcapi.IDTokenClaimAdditionalClaims)
+				idTokenFields = append(idTokenFields, "additionalClaims")
 			}
 			require.ElementsMatch(t, idTokenFields, getMapKeys(tokenClaims))
 
@@ -1658,10 +1681,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			}
 
 			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
-				require.Equal(t, test.authcodeExchange.want.wantAdditionalClaims, tokenClaims[oidcapi.IDTokenClaimAdditionalClaims])
+				require.Equal(t, test.authcodeExchange.want.wantAdditionalClaims, tokenClaims["additionalClaims"])
 			}
-			additionalClaims, ok := tokenClaims[oidcapi.IDTokenClaimAdditionalClaims].(map[string]interface{})
-			if ok && tokenClaims[oidcapi.IDTokenClaimAdditionalClaims] != nil {
+			additionalClaims, ok := tokenClaims["additionalClaims"].(map[string]interface{})
+			if ok && tokenClaims["additionalClaims"] != nil {
 				require.True(t, len(additionalClaims) > 0, "additionalClaims may never be present and empty in the id token")
 			}
 
@@ -1671,7 +1694,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			requireClaimsAreEqual(t, "rat", claimsOfFirstIDToken, tokenClaims)       // requested at
 			requireClaimsAreEqual(t, "auth_time", claimsOfFirstIDToken, tokenClaims) // auth time
 			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
-				requireClaimsAreEqual(t, oidcapi.IDTokenClaimAdditionalClaims, claimsOfFirstIDToken, tokenClaims)
+				requireClaimsAreEqual(t, "additionalClaims", claimsOfFirstIDToken, tokenClaims)
 			}
 
 			// Also assert which are the different from the original downstream ID token.
@@ -1966,9 +1989,12 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -1985,7 +2011,10 @@ func TestRefreshGrant(t *testing.T) {
 					wantGroups:                  goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -1998,7 +2027,10 @@ func TestRefreshGrant(t *testing.T) {
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 					map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -2052,9 +2084,12 @@ func TestRefreshGrant(t *testing.T) {
 					r.Form.Set("scope", "openid offline_access username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra[oidcapi.IDTokenClaimAdditionalClaims] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
@@ -2072,7 +2107,10 @@ func TestRefreshGrant(t *testing.T) {
 					wantGroups:                  goodGroups,
 					wantAdditionalClaims: map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -2086,7 +2124,10 @@ func TestRefreshGrant(t *testing.T) {
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 					map[string]interface{}{
 						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
 						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
 						"upstreamObj": map[string]interface{}{
 							"name": "value",
 						},
@@ -4691,7 +4732,7 @@ func requireValidStoredRequest(
 	}
 	expectedExtra["azp"] = wantClientID
 	if len(wantAdditionalClaims) > 0 {
-		expectedExtra[oidcapi.IDTokenClaimAdditionalClaims] = wantAdditionalClaims
+		expectedExtra["additionalClaims"] = wantAdditionalClaims
 	}
 	require.Equal(t, expectedExtra, claims.Extra)
 
@@ -4823,7 +4864,7 @@ func requireValidIDToken(
 		idTokenFields = append(idTokenFields, "groups")
 	}
 	if len(wantAdditionalClaims) > 0 {
-		idTokenFields = append(idTokenFields, oidcapi.IDTokenClaimAdditionalClaims)
+		idTokenFields = append(idTokenFields, "additionalClaims")
 	}
 
 	// make sure that these are the only fields in the token

@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // The configurations here override the usual ptls.Secure, ptls.Default, and ptls.DefaultLDAP
@@ -16,11 +16,10 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"C"                     // explicitly import cgo so that runtime/cgo gets linked into the kube-cert-agent
-	_ "crypto/tls/fipsonly" // restricts all TLS configuration to FIPS-approved settings.
-
 	"k8s.io/apiserver/pkg/server/options"
 
+	// Cause fipsonly tls mode with this side effect import.
+	_ "go.pinniped.dev/internal/crypto/fips"
 	"go.pinniped.dev/internal/plog"
 )
 

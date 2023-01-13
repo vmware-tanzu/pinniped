@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main is the combined entrypoint for the Pinniped "kube-cert-agent" component.
@@ -13,8 +13,23 @@ import (
 	"os"
 	"time"
 
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
-	_ "go.pinniped.dev/internal/crypto/ptls"
+	// This side effect import ensures that we use fipsonly crypto during TLS in fips_strict mode.
+	//
+	// Commenting this out because it causes the runtime memory consumption of this binary to increase
+	// from ~1 MB to ~8 MB (as measured when running the sleep subcommand). This binary does not use TLS,
+	// so it should not be needed. If this binary is ever changed to make use of TLS client and/or server
+	// code, then we should bring this import back to support the use of the ptls library for client and
+	// server code, and we should also increase the memory limits on the kube cert agent deployment (as
+	// decided by the kube cert agent controller in the Concierge).
+	//
+	//nolint:godot // This is not sentence, it is a commented out line of import code.
+	// _ "go.pinniped.dev/internal/crypto/ptls"
+
+	// This side effect imports cgo so that runtime/cgo gets linked, when in fips_strict mode.
+	// Without this line, the binary will exit 133 upon startup in fips_strict mode.
+	// It also enables fipsonly tls mode, just to be absolutely sure that the fips code is enabled,
+	// even though it shouldn't be used currently by this binary.
+	_ "go.pinniped.dev/internal/crypto/fips"
 )
 
 //nolint:gochecknoglobals // these are swapped during unit tests.

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package auth
@@ -582,7 +582,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		wantUnnecessaryStoredRecords      int
 		wantPasswordGrantCall             *expectedPasswordGrant
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
-		wantAdditionalClaims              map[string]interface{}
+		wantDownstreamAdditionalClaims    map[string]interface{}
 	}
 	tests := []testCase{
 		{
@@ -721,7 +721,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					"downstreamMissingClaim": "upstreamMissingClaim",
 				}).
 				WithIDTokenClaim("upstreamCustomClaim", "i am a claim value").
-				WithIDTokenClaim("upstreamOtherClaim", "other claim value").
+				WithIDTokenClaim("upstreamOtherClaim", []interface{}{"hello", true}).
 				Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPath,
@@ -741,9 +741,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
-			wantAdditionalClaims: map[string]interface{}{
+			wantDownstreamAdditionalClaims: map[string]interface{}{
 				"downstreamCustomClaim": "i am a claim value",
-				"downstreamOtherClaim":  "other claim value",
+				"downstreamOtherClaim":  []interface{}{"hello", true},
 			},
 		},
 		{
@@ -772,7 +772,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
-			wantAdditionalClaims:              nil, // downstream claims are empty
+			wantDownstreamAdditionalClaims:    nil, // downstream claims are empty
 		},
 		{
 			name:                              "LDAP cli upstream happy path using GET",
@@ -3189,7 +3189,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				test.wantDownstreamClientID,
 				test.wantDownstreamRedirectURI,
 				test.wantDownstreamCustomSessionData,
-				test.wantAdditionalClaims,
+				test.wantDownstreamAdditionalClaims,
 			)
 		default:
 			require.Empty(t, rsp.Header().Values("Location"))
@@ -3242,8 +3242,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			oauthHelperWithNullStorage, _ := createOauthHelperWithNullStorage(secretsClient, oidcClientsClient)
 
 			idps := test.idps.Build()
-			if len(test.wantAdditionalClaims) > 0 {
-				require.True(t, len(idps.GetOIDCIdentityProviders()) > 0, "wantAdditionalClaims requires at least one OIDC IDP")
+			if len(test.wantDownstreamAdditionalClaims) > 0 {
+				require.True(t, len(idps.GetOIDCIdentityProviders()) > 0, "wantDownstreamAdditionalClaims requires at least one OIDC IDP")
 			}
 
 			subject := NewHandler(

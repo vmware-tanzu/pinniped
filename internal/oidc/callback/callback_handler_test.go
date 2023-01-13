@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package callback
@@ -189,7 +189,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
-		wantAdditionalClaims              map[string]interface{}
+		wantDownstreamAdditionalClaims    map[string]interface{}
 
 		wantAuthcodeExchangeCall *expectedAuthcodeExchange
 	}{
@@ -262,7 +262,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
 			},
-			wantAdditionalClaims: map[string]interface{}{
+			wantDownstreamAdditionalClaims: map[string]interface{}{
 				"downstreamCustomClaim": "i am a claim value",
 				"downstreamOtherClaim":  "other claim value",
 			},
@@ -1507,7 +1507,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
-					test.wantAdditionalClaims,
+					test.wantDownstreamAdditionalClaims,
 				)
 
 			// Otherwise, expect an empty response body.
@@ -1535,7 +1535,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamClientID,
 					downstreamRedirectURI,
 					test.wantDownstreamCustomSessionData,
-					test.wantAdditionalClaims,
+					test.wantDownstreamAdditionalClaims,
 				)
 			}
 		})

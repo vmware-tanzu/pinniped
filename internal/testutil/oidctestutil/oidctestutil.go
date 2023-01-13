@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidctestutil
@@ -28,7 +28,6 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/utils/strings/slices"
 
-	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
@@ -947,7 +946,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
+	wantDownstreamAdditionalClaims map[string]interface{},
 ) {
 	t.Helper()
 
@@ -986,7 +985,7 @@ func RequireAuthCodeRegexpMatch(
 		wantDownstreamClientID,
 		wantDownstreamRedirectURI,
 		wantCustomSessionData,
-		wantAdditionalClaims,
+		wantDownstreamAdditionalClaims,
 	)
 
 	// One PKCE should have been stored.
@@ -1039,7 +1038,7 @@ func validateAuthcodeStorage(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
+	wantDownstreamAdditionalClaims map[string]interface{},
 ) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
@@ -1083,7 +1082,7 @@ func validateAuthcodeStorage(
 	require.Equal(t, wantDownstreamClientID, actualClaims.Extra["azp"])
 	wantDownstreamIDTokenExtraClaimsCount := 1 // should always have azp claim
 
-	if len(wantAdditionalClaims) > 0 {
+	if len(wantDownstreamAdditionalClaims) > 0 {
 		wantDownstreamIDTokenExtraClaimsCount++
 	}
 
@@ -1106,12 +1105,12 @@ func validateAuthcodeStorage(
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.Nil(t, actualDownstreamIDTokenGroups)
 	}
-	if len(wantAdditionalClaims) > 0 {
-		actualAdditionalClaims, ok := actualClaims.Get(oidcapi.IDTokenClaimAdditionalClaims).(map[string]interface{})
-		require.True(t, ok, "expected %s to be a map[string]interface{}", oidcapi.IDTokenClaimAdditionalClaims)
-		require.Equal(t, wantAdditionalClaims, actualAdditionalClaims)
+	if len(wantDownstreamAdditionalClaims) > 0 {
+		actualAdditionalClaims, ok := actualClaims.Get("additionalClaims").(map[string]interface{})
+		require.True(t, ok, "expected additionalClaims to be a map[string]interface{}")
+		require.Equal(t, wantDownstreamAdditionalClaims, actualAdditionalClaims)
 	} else {
-		require.NotContains(t, actualClaims.Extra, oidcapi.IDTokenClaimAdditionalClaims, "%s must not be present when there are no wanted additional claims", oidcapi.IDTokenClaimAdditionalClaims)
+		require.NotContains(t, actualClaims.Extra, "additionalClaims", "additionalClaims must not be present when there are no wanted additional claims")
 	}
 
 	// Make sure that we asserted on every extra claim.

@@ -2247,7 +2247,11 @@ func verifyTokenResponse(
 	require.ElementsMatch(t, wantDownstreamIDTokenGroups, idTokenClaims["groups"])
 
 	// Check the "additionalClaims" claim.
-	require.Equal(t, wantDownstreamIDTokenAdditionalClaims, idTokenClaims["additionalClaims"])
+	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
+		require.Equal(t, wantDownstreamIDTokenAdditionalClaims, idTokenClaims["additionalClaims"])
+	} else {
+		require.NotContains(t, idTokenClaims, "additionalClaims", "additionalClaims claim should not be present when no sub claims are expected")
+	}
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)

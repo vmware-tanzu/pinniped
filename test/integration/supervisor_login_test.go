@@ -1715,7 +1715,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]interface{}, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]interface{} {
 	if len(wantGroups) > 0 {
-		additionalClaims[wantGroupsAdditionalClaimName] = wantGroups
+		var wantGroupsAnyType []interface{}
+		for _, group := range wantGroups {
+			wantGroupsAnyType = append(wantGroupsAnyType, group)
+		}
+		additionalClaims[wantGroupsAdditionalClaimName] = wantGroupsAnyType
 	}
 	return additionalClaims
 }

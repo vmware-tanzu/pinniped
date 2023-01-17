@@ -370,6 +370,67 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
 		{
+			name:      "oidc with CLI password flow with additional claim mappings",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AllowPasswordGrant: true,                                        // allow the CLI password flow for this OIDCIdentityProvider
+					AdditionalScopes:   env.SupervisorUpstreamOIDC.AdditionalScopes, // ask for the groups claim so we can use it in additionalClaimMappings below
+				}
+				spec.Claims.AdditionalClaimMappings = map[string]string{
+					"upstream_issuer✅":  "iss",
+					"upstream_username": env.SupervisorUpstreamOIDC.UsernameClaim,
+					"not_existing":      "not_existing_upstream_claim",
+					"upstream_groups":   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamOIDC.Username, // username to present to server during login
+					env.SupervisorUpstreamOIDC.Password, // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
+				"upstream_username": env.SupervisorUpstreamOIDC.Username,
+			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
+		},
+		{
+			name:      "oidc with default username and groups claim settings with additional claim mappings",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes, // ask for the groups claim so we can use it in additionalClaimMappings below
+				}
+				spec.Claims.AdditionalClaimMappings = map[string]string{
+					"upstream_issuer✅":  "iss",
+					"upstream_username": env.SupervisorUpstreamOIDC.UsernameClaim,
+					"not_existing":      "not_existing_upstream_claim",
+					"upstream_groups":   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
+				"upstream_username": env.SupervisorUpstreamOIDC.Username,
+			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
+		},
+		{
 			name:      "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {

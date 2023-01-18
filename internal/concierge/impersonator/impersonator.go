@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -192,7 +192,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 				defer impersonationProxyCompleted.ServeHTTP(w, r)
 				impersonationProxy.ServeHTTP(w, r)
 			}))
-			handler = filterlatency.TrackStarted(handler, "impersonationproxy")
+			handler = filterlatency.TrackStarted(handler, c.TracerProvider, "impersonationproxy")
 
 			// The standard Kube handler chain (authn, authz, impersonation, audit, etc).
 			// See the genericapiserver.DefaultBuildHandlerChain func for details.
@@ -201,12 +201,12 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			// we need to grab the bearer token before WithAuthentication deletes it.
 			handler = filterlatency.TrackCompleted(handler)
 			handler = withBearerTokenPreservation(handler)
-			handler = filterlatency.TrackStarted(handler, "bearertokenpreservation")
+			handler = filterlatency.TrackStarted(handler, c.TracerProvider, "bearertokenpreservation")
 
 			// Always set security headers so browsers do the right thing.
 			handler = filterlatency.TrackCompleted(handler)
 			handler = securityheader.Wrap(handler)
-			handler = filterlatency.TrackStarted(handler, "securityheaders")
+			handler = filterlatency.TrackStarted(handler, c.TracerProvider, "securityheaders")
 
 			return handler
 		}

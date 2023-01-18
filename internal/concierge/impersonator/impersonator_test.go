@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -58,6 +58,11 @@ import (
 )
 
 func TestImpersonator(t *testing.T) {
+	const (
+		priorityLevelConfigurationsVersion = "v1beta3"
+		flowSchemasVersion                 = "v1beta3"
+	)
+
 	ca, err := certauthority.New("ca", time.Hour)
 	require.NoError(t, err)
 	caKey, err := ca.PrivateKeyToPEM()
@@ -714,8 +719,8 @@ func TestImpersonator(t *testing.T) {
 					secure := ptls.Secure(rootCAs)
 					switch r.URL.Path {
 					case "/api/v1/namespaces/kube-system/configmaps",
-						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
-						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas",
+						fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/prioritylevelconfigurations", priorityLevelConfigurationsVersion),
+						fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/flowschemas", flowSchemasVersion),
 						"/healthz":
 					default:
 						if !httpstream.IsUpgradeRequest(r) {
@@ -736,8 +741,8 @@ func TestImpersonator(t *testing.T) {
 					http.NotFound(w, r)
 					return
 
-				case "/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
-					"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas":
+				case fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/prioritylevelconfigurations", priorityLevelConfigurationsVersion),
+					fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/flowschemas", flowSchemasVersion):
 					// ignore requests related to priority and fairness logic
 					require.Equal(t, http.MethodGet, r.Method)
 					http.NotFound(w, r)
@@ -1051,7 +1056,11 @@ func TestImpersonator(t *testing.T) {
 }
 
 func TestImpersonatorHTTPHandler(t *testing.T) {
-	const testUser = "test-user"
+	const (
+		testUser                           = "test-user"
+		priorityLevelConfigurationsVersion = "v1beta3"
+		flowSchemasVersion                 = "v1beta3"
+	)
 
 	testGroups := []string{"test-group-1", "test-group-2"}
 	testExtra := map[string][]string{
@@ -1149,7 +1158,9 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					Groups: testGroups,
 					Extra:  testExtra,
 				}, nil, "")
-				ctx := audit.WithAuditContext(req.Context(), nil)
+				ctx := audit.WithAuditContext(req.Context())
+				ac := audit.AuditContextFrom(ctx)
+				ac.Event = nil
 				req = req.WithContext(ctx)
 				return req
 			}(),
@@ -1814,8 +1825,8 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					secure := ptls.Secure(rootCAs)
 					switch r.URL.Path {
 					case "/api/v1/namespaces/kube-system/configmaps",
-						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/prioritylevelconfigurations",
-						"/apis/flowcontrol.apiserver.k8s.io/v1beta2/flowschemas",
+						fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/prioritylevelconfigurations", priorityLevelConfigurationsVersion),
+						fmt.Sprintf("/apis/flowcontrol.apiserver.k8s.io/%s/flowschemas", flowSchemasVersion),
 						"/healthz":
 					default:
 						if !httpstream.IsUpgradeRequest(r) {
@@ -1925,7 +1936,9 @@ func newRequest(t *testing.T, h http.Header, userInfo user.Info, event *auditint
 	if event != nil {
 		ae = event
 	}
-	ctx = audit.WithAuditContext(ctx, &audit.AuditContext{Event: ae})
+	ctx = audit.WithAuditContext(ctx)
+	ac := audit.AuditContextFrom(ctx)
+	ac.Event = ae
 
 	reqInfo := &request.RequestInfo{
 		IsResourceRequest: false,

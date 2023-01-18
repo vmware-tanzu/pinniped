@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -974,21 +974,6 @@ func TestUnwrap(t *testing.T) {
 		testUnwrap(t, execClient, serverSubjects)
 	})
 
-	t.Run("gcp client", func(t *testing.T) {
-		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
-
-		gcpClient := makeClient(t, restConfig, func(config *rest.Config) {
-			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
-				Name: "gcp",
-				Config: map[string]string{
-					"cmd-path": `echo {"access_token":"fake","token_expiry":"2200-01-02T15:04:05.999999999Z07:00"}`,
-				},
-			}
-		})
-
-		testUnwrap(t, gcpClient, serverSubjects)
-	})
-
 	t.Run("oidc client", func(t *testing.T) {
 		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
 
@@ -1003,23 +988,6 @@ func TestUnwrap(t *testing.T) {
 		})
 
 		testUnwrap(t, oidcClient, serverSubjects)
-	})
-
-	t.Run("azure client", func(t *testing.T) {
-		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
-
-		azureClient := makeClient(t, restConfig, func(config *rest.Config) {
-			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
-				Name: "azure",
-				Config: map[string]string{
-					"client-id":    "pinny",
-					"tenant-id":    "danger",
-					"apiserver-id": "1234",
-				},
-			}
-		})
-
-		testUnwrap(t, azureClient, serverSubjects)
 	})
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -59,7 +59,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 			return
 		}
 
-		informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				object := metaOrDie(obj)
 				if filter.Add(object) {
@@ -113,6 +113,10 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 				}
 			},
 		})
+		if err != nil {
+			// Shouldn't really happen.
+			panic(die(fmt.Sprintf("got error from AddEventHandler: %s", err.Error())))
+		}
 	})
 }
 

@@ -18,12 +18,12 @@ import (
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psets"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -421,7 +421,7 @@ func maybeLogClaims(msg, name string, claims map[string]interface{}) {
 	}
 
 	if plog.Enabled(plog.LevelDebug) { // log keys at debug level
-		keys := sets.StringKeySet(claims).List() // note: this is only safe because the compiler asserts that claims is a map[string]<anything>
+		keys := psets.StringKeySet(claims).List() // note: this is only safe because the compiler asserts that claims is a map[string]<anything>
 		plog.Debug(msg, "providerName", name, "keys", keys)
 		return
 	}

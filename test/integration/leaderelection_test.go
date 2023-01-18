@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -17,13 +17,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
+	"go.pinniped.dev/internal/psets"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -175,7 +175,7 @@ func leaderElectionClients(t *testing.T, namespace *corev1.Namespace, leaseName 
 		clients[identity], cancels[identity] = leaderElectionClient(t, namespace, leaseName, identity)
 	}
 
-	t.Logf("running leader election client tests with %d clients: %v", len(clients), sets.StringKeySet(clients).List())
+	t.Logf("running leader election client tests with %d clients: %v", len(clients), psets.StringKeySet(clients).List())
 
 	return clients, cancels
 }
@@ -191,7 +191,7 @@ func pickRandomLeaderElectionClient(clients map[string]*kubeclient.Client) *kube
 func waitForIdentity(ctx context.Context, t *testing.T, namespace *corev1.Namespace, leaseName string, clients map[string]*kubeclient.Client) *coordinationv1.Lease {
 	t.Helper()
 
-	identities := sets.StringKeySet(clients)
+	identities := psets.StringKeySet(clients)
 	var out *coordinationv1.Lease
 
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {

@@ -9,6 +9,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -38,10 +39,10 @@ func (m *MockPodCommandExecutor) EXPECT() *MockPodCommandExecutorMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockPodCommandExecutor) Exec(arg0, arg1 string, arg2 ...string) (string, error) {
+func (m *MockPodCommandExecutor) Exec(arg0 context.Context, arg1, arg2 string, arg3 ...string) (string, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []interface{}{arg0, arg1, arg2}
+	for _, a := range arg3 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -51,8 +52,8 @@ func (m *MockPodCommandExecutor) Exec(arg0, arg1 string, arg2 ...string) (string
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockPodCommandExecutorMockRecorder) Exec(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+func (mr *MockPodCommandExecutorMockRecorder) Exec(arg0, arg1, arg2 interface{}, arg3 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	varargs := append([]interface{}{arg0, arg1, arg2}, arg3...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPodCommandExecutor)(nil).Exec), varargs...)
 }

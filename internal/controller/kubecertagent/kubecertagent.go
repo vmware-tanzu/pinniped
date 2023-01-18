@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package kubecertagent provides controllers that ensure a pod (the kube-cert-agent), is
@@ -317,7 +317,7 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Load the certificate and key from the agent pod into our in-memory signer.
-	if err := c.loadSigningKey(newestAgentPod); err != nil {
+	if err := c.loadSigningKey(ctx.Context, newestAgentPod); err != nil {
 		return c.failStrategyAndErr(ctx.Context, credIssuer, firstErr(depErr, err), configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
@@ -341,14 +341,14 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	})
 }
 
-func (c *agentController) loadSigningKey(agentPod *corev1.Pod) error {
+func (c *agentController) loadSigningKey(ctx context.Context, agentPod *corev1.Pod) error {
 	// If we remember successfully loading the key from this pod recently, we can skip this step and return immediately.
 	if _, exists := c.execCache.Get(agentPod.UID); exists {
 		return nil
 	}
 
 	// Exec into the agent pod and cat out the certificate and the key.
-	outputJSON, err := c.executor.Exec(agentPod.Namespace, agentPod.Name, "pinniped-concierge-kube-cert-agent", "print")
+	outputJSON, err := c.executor.Exec(ctx, agentPod.Namespace, agentPod.Name, "pinniped-concierge-kube-cert-agent", "print")
 	if err != nil {
 		return fmt.Errorf("could not exec into agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}

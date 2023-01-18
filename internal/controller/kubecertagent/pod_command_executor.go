@@ -1,10 +1,11 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
 
 import (
 	"bytes"
+	"context"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -15,7 +16,7 @@ import (
 
 // PodCommandExecutor can exec a command in a pod located via namespace and name.
 type PodCommandExecutor interface {
-	Exec(podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
+	Exec(ctx context.Context, podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
 }
 
 type kubeClientPodCommandExecutor struct {
@@ -31,8 +32,7 @@ func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.
 	return &kubeClientPodCommandExecutor{kubeConfig: kubeConfig, kubeClient: kubeClient}
 }
 
-func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string, commandAndArgs ...string) (string, error) {
-	// TODO: see if we can add a timeout or make this cancelable somehow
+func (s *kubeClientPodCommandExecutor) Exec(ctx context.Context, podNamespace string, podName string, commandAndArgs ...string) (string, error) {
 	request := s.kubeClient.
 		CoreV1().
 		RESTClient().
@@ -55,7 +55,7 @@ func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string,
 	}
 
 	var stdoutBuf bytes.Buffer
-	if err := executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf}); err != nil {
+	if err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{Stdout: &stdoutBuf}); err != nil {
 		return "", err
 	}
 	return stdoutBuf.String(), nil

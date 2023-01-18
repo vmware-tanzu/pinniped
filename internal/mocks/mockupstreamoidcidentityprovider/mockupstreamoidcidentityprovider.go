@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -86,6 +86,20 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetAdditionalAuthcodeParams() map[st
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetAdditionalAuthcodeParams() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAdditionalAuthcodeParams", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetAdditionalAuthcodeParams))
+}
+
+// GetAdditionalClaimMappings mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) GetAdditionalClaimMappings() map[string]string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAdditionalClaimMappings")
+	ret0, _ := ret[0].(map[string]string)
+	return ret0
+}
+
+// GetAdditionalClaimMappings indicates an expected call of GetAdditionalClaimMappings.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetAdditionalClaimMappings() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAdditionalClaimMappings", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetAdditionalClaimMappings))
 }
 
 // GetAuthorizationURL mocks base method.

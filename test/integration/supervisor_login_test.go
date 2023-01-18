@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -226,6 +226,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		wantDownstreamIDTokenUsernameToMatch func(username string) string
 		// The expected ID token groups claim value, for the original ID token and the refreshed ID token.
 		wantDownstreamIDTokenGroups []string
+		// The expected ID token additional claims, which will be nested under claim "additionalClaims",
+		// for the original ID token and the refreshed ID token.
+		wantDownstreamIDTokenAdditionalClaims map[string]interface{}
 
 		// Want the authorization endpoint to redirect to the callback with this error type.
 		// The rest of the flow will be skipped since the initial authorization failed.
@@ -365,6 +368,67 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+		{
+			name:      "oidc with CLI password flow with additional claim mappings",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AllowPasswordGrant: true,                                        // allow the CLI password flow for this OIDCIdentityProvider
+					AdditionalScopes:   env.SupervisorUpstreamOIDC.AdditionalScopes, // ask for the groups claim so we can use it in additionalClaimMappings below
+				}
+				spec.Claims.AdditionalClaimMappings = map[string]string{
+					"upstream_issuer✅":  "iss",
+					"upstream_username": env.SupervisorUpstreamOIDC.UsernameClaim,
+					"not_existing":      "not_existing_upstream_claim",
+					"upstream_groups":   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamOIDC.Username, // username to present to server during login
+					env.SupervisorUpstreamOIDC.Password, // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
+				"upstream_username": env.SupervisorUpstreamOIDC.Username,
+			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
+		},
+		{
+			name:      "oidc with default username and groups claim settings with additional claim mappings",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes, // ask for the groups claim so we can use it in additionalClaimMappings below
+				}
+				spec.Claims.AdditionalClaimMappings = map[string]string{
+					"upstream_issuer✅":  "iss",
+					"upstream_username": env.SupervisorUpstreamOIDC.UsernameClaim,
+					"not_existing":      "not_existing_upstream_claim",
+					"upstream_groups":   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
+				"upstream_username": env.SupervisorUpstreamOIDC.Username,
+			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
 		},
 		{
 			name:      "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
@@ -1319,6 +1383,43 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
+			name:      "oidc upstream with downstream dynamic client happy path, requesting all scopes, with additional claims",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+					AdditionalClaimMappings: map[string]string{
+						"upstream_issuer✅":  "iss",
+						"upstream_username": env.SupervisorUpstreamOIDC.UsernameClaim,
+						"not_existing":      "not_existing_upstream_claim",
+						"upstream_groups":   env.SupervisorUpstreamOIDC.GroupsClaim,
+					},
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.PhaseReady)
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
+				"upstream_username": env.SupervisorUpstreamOIDC.Username,
+			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
+		},
+		{
 			name:      "ldap upstream with downstream dynamic client happy path, requesting all scopes",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
@@ -1663,6 +1764,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				tt.wantDownstreamIDTokenSubjectToMatch,
 				tt.wantDownstreamIDTokenUsernameToMatch,
 				tt.wantDownstreamIDTokenGroups,
+				tt.wantDownstreamIDTokenAdditionalClaims,
 				tt.wantAuthorizationErrorType,
 				tt.wantAuthorizationErrorDescription,
 				tt.wantAuthcodeExchangeError,
@@ -1670,6 +1772,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			)
 		})
 	}
+}
+
+func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]interface{}, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]interface{} {
+	if len(wantGroups) > 0 {
+		var wantGroupsAnyType []interface{}
+		for _, group := range wantGroups {
+			wantGroupsAnyType = append(wantGroupsAnyType, group)
+		}
+		additionalClaims[wantGroupsAdditionalClaimName] = wantGroupsAnyType
+	}
+	return additionalClaims
 }
 
 func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
@@ -1805,6 +1918,7 @@ func testSupervisorLogin(
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
+	wantDownstreamIDTokenAdditionalClaims map[string]interface{},
 	wantAuthorizationErrorType string,
 	wantAuthorizationErrorDescription string,
 	wantAuthcodeExchangeError string,
@@ -2015,15 +2129,27 @@ func testSupervisorLogin(
 		// If the test wants the groups scope to have been granted, then also expect the claim in the ID token.
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "groups")
 	}
-	verifyTokenResponse(t,
-		tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
-		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
+	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
+		expectedIDTokenClaims = append(expectedIDTokenClaims, "additionalClaims")
+	}
+	initialIDTokenClaims := verifyTokenResponse(
+		t,
+		tokenResponse,
+		discovery,
+		downstreamOAuth2Config,
+		nonceParam,
+		expectedIDTokenClaims,
+		wantDownstreamIDTokenSubjectToMatch,
+		wantDownstreamIDTokenUsernameToMatch(username),
+		wantDownstreamIDTokenGroups,
+		wantDownstreamIDTokenAdditionalClaims,
+	)
 
 	// token exchange on the original token
 	if requestTokenExchangeAud == "" {
 		requestTokenExchangeAud = "some-cluster-123" // use a default test value
 	}
-	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, tokenResponse, httpClient, discovery, wantTokenExchangeResponse, initialIDTokenClaims)
 
 	wantRefreshedGroups := wantDownstreamIDTokenGroups
 	if editRefreshSessionDataWithoutBreaking != nil {
@@ -2063,16 +2189,28 @@ func testSupervisorLogin(
 		// If the test wants the groups scope to have been granted, then also expect the claim in the refreshed ID token.
 		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "groups")
 	}
-	verifyTokenResponse(t,
-		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantRefreshedGroups)
+	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
+		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "additionalClaims")
+	}
+	refreshedIDTokenClaims := verifyTokenResponse(
+		t,
+		refreshedTokenResponse,
+		discovery,
+		downstreamOAuth2Config,
+		"",
+		expectRefreshedIDTokenClaims,
+		wantDownstreamIDTokenSubjectToMatch,
+		wantDownstreamIDTokenUsernameToMatch(username),
+		wantRefreshedGroups,
+		wantDownstreamIDTokenAdditionalClaims,
+	)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
 	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
 
 	// token exchange on the refreshed token
-	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse)
+	doTokenExchange(t, requestTokenExchangeAud, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery, wantTokenExchangeResponse, refreshedIDTokenClaims)
 
 	// Now that we have successfully performed a refresh, let's test what happens when an
 	// upstream refresh fails during the next downstream refresh.
@@ -2126,8 +2264,10 @@ func verifyTokenResponse(
 	downstreamOAuth2Config oauth2.Config,
 	nonceParam nonce.Nonce,
 	expectedIDTokenClaims []string,
-	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
-) {
+	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
+	wantDownstreamIDTokenGroups []string,
+	wantDownstreamIDTokenAdditionalClaims map[string]interface{},
+) map[string]interface{} {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -2171,6 +2311,13 @@ func verifyTokenResponse(
 	// Check the groups claim.
 	require.ElementsMatch(t, wantDownstreamIDTokenGroups, idTokenClaims["groups"])
 
+	// Check the "additionalClaims" claim.
+	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
+		require.Equal(t, wantDownstreamIDTokenAdditionalClaims, idTokenClaims["additionalClaims"])
+	} else {
+		require.NotContains(t, idTokenClaims, "additionalClaims", "additionalClaims claim should not be present when no sub claims are expected")
+	}
+
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)
 	require.Equal(t, "bearer", tokenResponse.TokenType)
@@ -2188,6 +2335,8 @@ func verifyTokenResponse(
 	actualAccessTokenHashClaimValue := idTokenClaims["at_hash"]
 	require.NotEmpty(t, actualAccessTokenHashClaimValue)
 	require.Equal(t, hashAccessToken(tokenResponse.AccessToken), actualAccessTokenHashClaimValue)
+
+	return idTokenClaims
 }
 
 func hashAccessToken(accessToken string) string {
@@ -2400,6 +2549,7 @@ func doTokenExchange(
 	httpClient *http.Client,
 	provider *coreosoidc.Provider,
 	wantTokenExchangeResponse func(t *testing.T, status int, body string),
+	previousIDTokenClaims map[string]interface{},
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -2443,6 +2593,7 @@ func doTokenExchange(
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&respBody))
 
+	// Note that this validates the "aud" claim, among other things.
 	var clusterVerifier = provider.Verifier(&coreosoidc.Config{ClientID: requestTokenExchangeAud})
 	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
 	require.NoError(t, err)
@@ -2452,6 +2603,18 @@ func doTokenExchange(
 	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
 	require.NoError(t, err)
 	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
+
+	// Some claims should be identical to the previously issued ID token.
+	require.Equal(t, previousIDTokenClaims["iss"], claims["iss"])
+	require.Equal(t, previousIDTokenClaims["sub"], claims["sub"])
+	require.Equal(t, previousIDTokenClaims["username"], claims["username"])
+	require.Equal(t, previousIDTokenClaims["groups"], claims["groups"])                     // may be nil in some test cases
+	require.Equal(t, previousIDTokenClaims["additionalClaims"], claims["additionalClaims"]) // may be nil in some test cases
+	require.Equal(t, previousIDTokenClaims["auth_time"], claims["auth_time"])
+	require.Contains(t, claims, "rat") // requested at
+	require.Contains(t, claims, "iat") // issued at
+	require.Contains(t, claims, "exp") // expires at
+	require.Contains(t, claims, "jti") // JWT ID
 
 	// The original client ID should be preserved in the azp claim, therefore preserving this information
 	// about the original source of the authorization for tracing/auditing purposes, since the "aud" claim

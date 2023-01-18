@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidctestutil
@@ -164,6 +164,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	GroupsClaim              string
 	Scopes                   []string
 	AdditionalAuthcodeParams map[string]string
+	AdditionalClaimMappings  map[string]string
 	AllowPasswordGrant       bool
 
 	ExchangeAuthcodeAndValidateTokensFunc func(
@@ -205,6 +206,10 @@ func (u *TestUpstreamOIDCIdentityProvider) GetResourceUID() types.UID {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalAuthcodeParams() map[string]string {
 	return u.AdditionalAuthcodeParams
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalClaimMappings() map[string]string {
+	return u.AdditionalClaimMappings
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
@@ -630,6 +635,7 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	authorizationURL                     url.URL
 	hasUserInfoURL                       bool
 	additionalAuthcodeParams             map[string]string
+	additionalClaimMappings              map[string]string
 	allowPasswordGrant                   bool
 	authcodeExchangeErr                  error
 	passwordGrantErr                     error
@@ -716,6 +722,11 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAdditionalAuthcodeParams(p
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithAdditionalClaimMappings(m map[string]string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.additionalClaimMappings = m
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRefreshToken(token string) *TestUpstreamOIDCIdentityProviderBuilder {
 	u.refreshToken = &oidctypes.RefreshToken{Token: token}
 	return u
@@ -792,6 +803,7 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 		AuthorizationURL:         u.authorizationURL,
 		UserInfoURL:              u.hasUserInfoURL,
 		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
+		AdditionalClaimMappings:  u.additionalClaimMappings,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
@@ -934,6 +946,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantDownstreamAdditionalClaims map[string]interface{},
 ) {
 	t.Helper()
 
@@ -972,6 +985,7 @@ func RequireAuthCodeRegexpMatch(
 		wantDownstreamClientID,
 		wantDownstreamRedirectURI,
 		wantCustomSessionData,
+		wantDownstreamAdditionalClaims,
 	)
 
 	// One PKCE should have been stored.
@@ -1011,6 +1025,7 @@ func includesOpenIDScope(scopes []string) bool {
 	return false
 }
 
+//nolint:funlen
 func validateAuthcodeStorage(
 	t *testing.T,
 	oauthStore fositestoragei.AllFositeStorage,
@@ -1023,6 +1038,7 @@ func validateAuthcodeStorage(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantDownstreamAdditionalClaims map[string]interface{},
 ) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
@@ -1066,6 +1082,10 @@ func validateAuthcodeStorage(
 	require.Equal(t, wantDownstreamClientID, actualClaims.Extra["azp"])
 	wantDownstreamIDTokenExtraClaimsCount := 1 // should always have azp claim
 
+	if len(wantDownstreamAdditionalClaims) > 0 {
+		wantDownstreamIDTokenExtraClaimsCount++
+	}
+
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
 	if wantDownstreamIDTokenUsername == "" {
@@ -1085,6 +1105,14 @@ func validateAuthcodeStorage(
 		actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
 		require.Nil(t, actualDownstreamIDTokenGroups)
 	}
+	if len(wantDownstreamAdditionalClaims) > 0 {
+		actualAdditionalClaims, ok := actualClaims.Get("additionalClaims").(map[string]interface{})
+		require.True(t, ok, "expected additionalClaims to be a map[string]interface{}")
+		require.Equal(t, wantDownstreamAdditionalClaims, actualAdditionalClaims)
+	} else {
+		require.NotContains(t, actualClaims.Extra, "additionalClaims", "additionalClaims must not be present when there are no wanted additional claims")
+	}
+
 	// Make sure that we asserted on every extra claim.
 	require.Len(t, actualClaims.Extra, wantDownstreamIDTokenExtraClaimsCount)
 

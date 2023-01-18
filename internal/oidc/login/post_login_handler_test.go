@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -1027,6 +1027,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
+					map[string]interface{}{},
 				)
 			case tt.wantRedirectToLoginPageError != "":
 				// Expecting an error redirect to the login UI page.
@@ -1062,6 +1063,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
+					map[string]interface{}{},
 				)
 			default:
 				require.Failf(t, "test should have expected a redirect or form body",

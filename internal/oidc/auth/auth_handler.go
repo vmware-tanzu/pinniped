@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides a handler for the OIDC authorization endpoint.
@@ -150,7 +150,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	groups := authenticateResponse.User.GetGroups()
 	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
 	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
+		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
 	return nil
@@ -243,6 +243,8 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
+	additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+
 	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token, username)
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
@@ -252,7 +254,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	}
 
 	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData)
+		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, additionalClaims)
 
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 

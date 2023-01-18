@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -505,7 +505,7 @@ func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, superviso
       "response_types_supported": ["code"],
       "response_modes_supported": ["query", "form_post"],
       "code_challenge_methods_supported": ["S256"],
-      "claims_supported": ["username", "groups"],
+      "claims_supported": ["username", "groups", "additionalClaims"],
       "discovery.supervisor.pinniped.dev/v1alpha1": {"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"},
       "subject_types_supported": ["public"],
       "id_token_signing_alg_values_supported": ["ES256"]

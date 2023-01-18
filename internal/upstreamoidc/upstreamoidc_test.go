@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamoidc
@@ -68,6 +68,16 @@ func TestProviderConfig(t *testing.T) {
 			rawClaims: []byte(`{`),
 		}
 		require.False(t, p.HasUserInfoURL())
+
+		// AdditionalAuthcodeParams defaults to empty
+		require.Empty(t, p.AdditionalAuthcodeParams)
+		p.AdditionalAuthcodeParams = map[string]string{"additional": "authcodeParams"}
+		require.Equal(t, p.GetAdditionalAuthcodeParams(), map[string]string{"additional": "authcodeParams"})
+
+		// AdditionalClaimMappings defaults to empty
+		require.Empty(t, p.AdditionalClaimMappings)
+		p.AdditionalClaimMappings = map[string]string{"additional": "claimMappings"}
+		require.Equal(t, p.GetAdditionalClaimMappings(), map[string]string{"additional": "claimMappings"})
 	})
 
 	const (

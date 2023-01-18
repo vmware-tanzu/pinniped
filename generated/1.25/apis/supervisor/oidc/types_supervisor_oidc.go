@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -39,6 +39,10 @@ const (
 	// IDTokenClaimGroups is the name of a custom claim in the downstream ID token whose value will contain the user's
 	// group names which were mapped from the upstream identity provider.
 	IDTokenClaimGroups = "groups"
+
+	// IDTokenClaimAdditionalClaims is the top level claim used to hold additional claims in the downstream ID
+	// token, if any claims are present.
+	IDTokenClaimAdditionalClaims = "additionalClaims"
 
 	// GrantTypeAuthorizationCode is the name of the grant type for authorization code flows defined by the OIDC spec.
 	GrantTypeAuthorizationCode = "authorization_code"

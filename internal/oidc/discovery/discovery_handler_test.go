@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package discovery
@@ -47,7 +47,7 @@ func TestDiscovery(t *testing.T) {
 				"token_endpoint_auth_methods_supported": ["client_secret_basic"],
 				"scopes_supported": ["openid", "offline_access", "pinniped:request-audience", "username", "groups"],
 				"code_challenge_methods_supported": ["S256"],
-				"claims_supported": ["username", "groups"],
+				"claims_supported": ["username", "groups", "additionalClaims"],
 				"discovery.supervisor.pinniped.dev/v1alpha1": {
 					"pinniped_identity_providers_endpoint": "https://some-issuer.com/some/path/v1alpha1/pinniped_identity_providers"
 				}

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcupstreamwatcher implements a controller which watches OIDCIdentityProviders.
@@ -215,6 +215,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		GroupsClaim:              upstream.Spec.Claims.Groups,
 		AllowPasswordGrant:       authorizationConfig.AllowPasswordGrant,
 		AdditionalAuthcodeParams: additionalAuthcodeAuthorizeParameters,
+		AdditionalClaimMappings:  upstream.Spec.Claims.AdditionalClaimMappings,
 		ResourceUID:              upstream.UID,
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package token
@@ -285,19 +285,16 @@ type tokenEndpointResponseExpectedValues struct {
 	wantUpstreamOIDCValidateTokenCall *expectedUpstreamValidateTokens
 	wantCustomSessionDataStored       *psession.CustomSessionData
 	wantWarnings                      []RecordedWarning
+	wantAdditionalClaims              map[string]interface{}
 }
 
 type authcodeExchangeInputs struct {
-	modifyAuthRequest  func(authRequest *http.Request)
-	modifyTokenRequest func(tokenRequest *http.Request, authCode string)
-	modifyStorage      func(
-		t *testing.T,
-		s fositestoragei.AllFositeStorage,
-		authCode string,
-	)
-	makeOathHelper    OauthHelperFactoryFunc
-	customSessionData *psession.CustomSessionData
-	want              tokenEndpointResponseExpectedValues
+	modifyAuthRequest             func(authRequest *http.Request)
+	modifyTokenRequest            func(tokenRequest *http.Request, authCode string)
+	makeJwksSigningKeyAndProvider MakeJwksSigningKeyAndProviderFunc
+	customSessionData             *psession.CustomSessionData
+	modifySession                 func(*psession.PinnipedSession)
+	want                          tokenEndpointResponseExpectedValues
 }
 
 func addFullyCapableDynamicClientAndSecretToKubeResources(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
@@ -345,6 +342,43 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			},
 		},
 		{
+			name: "request is valid and tokens are issued with additional claims",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email username groups") },
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "profile", "email", "username", "groups"},
+					wantGrantedScopes:     []string{"openid", "username", "groups"},
+					wantUsername:          goodUsername,
+					wantGroups:            goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				},
+			},
+		},
+		{
 			name:          "request is valid and tokens are issued for dynamic client",
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			authcodeExchange: authcodeExchangeInputs{
@@ -361,6 +395,48 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+				},
+			},
+		},
+		{
+			name:          "request is valid and tokens are issued for dynamic client with additional claims",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience username groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantUsername:          goodUsername,
+					wantGroups:            goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
 				},
 			},
 		},
@@ -788,7 +864,9 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 		{
 			name: "private signing key for JWTs has not yet been provided by the controller who is responsible for dynamically providing it",
 			authcodeExchange: authcodeExchangeInputs{
-				makeOathHelper: makeOauthHelperWithNilPrivateJWTSigningKey,
+				makeJwksSigningKeyAndProvider: func(t *testing.T, issuer string) (*ecdsa.PrivateKey, jwks.DynamicJWKSProvider) {
+					return nil, jwks.NewDynamicJWKSProvider()
+				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusServiceUnavailable,
 					wantErrorResponseBody: fositeTemporarilyUnavailableErrorBody,
@@ -870,7 +948,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 				test.authcodeExchange.want.wantClientID,
 				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes,
 				test.authcodeExchange.want.wantUsername, test.authcodeExchange.want.wantGroups,
-				nil, approxRequestTime)
+				nil, test.authcodeExchange.want.wantAdditionalClaims, approxRequestTime)
 
 			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -942,6 +1020,47 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:        http.StatusOK,
 		},
 		{
+			name: "happy path with additional claims",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
+				},
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          pinnipedCLIClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantUsername:          goodUsername,
+					wantGroups:            goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				},
+			},
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
+		},
+		{
 			name: "happy path without requesting username and groups scopes",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
@@ -964,6 +1083,56 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			name:             "happy path with dynamic client",
 			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
 			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
+		},
+		{
+			name:          "happy path with dynamic client and additional claims",
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					addDynamicClientIDToFormPostBody(authRequest)
+					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
+				},
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantClientID:          dynamicClientID,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantUsername:          goodUsername,
+					wantGroups:            goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				},
+			},
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
 			},
@@ -1389,8 +1558,11 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
 				},
 				// Fail to fetch a JWK signing key after the authcode exchange has happened.
-				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
-				want:           successfulAuthCodeExchange,
+				makeJwksSigningKeyAndProvider: func(t *testing.T, issuer string) (*ecdsa.PrivateKey, jwks.DynamicJWKSProvider) {
+					jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
+					return jwtSigningKey, &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}
+				},
+				want: successfulAuthCodeExchange,
 			},
 			requestedAudience:     "some-workload-cluster",
 			wantStatus:            http.StatusServiceUnavailable,
@@ -1481,6 +1653,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			if test.authcodeExchange.want.wantGroups != nil {
 				idTokenFields = append(idTokenFields, "groups")
 			}
+			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
+				idTokenFields = append(idTokenFields, "additionalClaims")
+			}
 			require.ElementsMatch(t, idTokenFields, getMapKeys(tokenClaims))
 
 			// Assert that the returned token has expected claims values.
@@ -1505,11 +1680,22 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				require.Nil(t, tokenClaims["groups"])
 			}
 
+			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
+				require.Equal(t, test.authcodeExchange.want.wantAdditionalClaims, tokenClaims["additionalClaims"])
+			}
+			additionalClaims, ok := tokenClaims["additionalClaims"].(map[string]interface{})
+			if ok && tokenClaims["additionalClaims"] != nil {
+				require.True(t, len(additionalClaims) > 0, "additionalClaims may never be present and empty in the id token")
+			}
+
 			// Also assert that some are the same as the original downstream ID token.
 			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
 			requireClaimsAreEqual(t, "sub", claimsOfFirstIDToken, tokenClaims)       // subject
 			requireClaimsAreEqual(t, "rat", claimsOfFirstIDToken, tokenClaims)       // requested at
 			requireClaimsAreEqual(t, "auth_time", claimsOfFirstIDToken, tokenClaims) // auth time
+			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
+				requireClaimsAreEqual(t, "additionalClaims", claimsOfFirstIDToken, tokenClaims)
+			}
 
 			// Also assert which are the different from the original downstream ID token.
 			requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, tokenClaims) // JWT ID
@@ -1691,6 +1877,12 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
+	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantAdditionalClaims map[string]interface{}) tokenEndpointResponseExpectedValues {
+		want := happyRefreshTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored, expectToValidateToken)
+		want.wantAdditionalClaims = wantAdditionalClaims
+		return want
+	}
+
 	happyRefreshTokenResponseForLDAP := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
 		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
@@ -1784,6 +1976,69 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
+			name: "happy path refresh grant with openid scope granted (id token returned) and additionalClaims",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantClientID:                pinnipedCLIClientID,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "username", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
+					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+					wantUsername:                goodUsername,
+					wantGroups:                  goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+					map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				),
+			},
+		},
+		{
 			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
@@ -1808,6 +2063,75 @@ func TestRefreshGrant(t *testing.T) {
 				want: withWantDynamicClientID(happyRefreshTokenResponseForOpenIDAndOfflineAccess(
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				)),
+			},
+		},
+		{
+			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client with additional claims",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access username groups")
+				},
+				modifySession: func(session *psession.PinnipedSession) {
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999,
+						"upstreamObj": map[string]string{
+							"name": "value",
+						},
+					}
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantClientID:                dynamicClientID,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "username", "groups"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
+					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+					wantUsername:                goodUsername,
+					wantGroups:                  goodGroups,
+					wantAdditionalClaims: map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: modifyRefreshTokenRequestWithDynamicClientAuth,
+				want: withWantDynamicClientID(happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims(
+					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+					map[string]interface{}{
+						"upstreamString": "string value",
+						"upstreamBool":   true,
+						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamFloat":  42.0,
+						"upstreamInt":    999.0, // note: this is deserialized as float64
+						"upstreamObj": map[string]interface{}{
+							"name": "value",
+						},
+					},
 				)),
 			},
 		},
@@ -3852,16 +4176,13 @@ func exchangeAuthcodeForTokens(
 	var oauthHelper fosite.OAuth2Provider
 	// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
 	oauthStore = oidc.NewKubeStorage(secrets, oidcClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), bcrypt.MinCost)
-	if test.makeOathHelper != nil {
-		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore, test.customSessionData)
-	} else {
-		// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
-		oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.customSessionData)
+
+	if test.makeJwksSigningKeyAndProvider == nil {
+		test.makeJwksSigningKeyAndProvider = generateJWTSigningKeyAndJWKSProvider
 	}
 
-	if test.modifyStorage != nil {
-		test.modifyStorage(t, oauthStore, authCode)
-	}
+	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
+	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
 
 	subject = NewHandler(idps, oauthHelper)
 
@@ -3936,10 +4257,10 @@ func requireTokenEndpointBehavior(
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
 		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets, requestTime)
-		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, secrets, requestTime)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
 		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data and old username and groups from the initial login.
-		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, oldUsername, oldGroups, oldCustomSessionData, requestTime)
+		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, oldUsername, oldGroups, oldCustomSessionData, test.wantAdditionalClaims, requestTime)
 
 		expectedNumberOfRefreshTokenSessionsStored := 0
 		if wantRefreshToken {
@@ -3948,10 +4269,10 @@ func requireTokenEndpointBehavior(
 		expectedNumberOfIDSessionsStored := 0
 		if wantIDToken {
 			expectedNumberOfIDSessionsStored = 1
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, parsedResponseBody["access_token"].(string), requestTime)
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, parsedResponseBody["access_token"].(string), requestTime)
 		}
 		if wantRefreshToken {
-			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, secrets, requestTime)
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
 		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -4053,24 +4374,21 @@ func getFositeDataSignature(t *testing.T, data string) string {
 	return split[1]
 }
 
-type OauthHelperFactoryFunc func(
-	t *testing.T,
-	authRequest *http.Request,
-	store fositestoragei.AllFositeStorage,
-	initialCustomSessionData *psession.CustomSessionData,
-) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
+type MakeJwksSigningKeyAndProviderFunc func(t *testing.T, issuer string) (*ecdsa.PrivateKey, jwks.DynamicJWKSProvider)
 
 func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
 	store fositestoragei.AllFositeStorage,
+	makeJwksSigningKeyAndProvider MakeJwksSigningKeyAndProviderFunc,
 	initialCustomSessionData *psession.CustomSessionData,
+	modifySession func(session *psession.PinnipedSession),
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
-	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
+	jwtSigningKey, jwkProvider := makeJwksSigningKeyAndProvider(t, goodIssuer)
 	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData, modifySession)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
 
@@ -4087,40 +4405,13 @@ func (s *singleUseJWKProvider) GetJWKS(issuerName string) (jwks *jose.JSONWebKey
 	return s.DynamicJWKSProvider.GetJWKS(issuerName)
 }
 
-func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
-	t *testing.T,
-	authRequest *http.Request,
-	store fositestoragei.AllFositeStorage,
-	initialCustomSessionData *psession.CustomSessionData,
-) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
-	t.Helper()
-
-	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
-	return oauthHelper, authResponder.GetCode(), jwtSigningKey
-}
-
-func makeOauthHelperWithNilPrivateJWTSigningKey(
-	t *testing.T,
-	authRequest *http.Request,
-	store fositestoragei.AllFositeStorage,
-	initialCustomSessionData *psession.CustomSessionData,
-) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
-	t.Helper()
-
-	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
-	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData)
-	return oauthHelper, authResponder.GetCode(), nil
-}
-
 // Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
 func simulateAuthEndpointHavingAlreadyRun(
 	t *testing.T,
 	authRequest *http.Request,
 	oauthHelper fosite.OAuth2Provider,
 	initialCustomSessionData *psession.CustomSessionData,
+	modifySession func(session *psession.PinnipedSession),
 ) fosite.AuthorizeResponder {
 	// We only set the fields in the session that Fosite wants us to set.
 	ctx := context.Background()
@@ -4137,6 +4428,10 @@ func simulateAuthEndpointHavingAlreadyRun(
 		},
 		Custom: initialCustomSessionData,
 	}
+	if modifySession != nil {
+		modifySession(session)
+	}
+
 	authRequester, err := oauthHelper.NewAuthorizeRequest(ctx, authRequest)
 	require.NoError(t, err)
 	if strings.Contains(authRequest.Form.Get("scope"), "openid") {
@@ -4212,6 +4507,7 @@ func requireValidRefreshTokenStorage(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantAdditionalClaims map[string]interface{},
 	secrets v1.SecretInterface,
 	requestTime time.Time,
 ) {
@@ -4241,6 +4537,7 @@ func requireValidRefreshTokenStorage(
 		wantUsername,
 		wantGroups,
 		wantCustomSessionData,
+		wantAdditionalClaims,
 		requestTime,
 	)
 
@@ -4257,6 +4554,7 @@ func requireValidAccessTokenStorage(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantAdditionalClaims map[string]interface{},
 	secrets v1.SecretInterface,
 	requestTime time.Time,
 ) {
@@ -4305,6 +4603,7 @@ func requireValidAccessTokenStorage(
 		wantUsername,
 		wantGroups,
 		wantCustomSessionData,
+		wantAdditionalClaims,
 		requestTime,
 	)
 
@@ -4351,6 +4650,7 @@ func requireValidOIDCStorage(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantAdditionalClaims map[string]interface{},
 	requestTime time.Time,
 ) {
 	t.Helper()
@@ -4378,6 +4678,7 @@ func requireValidOIDCStorage(
 			wantUsername,
 			wantGroups,
 			wantCustomSessionData,
+			wantAdditionalClaims,
 			requestTime,
 		)
 	} else {
@@ -4397,6 +4698,7 @@ func requireValidStoredRequest(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
+	wantAdditionalClaims map[string]interface{},
 	requestTime time.Time,
 ) {
 	t.Helper()
@@ -4429,6 +4731,9 @@ func requireValidStoredRequest(
 		expectedExtra["groups"] = toSliceOfInterface(wantGroups)
 	}
 	expectedExtra["azp"] = wantClientID
+	if len(wantAdditionalClaims) > 0 {
+		expectedExtra["additionalClaims"] = wantAdditionalClaims
+	}
 	require.Equal(t, expectedExtra, claims.Extra)
 
 	// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -4518,6 +4823,7 @@ func requireValidIDToken(
 	wantNonceValueInIDToken bool,
 	wantUsernameInIDToken string,
 	wantGroupsInIDToken []string,
+	wantAdditionalClaims map[string]interface{},
 	actualAccessToken string,
 	requestTime time.Time,
 ) {
@@ -4532,18 +4838,19 @@ func requireValidIDToken(
 	token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, wantClientID, jwtSigningKey, idTokenString)
 
 	var claims struct {
-		Subject         string   `json:"sub"`
-		Audience        []string `json:"aud"`
-		Issuer          string   `json:"iss"`
-		JTI             string   `json:"jti"`
-		Nonce           string   `json:"nonce"`
-		AccessTokenHash string   `json:"at_hash"`
-		ExpiresAt       int64    `json:"exp"`
-		IssuedAt        int64    `json:"iat"`
-		RequestedAt     int64    `json:"rat"`
-		AuthTime        int64    `json:"auth_time"`
-		Groups          []string `json:"groups"`
-		Username        string   `json:"username"`
+		Subject          string                 `json:"sub"`
+		Audience         []string               `json:"aud"`
+		Issuer           string                 `json:"iss"`
+		JTI              string                 `json:"jti"`
+		Nonce            string                 `json:"nonce"`
+		AccessTokenHash  string                 `json:"at_hash"`
+		ExpiresAt        int64                  `json:"exp"`
+		IssuedAt         int64                  `json:"iat"`
+		RequestedAt      int64                  `json:"rat"`
+		AuthTime         int64                  `json:"auth_time"`
+		Groups           []string               `json:"groups"`
+		Username         string                 `json:"username"`
+		AdditionalClaims map[string]interface{} `json:"additionalClaims"`
 	}
 
 	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "azp", "at_hash"}
@@ -4555,6 +4862,9 @@ func requireValidIDToken(
 	}
 	if wantGroupsInIDToken != nil {
 		idTokenFields = append(idTokenFields, "groups")
+	}
+	if len(wantAdditionalClaims) > 0 {
+		idTokenFields = append(idTokenFields, "additionalClaims")
 	}
 
 	// make sure that these are the only fields in the token
@@ -4573,6 +4883,8 @@ func requireValidIDToken(
 	require.Equal(t, wantClientID, m["azp"])
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
+	require.Equal(t, wantAdditionalClaims, claims.AdditionalClaims)
+	require.NotEqual(t, map[string]interface{}{}, claims.AdditionalClaims, "additionalClaims may never be present and empty in the id token")
 
 	if wantNonceValueInIDToken {
 		require.Equal(t, goodNonce, claims.Nonce)

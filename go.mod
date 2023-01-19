@@ -39,12 +39,12 @@ require (
 	golang.org/x/term v0.4.0
 	golang.org/x/text v0.6.0
 	gopkg.in/square/go-jose.v2 v2.6.0
-	k8s.io/api v0.26.0
+	k8s.io/api v0.26.1
 	k8s.io/apiextensions-apiserver v0.26.0
-	k8s.io/apimachinery v0.26.0
+	k8s.io/apimachinery v0.26.1
 	k8s.io/apiserver v0.26.0
-	k8s.io/client-go v0.26.0
-	k8s.io/component-base v0.26.0
+	k8s.io/client-go v0.26.1
+	k8s.io/component-base v0.26.1
 	k8s.io/gengo v0.0.0-20221011193443-fad74ee6edd9
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/kube-aggregator v0.26.0

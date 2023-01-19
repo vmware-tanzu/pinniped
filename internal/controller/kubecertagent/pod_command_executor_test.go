@@ -1,9 +1,10 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestSecureTLS(t *testing.T) {
 	// build this exactly like our production could does
 	podCommandExecutor := NewPodCommandExecutor(client.JSONConfig, client.Kubernetes)
 
-	got, err := podCommandExecutor.Exec("podNamespace", "podName", "command", "arg1", "arg2")
+	got, err := podCommandExecutor.Exec(context.Background(), "podNamespace", "podName", "command", "arg1", "arg2")
 	require.Equal(t, &errors.StatusError{}, err)
 	require.Empty(t, got)
 

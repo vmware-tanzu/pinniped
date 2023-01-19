@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -229,7 +229,7 @@ func TestAgentController(t *testing.T) {
 	}
 
 	mockExecSucceeds := func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-		executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+		executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 			Return(`{"tls.crt": "dGVzdC1jZXJ0", "tls.key": "dGVzdC1rZXk="}`, nil) // "test-cert" / "test-key"
 		dynamicCert.SetCertKeyContent([]byte("test-cert"), []byte("test-key")).
 			Return(nil)
@@ -740,7 +740,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return("", fmt.Errorf("some exec error")).
 					AnyTimes()
 			},
@@ -769,7 +769,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return("bogus-data", nil).
 					AnyTimes()
 			},
@@ -798,7 +798,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return(`{"tls.crt": "invalid"}`, nil).
 					AnyTimes()
 			},
@@ -827,7 +827,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return(`{"tls.crt": "dGVzdAo=", "tls.key": "invalid"}`, nil).
 					AnyTimes()
 			},
@@ -856,7 +856,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return(`{"tls.crt": "dGVzdC1jZXJ0", "tls.key": "dGVzdC1rZXk="}`, nil). // "test-cert" / "test-key"
 					AnyTimes()
 				dynamicCert.SetCertKeyContent([]byte("test-cert"), []byte("test-key")).

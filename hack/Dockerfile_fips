@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2022 the Pinniped contributors. All Rights Reserved.
+# Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # this dockerfile is used to produce a binary of Pinniped that uses
@@ -11,8 +11,11 @@
 # using this dockerfile.  Using this dockerfile does not convey
 # any type of fips certification.
 
-# use go-boringcrypto rather than main go
-FROM us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto/golang:1.18.10b7 as build-env
+# Starting in 1.19, go-boringcrypto has been added to the main Go toolchain,
+# hidden behind a `GOEXPERIMENT=boringcrypto` env var.
+# See https://go.googlesource.com/go/+/dev.boringcrypto/README.boringcrypto.md
+# and https://kupczynski.info/posts/fips-golang/ for details.
+FROM golang:1.19.5 as build-env
 
 WORKDIR /work
 COPY . .
@@ -46,7 +49,7 @@ ARG GOPROXY
 # since we would not be able to ship windows and macOS binaries.
 RUN \
   mkdir out && \
-  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 && \
+  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOEXPERIMENT=boringcrypto && \
   go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
   go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \

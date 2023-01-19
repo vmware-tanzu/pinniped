@@ -24,8 +24,7 @@ type Interface interface {
 	IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface
 }
 
-// Clientset contains the clients for groups. Each group has exactly one
-// version included in a Clientset.
+// Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clientsecretV1alpha1 *clientsecretv1alpha1.ClientsecretV1alpha1Client

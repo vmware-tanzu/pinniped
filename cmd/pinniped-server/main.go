@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main is the combined entrypoint for all Pinniped server components.
@@ -12,13 +12,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
 	concierge "go.pinniped.dev/internal/concierge/server"
+	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
 	_ "go.pinniped.dev/internal/crypto/ptls"
 	lua "go.pinniped.dev/internal/localuserauthenticator"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/psets"
 	supervisor "go.pinniped.dev/internal/supervisor/server"
 )
 
@@ -38,7 +37,7 @@ func main() {
 	}
 	binary := filepath.Base(os.Args[0])
 	if subcommands[binary] == nil {
-		fail(fmt.Errorf("must be invoked as one of %v, not %q", sets.StringKeySet(subcommands).List(), binary))
+		fail(fmt.Errorf("must be invoked as one of %v, not %q", psets.StringKeySet(subcommands).List(), binary))
 	}
 	subcommands[binary]()
 }

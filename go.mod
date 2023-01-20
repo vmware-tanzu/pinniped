@@ -1,6 +1,6 @@
 module go.pinniped.dev
 
-go 1.17
+go 1.18
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1

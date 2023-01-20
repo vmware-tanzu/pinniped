@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package certauthority
@@ -206,6 +206,7 @@ func TestPool(t *testing.T) {
 	require.NoError(t, err)
 
 	pool := ca.Pool()
+	//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 	require.Len(t, pool.Subjects(), 1)
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
@@ -41,6 +41,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
+				//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
@@ -69,6 +70,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 
 				certKey.UnsetCertKeyContent()
 
+				//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
@@ -87,6 +89,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				cert, err := tls.X509KeyPair(certPEM, keyPEM)
 				require.NoError(t, err)
 
+				//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 				return newCA.Pool().Subjects(), []tls.Certificate{cert}
 			},
 		},
@@ -110,6 +113,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				ok := pool.AppendCertsFromPEM(ca.CurrentCABundleContent())
 				require.True(t, ok, "should have valid non-empty CA bundle")
 
+				//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 				return pool.Subjects(), []tls.Certificate{cert}
 			},
 		},
@@ -137,6 +141,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				err = ca.SetCertKeyContent(newOtherCA.Bundle(), caKey)
 				require.NoError(t, err)
 
+				//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 				return newOtherCA.Pool().Subjects(), []tls.Certificate{cert}
 			},
 		},
@@ -221,6 +226,7 @@ func poolSubjects(pool *x509.CertPool) [][]byte {
 	if pool == nil {
 		return nil
 	}
+	//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 	return pool.Subjects()
 }
 

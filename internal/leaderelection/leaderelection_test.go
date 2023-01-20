@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package leaderelection
@@ -6,11 +6,11 @@ package leaderelection
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubefake "k8s.io/client-go/kubernetes/fake"
@@ -63,7 +63,7 @@ func Test_releaseLock_Update(t *testing.T) {
 			t.Parallel()
 
 			internalClient := kubefake.NewSimpleClientset()
-			isLeader := &isLeaderTracker{tracker: atomic.NewBool(false)}
+			isLeader := &isLeaderTracker{tracker: &atomic.Bool{}}
 
 			leaderElectorCtx, cancel := context.WithCancel(context.Background())
 

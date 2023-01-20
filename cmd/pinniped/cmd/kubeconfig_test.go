@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -107,7 +107,7 @@ func TestGetKubeconfig(t *testing.T) {
 		wantLogs                func(string, string) []string
 		wantError               bool
 		wantStdout              func(string, string) string
-		wantStderr              func(string, string) string
+		wantStderr              func(string, string) testutil.RequireErrorStringFunc
 		wantOptionsCount        int
 		wantAPIGroupSuffix      string
 	}{
@@ -164,8 +164,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: invalid argument "./does/not/exist" for "--oidc-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: invalid argument "./does/not/exist" for "--oidc-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory` + "\n")
 			},
 		},
 		{
@@ -177,8 +177,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: invalid argument "./does/not/exist" for "--concierge-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: invalid argument "./does/not/exist" for "--concierge-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory` + "\n")
 			},
 		},
 		{
@@ -189,8 +189,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not load --kubeconfig: stat ./does/not/exist: no such file or directory` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not load --kubeconfig: stat ./does/not/exist: no such file or directory` + "\n")
 			},
 		},
 		{
@@ -202,8 +202,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not load --kubeconfig/--kubeconfig-context: no such context "invalid"` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not load --kubeconfig/--kubeconfig-context: no such context "invalid"` + "\n")
 			},
 		},
 		{
@@ -215,8 +215,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not load --kubeconfig/--kubeconfig-context: no such cluster "invalid-cluster"` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not load --kubeconfig/--kubeconfig-context: no such cluster "invalid-cluster"` + "\n")
 			},
 		},
 		{
@@ -228,8 +228,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not load --kubeconfig/--kubeconfig-context: no such user "invalid-user"` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not load --kubeconfig/--kubeconfig-context: no such user "invalid-user"` + "\n")
 			},
 		},
 		{
@@ -241,8 +241,8 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			getClientsetErr: fmt.Errorf("some kube error"),
 			wantError:       true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not configure Kubernetes client: some kube error` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not configure Kubernetes client: some kube error` + "\n")
 			},
 		},
 		{
@@ -253,8 +253,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no CredentialIssuers were found` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no CredentialIssuers were found` + "\n")
 			},
 		},
 		{
@@ -271,8 +271,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: credentialissuers.config.concierge.pinniped.dev "does-not-exist" not found` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: credentialissuers.config.concierge.pinniped.dev "does-not-exist" not found` + "\n")
 			},
 		},
 		{
@@ -295,8 +295,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: webhookauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: webhookauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found` + "\n")
 			},
 		},
 		{
@@ -319,8 +319,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: jwtauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: jwtauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found` + "\n")
 			},
 		},
 		{
@@ -343,8 +343,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: invalid authenticator type "invalid", supported values are "webhook" and "jwt"` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: invalid authenticator type "invalid", supported values are "webhook" and "jwt"` + "\n")
 			},
 		},
 		{
@@ -374,8 +374,8 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: failed to list JWTAuthenticator objects for autodiscovery: some list error` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: failed to list JWTAuthenticator objects for autodiscovery: some list error` + "\n")
 			},
 		},
 		{
@@ -405,8 +405,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: failed to list WebhookAuthenticator objects for autodiscovery: some list error` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: failed to list WebhookAuthenticator objects for autodiscovery: some list error` + "\n")
 			},
 		},
 		{
@@ -427,8 +427,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no authenticators were found` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no authenticators were found` + "\n")
 			},
 		},
 		{
@@ -457,8 +457,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified` + "\n")
 			},
 		},
 		{
@@ -491,8 +491,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not autodiscover --concierge-mode` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not autodiscover --concierge-mode` + "\n")
 			},
 		},
 		{
@@ -553,8 +553,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: autodiscovered Concierge CA bundle is invalid: illegal base64 data at input byte 7` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: autodiscovered Concierge CA bundle is invalid: illegal base64 data at input byte 7` + "\n")
 			},
 		},
 		{
@@ -580,8 +580,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not autodiscover --oidc-issuer and none was provided` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not autodiscover --oidc-issuer and none was provided` + "\n")
 			},
 		},
 		{
@@ -635,8 +635,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7` + "\n")
 			},
 		},
 		{
@@ -675,8 +675,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n")
 			},
 		},
 		{
@@ -706,8 +706,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: request audience is not allowed to include the substring '.pinniped.dev': some-test-audience.pinniped.dev-invalid-substring` + "\n")
 			},
 		},
 		{
@@ -738,8 +738,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: could not determine the Pinniped executable path: some OS error` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: could not determine the Pinniped executable path: some OS error` + "\n")
 			},
 		},
 		{
@@ -767,8 +767,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: only one of --static-token and --static-token-env can be specified` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: only one of --static-token and --static-token-env can be specified` + "\n")
 			},
 		},
 		{
@@ -779,8 +779,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')` + "\n")
 			},
 		},
 		{
@@ -811,8 +811,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: while fetching OIDC discovery data from issuer: 400 Bad Request: {}\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString("Error: while fetching OIDC discovery data from issuer: 400 Bad Request: {}\n")
 			},
 		},
 		{
@@ -847,8 +847,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return fmt.Sprintf(
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantSprintfErrorString(
 					"Error: while fetching OIDC discovery data from issuer: oidc: issuer did not match the issuer returned by provider, expected \"%s\" got \"https://wrong-issuer.com\"\n",
 					issuerURL)
 			},
@@ -882,8 +882,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: unable to fetch IDP discovery data from issuer: unexpected http response status: 400 Bad Request\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString("Error: unable to fetch IDP discovery data from issuer: unexpected http response status: 400 Bad Request\n")
 			},
 		},
 		{
@@ -920,10 +920,10 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: multiple Supervisor upstream identity providers were found, ` +
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: multiple Supervisor upstream identity providers were found, ` +
 					`so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified. ` +
-					`Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+					`Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -956,8 +956,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: while fetching OIDC discovery data from issuer: oidc: failed to decode provider discovery object: got Content-Type = application/json, but could not unmarshal as JSON: invalid character 'h' in literal true (expecting 'r')\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString("Error: while fetching OIDC discovery data from issuer: oidc: failed to decode provider discovery object: got Content-Type = application/json, but could not unmarshal as JSON: invalid character 'h' in literal true (expecting 'r')\n")
 			},
 		},
 		{
@@ -989,8 +989,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: unable to fetch IDP discovery data from issuer: could not parse response JSON: invalid character 'h' in literal true (expecting 'r')\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString("Error: unable to fetch IDP discovery data from issuer: could not parse response JSON: invalid character 'h' in literal true (expecting 'r')\n")
 			},
 		},
 		{
@@ -1025,8 +1025,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return fmt.Sprintf("Error: while fetching OIDC discovery data from issuer: Get \"%s/.well-known/openid-configuration\": %s\n", issuerURL, testutil.X509UntrustedCertError("Acme Co"))
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantX509UntrustedCertErrorString(fmt.Sprintf("Error: while fetching OIDC discovery data from issuer: Get \"%s/.well-known/openid-configuration\": %%s\n", issuerURL), "Acme Co")
 			},
 		},
 		{
@@ -1063,8 +1063,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: while fetching OIDC discovery data from issuer: parse "https%://bad-issuer-url/.well-known/openid-configuration": first path segment in URL cannot contain colon` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: while fetching OIDC discovery data from issuer: parse "https%://bad-issuer-url/.well-known/openid-configuration": first path segment in URL cannot contain colon` + "\n")
 			},
 		},
 		{
@@ -1102,8 +1102,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: while forming request to IDP discovery URL: parse "https%://illegal_url": first path segment in URL cannot contain colon` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: while forming request to IDP discovery URL: parse "https%://illegal_url": first path segment in URL cannot contain colon` + "\n")
 			},
 		},
 		{
@@ -1128,9 +1128,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no Supervisor upstream identity providers with name "does-not-exist-idp" of type "ldap" were found.` +
-					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"}]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no Supervisor upstream identity providers with name "does-not-exist-idp" of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"}]` + "\n")
 			},
 		},
 		{
@@ -1156,10 +1156,10 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: multiple Supervisor upstream identity providers of type "ldap" were found,` +
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: multiple Supervisor upstream identity providers of type "ldap" were found,` +
 					` so the --upstream-identity-provider-name flag must be specified.` +
-					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1184,10 +1184,10 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: multiple Supervisor upstream identity providers with name "my-idp" were found,` +
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: multiple Supervisor upstream identity providers with name "my-idp" were found,` +
 					` so the --upstream-identity-provider-type flag must be specified.` +
-					` Found these upstreams: [{"name":"my-idp","type":"ldap"},{"name":"my-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+					` Found these upstreams: [{"name":"my-idp","type":"ldap"},{"name":"my-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1211,9 +1211,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no Supervisor upstream identity providers of type "ldap" were found.` +
-					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no Supervisor upstream identity providers of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1236,9 +1236,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no Supervisor upstream identity providers of type "ldap" were found.` +
-					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no Supervisor upstream identity providers of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1262,9 +1262,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
-					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1287,9 +1287,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
-					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"}]` + "\n")
 			},
 		},
 		{
@@ -1312,9 +1312,9 @@ func TestGetKubeconfig(t *testing.T) {
 				]
 			}`),
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: no client flow "my-nonexistent-flow" for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found.` +
-					` Found these flows: [non-matching-flow-1 non-matching-flow-2]` + "\n"
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: no client flow "my-nonexistent-flow" for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found.` +
+					` Found these flows: [non-matching-flow-1 non-matching-flow-2]` + "\n")
 			},
 		},
 		{
@@ -3015,11 +3015,12 @@ func TestGetKubeconfig(t *testing.T) {
 			}
 			require.Equal(t, expectedStdout, stdout.String(), "unexpected stdout")
 
-			expectedStderr := ""
+			actualStderr := stderr.String()
 			if tt.wantStderr != nil {
-				expectedStderr = tt.wantStderr(issuerCABundle, issuerEndpoint)
+				testutil.RequireErrorString(t, actualStderr, tt.wantStderr(issuerCABundle, issuerEndpoint))
+			} else {
+				require.Empty(t, actualStderr, "unexpected stderr")
 			}
-			require.Equal(t, expectedStderr, stderr.String(), "unexpected stderr")
 		})
 	}
 }

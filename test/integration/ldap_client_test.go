@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -75,7 +75,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 		password            string
 		grantedScopes       []string
 		provider            *upstreamldap.Provider
-		wantError           string
+		wantError           testutil.RequireErrorStringFunc
 		wantAuthResponse    *authenticators.Response
 		wantUnauthenticated bool
 	}{
@@ -248,7 +248,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.UsernameAttribute = "dn"
 				p.UserSearch.Filter = ""
 			})),
-			wantError: `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+			wantError: testutil.WantExactErrorString(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`),
 		},
 		{
 			name:     "group search disabled",
@@ -352,21 +352,21 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.BindUsername = "invalid-dn" })),
-			wantError: `error binding as "invalid-dn" before user search: LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+			wantError: testutil.WantExactErrorString(`error binding as "invalid-dn" before user search: LDAP Result Code 34 "Invalid DN Syntax": invalid DN`),
 		},
 		{
 			name:      "when the bind user username is wrong",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.BindUsername = "cn=wrong,dc=pinniped,dc=dev" })),
-			wantError: `error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
+			wantError: testutil.WantExactErrorString(`error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `),
 		},
 		{
 			name:      "when the bind user password is wrong",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.BindPassword = "wrong-password" })),
-			wantError: `error binding as "cn=admin,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
+			wantError: testutil.WantExactErrorString(`error binding as "cn=admin,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `),
 		},
 		{
 			name:     "when the bind user username is wrong with StartTLS: example of an error after successful connection with StartTLS",
@@ -377,7 +377,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.BindUsername = "cn=wrong,dc=pinniped,dc=dev"
 			})),
-			wantError: `error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
+			wantError: testutil.WantExactErrorString(`error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `),
 		},
 		{
 			name:                "when the end user password is wrong",
@@ -405,14 +405,14 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "*" })),
-			wantError: `error searching for user: LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
+			wantError: testutil.WantExactErrorString(`error searching for user: LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`),
 		},
 		{
 			name:      "when the group search filter does not compile",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Filter = "*" })),
-			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
+			wantError: testutil.WantExactErrorString(`error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`),
 		},
 		{
 			name:     "when there are too many search results for the user",
@@ -421,14 +421,14 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.Filter = "objectClass=*" // overly broad search filter
 			})),
-			wantError: `error searching for user: LDAP Result Code 4 "Size Limit Exceeded": `,
+			wantError: testutil.WantExactErrorString(`error searching for user: LDAP Result Code 4 "Size Limit Exceeded": `),
 		},
 		{
 			name:      "when the server is unreachable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + unusedLocalhostPort })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
 		},
 		{
 			name:     "when the server is unreachable with StartTLS",
@@ -438,14 +438,14 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.Host = "127.0.0.1:" + unusedLocalhostPort
 				p.ConnectionProtocol = upstreamldap.StartTLS
 			})),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
 		},
 		{
 			name:      "when the server is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "too:many:ports" })),
-			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`,
+			wantError: testutil.WantExactErrorString(`error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`),
 		},
 		{
 			name:     "when the server is not parsable with StartTLS",
@@ -456,14 +456,14 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.Host = "too:many:ports"
 			})),
-			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`,
+			wantError: testutil.WantExactErrorString(`error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`),
 		},
 		{
 			name:      "when the CA bundle is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = []byte("invalid-pem") })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapsLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapsLocalhostPort),
 		},
 		{
 			name:     "when the CA bundle is not parsable with StartTLS",
@@ -474,14 +474,14 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.CABundle = []byte("invalid-pem")
 			})),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapLocalhostPort),
 		},
 		{
 			name:      "when the CA bundle does not cause the host to be trusted with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = nil })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": %s`, ldapsLocalhostPort, testutil.X509UntrustedCertError("Pinniped Test")),
+			wantError: testutil.WantX509UntrustedCertErrorString(fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": %%s`, ldapsLocalhostPort), "Pinniped Test"),
 		},
 		{
 			name:     "when the CA bundle does not cause the host to be trusted with StartTLS",
@@ -492,35 +492,35 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.CABundle = nil
 			})),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (%s)`, ldapLocalhostPort, testutil.X509UntrustedCertError("Pinniped Test")),
+			wantError: testutil.WantX509UntrustedCertErrorString(fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (%%s)`, ldapLocalhostPort), "Pinniped Test"),
 		},
 		{
 			name:      "when trying to use TLS to connect to a port which only supports StartTLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + ldapLocalhostPort })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": EOF`, ldapLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": EOF`, ldapLocalhostPort),
 		},
 		{
 			name:      "when trying to use StartTLS to connect to a port which only supports TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.ConnectionProtocol = upstreamldap.StartTLS })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: unexpected EOF`, ldapsLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: unexpected EOF`, ldapsLocalhostPort),
 		},
 		{
 			name:      "when the UsernameAttribute attribute has multiple values in the entry",
 			username:  "wally.ldap@example.com",
 			password:  "unused-because-error-is-before-bind",
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UsernameAttribute = "mail" })),
-			wantError: `found 2 values for attribute "mail" while searching for user "wally.ldap@example.com", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 2 values for attribute "mail" while searching for user "wally.ldap@example.com", but expected 1 result`),
 		},
 		{
 			name:      "when the UIDAttribute attribute has multiple values in the entry",
 			username:  "wally",
 			password:  "unused-because-error-is-before-bind",
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "mail" })),
-			wantError: `found 2 values for attribute "mail" while searching for user "wally", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 2 values for attribute "mail" while searching for user "wally", but expected 1 result`),
 		},
 		{
 			name:     "when the UsernameAttribute attribute is not found in the entry",
@@ -530,35 +530,35 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.Filter = "cn={}"
 				p.UserSearch.UsernameAttribute = "attr-does-not-exist"
 			})),
-			wantError: `found 0 values for attribute "attr-does-not-exist" while searching for user "wally", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "attr-does-not-exist" while searching for user "wally", but expected 1 result`),
 		},
 		{
 			name:      "when the UIDAttribute attribute is not found in the entry",
 			username:  "wally",
 			password:  "unused-because-error-is-before-bind",
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "attr-does-not-exist" })),
-			wantError: `found 0 values for attribute "attr-does-not-exist" while searching for user "wally", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "attr-does-not-exist" while searching for user "wally", but expected 1 result`),
 		},
 		{
 			name:      "when the UsernameAttribute has the wrong case",
 			username:  "Seal",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UsernameAttribute = "SN" })), // this is case-sensitive
-			wantError: `found 0 values for attribute "SN" while searching for user "Seal", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "SN" while searching for user "Seal", but expected 1 result`),
 		},
 		{
 			name:      "when the UIDAttribute has the wrong case",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "SN" })), // this is case-sensitive
-			wantError: `found 0 values for attribute "SN" while searching for user "pinny", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "SN" while searching for user "pinny", but expected 1 result`),
 		},
 		{
 			name:      "when the GroupNameAttribute has the wrong case",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.GroupNameAttribute = "CN" })), // this is case-sensitive
-			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "CN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "CN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`),
 		},
 		{
 			name:     "when the UsernameAttribute is DN and has the wrong case",
@@ -568,7 +568,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.UserSearch.UsernameAttribute = "DN" // dn must be lower-case
 				p.UserSearch.Filter = "cn={}"
 			})),
-			wantError: `found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`),
 		},
 		{
 			name:     "when the UIDAttribute is DN and has the wrong case",
@@ -577,7 +577,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.UIDAttribute = "DN" // dn must be lower-case
 			})),
-			wantError: `found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`),
 		},
 		{
 			name:     "when the GroupNameAttribute is DN and has the wrong case",
@@ -586,35 +586,35 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "DN" // dn must be lower-case
 			})),
-			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "DN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+			wantError: testutil.WantExactErrorString(`error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "DN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`),
 		},
 		{
 			name:      "when the user search base is invalid",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "invalid-base" })),
-			wantError: `error searching for user: LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+			wantError: testutil.WantExactErrorString(`error searching for user: LDAP Result Code 34 "Invalid DN Syntax": invalid DN`),
 		},
 		{
 			name:      "when the group search base is invalid",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "invalid-base" })),
-			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+			wantError: testutil.WantExactErrorString(`error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`),
 		},
 		{
 			name:      "when the user search base does not exist",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
-			wantError: `error searching for user: LDAP Result Code 32 "No Such Object": `,
+			wantError: testutil.WantExactErrorString(`error searching for user: LDAP Result Code 32 "No Such Object": `),
 		},
 		{
 			name:      "when the group search base does not exist",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
-			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 32 "No Such Object": `,
+			wantError: testutil.WantExactErrorString(`error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 32 "No Such Object": `),
 		},
 		{
 			name:                "when the user search base causes no search results",
@@ -635,7 +635,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  "",
 			provider:  upstreamldap.New(*providerConfig(nil)),
-			wantError: `error binding for user "pinny" using provided password against DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 206 "Empty password not allowed by the client": ldap: empty password not allowed by the client`,
+			wantError: testutil.WantExactErrorString(`error binding for user "pinny" using provided password against DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 206 "Empty password not allowed by the client": ldap: empty password not allowed by the client`),
 		},
 		{
 			name:                "when the user has no password in their entry",
@@ -655,8 +655,8 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password, tt.grantedScopes)
 
 			switch {
-			case tt.wantError != "":
-				require.EqualError(t, err, tt.wantError)
+			case tt.wantError != nil:
+				testutil.RequireErrorStringFromErr(t, err, tt.wantError)
 				require.False(t, authenticated, "expected the user not to be authenticated, but they were")
 				require.Nil(t, authResponse)
 			case tt.wantUnauthenticated:

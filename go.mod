@@ -124,7 +124,6 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
 	github.com/tdewolff/parse/v2 v2.6.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.5 // indirect

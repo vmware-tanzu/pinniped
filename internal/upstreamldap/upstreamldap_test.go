@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamldap
@@ -179,7 +179,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		searchMocks                func(conn *mockldapconn.MockConn)
 		bindEndUserMocks           func(conn *mockldapconn.MockConn)
 		dialError                  error
-		wantError                  string
+		wantError                  testutil.RequireErrorStringFunc
 		wantToSkipDial             bool
 		wantAuthResponse           *authenticators.Response
 		wantUnauthenticated        bool
@@ -711,7 +711,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					Return(exampleGroupSearchResult, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: "found 0 values for attribute \"some-attribute-to-check-during-refresh\" while searching for user \"some-upstream-username\", but expected 1 result",
+			wantError: testutil.WantExactErrorString("found 0 values for attribute \"some-attribute-to-check-during-refresh\" while searching for user \"some-upstream-username\", but expected 1 result"),
 		},
 		{
 			name:           "when dial fails",
@@ -719,7 +719,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
 			dialError:      errors.New("some dial error"),
-			wantError:      fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+			wantError:      testutil.WantSprintfErrorString(`error dialing host "%s": some dial error`, testHost),
 		},
 		{
 			name:     "when the UsernameAttribute is dn and there is not a user search filter provided",
@@ -730,7 +730,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				p.UserSearch.Filter = ""
 			}),
 			wantToSkipDial: true,
-			wantError:      `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+			wantError:      testutil.WantExactErrorString(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`),
 		},
 		{
 			name:           "when binding as the bind user returns an error",
@@ -741,7 +741,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error binding as "%s" before user search: some bind error`, testBindUsername),
+			wantError: testutil.WantSprintfErrorString(`error binding as "%s" before user search: some bind error`, testBindUsername),
 		},
 		{
 			name:           "when searching for the user returns an error",
@@ -753,7 +753,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch(nil)).Return(nil, errors.New("some user search error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: `error searching for user: some user search error`,
+			wantError: testutil.WantExactErrorString(`error searching for user: some user search error`),
 		},
 		{
 			name:           "when searching for the user's groups returns an error",
@@ -767,7 +767,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					Return(nil, errors.New("some group search error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error searching for group memberships for user with DN "%s": some group search error`, testUserSearchResultDNValue),
+			wantError: testutil.WantSprintfErrorString(`error searching for group memberships for user with DN "%s": some group search error`, testUserSearchResultDNValue),
 		},
 		{
 			name:           "when searching for the user returns no results",
@@ -798,7 +798,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`searching for user "%s" resulted in 2 search results, but expected 1 result`, testUpstreamUsername),
+			wantError: testutil.WantSprintfErrorString(`searching for user "%s" resulted in 2 search results, but expected 1 result`, testUpstreamUsername),
 		},
 		{
 			name:           "when searching for the user returns a user without a DN",
@@ -814,7 +814,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`searching for user "%s" resulted in search result without DN`, testUpstreamUsername),
+			wantError: testutil.WantSprintfErrorString(`searching for user "%s" resulted in search result without DN`, testUpstreamUsername),
 		},
 		{
 			name:           "when searching for the user's groups returns a group without a DN",
@@ -845,7 +845,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`searching for group memberships for user with DN "%s" resulted in search result without DN`,
 				testUserSearchResultDNValue),
 		},
@@ -868,7 +868,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`,
 				testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
@@ -901,7 +901,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`error searching for group memberships for user with DN "%s": found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`,
 				testUserSearchResultDNValue, testGroupSearchGroupNameAttribute, testUserSearchResultDNValue),
 		},
@@ -928,7 +928,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`,
 				testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
@@ -964,7 +964,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`error searching for group memberships for user with DN "%s": found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`,
 				testUserSearchResultDNValue, testGroupSearchGroupNameAttribute, testUserSearchResultDNValue),
 		},
@@ -988,7 +988,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
 				testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
@@ -1021,7 +1021,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(
+			wantError: testutil.WantSprintfErrorString(
 				`error searching for group memberships for user with DN "%s": found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
 				testUserSearchResultDNValue, testGroupSearchGroupNameAttribute, testUserSearchResultDNValue),
 		},
@@ -1044,7 +1044,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
+			wantError: testutil.WantSprintfErrorString(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
 			name:           "when searching for the user returns a user with too many values for the expected UID attribute",
@@ -1069,7 +1069,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
+			wantError: testutil.WantSprintfErrorString(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
 			name:           "when searching for the user returns a user with an empty value for the expected UID attribute",
@@ -1091,7 +1091,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
+			wantError: testutil.WantSprintfErrorString(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
 			name:     "when the group search has an override func that errors",
@@ -1109,7 +1109,7 @@ func TestEndUserAuthentication(t *testing.T) {
 					Return(exampleGroupSearchResult, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf("error finding groups for user %s: some error", testUserSearchResultDNValue),
+			wantError: testutil.WantSprintfErrorString("error finding groups for user %s: some error", testUserSearchResultDNValue),
 		},
 		{
 			name:           "when binding as the found user returns an error",
@@ -1127,7 +1127,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Return(errors.New("some bind error")).Times(1)
 			},
 			skipDryRunAuthenticateUser: true,
-			wantError:                  fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testUserSearchResultDNValue),
+			wantError:                  testutil.WantSprintfErrorString(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testUserSearchResultDNValue),
 		},
 		{
 			name:           "when binding as the found user returns a specific invalid credentials error",
@@ -1194,8 +1194,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, tt.grantedScopes)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
-			case tt.wantError != "":
-				require.EqualError(t, err, tt.wantError)
+			case tt.wantError != nil:
+				testutil.RequireErrorStringFromErr(t, err, tt.wantError)
 				require.False(t, authenticated)
 				require.Nil(t, authResponse)
 			case tt.wantUnauthenticated:
@@ -1226,8 +1226,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, tt.grantedScopes)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
-			case tt.wantError != "":
-				require.EqualError(t, err, tt.wantError)
+			case tt.wantError != nil:
+				testutil.RequireErrorStringFromErr(t, err, tt.wantError)
 				require.False(t, authenticated)
 				require.Nil(t, authResponse)
 			case tt.wantUnauthenticated:
@@ -1852,7 +1852,7 @@ func TestTestConnection(t *testing.T) {
 		providerConfig *ProviderConfig
 		setupMocks     func(conn *mockldapconn.MockConn)
 		dialError      error
-		wantError      string
+		wantError      testutil.RequireErrorStringFunc
 		wantToSkipDial bool
 	}{
 		{
@@ -1867,7 +1867,7 @@ func TestTestConnection(t *testing.T) {
 			name:           "when dial fails",
 			providerConfig: providerConfig(nil),
 			dialError:      errors.New("some dial error"),
-			wantError:      fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+			wantError:      testutil.WantSprintfErrorString(`error dialing host "%s": some dial error`, testHost),
 		},
 		{
 			name:           "when binding as the bind user returns an error",
@@ -1876,7 +1876,7 @@ func TestTestConnection(t *testing.T) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error binding as "%s": some bind error`, testBindUsername),
+			wantError: testutil.WantSprintfErrorString(`error binding as "%s": some bind error`, testBindUsername),
 		},
 		{
 			name: "when the config is invalid",
@@ -1886,7 +1886,7 @@ func TestTestConnection(t *testing.T) {
 				p.UserSearch.Filter = ""
 			}),
 			wantToSkipDial: true,
-			wantError:      `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+			wantError:      testutil.WantExactErrorString(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`),
 		},
 	}
 
@@ -1917,8 +1917,8 @@ func TestTestConnection(t *testing.T) {
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 
 			switch {
-			case tt.wantError != "":
-				require.EqualError(t, err, tt.wantError)
+			case tt.wantError != nil:
+				testutil.RequireErrorStringFromErr(t, err, tt.wantError)
 			default:
 				require.NoError(t, err)
 			}
@@ -2010,7 +2010,7 @@ func TestRealTLSDialing(t *testing.T) {
 		connProto LDAPConnectionProtocol
 		caBundle  []byte
 		context   context.Context
-		wantError string
+		wantError testutil.RequireErrorStringFunc
 	}{
 		{
 			name:      "happy path",
@@ -2025,7 +2025,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  caForTestServerWithBadCertName.Bundle(),
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": x509: certificate is valid for 10.2.3.4, not 127.0.0.1`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": x509: certificate is valid for 10.2.3.4, not 127.0.0.1`),
 		},
 		{
 			name:      "invalid CA bundle with TLS",
@@ -2033,7 +2033,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  []byte("not a ca bundle"),
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": could not parse CA bundle`),
 		},
 		{
 			name:      "invalid CA bundle with StartTLS",
@@ -2041,7 +2041,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  []byte("not a ca bundle"),
 			connProto: StartTLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": could not parse CA bundle`),
 		},
 		{
 			name:      "invalid host with TLS",
@@ -2049,7 +2049,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`),
 		},
 		{
 			name:      "invalid host with StartTLS",
@@ -2057,7 +2057,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  testServerCABundle,
 			connProto: StartTLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`),
 		},
 		{
 			name:      "missing CA bundle when it is required because the host is not using a trusted CA",
@@ -2065,7 +2065,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  nil,
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": %s`, testutil.X509UntrustedCertError("Acme Co")),
+			wantError: testutil.WantX509UntrustedCertErrorString(`LDAP Result Code 200 "Network Error": %s`, "Acme Co"),
 		},
 		{
 			name: "cannot connect to host",
@@ -2074,7 +2074,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
+			wantError: testutil.WantSprintfErrorString(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
 		},
 		{
 			name:      "pays attention to the passed context",
@@ -2082,7 +2082,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  testServerCABundle,
 			connProto: TLS,
 			context:   alreadyCancelledContext,
-			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
+			wantError: testutil.WantSprintfErrorString(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
 		},
 		{
 			name:      "unsupported connection protocol",
@@ -2090,7 +2090,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  testServerCABundle,
 			connProto: "bad usage of this type",
 			context:   alreadyCancelledContext,
-			wantError: `LDAP Result Code 200 "Network Error": did not specify valid ConnectionProtocol`,
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": did not specify valid ConnectionProtocol`),
 		},
 	}
 	for _, test := range tests {
@@ -2106,9 +2106,9 @@ func TestRealTLSDialing(t *testing.T) {
 			if conn != nil {
 				defer conn.Close()
 			}
-			if tt.wantError != "" {
+			if tt.wantError != nil {
 				require.Nil(t, conn)
-				require.EqualError(t, err, tt.wantError)
+				testutil.RequireErrorStringFromErr(t, err, tt.wantError)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, conn)

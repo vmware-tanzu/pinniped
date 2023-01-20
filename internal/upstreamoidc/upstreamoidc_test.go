@@ -487,9 +487,8 @@ func TestProviderConfig(t *testing.T) {
 			unreachableServer    bool
 			returnStatusCodes    []int
 			returnErrBodies      []string
-			wantErr              string
-			wantErrRegexp        string // use either wantErr or wantErrRegexp
-			wantRetryableErrType bool   // additionally assert error type when wantErr is non-empty
+			wantErr              testutil.RequireErrorStringFunc
+			wantRetryableErrType bool // additionally assert error type when wantErr is non-empty
 			wantNumRequests      int
 			wantTokenTypeHint    string
 		}{
@@ -542,7 +541,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusBadRequest},
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
-				wantErr:              `server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`,
+				wantErr:              testutil.WantExactErrorString(`server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`),
 				wantRetryableErrType: false,
 				wantNumRequests:      2,
 				wantTokenTypeHint:    "refresh_token",
@@ -552,7 +551,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{`invalid JSON body`},
-				wantErr:              `error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`,
+				wantErr:              testutil.WantExactErrorString(`error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`),
 				wantRetryableErrType: false,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -562,7 +561,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{``},
-				wantErr:              `error parsing response body "" on response with status code 400: unexpected end of JSON input`,
+				wantErr:              testutil.WantExactErrorString(`error parsing response body "" on response with status code 400: unexpected end of JSON input`),
 				wantRetryableErrType: false,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -572,7 +571,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusForbidden},
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
-				wantErr:              "server responded with status 403",
+				wantErr:              testutil.WantExactErrorString("server responded with status 403"),
 				wantRetryableErrType: false,
 				wantNumRequests:      2,
 				wantTokenTypeHint:    "refresh_token",
@@ -582,7 +581,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
-				wantErr:              `server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`,
+				wantErr:              testutil.WantExactErrorString(`server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`),
 				wantRetryableErrType: false,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -592,7 +591,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusForbidden},
 				returnErrBodies:      []string{""},
-				wantErr:              "server responded with status 403",
+				wantErr:              testutil.WantExactErrorString("server responded with status 403"),
 				wantRetryableErrType: false,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -602,7 +601,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusServiceUnavailable}, // 503
 				returnErrBodies:      []string{""},
-				wantErr:              "retryable revocation error: server responded with status 503",
+				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 503"),
 				wantRetryableErrType: true,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -612,7 +611,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.AccessTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusServiceUnavailable}, // 400, 503
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
-				wantErr:              "retryable revocation error: server responded with status 503",
+				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 503"),
 				wantRetryableErrType: true,
 				wantNumRequests:      2,
 				wantTokenTypeHint:    "access_token",
@@ -622,7 +621,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusInternalServerError}, // 500
 				returnErrBodies:      []string{""},
-				wantErr:              "retryable revocation error: server responded with status 500",
+				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 500"),
 				wantRetryableErrType: true,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -632,7 +631,7 @@ func TestProviderConfig(t *testing.T) {
 				tokenType:            provider.RefreshTokenType,
 				returnStatusCodes:    []int{599}, // not defined by an RFC, but sometimes considered Network Connect Timeout Error
 				returnErrBodies:      []string{""},
-				wantErr:              "retryable revocation error: server responded with status 599",
+				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 599"),
 				wantRetryableErrType: true,
 				wantNumRequests:      1,
 				wantTokenTypeHint:    "refresh_token",
@@ -641,7 +640,7 @@ func TestProviderConfig(t *testing.T) {
 				name:                 "retryable error when the server cannot be reached",
 				tokenType:            provider.AccessTokenType,
 				unreachableServer:    true,
-				wantErrRegexp:        "^retryable revocation error: Post .*: dial tcp .*: connect: connection refused$",
+				wantErr:              testutil.WantMatchingErrorString("^retryable revocation error: Post .*: dial tcp .*: connect: connection refused$"),
 				wantRetryableErrType: true,
 				wantNumRequests:      0,
 			},
@@ -709,13 +708,8 @@ func TestProviderConfig(t *testing.T) {
 				require.Equal(t, tt.wantNumRequests, numRequests,
 					"did not make expected number of requests to revocation endpoint")
 
-				if tt.wantErr != "" || tt.wantErrRegexp != "" { //nolint:nestif
-					if tt.wantErr != "" {
-						require.EqualError(t, err, tt.wantErr)
-					} else {
-						require.Error(t, err)
-						require.Regexp(t, tt.wantErrRegexp, err.Error())
-					}
+				if tt.wantErr != nil {
+					testutil.RequireErrorStringFromErr(t, err, tt.wantErr)
 
 					if tt.wantRetryableErrType {
 						require.ErrorAs(t, err, &provider.RetryableRevocationError{})

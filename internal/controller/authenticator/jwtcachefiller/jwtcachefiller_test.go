@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package jwtcachefiller
@@ -188,7 +188,7 @@ func TestController(t *testing.T) {
 		syncKey                          controllerlib.Key
 		jwtAuthenticators                []runtime.Object
 		wantClose                        bool
-		wantErr                          string
+		wantErr                          testutil.RequireErrorStringFunc
 		wantLogs                         []string
 		wantCacheEntries                 int
 		wantUsernameClaim                string
@@ -350,7 +350,7 @@ func TestController(t *testing.T) {
 					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantErr: `failed to build jwt authenticator: could not initialize provider: Get "` + goodIssuer + `/.well-known/openid-configuration": ` + testutil.X509UntrustedCertError("Acme Co"),
+			wantErr: testutil.WantX509UntrustedCertErrorString(`failed to build jwt authenticator: could not initialize provider: Get "`+goodIssuer+`/.well-known/openid-configuration": %s`, "Acme Co"),
 		},
 		{
 			name:    "invalid jwt authenticator CA",
@@ -363,7 +363,7 @@ func TestController(t *testing.T) {
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantErr: "failed to build jwt authenticator: invalid TLS configuration: illegal base64 data at input byte 7",
+			wantErr: testutil.WantExactErrorString("failed to build jwt authenticator: invalid TLS configuration: illegal base64 data at input byte 7"),
 		},
 	}
 
@@ -391,8 +391,8 @@ func TestController(t *testing.T) {
 
 			syncCtx := controllerlib.Context{Context: ctx, Key: tt.syncKey}
 
-			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
+			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != nil {
+				testutil.RequireErrorStringFromErr(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 			}
@@ -490,9 +490,8 @@ func TestController(t *testing.T) {
 						rsp, authenticated, err = cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
 						return !isNotInitialized(err), nil
 					})
-					if test.wantErrorRegexp != "" {
-						require.Error(t, err)
-						require.Regexp(t, test.wantErrorRegexp, err.Error())
+					if test.wantErr != nil {
+						testutil.RequireErrorStringFromErr(t, err, test.wantErr)
 					} else {
 						require.NoError(t, err)
 						require.Equal(t, test.wantResponse, rsp)
@@ -528,7 +527,7 @@ func testTableForAuthenticateTokenTests(
 	jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
 	wantResponse              *authenticator.Response
 	wantAuthenticated         bool
-	wantErrorRegexp           string
+	wantErr                   testutil.RequireErrorStringFunc
 	distributedGroupsClaimURL string
 } {
 	tests := []struct {
@@ -537,7 +536,7 @@ func testTableForAuthenticateTokenTests(
 		jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
 		wantResponse              *authenticator.Response
 		wantAuthenticated         bool
-		wantErrorRegexp           string
+		wantErr                   testutil.RequireErrorStringFunc
 		distributedGroupsClaimURL string
 	}{
 		{
@@ -594,14 +593,14 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/not_found_claim_source",
-			wantErrorRegexp:           `oidc: could not expand distributed claims: while getting distributed claim "` + expectedGroupsClaim + `": error while getting distributed claim JWT: 404 Not Found`,
+			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: while getting distributed claim "` + expectedGroupsClaim + `": error while getting distributed claim JWT: 404 Not Found`),
 		},
 		{
 			name: "distributed groups doesn't return the right claim",
 			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/wrong_claim_source",
-			wantErrorRegexp:           `oidc: could not expand distributed claims: jwt returned by distributed claim endpoint "` + issuer + `/wrong_claim_source" did not contain claim: `,
+			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: jwt returned by distributed claim endpoint "` + issuer + `/wrong_claim_source" did not contain claim: `),
 		},
 		{
 			name: "good token with groups as string",
@@ -633,7 +632,7 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
 				*groups = map[string]string{"not an array": "or a string"}
 			},
-			wantErrorRegexp: "oidc: parse groups claim \"" + expectedGroupsClaim + "\": json: cannot unmarshal object into Go value of type string",
+			wantErr: testutil.WantMatchingErrorString("oidc: parse groups claim \"" + expectedGroupsClaim + "\": json: cannot unmarshal object into Go value of type string"),
 		},
 		{
 			name: "bad token with wrong issuer",
@@ -648,42 +647,42 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Audience = nil
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: expected audience "some-audience" got \[\]`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \[\]`),
 		},
 		{
 			name: "bad token with wrong audience",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Audience = []string{"wrong-audience"}
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: expected audience "some-audience" got \["wrong-audience"\]`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \["wrong-audience"\]`),
 		},
 		{
 			name: "bad token with nbf in the future",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.NotBefore = jwt.NewNumericDate(time.Date(3020, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: current time .* before the nbf \(not before\) time: 3020-.*`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: current time .* before the nbf \(not before\) time: 3020-.*`),
 		},
 		{
 			name: "bad token with exp in past",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = jwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: .+`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "bad token without exp",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = nil
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: .+`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "token does not have username claim",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				*username = ""
 			},
-			wantErrorRegexp: `oidc: parse username claims "` + expectedUsernameClaim + `": claim not present`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: parse username claims "` + expectedUsernameClaim + `": claim not present`),
 		},
 		{
 			name: "signing key is wrong",
@@ -693,7 +692,7 @@ func testTableForAuthenticateTokenTests(
 				require.NoError(t, err)
 				*algo = jose.ES256
 			},
-			wantErrorRegexp: `oidc: verify token: failed to verify signature: failed to verify id token signature`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: failed to verify signature: failed to verify id token signature`),
 		},
 		{
 			name: "signing algo is unsupported",
@@ -703,7 +702,7 @@ func testTableForAuthenticateTokenTests(
 				require.NoError(t, err)
 				*algo = jose.ES384
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: id token signed with unsupported algorithm, expected \["RS256" "ES256"\] got "ES384"`,
+			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: id token signed with unsupported algorithm, expected \["RS256" "ES256"\] got "ES384"`),
 		},
 	}
 

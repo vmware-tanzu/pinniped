@@ -1,10 +1,11 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
 
 import (
 	"context"
+	"fmt"
 	"mime"
 	"net/http/httptest"
 	"testing"
@@ -124,4 +125,64 @@ func requireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
 
 	// This check is more relaxed since Fosite can override the base header we set.
 	require.Contains(t, response.Header().Get("Cache-Control"), "no-store")
+}
+
+type RequireErrorStringFunc func(t *testing.T, actualErrorStr string)
+
+// RequireErrorStringFromErr can be used to make assertions about errors in tests.
+func RequireErrorStringFromErr(t *testing.T, actualError error, requireFunc RequireErrorStringFunc) {
+	require.Error(t, actualError)
+	requireFunc(t, actualError.Error())
+}
+
+// RequireErrorString can be used to make assertions about error strings in tests.
+func RequireErrorString(t *testing.T, actualErrorStr string, requireFunc RequireErrorStringFunc) {
+	requireFunc(t, actualErrorStr)
+}
+
+// WantExactErrorString can be used to set up an expected value for an error string in a test table.
+// Use when you want to express that the expected string must be an exact match.
+func WantExactErrorString(wantErrStr string) RequireErrorStringFunc {
+	return func(t *testing.T, actualErrorStr string) {
+		require.Equal(t, wantErrStr, actualErrorStr)
+	}
+}
+
+// WantSprintfErrorString can be used to set up an expected value for an error string in a test table.
+// Use when you want to express that an expected string built using fmt.Sprintf semantics must be an exact match.
+func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...interface{}) RequireErrorStringFunc {
+	wantErrStr := fmt.Sprintf(wantErrSprintfSpecifier, a...)
+	return func(t *testing.T, actualErrorStr string) {
+		require.Equal(t, wantErrStr, actualErrorStr)
+	}
+}
+
+// WantMatchingErrorString can be used to set up an expected value for an error string in a test table.
+// Use when you want to express that the expected regexp must be a match.
+func WantMatchingErrorString(wantErrRegexp string) RequireErrorStringFunc {
+	return func(t *testing.T, actualErrorStr string) {
+		require.Regexp(t, wantErrRegexp, actualErrorStr)
+	}
+}
+
+// WantX509UntrustedCertErrorString can be used to set up an expected value for an error string in a test table.
+// expectedErrorFormatString must contain exactly one formatting verb, which should usually be %s, which will
+// be replaced by the platform-specific X509 untrusted certs error string and then compared against expectedCommonName.
+func WantX509UntrustedCertErrorString(expectedErrorFormatSpecifier string, expectedCommonName string) RequireErrorStringFunc {
+	// Starting in Go 1.18.1, and until it was fixed in Go 1.19.5, Go on MacOS had an incorrect error string.
+	// We don't care which error string was returned, as long as it is either the normal error string from
+	// the Go x509 library, or the error string that was accidentally returned from the Go x509 library in
+	// those versions of Go on MacOS which had the bug.
+	return func(t *testing.T, actualErrorStr string) {
+		// This is the MacOS error string starting in Go 1.18.1, and until it was fixed in Go 1.19.5.
+		macOSErr := fmt.Sprintf(`x509: “%s” certificate is not trusted`, expectedCommonName)
+		// This is the normal Go x509 library error string.
+		standardErr := `x509: certificate signed by unknown authority`
+		allowedErrorStrings := []string{
+			fmt.Sprintf(expectedErrorFormatSpecifier, macOSErr),
+			fmt.Sprintf(expectedErrorFormatSpecifier, standardErr),
+		}
+		// Allow either.
+		require.Contains(t, allowedErrorStrings, actualErrorStr)
+	}
 }

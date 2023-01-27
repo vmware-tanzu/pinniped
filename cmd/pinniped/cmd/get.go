@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -8,7 +8,11 @@ import (
 )
 
 //nolint:gochecknoglobals
-var getCmd = &cobra.Command{Use: "get", Short: "get"}
+var getCmd = &cobra.Command{
+	Use:          "get",
+	Short:        "Gets one of [kubeconfig]",
+	SilenceUsage: true, // Do not print usage message when commands fail.
+}
 
 //nolint:gochecknoinits
 func init() {

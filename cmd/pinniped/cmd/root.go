@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -8,14 +8,18 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
 )
 
 //nolint:gochecknoglobals
 var rootCmd = &cobra.Command{
-	Use:          "pinniped",
-	Short:        "pinniped",
-	Long:         "pinniped is the client-side binary for use with Pinniped-enabled Kubernetes clusters.",
+	Use: "pinniped",
+	Long: here.Doc(
+		`The Pinniped CLI is the client-side binary for use with Pinniped-enabled Kubernetes clusters
+
+		 Find more information at: https://pinniped.dev`,
+	),
 	SilenceUsage: true, // do not print usage message when commands fail
 }
 

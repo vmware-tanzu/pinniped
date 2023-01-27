@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -24,7 +24,7 @@ func generateMarkdownHelpCommand() *cobra.Command {
 		Args:         cobra.NoArgs,
 		Use:          "generate-markdown-help",
 		Short:        "Generate markdown help for the current set of non-hidden CLI commands",
-		SilenceUsage: true,
+		SilenceUsage: true, // do not print usage message when commands fail
 		Hidden:       true,
 		RunE:         runGenerateMarkdownHelp,
 	}

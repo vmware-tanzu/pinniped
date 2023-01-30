@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -23,6 +23,7 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/execcredcache"
 	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/conciergeclient"
@@ -88,10 +89,21 @@ type oidcLoginFlags struct {
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	var (
 		cmd = &cobra.Command{
-			Args:         cobra.NoArgs,
-			Use:          "oidc --issuer ISSUER",
-			Short:        "Login using an OpenID Connect provider",
-			SilenceUsage: true,
+			Args:  cobra.NoArgs,
+			Use:   "oidc --issuer ISSUER",
+			Short: "Login using an OpenID Connect provider",
+			Long: here.Doc(
+				`Login using an OpenID Connect provider
+
+					Use "pinniped get kubeconfig" to generate a kubeconfig file which includes this
+					login command in its configuration. This login command is not meant to be
+					invoked directly by a user.
+
+					This login command is a Kubernetes client-go credential plugin which is meant to
+					be configured inside a kubeconfig file. (See the Kubernetes authentication
+					documentation for more information about client-go credential plugins.)`,
+			),
+			SilenceUsage: true, // do not print usage message when commands fail
 		}
 		flags              oidcLoginFlags
 		conciergeNamespace string // unused now

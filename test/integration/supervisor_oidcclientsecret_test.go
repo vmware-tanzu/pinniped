@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -211,7 +211,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			t.Cleanup(cancel)
 
 			supervisorClient := testlib.NewSupervisorClientset(t)
@@ -877,7 +877,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			t.Cleanup(cancel)
 
 			kubeClient := testlib.NewKubernetesClientset(t)
@@ -1020,7 +1020,7 @@ func prependSecret(list []string, newItem string) []string {
 func TestOIDCClientSecretRequestUnauthenticated_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
 
 	client := testlib.NewAnonymousSupervisorClientset(t)

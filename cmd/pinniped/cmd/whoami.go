@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -48,7 +48,7 @@ func newWhoamiCommand(getClientset getConciergeClientsetFunc) *cobra.Command {
 		Args:         cobra.NoArgs, // do not accept positional arguments for this command
 		Use:          "whoami",
 		Short:        "Print information about the current user",
-		SilenceUsage: true,
+		SilenceUsage: true, // do not print usage message when commands fail
 	}
 	flags := &whoamiFlags{}
 

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -55,6 +55,14 @@ func TestLoginStaticCommand(t *testing.T) {
 			args: []string{"--help"},
 			wantStdout: here.Doc(`
 				Login using a static token
+
+				Use "pinniped get kubeconfig" to generate a kubeconfig file which includes this
+				login command in its configuration. This login command is not meant to be
+				invoked directly by a user.
+
+				This login command is a Kubernetes client-go credential plugin which is meant to
+				be configured inside a kubeconfig file. (See the Kubernetes authentication
+				documentation for more information about client-go credential plugins.)
 
 				Usage:
 				  static [--token TOKEN] [--token-env TOKEN_NAME] [flags]
@@ -140,7 +148,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				Error: could not complete Concierge credential exchange: some concierge error
 			`),
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_static.go:147  exchanging static token for cluster credential  {"endpoint": "https://127.0.0.1/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  pinniped-login  cmd/login_static.go:159  exchanging static token for cluster credential  {"endpoint": "https://127.0.0.1/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
 			},
 		},
 		{

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -61,6 +61,14 @@ func TestLoginOIDCCommand(t *testing.T) {
 			args: []string{"--help"},
 			wantStdout: here.Doc(`
 				Login using an OpenID Connect provider
+
+				Use "pinniped get kubeconfig" to generate a kubeconfig file which includes this
+				login command in its configuration. This login command is not meant to be
+				invoked directly by a user.
+
+				This login command is a Kubernetes client-go credential plugin which is meant to
+				be configured inside a kubeconfig file. (See the Kubernetes authentication
+				documentation for more information about client-go credential plugins.)
 
 				Usage:
 				  oidc --issuer ISSUER [flags]
@@ -483,8 +491,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:231  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:251  No concierge configured, skipping token credential exchange`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:243  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:263  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -513,10 +521,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 11,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:231  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:241  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:249  Successfully exchanged token for cluster credential.`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:256  caching cluster credential for future use.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:243  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:253  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:261  Successfully exchanged token for cluster credential.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:268  caching cluster credential for future use.`,
 			},
 		},
 	}

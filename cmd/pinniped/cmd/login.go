@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -7,15 +7,27 @@ import (
 	"github.com/spf13/cobra"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/auth/exec"
+
+	"go.pinniped.dev/internal/here"
 )
 
 //nolint:gochecknoglobals
 var loginCmd = &cobra.Command{
-	Use:          "login",
-	Short:        "login",
-	Long:         "Login to a Pinniped server",
+	Use:   "login",
+	Short: "Authenticates with one of [oidc, static]",
+	Long: here.Doc(
+		`Authenticates with one of [oidc, static]
+
+			Use "pinniped get kubeconfig" to generate a kubeconfig file which will include
+			one of these login subcommands in its configuration. The oidc and static
+			subcommands are not meant to be invoked directly by a user.
+
+			The oidc and static subcommands are Kubernetes client-go credential plugins
+			which are meant to be configured inside a kubeconfig file. (See the Kubernetes
+			authentication documentation for more information about client-go credential
+			plugins.)`,
+	),
 	SilenceUsage: true, // Do not print usage message when commands fail.
-	Hidden:       true, // These commands are not really meant to be used directly by users, so it's confusing to have them discoverable.
 }
 
 //nolint:gochecknoinits

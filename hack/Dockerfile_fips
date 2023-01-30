@@ -3,13 +3,13 @@
 # Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# this dockerfile is used to produce a binary of Pinniped that uses
-# only fips-allowable ciphers.  Note that this is provided only as
-# an example.  Pinniped has no official support for fips and using
+# This dockerfile is used to produce a binary of Pinniped that uses
+# only FIPS-allowable ciphers.  Note that this is provided only as
+# an example.  Pinniped has no official support for FIPS and using
 # a version built from this dockerfile may have unforseen consquences.
 # Please do not create issues in regards to problems encountered by
 # using this dockerfile.  Using this dockerfile does not convey
-# any type of fips certification.
+# any type of FIPS certification.
 
 # Starting in 1.19, go-boringcrypto has been added to the main Go toolchain,
 # hidden behind a `GOEXPERIMENT=boringcrypto` env var.
@@ -21,37 +21,21 @@ WORKDIR /work
 COPY . .
 ARG GOPROXY
 
-# Build the executable binary (CGO_ENABLED=1 is required for go boring).
-# Even though we need cgo to call the boring crypto C functions, these
-# functions are statically linked into the binary.  We also want to statically
-# link any libc bits hence we pass "-linkmode=external -extldflags -static"
-# to the ldflags directive.  We do not pass "-s" to ldflags because we do
-# not want to strip symbols - those are used to verify if we compiled correctly.
-# We do not pass in GOCACHE (build cache) and GOMODCACHE (module cache)
-# because there have been bugs in the Go compiler caching when using cgo
-# (it will sometimes use cached artifiacts when it should not).  Since we
-# use gcc as the C compiler, the following warning is emitted:
-# /boring/boringssl/build/../crypto/bio/socket_helper.c:55: warning:
-# Using 'getaddrinfo' in statically linked applications requires at
-# runtime the shared libraries from the glibc version used for linking
-# This is referring to the code in
-# https://github.com/google/boringssl/blob/af34f6460f0bf99dc267818f02b2936f60a30de7/crypto/bio/socket_helper.c#L55
-# which calls the getaddrinfo function.  This function, even when statically linked,
-# uses dlopen to dynamically fetch networking config.  It is safe for us to ignore
-# this warning because the go boring cypto code does not create netowrking connections:
-# https://github.com/golang/go/blob/9d6ab825f6fe125f7ce630e103b887e580403802/src/crypto/internal/boring/goboringcrypto.h
-# The osusergo and netgo tags are used to make sure that the Go implementations of these
-# standard library packages are used instead of the libc based versions.
-# We want to have no reliance on any C code other than the boring crypto bits.
-# Setting GOOS=linux GOARCH=amd64 is a hard requirment for boring crypto:
-# https://github.com/golang/go/blob/9d6ab825f6fe125f7ce630e103b887e580403802/misc/boring/README.md?plain=1#L95
-# Thus trying to compile the pinniped CLI with boring crypto is meaningless
-# since we would not be able to ship windows and macOS binaries.
+# Build the executable binary (CGO_ENABLED=0 means static linking)
+# Pass in GOCACHE (build cache) and GOMODCACHE (module cache) so they
+# can be re-used between image builds.
 RUN \
+  --mount=type=cache,target=/cache/gocache \
+  --mount=type=cache,target=/cache/gomodcache \
   mkdir out && \
-  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOEXPERIMENT=boringcrypto && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
+  export GOCACHE=/cache/gocache && \
+  export GOMODCACHE=/cache/gomodcache && \
+  export CGO_ENABLED=0 && \
+  export GOOS=linux && \
+  export GOARCH=amd64 &&  \
+  export GOEXPERIMENT=boringcrypto && \
+  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
+  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator

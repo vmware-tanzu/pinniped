@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package server
@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/certauthority"
@@ -23,8 +23,8 @@ type contextKey int
 const bootstrapKey contextKey = iota
 
 func withBootstrapConnCtx(ctx context.Context, _ net.Conn) context.Context {
-	isBootstrap := atomic.NewBool(false) // safe for concurrent access
-	return context.WithValue(ctx, bootstrapKey, isBootstrap)
+	isBootstrap := atomic.Bool{} // safe for concurrent access
+	return context.WithValue(ctx, bootstrapKey, &isBootstrap)
 }
 
 func setIsBootstrapConn(ctx context.Context) {

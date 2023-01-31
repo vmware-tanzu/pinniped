@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package leaderelection
@@ -6,9 +6,9 @@ package leaderelection
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -45,7 +45,7 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 		return nil, nil, fmt.Errorf("could not create internal client for leader election: %w", err)
 	}
 
-	isLeader := &isLeaderTracker{tracker: atomic.NewBool(false)}
+	isLeader := &isLeaderTracker{tracker: &atomic.Bool{}}
 
 	identity := podInfo.Name
 	leaseName := deployment.Name

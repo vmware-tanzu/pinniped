@@ -949,6 +949,7 @@ func TestUnwrap(t *testing.T) {
 
 	server, restConfig := fakekubeapi.Start(t, nil)
 
+	//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 	serverSubjects := server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs.Subjects()
 
 	t.Run("regular client", func(t *testing.T) {
@@ -1089,6 +1090,7 @@ func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
 			require.Equal(t, secureTLSConfig.NextProtos, tlsConfig.NextProtos)
 
 			// x509.CertPool has some embedded functions that make it hard to compare so just look at the subjects
+			//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 			require.Equal(t, serverSubjects, tlsConfig.RootCAs.Subjects())
 		})
 	}

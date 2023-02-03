@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	concierge "go.pinniped.dev/internal/concierge/server"
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
+	// this side effect import ensures that we use fipsonly crypto in boringcrypto mode.
 	_ "go.pinniped.dev/internal/crypto/ptls"
 	lua "go.pinniped.dev/internal/localuserauthenticator"
 	"go.pinniped.dev/internal/plog"

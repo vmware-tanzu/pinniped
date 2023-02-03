@@ -4,8 +4,8 @@
 // The configurations here override the usual ptls.Secure, ptls.Default, and ptls.DefaultLDAP
 // configs when Pinniped is built in fips-only mode.
 // All of these are the same because FIPs is already so limited.
-//go:build fips_strict
-// +build fips_strict
+//go:build boringcrypto
+// +build boringcrypto
 
 package ptls
 

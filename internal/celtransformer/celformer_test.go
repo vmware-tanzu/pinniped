@@ -30,6 +30,7 @@ func TestTransformer(t *testing.T) {
 		username   string
 		groups     []string
 		transforms []CELTransformation
+		consts     *TransformationConstants
 		ctx        context.Context
 
 		wantUsername            string
@@ -112,6 +113,28 @@ func TestTransformer(t *testing.T) {
 			},
 			wantUsername: "other",
 			wantGroups:   []string{"admins", "developers", "other", "ryan", "other2"},
+		},
+		{
+			name:     "any transformation can use the provided constants as variables",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			consts: &TransformationConstants{
+				StringConstants: map[string]string{
+					"x": "abc",
+					"y": "def",
+				},
+				StringListConstants: map[string][]string{
+					"x": {"uvw", "xyz"},
+					"y": {"123", "456"},
+				},
+			},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `strConst.x + strListConst.x[0]`},
+				&GroupsTransformation{Expression: `[strConst.x, strConst.y, strListConst.x[1], strListConst.y[0]]`},
+				&AllowAuthenticationPolicy{Expression: `strConst.x == "abc"`},
+			},
+			wantUsername: "abcuvw",
+			wantGroups:   []string{"abc", "def", "xyz", "123"},
 		},
 		{
 			name:     "the CEL string extensions are enabled for use in the expressions",
@@ -220,6 +243,19 @@ func TestTransformer(t *testing.T) {
 			wantGroups:   []string{"admins", "developers"},
 		},
 		{
+			name:     "can filter groups based on an allow list provided as a const",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			consts: &TransformationConstants{
+				StringListConstants: map[string][]string{"allowedGroups": {"admins", "developers"}},
+			},
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups.filter(g, g in strListConst.allowedGroups)`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{"admins", "developers"},
+		},
+		{
 			name:     "can filter groups based on a disallow list",
 			username: "ryan",
 			groups:   []string{"admins", "developers", "other"},
@@ -240,11 +276,37 @@ func TestTransformer(t *testing.T) {
 			wantGroups:   []string{"other"},
 		},
 		{
+			name:     "can filter groups based on a disallowed prefixes provided as a const",
+			username: "ryan",
+			groups:   []string{"disallowed1:admins", "disallowed2:developers", "other"},
+			consts: &TransformationConstants{
+				StringListConstants: map[string][]string{"disallowedPrefixes": {"disallowed1:", "disallowed2:"}},
+			},
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups.filter(group, !(strListConst.disallowedPrefixes.exists(prefix, group.startsWith(prefix))))`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{"other"},
+		},
+		{
 			name:     "can add a group",
 			username: "ryan",
 			groups:   []string{"admins", "developers", "other"},
 			transforms: []CELTransformation{
 				&GroupsTransformation{Expression: `groups + ["new-group"]`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{"admins", "developers", "other", "new-group"},
+		},
+		{
+			name:     "can add a group from a const",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			consts: &TransformationConstants{
+				StringConstants: map[string]string{"groupToAlwaysAdd": "new-group"},
+			},
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups + [strConst.groupToAlwaysAdd]`},
 			},
 			wantUsername: "ryan",
 			wantGroups:   []string{"admins", "developers", "other", "new-group"},
@@ -622,6 +684,44 @@ func TestTransformer(t *testing.T) {
 			},
 			wantCompileErr: `CEL expression should return type "list(string)" but returns type "list(dyn)"`,
 		},
+		{
+			name:     "using string constants which were not were provided",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `strConst.x`},
+			},
+			wantEvaluationErr: `identity transformation at index 0: no such key: x`,
+		},
+		{
+			name:     "using string list constants which were not were provided",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `strListConst.x`},
+			},
+			wantEvaluationErr: `identity transformation at index 0: no such key: x`,
+		},
+		{
+			name:     "using an illegal name for a string constant",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			consts:   &TransformationConstants{StringConstants: map[string]string{" illegal": "a"}},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `username`},
+			},
+			wantCompileErr: `" illegal" is an invalid const variable name (must match [_a-zA-Z][_a-zA-Z0-9]*)`,
+		},
+		{
+			name:     "using an illegal name for a stringList constant",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			consts:   &TransformationConstants{StringListConstants: map[string][]string{" illegal": {"a"}}},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `username`},
+			},
+			wantCompileErr: `" illegal" is an invalid const variable name (must match [_a-zA-Z][_a-zA-Z0-9]*)`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -635,7 +735,7 @@ func TestTransformer(t *testing.T) {
 			pipeline := idtransform.NewTransformationPipeline()
 
 			for _, transform := range tt.transforms {
-				compiledTransform, err := transformer.CompileTransformation(transform)
+				compiledTransform, err := transformer.CompileTransformation(transform, tt.consts)
 				if tt.wantCompileErr != "" {
 					require.EqualError(t, err, tt.wantCompileErr)
 					return // the rest of the test doesn't make sense when there was a compile error
@@ -673,13 +773,13 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	pipeline := idtransform.NewTransformationPipeline()
 
 	var compiledTransform idtransform.IdentityTransformation
-	compiledTransform, err = transformer.CompileTransformation(&UsernameTransformation{Expression: `"username_prefix:" + username`})
+	compiledTransform, err = transformer.CompileTransformation(&UsernameTransformation{Expression: `"username_prefix:" + username`}, nil)
 	require.NoError(t, err)
 	pipeline.AppendTransformation(compiledTransform)
-	compiledTransform, err = transformer.CompileTransformation(&GroupsTransformation{Expression: `groups.map(g, "group_prefix:" + g)`})
+	compiledTransform, err = transformer.CompileTransformation(&GroupsTransformation{Expression: `groups.map(g, "group_prefix:" + g)`}, nil)
 	require.NoError(t, err)
 	pipeline.AppendTransformation(compiledTransform)
-	compiledTransform, err = transformer.CompileTransformation(&AllowAuthenticationPolicy{Expression: `username == "username_prefix:ryan"`})
+	compiledTransform, err = transformer.CompileTransformation(&AllowAuthenticationPolicy{Expression: `username == "username_prefix:ryan"`}, nil)
 	require.NoError(t, err)
 	pipeline.AppendTransformation(compiledTransform)
 

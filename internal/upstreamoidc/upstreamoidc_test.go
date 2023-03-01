@@ -294,6 +294,7 @@ func TestProviderConfig(t *testing.T) {
 						userInfoErr: tt.userInfoErr,
 					},
 					AllowPasswordGrant: !tt.disallowPasswordGrant,
+					Client:             http.DefaultClient,
 				}
 
 				tok, err := p.PasswordCredentialsGrantAndValidateTokens(
@@ -454,6 +455,7 @@ func TestProviderConfig(t *testing.T) {
 						},
 						Scopes: []string{"scope1", "scope2"},
 					},
+					Client: http.DefaultClient,
 				}
 
 				tok, err := p.PerformRefresh(
@@ -1384,6 +1386,7 @@ func TestProviderConfig(t *testing.T) {
 						userInfo:    tt.userInfo,
 						userInfoErr: tt.userInfoErr,
 					},
+					Client: http.DefaultClient,
 				}
 
 				tok, err := p.ExchangeAuthcodeAndValidateTokens(

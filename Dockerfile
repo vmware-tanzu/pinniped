@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.19.5 as build-env
+FROM golang:1.20.1 as build-env
 
 WORKDIR /work
 COPY . .

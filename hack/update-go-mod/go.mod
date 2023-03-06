@@ -1,5 +1,5 @@
 module go.pinniped.dev/update-go-mod
 
-go 1.18
+go 1.19
 
 require golang.org/x/mod v0.8.0

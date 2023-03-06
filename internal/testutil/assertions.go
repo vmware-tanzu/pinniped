@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.pinniped.dev/internal/testutil/tlsassertions"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -179,8 +180,8 @@ func WantX509UntrustedCertErrorString(expectedErrorFormatSpecifier string, expec
 		// This is the normal Go x509 library error string.
 		standardErr := `x509: certificate signed by unknown authority`
 		allowedErrorStrings := []string{
-			fmt.Sprintf(expectedErrorFormatSpecifier, macOSErr),
-			fmt.Sprintf(expectedErrorFormatSpecifier, standardErr),
+			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTlsErrorPrefix()+macOSErr),
+			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTlsErrorPrefix()+standardErr),
 		}
 		// Allow either.
 		require.Contains(t, allowedErrorStrings, actualErrorStr)

@@ -30,6 +30,9 @@ import (
 	// It also enables fipsonly tls mode, just to be absolutely sure that the fips code is enabled,
 	// even though it shouldn't be used currently by this binary.
 	_ "go.pinniped.dev/internal/crypto/fips"
+
+	// This side effect ensures building with at least go1.19
+	_ "go.pinniped.dev/internal/build"
 )
 
 //nolint:gochecknoglobals // these are swapped during unit tests.

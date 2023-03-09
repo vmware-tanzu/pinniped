@@ -15,11 +15,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	concierge "go.pinniped.dev/internal/concierge/server"
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
-	_ "go.pinniped.dev/internal/crypto/ptls"
 	lua "go.pinniped.dev/internal/localuserauthenticator"
 	"go.pinniped.dev/internal/plog"
 	supervisor "go.pinniped.dev/internal/supervisor/server"
+
+	// this side effect import ensures that we use fipsonly crypto in boringcrypto mode.
+	_ "go.pinniped.dev/internal/crypto/ptls"
+
+	// This side effect ensures building with at least go1.19
+	_ "go.pinniped.dev/internal/build"
 )
 
 //nolint:gochecknoglobals // these are swapped during unit tests.

@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/browser"
 
 	"go.pinniped.dev/cmd/pinniped/cmd"
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
+	// this side effect import ensures that we use fipsonly crypto in boringcrypto mode.
 	_ "go.pinniped.dev/internal/crypto/ptls"
 
 	// This side effect ensures building with at least go1.19

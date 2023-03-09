@@ -1,8 +1,7 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build fips_strict
-// +build fips_strict
+//go:build boringcrypto
 
 package integration
 

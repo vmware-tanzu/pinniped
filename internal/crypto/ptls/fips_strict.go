@@ -4,8 +4,7 @@
 // The configurations here override the usual ptls.Secure, ptls.Default, and ptls.DefaultLDAP
 // configs when Pinniped is built in fips-only mode.
 // All of these are the same because FIPs is already so limited.
-//go:build fips_strict
-// +build fips_strict
+//go:build boringcrypto
 
 package ptls
 
@@ -18,8 +17,6 @@ import (
 
 	"k8s.io/apiserver/pkg/server/options"
 
-	// Cause fipsonly tls mode with this side effect import.
-	_ "go.pinniped.dev/internal/crypto/fips"
 	"go.pinniped.dev/internal/plog"
 )
 

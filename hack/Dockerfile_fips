@@ -49,9 +49,12 @@ ARG GOPROXY
 # since we would not be able to ship windows and macOS binaries.
 RUN \
   mkdir out && \
-  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOEXPERIMENT=boringcrypto && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
+  export CGO_ENABLED=0 && \
+  export GOOS=linux && \
+  export GOARCH=amd64 && \
+  export GOEXPERIMENT=boringcrypto && \
+  go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
+  go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator

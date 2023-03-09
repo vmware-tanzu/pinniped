@@ -12,8 +12,7 @@ menu:
 By default, the Pinniped supervisor and concierge use ciphers that
 are not supported by FIPS 140-2. If you are deploying Pinniped in an
 environment with FIPS compliance requirements, you will have to build
-the binaries yourself using the `fips_strict` build tag and Golang's
-`go-boringcrypto` fork.
+the binaries yourself using Golang 1.19 and the `GOEXPERIMENT=boringcrypto` build tag.
 
 The Pinniped team provides an [example Dockerfile](https://github.com/vmware-tanzu/pinniped/blob/main/hack/Dockerfile_fips)
 demonstrating how you can build Pinniped images in a FIPS compatible way.

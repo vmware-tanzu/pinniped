@@ -24,6 +24,6 @@ if [[ "${#missing_copyright_files[@]}" -gt "0" ]]; then
     for f in "${missing_copyright_files[@]}"; do
         echo "    $f"
     done
-    echo "Try using hack/update-copyright-year.sh to update the copyright automatically in staged files."
+    echo "Try using ./hack/update-copyright-year.sh to update the copyright automatically in staged files."
     exit 1
 fi

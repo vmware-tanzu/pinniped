@@ -1,10 +1,7 @@
 // Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// The configurations here override the usual ptls.Secure, ptls.Default, and ptls.DefaultLDAP
-// configs when Pinniped is built in fips-only mode.
-// All of these are the same because FIPs is already so limited.
-//go:build fips_strict
+//go:build boringcrypto
 
 package ptls
 
@@ -15,16 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"k8s.io/apiserver/pkg/server/options"
-
-	// Cause fipsonly tls mode with this side effect import.
-	_ "go.pinniped.dev/internal/crypto/fips"
 	"go.pinniped.dev/internal/plog"
 )
-
-// Always use TLS 1.2 for FIPs
-const secureServingOptionsMinTLSVersion = "VersionTLS12"
-const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 
 func init() {
 	switch filepath.Base(os.Args[0]) {
@@ -52,7 +41,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 		// optional root CAs, nil means use the host's root CA set
 		RootCAs: rootCAs,
 
-		// This is all of the fips-approved ciphers.
+		// This is all the fips-approved ciphers.
 		// The list is hard-coded for convenience of testing.
 		// This is kept in sync with the boring crypto compiler via TestFIPSCipherSuites.
 		CipherSuites: []uint16{
@@ -66,14 +55,6 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 	}
 }
 
-func Secure(rootCAs *x509.CertPool) *tls.Config {
-	return Default(rootCAs)
-}
-
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
-}
-
-func secureServing(opts *options.SecureServingOptionsWithLoopback) {
-	defaultServing(opts)
 }

@@ -70,6 +70,8 @@ function main() {
     with_modules 'tidy_cmd'
     ;;
   'lint' | 'linter' | 'linters')
+    golangci-lint --version
+    echo
     with_modules 'lint_cmd'
     ;;
   'test' | 'tests')

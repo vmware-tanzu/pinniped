@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetTlsErrorPrefix(t *testing.T) {
+func TestGetTLSErrorPrefix(t *testing.T) {
 	expected := "tls: failed to verify certificate: "
 
 	if strings.Contains(runtime.Version(), "1.19") {
 		expected = ""
 	}
 
-	require.Equal(t, expected, GetTlsErrorPrefix())
+	require.Equal(t, expected, GetTLSErrorPrefix())
 }

@@ -28,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/tlsassertions"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -2025,7 +2026,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  caForTestServerWithBadCertName.Bundle(),
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": x509: certificate is valid for 10.2.3.4, not 127.0.0.1`),
+			wantError: testutil.WantExactErrorString(fmt.Sprintf(`LDAP Result Code 200 "Network Error": %sx509: certificate is valid for 10.2.3.4, not 127.0.0.1`, tlsassertions.GetTLSErrorPrefix())),
 		},
 		{
 			name:      "invalid CA bundle with TLS",

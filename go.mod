@@ -1,6 +1,11 @@
 module go.pinniped.dev
 
-go 1.18
+go 1.19
+
+// replace required because https://github.com/kubernetes/apiserver/blob/v0.26.2/pkg/server/routes/openapi.go#L44
+// is not updated to use k8s.io/kube-openapi@4b54b81d.
+// See https://github.com/kubernetes/kube-openapi/commit/4b54b81dd9c724d5b77bb1582a103bb175cf5a04
+replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230307230338-69ee2d25a840
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
@@ -31,24 +36,24 @@ require (
 	github.com/stretchr/testify v1.8.2
 	github.com/tdewolff/minify/v2 v2.12.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.6.0
-	golang.org/x/net v0.7.0
-	golang.org/x/oauth2 v0.5.0
+	golang.org/x/crypto v0.7.0
+	golang.org/x/net v0.8.0
+	golang.org/x/oauth2 v0.6.0
 	golang.org/x/sync v0.1.0
-	golang.org/x/term v0.5.0
-	golang.org/x/text v0.7.0
+	golang.org/x/term v0.6.0
+	golang.org/x/text v0.8.0
 	gopkg.in/square/go-jose.v2 v2.6.0
-	k8s.io/api v0.26.1
-	k8s.io/apiextensions-apiserver v0.26.1
-	k8s.io/apimachinery v0.26.1
-	k8s.io/apiserver v0.26.1
-	k8s.io/client-go v0.26.1
-	k8s.io/component-base v0.26.1
-	k8s.io/gengo v0.0.0-20221011193443-fad74ee6edd9
-	k8s.io/klog/v2 v2.90.0
-	k8s.io/kube-aggregator v0.26.1
-	k8s.io/kube-openapi v0.0.0-20230224204730-66828de6f33b
-	k8s.io/utils v0.0.0-20230220204549-a5ecb0141aa5
+	k8s.io/api v0.26.2
+	k8s.io/apiextensions-apiserver v0.26.2
+	k8s.io/apimachinery v0.26.2
+	k8s.io/apiserver v0.26.2
+	k8s.io/client-go v0.26.2
+	k8s.io/component-base v0.26.2
+	k8s.io/gengo v0.0.0-20230306165830-ab3349d207d4
+	k8s.io/klog/v2 v2.90.1
+	k8s.io/kube-aggregator v0.26.2
+	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -63,7 +68,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
-	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/cristalhq/jwt/v4 v4.0.2 // indirect
@@ -140,10 +145,10 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect
-	golang.org/x/tools v0.4.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220616135557-88e70c0c3a90 // indirect
 	google.golang.org/grpc v1.49.0 // indirect
@@ -153,7 +158,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.26.1 // indirect
+	k8s.io/kms v0.26.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.35 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect

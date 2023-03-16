@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -37,6 +37,7 @@ func PinnipedCLIPath(t *testing.T) string {
 	path := filepath.Join(testutil.TempDir(t), "pinniped")
 	if pinnipedCLIBinaryCache.buf != nil {
 		t.Log("using previously built pinniped CLI binary")
+		//nolint:gosec // this is test code.
 		require.NoError(t, os.WriteFile(path, pinnipedCLIBinaryCache.buf, 0500))
 		return path
 	}

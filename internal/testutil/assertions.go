@@ -16,6 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"go.pinniped.dev/internal/testutil/tlsassertions"
 )
 
 func RequireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
@@ -179,8 +181,8 @@ func WantX509UntrustedCertErrorString(expectedErrorFormatSpecifier string, expec
 		// This is the normal Go x509 library error string.
 		standardErr := `x509: certificate signed by unknown authority`
 		allowedErrorStrings := []string{
-			fmt.Sprintf(expectedErrorFormatSpecifier, macOSErr),
-			fmt.Sprintf(expectedErrorFormatSpecifier, standardErr),
+			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTLSErrorPrefix()+macOSErr),
+			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTLSErrorPrefix()+standardErr),
 		}
 		// Allow either.
 		require.Contains(t, allowedErrorStrings, actualErrorStr)

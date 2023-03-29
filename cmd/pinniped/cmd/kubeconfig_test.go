@@ -81,6 +81,7 @@ func TestGetKubeconfig(t *testing.T) {
 			"discovery.supervisor.pinniped.dev/v1alpha1": {
 				"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"
 			},
+			"scopes_supported": ["openid", "offline_access", "pinniped:request-audience", "username", "groups"],
 			"another-key": "another-value"
 		}`, issuerURL, issuerURL)
 	}
@@ -1086,7 +1087,8 @@ func TestGetKubeconfig(t *testing.T) {
 					"issuer": "%s",
 					"discovery.supervisor.pinniped.dev/v1alpha1": {
 						"pinniped_identity_providers_endpoint": "https%%://illegal_url"
-					}
+					},
+					"scopes_supported": ["openid", "offline_access", "pinniped:request-audience", "username", "groups"]
 				}`, issuerURL)
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -1369,7 +1371,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1406,41 +1408,41 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
 				return here.Doc(`
-        		apiVersion: v1
-        		clusters:
-        		- cluster:
-        		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		    server: https://fake-server-url-value
-        		  name: kind-cluster-pinniped
-        		contexts:
-        		- context:
-        		    cluster: kind-cluster-pinniped
-        		    user: kind-user-pinniped
-        		  name: kind-context-pinniped
-        		current-context: kind-context-pinniped
-        		kind: Config
-        		preferences: {}
-        		users:
-        		- name: kind-user-pinniped
-        		  user:
-        		    exec:
-        		      apiVersion: client.authentication.k8s.io/v1beta1
-        		      args:
-        		      - login
-        		      - static
-        		      - --enable-concierge
-        		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-authenticator-name=test-authenticator
-        		      - --concierge-authenticator-type=webhook
-        		      - --concierge-endpoint=https://fake-server-url-value
-        		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --token=test-token
-        		      command: '.../path/to/pinniped'
-        		      env: []
-                installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-                  for more details
-        		      provideClusterInfo: true
-			`)
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - static
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=webhook
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --token=test-token
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+				`)
 			},
 		},
 		{
@@ -1470,42 +1472,42 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
 				return here.Doc(`
-        		apiVersion: v1
-        		clusters:
-        		- cluster:
-        		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		    server: https://fake-server-url-value
-        		  name: kind-cluster-pinniped
-        		contexts:
-        		- context:
-        		    cluster: kind-cluster-pinniped
-        		    user: kind-user-pinniped
-        		  name: kind-context-pinniped
-        		current-context: kind-context-pinniped
-        		kind: Config
-        		preferences: {}
-        		users:
-        		- name: kind-user-pinniped
-        		  user:
-        		    exec:
-        		      apiVersion: client.authentication.k8s.io/v1beta1
-        		      args:
-        		      - login
-        		      - static
-        		      - --enable-concierge
-        		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-authenticator-name=test-authenticator
-        		      - --concierge-authenticator-type=webhook
-        		      - --concierge-endpoint=https://fake-server-url-value
-        		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --credential-cache=
-        		      - --token-env=TEST_TOKEN
-        		      command: '.../path/to/pinniped'
-        		      env: []
-                installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-                  for more details
-        		      provideClusterInfo: true
-			`)
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - static
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=webhook
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --credential-cache=
+						  - --token-env=TEST_TOKEN
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+				`)
 			},
 		},
 		{
@@ -1573,7 +1575,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1659,7 +1661,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
@@ -1772,7 +1774,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
@@ -1881,7 +1883,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -1960,7 +1962,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2039,7 +2041,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2114,7 +2116,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2187,7 +2189,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2267,7 +2269,272 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "IDP discovery endpoint is listed in OIDC discovery document but scopes_supported does not include username or groups, so do not request username or groups in kubeconfig's --scopes",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			oidcDiscoveryResponse: func(issuerURL string) string {
+				return here.Docf(`{
+					"issuer": "%s",
+					"discovery.supervisor.pinniped.dev/v1alpha1": {
+						"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"
+					},
+					"scopes_supported": ["openid", "offline_access", "pinniped:request-audience"]
+				}`, issuerURL, issuerURL)
+			},
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="username"`,
+					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="groups"`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  - --upstream-identity-provider-name=some-oidc-idp
+						  - --upstream-identity-provider-type=oidc
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "IDP discovery endpoint is listed in OIDC discovery document but scopes_supported is not listed (which shouldn't really happen), so do not request username or groups in kubeconfig's --scopes",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			oidcDiscoveryResponse: func(issuerURL string) string {
+				return here.Docf(`{
+					"issuer": "%s",
+					"discovery.supervisor.pinniped.dev/v1alpha1": {
+						"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"
+					}
+				}`, issuerURL, issuerURL)
+			},
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="username"`,
+					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="groups"`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  - --upstream-identity-provider-name=some-oidc-idp
+						  - --upstream-identity-provider-type=oidc
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "IDP discovery endpoint is listed in OIDC discovery document but scopes_supported does not include username or groups, and scopes username and groups were also not requested by flags",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--oidc-scopes", "foo,bar,baz",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			oidcDiscoveryResponse: func(issuerURL string) string {
+				return here.Docf(`{
+					"issuer": "%s",
+					"discovery.supervisor.pinniped.dev/v1alpha1": {
+						"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"
+					},
+					"scopes_supported": ["openid", "offline_access", "pinniped:request-audience"]
+				}`, issuerURL, issuerURL)
+			},
+			idpsDiscoveryResponse: here.Docf(`{
+				"pinniped_identity_providers": [
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=foo,bar,baz
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  - --upstream-identity-provider-name=some-oidc-idp
+						  - --upstream-identity-provider-type=oidc
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2291,7 +2558,8 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryStatusCode: http.StatusNotFound, // should not get called by the client in this case
+			oidcDiscoveryResponse:   happyOIDCDiscoveryResponse, // still called to check for support of username and groups scopes
+			idpsDiscoveryStatusCode: http.StatusNotFound,        // should not get called by the client in this case
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -2345,7 +2613,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2428,7 +2696,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2486,7 +2754,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2547,7 +2815,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2608,7 +2876,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2670,7 +2938,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2733,7 +3001,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2794,7 +3062,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2854,7 +3122,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  command: '.../path/to/pinniped'
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
-             for more details
+						    for more details
 						  provideClusterInfo: true
 					`,
 					issuerURL,
@@ -2888,40 +3156,40 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
 				return here.Doc(`
-        		apiVersion: v1
-        		clusters:
-        		- cluster:
-        		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		    server: https://fake-server-url-value
-        		  name: kind-cluster-pinniped
-        		contexts:
-        		- context:
-        		    cluster: kind-cluster-pinniped
-        		    user: kind-user-pinniped
-        		  name: kind-context-pinniped
-        		current-context: kind-context-pinniped
-        		kind: Config
-        		preferences: {}
-        		users:
-        		- name: kind-user-pinniped
-        		  user:
-        		    exec:
-        		      apiVersion: client.authentication.k8s.io/v1beta1
-        		      args:
-        		      - login
-        		      - static
-        		      - --enable-concierge
-        		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-authenticator-name=test-authenticator
-        		      - --concierge-authenticator-type=webhook
-        		      - --concierge-endpoint=https://fake-server-url-value
-        		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --token=test-token
-        		      command: '.../path/to/pinniped'
-        		      env: []
-                installHint: Test installHint message
-        		      provideClusterInfo: true
-			`)
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - static
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=webhook
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --token=test-token
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: Test installHint message
+						  provideClusterInfo: true
+				`)
 			},
 		},
 	}

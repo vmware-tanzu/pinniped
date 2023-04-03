@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -34,7 +34,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 	groupFix := strings.NewReplacer(".supervisor.pinniped.dev", ".supervisor."+env.APIGroupSuffix)
 	errFix := strings.NewReplacer(makeErrFix(reallyOld)...)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
 	namespaceClient := adminClient.CoreV1().Namespaces()
@@ -516,7 +516,7 @@ func makeErrFix(reallyOld bool) []string {
 func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
 	secrets := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)

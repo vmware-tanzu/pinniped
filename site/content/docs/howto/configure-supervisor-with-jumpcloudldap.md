@@ -71,7 +71,7 @@ spec:
     base: "ou=Users,o=YOUR_ORG_ID,dc=jumpcloud,dc=com"
 
     # Specify how to filter the search to find the specific user by username.
-    # "{}" will be replaced # by the username that the end-user had typed
+    # "{}" will be replaced by the username that the end-user had typed
     # when they tried to log in.
     filter: "&(objectClass=inetOrgPerson)(uid={})"
 

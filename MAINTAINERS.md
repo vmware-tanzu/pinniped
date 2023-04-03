@@ -16,9 +16,3 @@
 | Matt Moyer        | [mattmoyer](https://github.com/mattmoyer)               |
 | Mo Khan           | [enj](https://github.com/enj)                           |
 | Pablo Schuhmacher | [pabloschuhmacher](https://github.com/pabloschuhmacher) |
-
-## Pinniped Community Management
-
-| Community Manager | GitHub ID                             |
-|-------------------|---------------------------------------|
-| Nigel Brown       | [pnbrown](https://github.com/pnbrown) |

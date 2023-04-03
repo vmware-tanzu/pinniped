@@ -5,6 +5,6 @@
 
 package tlsassertions
 
-func GetTlsErrorPrefix() string {
+func GetTLSErrorPrefix() string {
 	return ""
 }

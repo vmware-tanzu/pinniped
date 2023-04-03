@@ -374,7 +374,7 @@ kind: TokenCredentialRequest
 spec:
   token: <cluster-scoped ID token value>
   authenticator:
-    apiGroup: authentication.concierge.pinniped.dev/v1alpha1
+    apiGroup: authentication.concierge.pinniped.dev
     kind: JWTAuthenticator
     name: <the metadata.name of the JWTAuthenticator to be used>
 ```

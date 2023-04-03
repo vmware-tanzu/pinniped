@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -458,10 +458,19 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 				}
 				require.NotNilf(t, actualResourceList, "could not find groupVersion %s", groupVersion)
 
-				// Because its hard to predict the storage version hash (e.g. "t/+v41y+3e4="), we just don't
-				// worry about comparing that field.
 				for i := range actualResourceList.APIResources {
+					// Because its hard to predict the storage version hash (e.g. "t/+v41y+3e4="), we just don't
+					// worry about comparing that field.
 					actualResourceList.APIResources[i].StorageVersionHash = ""
+
+					// These fields were empty for a long time but started to be non-empty at some Kubernetes version.
+					// The filled-in fields were first noticed when CI tested against a 1.27 pre-release.
+					// To make this test pass on all versions of Kube, just ignore these fields for now.
+					actualResourceList.APIResources[i].Group = ""
+					actualResourceList.APIResources[i].Version = ""
+					if strings.HasSuffix(actualResourceList.APIResources[i].Name, "/status") {
+						actualResourceList.APIResources[i].SingularName = ""
+					}
 				}
 				require.ElementsMatch(t, expectedResources, actualResourceList.APIResources, "unexpected API resources")
 			}

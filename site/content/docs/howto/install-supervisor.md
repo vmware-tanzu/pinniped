@@ -91,6 +91,11 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
      `ytt --file . --file site/dev-env.yaml | kapp deploy --app pinniped-supervisor --file -`
 
+## Other notes
+
+_Important:_ Configure Kubernetes authorization policies (i.e. RBAC) to prevent non-admin users from reading the
+resources, especially the Secrets, in the Supervisor's namespace.
+
 ## Next steps
 
 Next, [configure the Supervisor as an OIDC issuer]({{< ref "configure-supervisor" >}})!

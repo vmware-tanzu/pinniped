@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcclient implements a CLI OIDC login flow.
@@ -27,6 +27,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/strings/slices"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -741,7 +742,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 	if err := h.provider.Claims(&discoveryClaims); err != nil {
 		return fmt.Errorf("could not decode response_modes_supported in OIDC discovery from %q: %w", h.issuer, err)
 	}
-	h.useFormPost = stringSliceContains(discoveryClaims.ResponseModesSupported, "form_post")
+	h.useFormPost = slices.Contains(discoveryClaims.ResponseModesSupported, "form_post")
 	return nil
 }
 
@@ -754,15 +755,6 @@ func validateURLUsesHTTPS(uri string, uriName string) error {
 		return fmt.Errorf("%s must be an https URL, but had scheme %q instead", uriName, parsed.Scheme)
 	}
 	return nil
-}
-
-func stringSliceContains(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {

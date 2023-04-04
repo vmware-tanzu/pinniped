@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestFormat(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 
-	const startLogLine = 46 // make this match the current line number
+	const startLogLine = 47 // make this match the current line number
 
 	Info("hello", "happy", "day", "duration", time.Hour+time.Minute)
 	require.True(t, scanner.Scan())
@@ -122,6 +123,12 @@ func TestFormat(t *testing.T) {
 	WithName("stacky").WithName("does").Info("has a stack trace!")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
+
+	line := "1576"
+	if strings.Contains(runtime.Version(), "1.19") {
+		line = "1446"
+	}
+
 	require.JSONEq(t, fmt.Sprintf(`
 {
   "level": "info",
@@ -136,8 +143,8 @@ func TestFormat(t *testing.T) {
 				`go.pinniped.dev/internal/plog.TestFormat
 	%s/config_test.go:%d
 testing.tRunner
-	%s/src/testing/testing.go:1446`,
-				wd, startLogLine+2+13+14+11+12+24, runtime.GOROOT(),
+	%s/src/testing/testing.go:%s`,
+				wd, startLogLine+2+13+14+11+12+24, runtime.GOROOT(), line,
 			),
 		),
 	), scanner.Text())
@@ -151,13 +158,13 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  plog/config_test.go:%d  something happened  {"error": "invalid log format, valid choices are the empty string, json and text", "an": "item"}`,
-		startLogLine+2+13+14+11+12+24+28), scanner.Text())
+		startLogLine+2+13+14+11+12+24+28+6), scanner.Text())
 
 	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b", "slightly less than a year", 363*24*time.Hour, "slightly more than 2 years", 2*367*24*time.Hour)
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  burrito  plog/config_test.go:%d  wee  {"a": "b", "slightly less than a year": "363d", "slightly more than 2 years": "2y4d", "error": "invalid log level, valid choices are the empty string, info, debug, trace and all"}`,
-		startLogLine+2+13+14+11+12+24+28+6), scanner.Text())
+		startLogLine+2+13+14+11+12+24+28+6+6), scanner.Text())
 
 	origTimeNow := textlogger.TimeNow
 	t.Cleanup(func() {
@@ -183,19 +190,19 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what is happening" does klog="work?"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6), scanner.Text())
 
 	Logr().WithName("panda").V(KlogLevelDebug).Info("are the best", "yes?", "yes.")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "panda: are the best" yes?="yes."`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6), scanner.Text())
 
 	New().WithName("hi").WithName("there").WithValues("a", 1, "b", 2).Always("do it")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "hi/there: do it" a=1 b=2`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+6), scanner.Text())
 
 	l := WithValues("x", 33, "z", 22)
 	l.Debug("what to do")
@@ -203,17 +210,17 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what to do" x=33 z=22`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+6), scanner.Text())
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "and why" x=33 z=22`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+6), scanner.Text())
 
 	old.Always("should be klog text format", "for", "sure")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: should be klog text format" is="old" for="sure"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+6), scanner.Text())
 
 	// make sure child loggers do not share state
 	old1 := old.WithValues("i am", "old1")
@@ -223,11 +230,11 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: warn" is="old" i am="old1" warning=true`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9+6), scanner.Text())
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change/old2: info" is="old"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9+1), scanner.Text())
+		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9+1+6), scanner.Text())
 
 	Trace("should not be logged", "for", "sure")
 	require.Empty(t, buf.String())

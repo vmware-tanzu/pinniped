@@ -15,11 +15,12 @@ This guide shows you how to use this capability _without_ the Pinniped Superviso
 This is most useful if you have only a single cluster and want to authenticate to it via an existing OIDC provider.
 
 If you have multiple clusters, you may want to [install]({{< ref "install-supervisor" >}}) and [configure]({{< ref "configure-supervisor" >}}) the Pinniped Supervisor.
-Then you can [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}}).
+Then you can [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}})
+instead of following the guide below.
 
 ## Prerequisites
 
-Before starting, you should have the [command-line tool installed]({{< ref "install-cli" >}}) locally and [Concierge running in your cluster]({{< ref "install-concierge" >}}).
+Before starting, you should have the [Pinniped command-line tool installed]({{< ref "install-cli" >}}) locally and [Concierge running in your cluster]({{< ref "install-concierge" >}}).
 
 You should also have some existing OIDC issuer configuration:
 
@@ -37,6 +38,7 @@ metadata:
    name: my-jwt-authenticator
 spec:
    issuer: https://my-issuer.example.com/any/path
+   # This audience value must be the same as your OIDC client's ID.
    audience: my-client-id
    claims:
      username: email
@@ -59,6 +61,9 @@ pinniped get kubeconfig \
   --oidc-listen-port 12345 \
   > my-cluster.yaml
 ```
+
+Note that the value for the `--oidc-client-id` flag must be your OIDC client's ID, which must also be the same
+value declared as the `audience` in the JWTAuthenticator.
 
 This creates a kubeconfig YAML file `my-cluster.yaml` that targets your JWTAuthenticator using `pinniped login oidc` as an [ExecCredential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 
@@ -126,6 +131,82 @@ You should see:
     --user my-username@example.com
   ```
 
+## Including group membership
+
+If your OIDC provider supports adding user group memberships as a claim in the ID tokens, then you can
+use Pinniped to transmit those group memberships into Kubernetes.
+
+For example, one popular OIDC provider can include group memberships in an ID token claim called `groups`,
+if the client requests the scope called `groups` at authorization time.
+
+Unfortunately, each OIDC provider handles scopes a little differently, so please refer to your provider's documentation
+to see if it is possible for the provider to add group membership information to the ID token.
+
+### Update the JWTAuthenticator
+
+Update the JWTAuthenticator to describe the name of the ID token claim where groups names will reside:
+
+```yaml
+apiVersion: authentication.concierge.pinniped.dev/v1alpha1
+kind: JWTAuthenticator
+metadata:
+   name: my-jwt-authenticator
+spec:
+   issuer: https://my-issuer.example.com/any/path
+   audience: my-client-id
+   claims:
+     username: email
+     # Tell the JWTAuthenticator the name of the ID token claim
+     # where groups names will reside. For example, the name of
+     # the ID token claim is "groups", then set it as the value
+     # here. The name of this key is always "groups".
+     groups: groups
+```
+
+If you've saved this into a file `my-jwt-authenticator.yaml`, then update it into your cluster using:
+
+```sh
+kubectl apply -f my-jwt-authenticator.yaml
+```
+
+### Generate an updated kubeconfig file
+
+Generate a kubeconfig file to target the updated JWTAuthenticator. Note that this is almost the same command
+as before, but since our particular OIDC issuer requires that we also request the `groups` scope at
+authorization time, then we add it to the list of scopes here.
+
+```sh
+pinniped get kubeconfig \
+  --oidc-client-id my-client-id \
+  --oidc-scopes openid,email,groups \
+  --oidc-listen-port 12345 \
+  > my-cluster.yaml
+```
+
+### Use the kubeconfig file
+
+Use the kubeconfig with `kubectl` to access your cluster, as before:
+
+```sh
+# Remove the client-side session cache, which is equivalent to
+# performing a client-side logout.
+rm -rf ~/.config/pinniped
+
+# Log in again by issuing a kubectl command.
+kubectl --kubeconfig my-cluster.yaml get namespaces
+```
+
+To see the username and group membership as understood by the Kubernetes cluster, you can use
+this command:
+
+```sh
+pinniped whoami --kubeconfig my-cluster.yaml
+```
+
+If your groups configuration worked, then you should see your list of group names from your OIDC provider
+included in the output. These group names may now be used with Kubernetes RBAC to provide authorization to
+resources on the cluster.
+
 ## Other notes
 
 - Pinniped kubeconfig files do not contain secrets and are safe to share between users.
@@ -137,7 +218,9 @@ You should see:
 - If your OIDC provider supports [wildcard port number matching](https://tools.ietf.org/html/draft-ietf-oauth-security-topics-16#section-2.1) for localhost URIs, you can omit the `--oidc-listen-port` flag to use a randomly chosen ephemeral TCP port.
 
 - The Pinniped command-line tool can only act as a public client with no client secret.
-  If your provider only supports non-public clients, consider using the Pinniped Supervisor.
+  If your provider only supports non-public clients, consider using the Pinniped Supervisor instead of following this guide.
 
-- In general, it is not safe to use the same OIDC client across multiple clusters.
-  If you need to access multiple clusters, please [install the Pinniped Supervisor]({{< ref "install-supervisor" >}}).
+- In general, it is not safe to use the same OIDC client across multiple clusters. Each cluster should use its own OIDC client
+  to ensure that tokens sent to one cluster cannot also be used for another cluster.
+  If you need to provide access to multiple clusters, please consider [installing the Pinniped Supervisor]({{< ref "install-supervisor" >}})
+  instead of following this guide.

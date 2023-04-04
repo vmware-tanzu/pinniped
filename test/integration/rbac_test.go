@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -47,9 +47,6 @@ func TestServiceAccountPermissions(t *testing.T) {
 	// the impersonation proxy SA has the same permissions for all checks because it should only be authorized via cluster role bindings
 
 	expectedResourceRules := []authorizationv1.ResourceRule{
-		// system:basic-user is bound to system:authenticated by default
-		{Verbs: []string{"create"}, APIGroups: []string{"authorization.k8s.io"}, Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"}},
-
 		// the expected impersonation permissions
 		{Verbs: []string{"impersonate"}, APIGroups: []string{""}, Resources: []string{"users", "groups", "serviceaccounts"}},
 		{Verbs: []string{"impersonate"}, APIGroups: []string{"authentication.k8s.io"}, Resources: []string{"*"}},
@@ -57,6 +54,23 @@ func TestServiceAccountPermissions(t *testing.T) {
 		// we bind these to system:authenticated
 		{Verbs: []string{"create", "list"}, APIGroups: []string{"login.concierge." + env.APIGroupSuffix}, Resources: []string{"tokencredentialrequests"}},
 		{Verbs: []string{"create", "list"}, APIGroups: []string{"identity.concierge." + env.APIGroupSuffix}, Resources: []string{"whoamirequests"}},
+	}
+
+	// system:basic-user is bound to system:authenticated by default, so the SA gets these permissions too.
+	// See https://kubernetes.io/docs/reference/access-authn-authz/rbac/#discovery-roles.
+	// Note that this list previously only included "selfsubjectaccessreviews" and "selfsubjectrulesreviews",
+	// but later was updated in Kubernetes to also include "selfsubjectreviews".
+	// Rather than explicitly listing them all as expectations, dynamically append them here, so this test
+	// can pass against all versions of Kubernetes.
+	basicUserClusterRole, err := testlib.NewKubernetesClientset(t).RbacV1().ClusterRoles().Get(ctx, "system:basic-user", metav1.GetOptions{})
+	require.NoError(t, err)
+	for _, policyRule := range basicUserClusterRole.Rules {
+		expectedResourceRules = append(expectedResourceRules, authorizationv1.ResourceRule{
+			Verbs:         policyRule.Verbs,
+			APIGroups:     policyRule.APIGroups,
+			Resources:     policyRule.Resources,
+			ResourceNames: policyRule.ResourceNames,
+		})
 	}
 
 	if otherPinnipedGroupSuffix := getOtherPinnipedGroupSuffix(t); len(otherPinnipedGroupSuffix) > 0 {

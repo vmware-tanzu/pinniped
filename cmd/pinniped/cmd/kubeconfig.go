@@ -23,6 +23,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/utils/strings/slices"
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -95,6 +96,11 @@ type getKubeconfigParams struct {
 	credentialCachePath       string
 	credentialCachePathSet    bool
 	installHint               string
+}
+
+type discoveryResponseScopesSupported struct {
+	// Same as ScopesSupported in the Supervisor's discovery handler's struct.
+	ScopesSupported []string `json:"scopes_supported"`
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -232,11 +238,9 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		cluster.CertificateAuthorityData = flags.concierge.caBundle
 	}
 
-	// If there is an issuer, and if any upstream IDP flags are not already set, then try to discover Supervisor upstream IDP details.
-	// When all the upstream IDP flags are set by the user, then skip discovery and don't validate their input. Maybe they know something
-	// that we can't know, like the name of an IDP that they are going to define in the future.
-	if len(flags.oidc.issuer) > 0 && (flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "" || flags.oidc.upstreamIDPFlow == "") {
-		if err := discoverSupervisorUpstreamIDP(ctx, &flags, deps.log); err != nil {
+	if len(flags.oidc.issuer) > 0 {
+		err = pinnipedSupervisorDiscovery(ctx, &flags, deps.log)
+		if err != nil {
 			return err
 		}
 	}
@@ -733,21 +737,75 @@ func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool 
 	return false
 }
 
-func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams, log plog.MinLogger) error {
-	httpClient, err := newDiscoveryHTTPClient(flags.oidc.caBundle)
+func pinnipedSupervisorDiscovery(ctx context.Context, flags *getKubeconfigParams, log plog.MinLogger) error {
+	// Make a client suitable for calling the provider, which may or may not be a Pinniped Supervisor.
+	oidcProviderHTTPClient, err := newDiscoveryHTTPClient(flags.oidc.caBundle)
 	if err != nil {
 		return err
 	}
 
-	pinnipedIDPsEndpoint, err := discoverIDPsDiscoveryEndpointURL(ctx, flags.oidc.issuer, httpClient)
+	// Call the provider's discovery endpoint, but don't parse the results yet.
+	discoveredProvider, err := discoverOIDCProvider(ctx, flags.oidc.issuer, oidcProviderHTTPClient)
+	if err != nil {
+		return err
+	}
+
+	// Parse the discovery response to find the Supervisor IDP discovery endpoint.
+	pinnipedIDPsEndpoint, err := discoverIDPsDiscoveryEndpointURL(discoveredProvider)
 	if err != nil {
 		return err
 	}
 	if pinnipedIDPsEndpoint == "" {
 		// The issuer is not advertising itself as a Pinniped Supervisor which supports upstream IDP discovery.
+		// Since this field is not present, then assume that the provider is not a Pinniped Supervisor. This field
+		// was added to the discovery response in v0.9.0, which is so long ago that we can assume there are no such
+		// old Supervisors in the wild which need to work with this CLI command anymore. Since the issuer is not a
+		// Supervisor, then there is no need to do the rest of the Supervisor-specific business logic below related
+		// to username/groups scopes or IDP types/names/flows.
 		return nil
 	}
 
+	// Now that we know that the provider is a Supervisor, perform an additional check based on its response.
+	// The username and groups scopes were added to the Supervisor in v0.20.0, and were also added to the
+	// "scopes_supported" field in the discovery response in that same version. If this CLI command is talking
+	// to an older Supervisor, then remove the username and groups scopes from the list of requested scopes
+	// since they will certainly cause an error from the old Supervisor during authentication.
+	supervisorSupportsBothUsernameAndGroupsScopes, err := discoverScopesSupportedIncludesBothUsernameAndGroups(discoveredProvider)
+	if err != nil {
+		return err
+	}
+	if !supervisorSupportsBothUsernameAndGroupsScopes {
+		flags.oidc.scopes = slices.Filter(nil, flags.oidc.scopes, func(scope string) bool {
+			if scope == oidcapi.ScopeUsername || scope == oidcapi.ScopeGroups {
+				log.Info("removed scope from --oidc-scopes list because it is not supported by this Supervisor", "scope", scope)
+				return false // Remove username and groups scopes if there were present in the flags.
+			}
+			return true // Keep any other scopes in the flag list.
+		})
+	}
+
+	// If any upstream IDP flags are not already set, then try to discover Supervisor upstream IDP details.
+	// When all the upstream IDP flags are set by the user, then skip discovery and don't validate their input.
+	// Maybe they know something that we can't know, like the name of an IDP that they are going to define in the
+	// future.
+	if flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "" || flags.oidc.upstreamIDPFlow == "" {
+		if err := discoverSupervisorUpstreamIDP(ctx, pinnipedIDPsEndpoint, oidcProviderHTTPClient, flags, log); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func discoverOIDCProvider(ctx context.Context, issuer string, httpClient *http.Client) (*coreosoidc.Provider, error) {
+	discoveredProvider, err := coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), issuer)
+	if err != nil {
+		return nil, fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
+	}
+	return discoveredProvider, nil
+}
+
+func discoverSupervisorUpstreamIDP(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client, flags *getKubeconfigParams, log plog.MinLogger) error {
 	discoveredUpstreamIDPs, err := discoverAllAvailableSupervisorUpstreamIDPs(ctx, pinnipedIDPsEndpoint, httpClient)
 	if err != nil {
 		return err
@@ -787,19 +845,22 @@ func newDiscoveryHTTPClient(caBundleFlag caBundleFlag) (*http.Client, error) {
 	return phttp.Default(rootCAs), nil
 }
 
-func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpClient *http.Client) (string, error) {
-	discoveredProvider, err := coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), issuer)
-	if err != nil {
-		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
-	}
-
+func discoverIDPsDiscoveryEndpointURL(discoveredProvider *coreosoidc.Provider) (string, error) {
 	var body idpdiscoveryv1alpha1.OIDCDiscoveryResponse
-	err = discoveredProvider.Claims(&body)
+	err := discoveredProvider.Claims(&body)
 	if err != nil {
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}
-
 	return body.SupervisorDiscovery.PinnipedIDPsEndpoint, nil
+}
+
+func discoverScopesSupportedIncludesBothUsernameAndGroups(discoveredProvider *coreosoidc.Provider) (bool, error) {
+	var body discoveryResponseScopesSupported
+	err := discoveredProvider.Claims(&body)
+	if err != nil {
+		return false, fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
+	}
+	return slices.Contains(body.ScopesSupported, oidcapi.ScopeUsername) && slices.Contains(body.ScopesSupported, oidcapi.ScopeGroups), nil
 }
 
 func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]idpdiscoveryv1alpha1.PinnipedIDP, error) {

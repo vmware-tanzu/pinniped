@@ -104,7 +104,7 @@ spec:
     base: "OU=my-department,OU=Users,DC=activedirectory,DC=example,DC=com"
 
     # Specify how to filter the search to find the specific user by username.
-    # "{}" will be replaced # by the username that the end-user had typed
+    # "{}" will be replaced by the username that the end-user had typed
     # when they tried to log in.
     filter: "&(objectClass=person)(userPrincipalName={})"
 

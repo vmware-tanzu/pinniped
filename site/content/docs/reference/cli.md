@@ -209,7 +209,7 @@ pinniped get kubeconfig [flags]
 
 ### SEE ALSO
 
-* [pinniped get]()	 - get
+* [pinniped get]()	 - Gets one of [kubeconfig]
 
 ## pinniped help
 
@@ -232,7 +232,95 @@ pinniped help [command] [flags]
 
 ### SEE ALSO
 
-* [pinniped]()	 - pinniped
+* [pinniped]()	 - 
+
+## pinniped login oidc
+
+Login using an OpenID Connect provider
+
+### Synopsis
+
+Login using an OpenID Connect provider
+
+Use "pinniped get kubeconfig" to generate a kubeconfig file which includes this
+login command in its configuration. This login command is not meant to be
+invoked directly by a user.
+
+This login command is a Kubernetes client-go credential plugin which is meant to
+be configured inside a kubeconfig file. (See the Kubernetes authentication
+documentation for more information about client-go credential plugins.)
+
+```
+pinniped login oidc --issuer ISSUER [flags]
+```
+
+### Options
+
+```
+      --ca-bundle strings                        Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
+      --ca-bundle-data strings                   Base64 encoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)
+      --client-id string                         OpenID Connect client ID (default "pinniped-cli")
+      --concierge-api-group-suffix string        Concierge API group suffix (default "pinniped.dev")
+      --concierge-authenticator-name string      Concierge authenticator name
+      --concierge-authenticator-type string      Concierge authenticator type (e.g., 'webhook', 'jwt')
+      --concierge-ca-bundle-data string          CA bundle to use when connecting to the Concierge
+      --concierge-endpoint string                API base for the Concierge endpoint
+      --credential-cache string                  Path to cluster-specific credentials cache ("" disables the cache) (default "/root/.config/pinniped/credentials.yaml")
+      --enable-concierge                         Use the Concierge to login
+  -h, --help                                     help for oidc
+      --issuer string                            OpenID Connect issuer URL
+      --listen-port uint16                       TCP port for localhost listener (authorization code flow only)
+      --request-audience string                  Request a token with an alternate audience using RFC8693 token exchange
+      --scopes strings                           OIDC scopes to request during login (default [offline_access,openid,pinniped:request-audience,username,groups])
+      --session-cache string                     Path to session cache file (default "/root/.config/pinniped/sessions.yaml")
+      --skip-browser                             Skip opening the browser (just print the URL)
+      --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'browser_authcode', 'cli_password')
+      --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
+      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory') (default "oidc")
+```
+
+### SEE ALSO
+
+* [pinniped login]()	 - Authenticates with one of [oidc, static]
+
+## pinniped login static
+
+Login using a static token
+
+### Synopsis
+
+Login using a static token
+
+Use "pinniped get kubeconfig" to generate a kubeconfig file which includes this
+login command in its configuration. This login command is not meant to be
+invoked directly by a user.
+
+This login command is a Kubernetes client-go credential plugin which is meant to
+be configured inside a kubeconfig file. (See the Kubernetes authentication
+documentation for more information about client-go credential plugins.)
+
+```
+pinniped login static [--token TOKEN] [--token-env TOKEN_NAME] [flags]
+```
+
+### Options
+
+```
+      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
+      --concierge-authenticator-name string   Concierge authenticator name
+      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
+      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
+      --concierge-endpoint string             API base for the Concierge endpoint
+      --credential-cache string               Path to cluster-specific credentials cache ("" disables the cache) (default "/root/.config/pinniped/credentials.yaml")
+      --enable-concierge                      Use the Concierge to login
+  -h, --help                                  help for static
+      --token string                          Static token to present during login
+      --token-env string                      Environment variable containing a static token
+```
+
+### SEE ALSO
+
+* [pinniped login]()	 - Authenticates with one of [oidc, static]
 
 ## pinniped version
 
@@ -250,7 +338,7 @@ pinniped version [flags]
 
 ### SEE ALSO
 
-* [pinniped]()	 - pinniped
+* [pinniped]()	 - 
 
 ## pinniped whoami
 
@@ -272,5 +360,5 @@ pinniped whoami [flags]
 
 ### SEE ALSO
 
-* [pinniped]()	 - pinniped
+* [pinniped]()	 - 
 

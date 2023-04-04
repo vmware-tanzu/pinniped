@@ -15,18 +15,23 @@
 	{{ with .OutputFormats.Get "RSS" -}}
 		{{ printf `<link rel="%s" type="%s" href="%s" title="%s">` .Rel .MediaType.Type .RelPermalink $.Site.Title | safeHTML }}
 	{{- end }}
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.css" />
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
+ 	<style> 
+ 		.DocSearch-Button{
+ 			margin: 0px;	
+ 		}
+ 	</style>
 </head>
 <body>
 	{{ partial "header" . }}
 	{{ block "main" . }}{{ end }}
 	{{ partial "footer" . }}
-	<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.js"></script>
+	<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@docsearch/js@3/dist/umd/index.js"></script>
 <script type="text/javascript"> docsearch({
 appId: 'FYQE1VJB02',
-apiKey: '826ac6c64f20d5e00a72a0599cf76177',
+apiKey: 'ed11fcea9e709eb58558e949c2303491',
 indexName: 'pinniped',
-inputSelector: '.docsearch-input',
+container: '#docsearch-div',
 debug: false // Set debug to true if you want to inspect the dropdown
 });
 </script>

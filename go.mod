@@ -37,11 +37,11 @@ require (
 	github.com/tdewolff/minify/v2 v2.12.5
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.7.0
-	golang.org/x/net v0.8.0
+	golang.org/x/net v0.9.0
 	golang.org/x/oauth2 v0.6.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/term v0.7.0
-	golang.org/x/text v0.8.0
+	golang.org/x/text v0.9.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.26.3
 	k8s.io/apiextensions-apiserver v0.26.3
@@ -53,7 +53,7 @@ require (
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kube-aggregator v0.26.3
 	k8s.io/kube-openapi v0.0.0-20230327201221-f5883ff37f0c
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	sigs.k8s.io/yaml v1.3.0
 )
 

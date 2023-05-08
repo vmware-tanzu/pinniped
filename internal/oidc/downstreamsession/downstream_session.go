@@ -5,6 +5,7 @@
 package downstreamsession
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -19,8 +20,9 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -38,6 +40,8 @@ const (
 	requiredClaimEmptyErr              = constable.Error("required claim in upstream ID token is empty")
 	emailVerifiedClaimInvalidFormatErr = constable.Error("email_verified claim in upstream ID token has invalid format")
 	emailVerifiedClaimFalseErr         = constable.Error("email_verified claim in upstream ID token has false value")
+	idTransformUnexpectedErr           = constable.Error("configured identity transformation or policy resulted in unexpected error")
+	idTransformPolicyErr               = constable.Error("configured identity policy rejected this authentication")
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
@@ -82,16 +86,20 @@ func MakeDownstreamSession(
 }
 
 func MakeDownstreamLDAPOrADCustomSessionData(
-	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
 	idpType psession.ProviderType,
 	authenticateResponse *authenticators.Response,
 	username string,
+	untransformedUpstreamUsername string,
+	untransformedUpstreamGroups []string,
 ) *psession.CustomSessionData {
 	customSessionData := &psession.CustomSessionData{
-		Username:     username,
-		ProviderUID:  ldapUpstream.GetResourceUID(),
-		ProviderName: ldapUpstream.GetName(),
-		ProviderType: idpType,
+		Username:         username,
+		UpstreamUsername: untransformedUpstreamUsername,
+		UpstreamGroups:   untransformedUpstreamGroups,
+		ProviderUID:      ldapUpstream.GetResourceUID(),
+		ProviderName:     ldapUpstream.GetName(),
+		ProviderType:     idpType,
 	}
 
 	if idpType == psession.ProviderTypeLDAP {
@@ -112,9 +120,11 @@ func MakeDownstreamLDAPOrADCustomSessionData(
 }
 
 func MakeDownstreamOIDCCustomSessionData(
-	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	token *oidctypes.Token,
 	username string,
+	untransformedUpstreamUsername string,
+	untransformedUpstreamGroups []string,
 ) (*psession.CustomSessionData, error) {
 	upstreamSubject, err := ExtractStringClaimValue(oidcapi.IDTokenClaimSubject, oidcUpstream.GetName(), token.IDToken.Claims)
 	if err != nil {
@@ -126,10 +136,12 @@ func MakeDownstreamOIDCCustomSessionData(
 	}
 
 	customSessionData := &psession.CustomSessionData{
-		Username:     username,
-		ProviderUID:  oidcUpstream.GetResourceUID(),
-		ProviderName: oidcUpstream.GetName(),
-		ProviderType: psession.ProviderTypeOIDC,
+		Username:         username,
+		UpstreamUsername: untransformedUpstreamUsername,
+		UpstreamGroups:   untransformedUpstreamGroups,
+		ProviderUID:      oidcUpstream.GetResourceUID(),
+		ProviderName:     oidcUpstream.GetName(),
+		ProviderType:     psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamIssuer:  upstreamIssuer,
 			UpstreamSubject: upstreamSubject,
@@ -200,7 +212,7 @@ func AutoApproveScopes(authorizeRequester fosite.AuthorizeRequester) {
 
 // GetDownstreamIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
 func GetDownstreamIdentityFromUpstreamIDToken(
-	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) (string, string, []string, error) {
 	subject, username, err := getSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
@@ -218,7 +230,7 @@ func GetDownstreamIdentityFromUpstreamIDToken(
 
 // MapAdditionalClaimsFromUpstreamIDToken returns the additionalClaims mapped from the upstream token, if any.
 func MapAdditionalClaimsFromUpstreamIDToken(
-	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) map[string]interface{} {
 	mapped := make(map[string]interface{}, len(upstreamIDPConfig.GetAdditionalClaimMappings()))
@@ -237,8 +249,32 @@ func MapAdditionalClaimsFromUpstreamIDToken(
 	return mapped
 }
 
+func ApplyIdentityTransformations(
+	ctx context.Context,
+	identityTransforms *idtransform.TransformationPipeline,
+	username string,
+	groups []string,
+) (string, []string, error) {
+	transformationResult, err := identityTransforms.Evaluate(ctx, username, groups)
+	if err != nil {
+		plog.Error("unexpected identity transformation error during authentication", err, "inputUsername", username)
+		return "", nil, idTransformUnexpectedErr
+	}
+	if !transformationResult.AuthenticationAllowed {
+		plog.Debug("authentication rejected by configured policy", "inputUsername", username, "inputGroups", groups)
+		return "", nil, idTransformPolicyErr
+	}
+	plog.Debug("identity transformation successfully applied during authentication",
+		"originalUsername", username,
+		"newUsername", transformationResult.Username,
+		"originalGroups", groups,
+		"newGroups", transformationResult.Groups,
+	)
+	return transformationResult.Username, transformationResult.Groups, nil
+}
+
 func getSubjectAndUsernameFromUpstreamIDToken(
-	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
@@ -323,7 +359,7 @@ func ExtractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 	return valueAsString, nil
 }
 
-func DownstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
+func DownstreamSubjectFromUpstreamLDAP(ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
 	ldapURL := *ldapUpstream.GetURL()
 	return DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
 }
@@ -343,7 +379,7 @@ func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSu
 // It returns nil when there is no configured groups claim name, or then when the configured claim name is not found
 // in the provided map of claims. It returns an error when the claim exists but its value cannot be parsed.
 func GetGroupsFromUpstreamIDToken(
-	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) ([]string, error) {
 	groupsClaimName := upstreamIDPConfig.GetGroupsClaim()

@@ -35,7 +35,7 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -3287,7 +3287,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			WithScopes([]string{"some-other-new-scope1", "some-other-new-scope2"}).
 			WithAdditionalAuthcodeParams(map[string]string{"prompt": "consent", "abc": "123"}).
 			Build()
-		idpLister.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{provider.UpstreamOIDCIdentityProviderI(newProviderSettings)})
+		idpLister.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{upstreamprovider.UpstreamOIDCIdentityProviderI(newProviderSettings)})
 
 		// Update the expectations of the test case to match the new upstream IDP settings.
 		test.wantLocationHeader = urlWithQuery(upstreamAuthURL.String(),

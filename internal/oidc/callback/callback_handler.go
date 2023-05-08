@@ -20,7 +20,7 @@ import (
 )
 
 func NewHandler(
-	upstreamIDPs oidc.UpstreamOIDCIdentityProvidersLister,
+	upstreamIDPs provider.FederationDomainIdentityProvidersFinderI,
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
 	redirectURI string,
@@ -31,11 +31,12 @@ func NewHandler(
 			return err
 		}
 
-		upstreamIDPConfig := findUpstreamIDPConfig(state.UpstreamName, upstreamIDPs)
-		if upstreamIDPConfig == nil {
+		resolvedOIDCIdentityProvider, _, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
+		if err != nil || resolvedOIDCIdentityProvider == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
+		upstreamIDPConfig := resolvedOIDCIdentityProvider.Provider
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
@@ -69,14 +70,19 @@ func NewHandler(
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
+		subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
+		if err != nil {
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		}
+
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), resolvedOIDCIdentityProvider.Transforms, upstreamUsername, upstreamGroups)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
 		additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 
-		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token, username)
+		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token, username, upstreamUsername, upstreamGroups)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
@@ -119,13 +125,4 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 	}
 
 	return decodedState, nil
-}
-
-func findUpstreamIDPConfig(upstreamName string, upstreamIDPs oidc.UpstreamOIDCIdentityProvidersLister) provider.UpstreamOIDCIdentityProviderI {
-	for _, p := range upstreamIDPs.GetOIDCIdentityProviders() {
-		if p.GetName() == upstreamName {
-			return p
-		}
-	}
-	return nil
 }

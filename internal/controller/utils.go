@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controller
@@ -16,6 +16,16 @@ func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerl
 		// nil parent func is fine because we only match a key with the given name and namespace
 		// i.e. it is equivalent to having a SingletonQueue() parent func
 	}, nil)
+}
+
+// MatchAnythingIgnoringUpdatesFilter returns a controllerlib.Filter that allows all objects but ignores updates.
+func MatchAnythingIgnoringUpdatesFilter(parentFunc controllerlib.ParentFunc) controllerlib.Filter {
+	return controllerlib.FilterFuncs{
+		AddFunc:    func(object metav1.Object) bool { return true },
+		UpdateFunc: func(oldObj, newObj metav1.Object) bool { return false },
+		DeleteFunc: func(object metav1.Object) bool { return true },
+		ParentFunc: parentFunc,
+	}
 }
 
 // MatchAnythingFilter returns a controllerlib.Filter that allows all objects.

@@ -12,13 +12,14 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvidersLister, oauthHelper fosite.OAuth2Provider) HandlerFunc {
+func NewPostHandler(issuerURL string, upstreamIDPs provider.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
-		_, ldapUpstream, idpType, err := oidc.FindUpstreamIDPByNameAndType(upstreamIDPs, decodedState.UpstreamName, decodedState.UpstreamType)
+		_, ldapUpstream, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil {
 			// This shouldn't normally happen because the authorization endpoint ensured that this provider existed
 			// at that time. It would be possible in the unlikely event that the provider was deleted during the login.
@@ -51,20 +52,20 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		// Get the username and password form params from the POST body.
-		username := r.PostFormValue(usernameParamName)
-		password := r.PostFormValue(passwordParamName)
+		submittedUsername := r.PostFormValue(usernameParamName)
+		submittedPassword := r.PostFormValue(passwordParamName)
 
 		// Treat blank username or password as a bad username/password combination, as opposed to an internal error.
-		if username == "" || password == "" {
+		if submittedUsername == "" || submittedPassword == "" {
 			// User forgot to enter one of the required fields.
 			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 			return RedirectToLoginPage(r, w, issuerURL, encodedState, ShowBadUserPassErr)
 		}
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
+		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes())
 		if err != nil {
-			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
+			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.Provider.GetName())
 			// There was some problem during authentication with the upstream, aside from bad username/password.
 			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 			return RedirectToLoginPage(r, w, issuerURL, encodedState, ShowInternalError)
@@ -79,10 +80,19 @@ func NewPostHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvider
 		// Now the upstream IDP has authenticated the user, so now we're back into the regular OIDC authcode flow steps.
 		// Both success and error responses from this point onwards should look like the usual fosite redirect
 		// responses, and a happy redirect response will include a downstream authcode.
-		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
-		username = authenticateResponse.User.GetName()
-		groups := authenticateResponse.User.GetGroups()
-		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
+		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream.Provider, authenticateResponse)
+		upstreamUsername := authenticateResponse.User.GetName()
+		upstreamGroups := authenticateResponse.User.GetGroups()
+
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), ldapUpstream.Transforms, upstreamUsername, upstreamGroups)
+		if err != nil {
+			oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
+				fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), false,
+			)
+			return nil
+		}
+
+		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream.Provider, ldapUpstream.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
 		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
 			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)

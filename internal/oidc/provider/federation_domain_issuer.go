@@ -17,20 +17,42 @@ type FederationDomainIssuer struct {
 	issuer     string
 	issuerHost string
 	issuerPath string
+
+	// identityProviders should be used when they are explicitly specified in the FederationDomain's spec.
+	identityProviders []*FederationDomainIdentityProvider
+	// defaultIdentityProvider should be used only for the backwards compatibility mode where identity providers
+	// are not explicitly specified in the FederationDomain's spec, and there is exactly one IDP CR defined in the
+	// Supervisor's namespace.
+	defaultIdentityProvider *FederationDomainIdentityProvider
 }
 
 // NewFederationDomainIssuer returns a FederationDomainIssuer.
 // Performs validation, and returns any error from validation.
-func NewFederationDomainIssuer(issuer string) (*FederationDomainIssuer, error) {
-	p := FederationDomainIssuer{issuer: issuer}
-	err := p.validate()
+func NewFederationDomainIssuer(
+	issuer string,
+	identityProviders []*FederationDomainIdentityProvider,
+) (*FederationDomainIssuer, error) {
+	p := FederationDomainIssuer{issuer: issuer, identityProviders: identityProviders}
+	err := p.validateURL()
 	if err != nil {
 		return nil, err
 	}
 	return &p, nil
 }
 
-func (p *FederationDomainIssuer) validate() error {
+func NewFederationDomainIssuerWithDefaultIDP(
+	issuer string,
+	defaultIdentityProvider *FederationDomainIdentityProvider,
+) (*FederationDomainIssuer, error) {
+	fdi, err := NewFederationDomainIssuer(issuer, []*FederationDomainIdentityProvider{defaultIdentityProvider})
+	if err != nil {
+		return nil, err
+	}
+	fdi.defaultIdentityProvider = defaultIdentityProvider
+	return fdi, nil
+}
+
+func (p *FederationDomainIssuer) validateURL() error {
 	if p.issuer == "" {
 		return constable.Error("federation domain must have an issuer")
 	}
@@ -83,4 +105,14 @@ func (p *FederationDomainIssuer) IssuerHost() string {
 // IssuerPath returns the issuerPath.
 func (p *FederationDomainIssuer) IssuerPath() string {
 	return p.issuerPath
+}
+
+// IdentityProviders returns the IdentityProviders.
+func (p *FederationDomainIssuer) IdentityProviders() []*FederationDomainIdentityProvider {
+	return p.identityProviders
+}
+
+// DefaultIdentityProvider will return nil when there is no default.
+func (p *FederationDomainIssuer) DefaultIdentityProvider() *FederationDomainIdentityProvider {
+	return p.defaultIdentityProvider
 }

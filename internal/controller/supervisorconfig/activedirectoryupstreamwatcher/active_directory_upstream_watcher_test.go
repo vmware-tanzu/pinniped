@@ -31,6 +31,7 @@ import (
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/upstreamldap"
 )
@@ -229,7 +230,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			GroupNameAttribute:     testGroupSearchNameAttrName,
 		},
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 			"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 			"userAccountControl":                 validUserAccountControl,
 			"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -572,7 +573,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -642,7 +643,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     "sAMAccountName",
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -715,7 +716,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -795,7 +796,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -859,7 +860,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1010,7 +1011,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1160,7 +1161,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1232,7 +1233,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1499,7 +1500,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 					UIDAttributeParsingOverrides:   map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
 					GroupAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"sAMAccountName": groupSAMAccountNameWithDomainSuffix},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1559,7 +1560,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1623,7 +1624,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1687,7 +1688,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1899,7 +1900,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -1962,7 +1963,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						SkipGroupRefresh:       true,
 					},
 					UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID")},
-					RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 						"pwdLastSet":                         attributeUnchangedSinceLogin("pwdLastSet"),
 						"userAccountControl":                 validUserAccountControl,
 						"msDS-User-Account-Control-Computed": validComputedUserAccountControl,
@@ -2010,7 +2011,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
+			cache.SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
 				upstreamldap.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
 			})
 
@@ -2104,8 +2105,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 				expectedRefreshAttributeChecks := copyOfExpectedValueForResultingCache.RefreshAttributeChecks
 				actualRefreshAttributeChecks := actualConfig.RefreshAttributeChecks
-				copyOfExpectedValueForResultingCache.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.RefreshAttributes) error{}
-				actualConfig.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.RefreshAttributes) error{}
+				copyOfExpectedValueForResultingCache.RefreshAttributeChecks = map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{}
+				actualConfig.RefreshAttributeChecks = map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{}
 				require.Equal(t, len(expectedRefreshAttributeChecks), len(actualRefreshAttributeChecks))
 				for k, v := range expectedRefreshAttributeChecks {
 					require.NotNil(t, actualRefreshAttributeChecks[k])
@@ -2354,7 +2355,7 @@ func TestValidUserAccountControl(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := validUserAccountControl(tt.entry, provider.RefreshAttributes{})
+			err := validUserAccountControl(tt.entry, upstreamprovider.RefreshAttributes{})
 
 			if tt.wantErr != "" {
 				require.Error(t, err)
@@ -2415,7 +2416,7 @@ func TestValidComputedUserAccountControl(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := validComputedUserAccountControl(tt.entry, provider.RefreshAttributes{})
+			err := validComputedUserAccountControl(tt.entry, upstreamprovider.RefreshAttributes{})
 
 			if tt.wantErr != "" {
 				require.Error(t, err)

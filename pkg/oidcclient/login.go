@@ -33,7 +33,7 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/net/phttp"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamoidc"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -107,7 +107,7 @@ type handlerState struct {
 	getEnv          func(key string) string
 	listen          func(string, string) (net.Listener, error)
 	isTTY           func(int) bool
-	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
+	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error)
 	promptForValue  func(ctx context.Context, promptLabel string) (string, error)
 	promptForSecret func(promptLabel string) (string, error)
@@ -196,10 +196,11 @@ func WithSkipListen() Option {
 
 // SessionCacheKey contains the data used to select a valid session cache entry.
 type SessionCacheKey struct {
-	Issuer      string   `json:"issuer"`
-	ClientID    string   `json:"clientID"`
-	Scopes      []string `json:"scopes"`
-	RedirectURI string   `json:"redirect_uri"`
+	Issuer               string   `json:"issuer"`
+	ClientID             string   `json:"clientID"`
+	Scopes               []string `json:"scopes"`
+	RedirectURI          string   `json:"redirect_uri"`
+	UpstreamProviderName string   `json:"upstream_provider_name,omitempty"`
 }
 
 type SessionCache interface {
@@ -351,6 +352,10 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		ClientID:    h.clientID,
 		Scopes:      h.scopes,
 		RedirectURI: (&url.URL{Scheme: "http", Host: h.listenAddr, Path: h.callbackPath}).String(),
+		// When using a Supervisor with multiple IDPs, the cache keys need to be different for each IDP
+		// so a user can have multiple sessions going for each IDP at the same time.
+		// When using a non-Supervisor OIDC provider, then this value will be blank, so it won't be part of the key.
+		UpstreamProviderName: h.upstreamIdentityProviderName,
 	}
 
 	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.

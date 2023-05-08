@@ -35,7 +35,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/net/phttp"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
@@ -91,7 +91,7 @@ var (
 
 // UpstreamOIDCIdentityProviderICache is a thread safe cache that holds a list of validated upstream OIDC IDP configurations.
 type UpstreamOIDCIdentityProviderICache interface {
-	SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI)
+	SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI)
 }
 
 // lruValidatorCache caches the *oidc.Provider associated with a particular issuer/TLS configuration.
@@ -175,13 +175,13 @@ func (c *oidcWatcherController) Sync(ctx controllerlib.Context) error {
 	}
 
 	requeue := false
-	validatedUpstreams := make([]provider.UpstreamOIDCIdentityProviderI, 0, len(actualUpstreams))
+	validatedUpstreams := make([]upstreamprovider.UpstreamOIDCIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
 		valid := c.validateUpstream(ctx, upstream)
 		if valid == nil {
 			requeue = true
 		} else {
-			validatedUpstreams = append(validatedUpstreams, provider.UpstreamOIDCIdentityProviderI(valid))
+			validatedUpstreams = append(validatedUpstreams, upstreamprovider.UpstreamOIDCIdentityProviderI(valid))
 		}
 	}
 	c.cache.SetOIDCIdentityProviders(validatedUpstreams)

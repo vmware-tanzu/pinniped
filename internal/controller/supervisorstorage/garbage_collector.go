@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -27,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 )
@@ -43,7 +44,7 @@ type garbageCollectorController struct {
 
 // UpstreamOIDCIdentityProviderICache is a thread safe cache that holds a list of validated upstream OIDC IDP configurations.
 type UpstreamOIDCIdentityProviderICache interface {
-	GetOIDCIdentityProviders() []provider.UpstreamOIDCIdentityProviderI
+	GetOIDCIdentityProviders() []upstreamprovider.UpstreamOIDCIdentityProviderI
 }
 
 func GarbageCollectorController(
@@ -244,7 +245,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	}
 
 	// Try to find the provider that was originally used to create the stored session.
-	var foundOIDCIdentityProviderI provider.UpstreamOIDCIdentityProviderI
+	var foundOIDCIdentityProviderI upstreamprovider.UpstreamOIDCIdentityProviderI
 	for _, p := range c.idpCache.GetOIDCIdentityProviders() {
 		if p.GetName() == customSessionData.ProviderName && p.GetResourceUID() == customSessionData.ProviderUID {
 			foundOIDCIdentityProviderI = p
@@ -260,7 +261,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	upstreamAccessToken := customSessionData.OIDC.UpstreamAccessToken
 
 	if upstreamRefreshToken != "" {
-		err := foundOIDCIdentityProviderI.RevokeToken(ctx, upstreamRefreshToken, provider.RefreshTokenType)
+		err := foundOIDCIdentityProviderI.RevokeToken(ctx, upstreamRefreshToken, upstreamprovider.RefreshTokenType)
 		if err != nil {
 			return err
 		}
@@ -268,7 +269,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	}
 
 	if upstreamAccessToken != "" {
-		err := foundOIDCIdentityProviderI.RevokeToken(ctx, upstreamAccessToken, provider.AccessTokenType)
+		err := foundOIDCIdentityProviderI.RevokeToken(ctx, upstreamAccessToken, upstreamprovider.AccessTokenType)
 		if err != nil {
 			return err
 		}

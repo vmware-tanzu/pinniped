@@ -18,12 +18,14 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -37,7 +39,7 @@ const (
 
 func NewHandler(
 	downstreamIssuer string,
-	idpLister oidc.UpstreamIdentityProvidersLister,
+	idpFinder provider.FederationDomainIdentityProvidersFinderI,
 	oauthHelperWithoutStorage fosite.OAuth2Provider,
 	oauthHelperWithStorage fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
@@ -57,20 +59,25 @@ func NewHandler(
 		// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
 		// oidcapi.AuthorizeUpstreamIDPTypeParamName query params to request a certain upstream IDP.
 		// The Pinniped CLI has been sending these params since v0.9.0.
-		// Currently, these are ignored because the Supervisor does not yet support logins when multiple IDPs
-		// are configured. However, these params should be honored in the future when choosing an upstream
-		// here, e.g. by calling oidcapi.FindUpstreamIDPByNameAndType() when the params are present.
-		oidcUpstream, ldapUpstream, idpType, err := chooseUpstreamIDP(idpLister)
+		idpNameQueryParamValue := r.URL.Query().Get(oidcapi.AuthorizeUpstreamIDPNameParamName)
+		oidcUpstream, ldapUpstream, err := chooseUpstreamIDP(idpNameQueryParamValue, idpFinder)
 		if err != nil {
 			plog.WarningErr("authorize upstream config", err)
 			return err
 		}
 
-		if idpType == psession.ProviderTypeOIDC {
+		if oidcUpstream != nil {
 			if len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0 ||
 				len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0 {
 				// The client set a username header, so they are trying to log in with a username/password.
-				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
+				return handleAuthRequestForOIDCUpstreamPasswordGrant(
+					r,
+					w,
+					oauthHelperWithStorage,
+					oidcUpstream.Provider,
+					oidcUpstream.Transforms,
+					idpNameQueryParamValue,
+				)
 			}
 			return handleAuthRequestForOIDCUpstreamBrowserFlow(r, w,
 				oauthHelperWithoutStorage,
@@ -79,6 +86,7 @@ func NewHandler(
 				downstreamIssuer,
 				upstreamStateEncoder,
 				cookieCodec,
+				idpNameQueryParamValue,
 			)
 		}
 
@@ -88,8 +96,10 @@ func NewHandler(
 			// The client set a username header, so they are trying to log in with a username/password.
 			return handleAuthRequestForLDAPUpstreamCLIFlow(r, w,
 				oauthHelperWithStorage,
-				ldapUpstream,
-				idpType,
+				ldapUpstream.Provider,
+				ldapUpstream.SessionProviderType,
+				ldapUpstream.Transforms,
+				idpNameQueryParamValue,
 			)
 		}
 		return handleAuthRequestForLDAPUpstreamBrowserFlow(
@@ -100,10 +110,11 @@ func NewHandler(
 			generateNonce,
 			generatePKCE,
 			ldapUpstream,
-			idpType,
+			ldapUpstream.SessionProviderType,
 			downstreamIssuer,
 			upstreamStateEncoder,
 			cookieCodec,
+			idpNameQueryParamValue,
 		)
 	})
 
@@ -117,24 +128,28 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
-	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
 	idpType psession.ProviderType,
+	identityTransforms *idtransform.TransformationPipeline,
+	idpNameQueryParamValue string,
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
 	if !created {
 		return nil
 	}
 
+	maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue, authorizeRequester)
+
 	if !requireStaticClientForUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester) {
 		return nil
 	}
 
-	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	submittedUsername, submittedPassword, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
 	if !hadUsernamePasswordValues {
 		return nil
 	}
 
-	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password, authorizeRequester.GetGrantedScopes())
+	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes())
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
@@ -146,9 +161,18 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	}
 
 	subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
-	username = authenticateResponse.User.GetName()
-	groups := authenticateResponse.User.GetGroups()
-	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username)
+	upstreamUsername := authenticateResponse.User.GetName()
+	upstreamGroups := authenticateResponse.User.GetGroups()
+
+	username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), identityTransforms, upstreamUsername, upstreamGroups)
+	if err != nil {
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
+		)
+		return nil
+	}
+
+	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username, upstreamUsername, upstreamGroups)
 	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
 		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
@@ -163,11 +187,12 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-	ldapUpstream provider.UpstreamLDAPIdentityProviderI,
+	ldapUpstream *provider.FederationDomainResolvedLDAPIdentityProvider,
 	idpType psession.ProviderType,
 	downstreamIssuer string,
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
+	idpNameQueryParamValue string,
 ) error {
 	authRequestState, err := handleBrowserFlowAuthRequest(
 		r,
@@ -176,10 +201,11 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 		generateCSRF,
 		generateNonce,
 		generatePKCE,
-		ldapUpstream.GetName(),
+		ldapUpstream.DisplayName,
 		idpType,
 		cookieCodec,
 		upstreamStateEncoder,
+		idpNameQueryParamValue,
 	)
 	if err != nil {
 		return err
@@ -196,18 +222,22 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
-	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
+	identityTransforms *idtransform.TransformationPipeline,
+	idpNameQueryParamValue string,
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
 	if !created {
 		return nil
 	}
 
+	maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue, authorizeRequester)
+
 	if !requireStaticClientForUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester) {
 		return nil
 	}
 
-	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	submittedUsername, submittedPassword, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
 	if !hadUsernamePasswordValues {
 		return nil
 	}
@@ -220,7 +250,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
+	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), submittedUsername, submittedPassword)
 	if err != nil {
 		// Upstream password grant errors can be generic errors (e.g. a network failure) or can be oauth2.RetrieveError errors
 		// which represent the http response from the upstream server. These could be a 5XX or some other unexpected error,
@@ -234,7 +264,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
@@ -243,9 +273,17 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
+	username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), identityTransforms, upstreamUsername, upstreamGroups)
+	if err != nil {
+		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
+			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
+		)
+		return nil
+	}
+
 	additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 
-	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token, username)
+	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token, username, upstreamUsername, upstreamGroups)
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 			fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), true,
@@ -268,10 +306,11 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+	oidcUpstream *provider.FederationDomainResolvedOIDCIdentityProvider,
 	downstreamIssuer string,
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
+	idpNameQueryParamValue string,
 ) error {
 	authRequestState, err := handleBrowserFlowAuthRequest(
 		r,
@@ -280,10 +319,11 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 		generateCSRF,
 		generateNonce,
 		generatePKCE,
-		oidcUpstream.GetName(),
+		oidcUpstream.DisplayName,
 		psession.ProviderTypeOIDC,
 		cookieCodec,
 		upstreamStateEncoder,
+		idpNameQueryParamValue,
 	)
 	if err != nil {
 		return err
@@ -294,12 +334,12 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	}
 
 	upstreamOAuthConfig := oauth2.Config{
-		ClientID: oidcUpstream.GetClientID(),
+		ClientID: oidcUpstream.Provider.GetClientID(),
 		Endpoint: oauth2.Endpoint{
-			AuthURL: oidcUpstream.GetAuthorizationURL().String(),
+			AuthURL: oidcUpstream.Provider.GetAuthorizationURL().String(),
 		},
 		RedirectURL: fmt.Sprintf("%s/callback", downstreamIssuer),
-		Scopes:      oidcUpstream.GetScopes(),
+		Scopes:      oidcUpstream.Provider.GetScopes(),
 	}
 
 	authCodeOptions := []oauth2.AuthCodeOption{
@@ -308,7 +348,7 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 		authRequestState.pkce.Method(),
 	}
 
-	for key, val := range oidcUpstream.GetAdditionalAuthcodeParams() {
+	for key, val := range oidcUpstream.Provider.GetAdditionalAuthcodeParams() {
 		authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam(key, val))
 	}
 
@@ -382,39 +422,31 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 
 // chooseUpstreamIDP selects either an OIDC, an LDAP, or an AD IDP, or returns an error.
 // Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
-func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, provider.UpstreamLDAPIdentityProviderI, psession.ProviderType, error) {
-	oidcUpstreams := idpLister.GetOIDCIdentityProviders()
-	ldapUpstreams := idpLister.GetLDAPIdentityProviders()
-	adUpstreams := idpLister.GetActiveDirectoryIdentityProviders()
-	switch {
-	case len(oidcUpstreams)+len(ldapUpstreams)+len(adUpstreams) == 0:
-		return nil, nil, "", httperr.New(
-			http.StatusUnprocessableEntity,
-			"No upstream providers are configured",
-		)
-	case len(oidcUpstreams)+len(ldapUpstreams)+len(adUpstreams) > 1:
-		var upstreamIDPNames []string
-		for _, idp := range oidcUpstreams {
-			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
-		}
-		for _, idp := range ldapUpstreams {
-			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
-		}
-		for _, idp := range adUpstreams {
-			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
-		}
-		plog.Warning("Too many upstream providers are configured (found: %s)", upstreamIDPNames)
-		return nil, nil, "", httperr.New(
-			http.StatusUnprocessableEntity,
-			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",
-		)
-	case len(oidcUpstreams) == 1:
-		return oidcUpstreams[0], nil, psession.ProviderTypeOIDC, nil
-	case len(adUpstreams) == 1:
-		return nil, adUpstreams[0], psession.ProviderTypeActiveDirectory, nil
-	default:
-		return nil, ldapUpstreams[0], psession.ProviderTypeLDAP, nil
+func chooseUpstreamIDP(idpDisplayName string, idpLister provider.FederationDomainIdentityProvidersFinderI) (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+	// When a request is made to the authorization endpoint which does not specify the IDP name, then it might
+	// be an old dynamic client (OIDCClient). We need to make this work, but only in the backwards compatibility case
+	// where there is exactly one IDP defined in the namespace and no IDPs listed on the FederationDomain.
+	// This backwards compatibility mode is handled by FindDefaultIDP().
+	if len(idpDisplayName) == 0 {
+		return idpLister.FindDefaultIDP()
 	}
+	return idpLister.FindUpstreamIDPByDisplayName(idpDisplayName)
+}
+
+func maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue string, authorizeRequester fosite.AuthorizeRequester) {
+	if len(idpNameQueryParamValue) != 0 {
+		return
+	}
+	plog.Warning("Client attempted to perform an authorization flow (user login) without specifying the "+
+		"query param to choose an identity provider. "+
+		"This will not work when identity providers are configured explicitly on a FederationDomain. "+
+		"Additionally, this behavior is deprecated and support for any authorization requests missing this query param "+
+		"may be removed in a future release. "+
+		"Please ask the author of this client to update the authorization request URL to include this query parameter. "+
+		"The value of the parameter should be equal to the displayName of the identity provider as declared in the FederationDomain.",
+		"missingParameterName", oidcapi.AuthorizeUpstreamIDPNameParamName,
+		"clientID", authorizeRequester.GetClient().GetID(),
+	)
 }
 
 type browserFlowAuthRequestState struct {
@@ -438,15 +470,18 @@ func handleBrowserFlowAuthRequest(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-	upstreamName string,
+	upstreamDisplayName string,
 	idpType psession.ProviderType,
 	cookieCodec oidc.Codec,
 	upstreamStateEncoder oidc.Encoder,
+	idpNameQueryParamValue string,
 ) (*browserFlowAuthRequestState, error) {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, false)
 	if !created {
 		return nil, nil // already wrote the error response, don't return error
 	}
+
+	maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue, authorizeRequester)
 
 	now := time.Now()
 	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
@@ -476,7 +511,7 @@ func handleBrowserFlowAuthRequest(
 
 	encodedStateParamValue, err := upstreamStateParam(
 		authorizeRequester,
-		upstreamName,
+		upstreamDisplayName,
 		string(idpType),
 		nonceValue,
 		csrfValue,
@@ -532,7 +567,7 @@ func generateValues(
 
 func upstreamStateParam(
 	authorizeRequester fosite.AuthorizeRequester,
-	upstreamName string,
+	upstreamDisplayName string,
 	upstreamType string,
 	nonceValue nonce.Nonce,
 	csrfValue csrftoken.CSRFToken,
@@ -546,7 +581,7 @@ func upstreamStateParam(
 		// The UpstreamName and UpstreamType struct fields can be used instead.
 		// Remove those params here to avoid potential confusion about which should be used later.
 		AuthParams:    removeCustomIDPParams(authorizeRequester.GetRequestForm()).Encode(),
-		UpstreamName:  upstreamName,
+		UpstreamName:  upstreamDisplayName,
 		UpstreamType:  upstreamType,
 		Nonce:         nonceValue,
 		CSRFToken:     csrfValue,

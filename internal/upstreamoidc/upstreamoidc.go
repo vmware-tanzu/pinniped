@@ -23,13 +23,14 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 	return &ProviderConfig{Config: config, Provider: provider, Client: client}
 }
 
@@ -52,7 +53,7 @@ type ProviderConfig struct {
 	}
 }
 
-var _ provider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
+var _ upstreamprovider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
 
 func (p *ProviderConfig) GetResourceUID() types.UID {
 	return p.ResourceUID
@@ -160,7 +161,7 @@ func (p *ProviderConfig) PerformRefresh(ctx context.Context, refreshToken string
 // It may return an error wrapped by a RetryableRevocationError, which is an error indicating that it may
 // be worth trying to revoke the same token again later. Any other error returned should be assumed to
 // represent an error such that it is not worth retrying revocation later, even though revocation failed.
-func (p *ProviderConfig) RevokeToken(ctx context.Context, token string, tokenType provider.RevocableTokenType) error {
+func (p *ProviderConfig) RevokeToken(ctx context.Context, token string, tokenType upstreamprovider.RevocableTokenType) error {
 	if p.RevocationURL == nil {
 		plog.Trace("RevokeToken() was called but upstream provider has no available revocation endpoint",
 			"providerName", p.Name,
@@ -188,7 +189,7 @@ func (p *ProviderConfig) RevokeToken(ctx context.Context, token string, tokenTyp
 func (p *ProviderConfig) tryRevokeToken(
 	ctx context.Context,
 	token string,
-	tokenType provider.RevocableTokenType,
+	tokenType upstreamprovider.RevocableTokenType,
 	useBasicAuth bool,
 ) (tryAnotherClientAuthMethod bool, err error) {
 	clientID := p.Config.ClientID

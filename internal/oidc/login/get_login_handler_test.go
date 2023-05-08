@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/idplister"
 	"go.pinniped.dev/internal/oidc/login/loginhtml"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -28,7 +29,7 @@ func TestGetLogin(t *testing.T) {
 		decodedState    *oidc.UpstreamStateParamData
 		encodedState    string
 		errParam        string
-		idps            oidc.UpstreamIdentityProvidersLister
+		idps            idplister.UpstreamIdentityProvidersLister
 		wantStatus      int
 		wantContentType string
 		wantBody        string

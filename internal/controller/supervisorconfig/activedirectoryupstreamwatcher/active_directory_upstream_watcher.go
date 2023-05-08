@@ -26,7 +26,7 @@ import (
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
@@ -225,7 +225,7 @@ func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []metav1.Conditi
 
 // UpstreamActiveDirectoryIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
 type UpstreamActiveDirectoryIdentityProviderICache interface {
-	SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI)
+	SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI)
 }
 
 type activeDirectoryWatcherController struct {
@@ -299,7 +299,7 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 	}
 
 	requeue := false
-	validatedUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
+	validatedUpstreams := make([]upstreamprovider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
 		valid, requestedRequeue := c.validateUpstream(ctx.Context, upstream)
 		if valid != nil {
@@ -318,7 +318,7 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 	return nil
 }
 
-func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
+func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p upstreamprovider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
 	adUpstreamImpl := &activeDirectoryUpstreamGenericLDAPImpl{activeDirectoryIdentityProvider: *upstream}
@@ -344,7 +344,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){
 			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
 		},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
 			pwdLastSetAttribute:                 attributeUnchangedSinceLogin(pwdLastSetAttribute),
 			userAccountControlAttribute:         validUserAccountControl,
 			userAccountControlComputedAttribute: validComputedUserAccountControl,
@@ -445,7 +445,7 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var validUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+var validUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
@@ -459,7 +459,7 @@ var validUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttribut
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var validComputedUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+var validComputedUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err
@@ -473,8 +473,8 @@ var validComputedUserAccountControl = func(entry *ldap.Entry, _ provider.Refresh
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
-	return func(entry *ldap.Entry, storedAttributes provider.RefreshAttributes) error {
+var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, upstreamprovider.RefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes upstreamprovider.RefreshAttributes) error {
 		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
 		newValues := entry.GetRawAttributeValues(attribute)
 

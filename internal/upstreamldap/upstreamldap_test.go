@@ -26,7 +26,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/tlsassertions"
 	"go.pinniped.dev/internal/testutil/tlsserver"
@@ -661,8 +661,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -699,8 +699,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes provider.RefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes provider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error {
 						return nil
 					},
 				}
@@ -1575,8 +1575,8 @@ func TestUpstreamRefresh(t *testing.T) {
 				Filter:             testGroupSearchFilter,
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
 			},
-			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
-				pwdLastSetAttribute: func(*ldap.Entry, provider.RefreshAttributes) error { return nil },
+			RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
+				pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.RefreshAttributes) error { return nil },
 			},
 		}
 		if editFunc != nil {
@@ -2280,7 +2280,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*tt.providerConfig)
 			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
-			groups, err := ldapProvider.PerformRefresh(context.Background(), provider.RefreshAttributes{
+			groups, err := ldapProvider.PerformRefresh(context.Background(), upstreamprovider.RefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,

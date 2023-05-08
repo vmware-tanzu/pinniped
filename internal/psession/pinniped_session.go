@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package psession
@@ -32,6 +32,18 @@ type CustomSessionData struct {
 	// all users must have a username.
 	Username string `json:"username"`
 
+	// UpstreamUsername is the username from the upstream identity provider during the user's initial login before
+	// identity transformations were applied. We store this so that we can still reapply identity transformations
+	// during refresh flows even when an upstream OIDC provider does not return the username again during the upstream
+	// refresh, and so we can validate that same untransformed username was found during an LDAP refresh.
+	UpstreamUsername string `json:"upstreamUsername"`
+
+	// UpstreamGroups is the groups list from the upstream identity provider during the user's initial login before
+	// identity transformations were applied. We store this so that we can still reapply identity transformations
+	// during refresh flows even when an OIDC provider does not return the groups again during the upstream
+	// refresh, and when the LDAP search was configured to skip group refreshes.
+	UpstreamGroups []string `json:"upstreamGroups"`
+
 	// The Kubernetes resource UID of the identity provider CRD for the upstream IDP used to start this session.
 	// This should be validated again upon downstream refresh to make sure that we are not refreshing against
 	// a different identity provider CRD which just happens to have the same name.
@@ -41,11 +53,12 @@ type CustomSessionData struct {
 
 	// The Kubernetes resource name of the identity provider CRD for the upstream IDP used to start this session.
 	// Used during a downstream refresh to decide which upstream to refresh.
-	// Also used to decide which of the pointer types below should be used.
+	// Also used by the session storage garbage collector to decide which upstream to use for token revocation.
 	ProviderName string `json:"providerName"`
 
 	// The type of the identity provider for the upstream IDP used to start this session.
 	// Used during a downstream refresh to decide which upstream to refresh.
+	// Also used to decide which of the pointer types below should be used.
 	ProviderType ProviderType `json:"providerType"`
 
 	// Warnings that were encountered at some point during login that should be emitted to the client.
@@ -55,8 +68,10 @@ type CustomSessionData struct {
 	// Only used when ProviderType == "oidc".
 	OIDC *OIDCSessionData `json:"oidc,omitempty"`
 
+	// Only used when ProviderType == "ldap".
 	LDAP *LDAPSessionData `json:"ldap,omitempty"`
 
+	// Only used when ProviderType == "activedirectory".
 	ActiveDirectory *ActiveDirectorySessionData `json:"activedirectory,omitempty"`
 }
 

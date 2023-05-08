@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -30,6 +30,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -369,7 +370,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -493,7 +494,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 
@@ -785,7 +786,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -810,7 +811,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -889,7 +890,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -1012,7 +1013,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -1136,7 +1137,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 
@@ -1214,7 +1215,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -1291,7 +1292,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 

@@ -35,6 +35,7 @@ import (
 	pkce2 "go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -77,7 +78,7 @@ type PerformRefreshArgs struct {
 type RevokeTokenArgs struct {
 	Ctx       context.Context
 	Token     string
-	TokenType provider.RevocableTokenType
+	TokenType upstreamprovider.RevocableTokenType
 }
 
 // ValidateTokenAndMergeWithUserInfoArgs is used to spy on calls to
@@ -93,7 +94,7 @@ type ValidateTokenAndMergeWithUserInfoArgs struct {
 type ValidateRefreshArgs struct {
 	Ctx              context.Context
 	Tok              *oauth2.Token
-	StoredAttributes provider.RefreshAttributes
+	StoredAttributes upstreamprovider.RefreshAttributes
 }
 
 type TestUpstreamLDAPIdentityProvider struct {
@@ -107,7 +108,7 @@ type TestUpstreamLDAPIdentityProvider struct {
 	PerformRefreshGroups    []string
 }
 
-var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
+var _ upstreamprovider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
 
 func (u *TestUpstreamLDAPIdentityProvider) GetResourceUID() types.UID {
 	return u.ResourceUID
@@ -125,7 +126,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.RefreshAttributes) ([]string, error) {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes) ([]string, error) {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}
@@ -182,7 +183,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	PerformRefreshFunc func(ctx context.Context, refreshToken string) (*oauth2.Token, error)
 
-	RevokeTokenFunc func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error
+	RevokeTokenFunc func(ctx context.Context, refreshToken string, tokenType upstreamprovider.RevocableTokenType) error
 
 	ValidateTokenAndMergeWithUserInfoFunc func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 
@@ -198,7 +199,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	validateTokenAndMergeWithUserInfoArgs              []*ValidateTokenAndMergeWithUserInfoArgs
 }
 
-var _ provider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
+var _ upstreamprovider.UpstreamOIDCIdentityProviderI = &TestUpstreamOIDCIdentityProvider{}
 
 func (u *TestUpstreamOIDCIdentityProvider) GetResourceUID() types.UID {
 	return u.ResourceUID
@@ -302,7 +303,7 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, r
 	return u.PerformRefreshFunc(ctx, refreshToken)
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) RevokeToken(ctx context.Context, token string, tokenType provider.RevocableTokenType) error {
+func (u *TestUpstreamOIDCIdentityProvider) RevokeToken(ctx context.Context, token string, tokenType upstreamprovider.RevocableTokenType) error {
 	if u.revokeTokenArgs == nil {
 		u.revokeTokenArgs = make([]*RevokeTokenArgs, 0)
 	}
@@ -387,21 +388,21 @@ func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryId
 func (b *UpstreamIDPListerBuilder) Build() provider.DynamicUpstreamIDPProvider {
 	idpProvider := provider.NewDynamicUpstreamIDPProvider()
 
-	oidcUpstreams := make([]provider.UpstreamOIDCIdentityProviderI, len(b.upstreamOIDCIdentityProviders))
+	oidcUpstreams := make([]upstreamprovider.UpstreamOIDCIdentityProviderI, len(b.upstreamOIDCIdentityProviders))
 	for i := range b.upstreamOIDCIdentityProviders {
-		oidcUpstreams[i] = provider.UpstreamOIDCIdentityProviderI(b.upstreamOIDCIdentityProviders[i])
+		oidcUpstreams[i] = upstreamprovider.UpstreamOIDCIdentityProviderI(b.upstreamOIDCIdentityProviders[i])
 	}
 	idpProvider.SetOIDCIdentityProviders(oidcUpstreams)
 
-	ldapUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, len(b.upstreamLDAPIdentityProviders))
+	ldapUpstreams := make([]upstreamprovider.UpstreamLDAPIdentityProviderI, len(b.upstreamLDAPIdentityProviders))
 	for i := range b.upstreamLDAPIdentityProviders {
-		ldapUpstreams[i] = provider.UpstreamLDAPIdentityProviderI(b.upstreamLDAPIdentityProviders[i])
+		ldapUpstreams[i] = upstreamprovider.UpstreamLDAPIdentityProviderI(b.upstreamLDAPIdentityProviders[i])
 	}
 	idpProvider.SetLDAPIdentityProviders(ldapUpstreams)
 
-	adUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, len(b.upstreamActiveDirectoryIdentityProviders))
+	adUpstreams := make([]upstreamprovider.UpstreamLDAPIdentityProviderI, len(b.upstreamActiveDirectoryIdentityProviders))
 	for i := range b.upstreamActiveDirectoryIdentityProviders {
-		adUpstreams[i] = provider.UpstreamLDAPIdentityProviderI(b.upstreamActiveDirectoryIdentityProviders[i])
+		adUpstreams[i] = upstreamprovider.UpstreamLDAPIdentityProviderI(b.upstreamActiveDirectoryIdentityProviders[i])
 	}
 	idpProvider.SetActiveDirectoryIdentityProviders(adUpstreams)
 
@@ -822,7 +823,7 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 			}
 			return u.refreshedTokens, nil
 		},
-		RevokeTokenFunc: func(ctx context.Context, refreshToken string, tokenType provider.RevocableTokenType) error {
+		RevokeTokenFunc: func(ctx context.Context, refreshToken string, tokenType upstreamprovider.RevocableTokenType) error {
 			return u.revokeTokenErr
 		},
 		ValidateTokenAndMergeWithUserInfoFunc: func(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -81,7 +81,7 @@ while (("$#")); do
 done
 
 if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_upstream" == "no" ]]; then
-  log_error "Error: Please use --oidc, --ldap, or --ad to specify which type of upstream identity provider(s) you would like"
+  log_error "Error: Please use --oidc, --ldap, or --ad to specify which type(s) of upstream identity provider(s) you would like. May use one or multiple."
   exit 1
 fi
 
@@ -102,42 +102,6 @@ audience="my-workload-cluster-$(openssl rand -hex 4)"
 # the cluster whenever we want to be able to connect to it.
 issuer_host="pinniped-supervisor-clusterip.supervisor.svc.cluster.local"
 issuer="https://$issuer_host/some/path"
-
-# Create a CA and TLS serving certificates for the Supervisor.
-step certificate create \
-  "Supervisor CA" "$root_ca_crt_path" "$root_ca_key_path" \
-  --profile root-ca \
-  --no-password --insecure --force
-step certificate create \
-  "$issuer_host" "$tls_crt_path" "$tls_key_path" \
-  --profile leaf \
-  --not-after 8760h \
-  --ca "$root_ca_crt_path" --ca-key "$root_ca_key_path" \
-  --no-password --insecure --force
-
-# Put the TLS certificate into a Secret for the Supervisor.
-kubectl create secret tls -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" my-federation-domain-tls --cert "$tls_crt_path" --key "$tls_key_path" \
-  --dry-run=client --output yaml | kubectl apply -f -
-
-# Make a FederationDomain using the TLS Secret from above.
-cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: config.supervisor.pinniped.dev/v1alpha1
-kind: FederationDomain
-metadata:
-  name: my-federation-domain
-spec:
-  issuer: $issuer
-  tls:
-    secretName: my-federation-domain-tls
-EOF
-
-echo "Waiting for FederationDomain to initialize..."
-# Sleeping is a race, but that's probably good enough for the purposes of this script.
-sleep 5
-
-# Test that the federation domain is working before we proceed.
-echo "Fetching FederationDomain discovery info..."
-https_proxy="$PINNIPED_TEST_PROXY" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   # Make an OIDCIdentityProvider which uses Dex to provide identity.
@@ -254,6 +218,146 @@ EOF
     --dry-run=client --output yaml | kubectl apply -f -
 fi
 
+# Create a CA and TLS serving certificates for the Supervisor's FederationDomain.
+if [[ ! -f "$root_ca_crt_path" ]]; then
+  step certificate create \
+    "Supervisor CA" "$root_ca_crt_path" "$root_ca_key_path" \
+    --profile root-ca \
+    --no-password --insecure --force
+fi
+if [[ ! -f "$tls_crt_path" || ! -f "$tls_key_path" ]]; then
+  step certificate create \
+    "$issuer_host" "$tls_crt_path" "$tls_key_path" \
+    --profile leaf \
+    --not-after 8760h \
+    --ca "$root_ca_crt_path" --ca-key "$root_ca_key_path" \
+    --no-password --insecure --force
+fi
+
+# Put the TLS certificate into a Secret for the Supervisor's FederationDomain.
+kubectl create secret tls -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" my-federation-domain-tls --cert "$tls_crt_path" --key "$tls_key_path" \
+  --dry-run=client --output yaml | kubectl apply -f -
+
+# Variable that will be used to build up the "identityProviders" yaml for the FederationDomain.
+fd_idps=""
+
+if [[ "$use_oidc_upstream" == "yes" ]]; then
+  # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
+  fd_idps="${fd_idps}$(
+    cat <<EOF
+
+    - displayName: "My OIDC IDP"
+      objectRef:
+        apiGroup: idp.supervisor.pinniped.dev
+        kind: OIDCIdentityProvider
+        name: my-oidc-provider
+      transforms:
+        expressions:
+          - type: username/v1
+            expression: '"oidc:" + username'
+          - type: groups/v1 # the pinny user doesn't belong to any groups in Dex, so this isn't strictly needed, but doesn't hurt
+            expression: 'groups.map(group, "oidc:" + group)'
+        examples:
+          - username: ryan@example.com
+            groups: [ a, b ]
+            expects:
+              username: oidc:ryan@example.com
+              groups: [ oidc:a, oidc:b ]
+EOF
+  )"
+fi
+
+if [[ "$use_ldap_upstream" == "yes" ]]; then
+  # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
+  fd_idps="${fd_idps}$(
+    cat <<EOF
+
+    - displayName: "My LDAP IDP"
+      objectRef:
+        apiGroup: idp.supervisor.pinniped.dev
+        kind: LDAPIdentityProvider
+        name: my-ldap-provider
+      transforms: # these are contrived to exercise all the available features
+        constants:
+          - name: prefix
+            type: string
+            stringValue: "ldap:"
+          - name: onlyIncludeGroupsWithThisPrefix
+            type: string
+            stringValue: "ball-" # pinny belongs to ball-game-players in openldap
+          - name: mustBelongToOneOfThese
+            type: stringList
+            stringListValue: [ ball-admins, seals ] # pinny belongs to seals in openldap
+          - name: additionalAdmins
+            type: stringList
+            stringListValue: [ pinny.ldap@example.com, ryan@example.com ] # pinny's email address in openldap
+        expressions:
+          - type: policy/v1
+            expression: 'groups.exists(g, g in strListConst.mustBelongToOneOfThese)'
+            message: "Only users in certain kube groups are allowed to authenticate"
+          - type: groups/v1
+            expression: 'username in strListConst.additionalAdmins ? groups + ["ball-admins"] : groups'
+          - type: groups/v1
+            expression: 'groups.filter(group, group.startsWith(strConst.onlyIncludeGroupsWithThisPrefix))'
+          - type: username/v1
+            expression: 'strConst.prefix + username'
+          - type: groups/v1
+            expression: 'groups.map(group, strConst.prefix + group)'
+        examples:
+          - username: ryan@example.com
+            groups: [ ball-developers, seals, non-ball-group ] # allowed to auth because belongs to seals
+            expects:
+              username: ldap:ryan@example.com
+              groups: [ ldap:ball-developers, ldap:ball-admins ] # gets ball-admins because of username, others dropped because they lack "ball-" prefix
+          - username: someone_else@example.com
+            groups: [ ball-developers, ball-admins, non-ball-group ] # allowed to auth because belongs to ball-admins
+            expects:
+              username: ldap:someone_else@example.com
+              groups: [ ldap:ball-developers, ldap:ball-admins ] # seals dropped because it lacks prefix
+          - username: paul@example.com
+            groups: [ not-ball-admins-group, not-seals-group ] # reject because does not belong to any of the required groups
+            expects:
+              rejected: true
+              message: "Only users in certain kube groups are allowed to authenticate"
+EOF
+  )"
+fi
+
+if [[ "$use_ad_upstream" == "yes" ]]; then
+  # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
+  fd_idps="${fd_idps}$(
+    cat <<EOF
+
+    - displayName: "My AD IDP"
+      objectRef:
+        apiGroup: idp.supervisor.pinniped.dev
+        kind: ActiveDirectoryIdentityProvider
+        name: my-ad-provider
+EOF
+  )"
+fi
+
+# Make a FederationDomain using the TLS Secret and identity providers from above.
+cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
+kind: FederationDomain
+metadata:
+  name: my-federation-domain
+spec:
+  issuer: $issuer
+  tls:
+    secretName: my-federation-domain-tls
+  identityProviders:${fd_idps}
+EOF
+
+echo "Waiting for FederationDomain to initialize or update..."
+# Sleeping is a race, but that's probably good enough for the purposes of this script.
+sleep 5
+
+# Test that the federation domain is working before we proceed.
+echo "Fetching FederationDomain discovery info via command: https_proxy=\"$PINNIPED_TEST_PROXY\" curl -fLsS --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""
+https_proxy="$PINNIPED_TEST_PROXY" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
   certificateAuthorityData=$(cat "$root_ca_crt_path" | base64)
 else
@@ -275,7 +379,7 @@ spec:
     certificateAuthorityData: $certificateAuthorityData
 EOF
 
-echo "Waiting for JWTAuthenticator to initialize..."
+echo "Waiting for JWTAuthenticator to initialize or update..."
 # Sleeping is a race, but that's probably good enough for the purposes of this script.
 sleep 5
 
@@ -288,12 +392,24 @@ while [[ -z "$(kubectl get credentialissuer pinniped-concierge-config -o=jsonpat
   sleep 2
 done
 
-# Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for logins.
+# Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for browser-based
+# flows so we can open our own browser with the proxy settings. Generate a kubeconfig for each IDP.
 flow_arg=""
 if [[ -n "$use_flow" ]]; then
   flow_arg="--upstream-identity-provider-flow $use_flow"
 fi
-https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped get kubeconfig --oidc-skip-browser $flow_arg >kubeconfig
+if [[ "$use_oidc_upstream" == "yes" ]]; then
+  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type oidc >kubeconfig-oidc.yaml
+fi
+if [[ "$use_ldap_upstream" == "yes" ]]; then
+  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type ldap >kubeconfig-ldap.yaml
+fi
+if [[ "$use_ad_upstream" == "yes" ]]; then
+  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type activedirectory >kubeconfig-ad.yaml
+fi
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
 rm -f "$HOME/.config/pinniped/sessions.yaml"
@@ -304,37 +420,48 @@ echo "Ready! 🚀"
 
 if [[ "$use_oidc_upstream" == "yes" || "$use_flow" == "browser_authcode" ]]; then
   echo
-  echo "To be able to access the login URL shown below, start Chrome like this:"
+  echo "To be able to access the Supervisor URL during login, start Chrome like this:"
   echo "    open -a \"Google Chrome\" --args --proxy-server=\"$PINNIPED_TEST_PROXY\""
   echo "Note that Chrome must be fully quit before being started with --proxy-server."
   echo "Then open the login URL shown below in that new Chrome window."
   echo
   echo "When prompted for username and password, use these values:"
+  echo
 fi
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
-  echo "    Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
-  echo "    Password: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"
+  echo "    OIDC Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
+  echo "    OIDC Password: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"
+  echo
 fi
 
 if [[ "$use_ldap_upstream" == "yes" ]]; then
-  echo "    Username: $PINNIPED_TEST_LDAP_USER_CN"
-  echo "    Password: $PINNIPED_TEST_LDAP_USER_PASSWORD"
+  echo "    LDAP Username: $PINNIPED_TEST_LDAP_USER_CN"
+  echo "    LDAP Password: $PINNIPED_TEST_LDAP_USER_PASSWORD"
+  echo
 fi
 
 if [[ "$use_ad_upstream" == "yes" ]]; then
-  echo "    Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
-  echo "    Password: $PINNIPED_TEST_AD_USER_PASSWORD"
+  echo "    AD Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
+  echo "    AD Password: $PINNIPED_TEST_AD_USER_PASSWORD"
+  echo
 fi
 
-# Perform a login using the kubectl plugin. This should print the URL to be followed for the Dex login page
-# if using an OIDC upstream, or should prompt on the CLI for username/password if using an LDAP upstream.
-echo
-echo "Running: PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" kubectl --kubeconfig ./kubeconfig get pods -A"
-PINNIPED_DEBUG=true https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" kubectl --kubeconfig ./kubeconfig get pods -A
-
-# Print the identity of the currently logged in user. The CLI has cached your tokens, and will automatically refresh
-# your short-lived credentials whenever they expire, so you should not be prompted to log in again for the rest of the day.
-echo
-echo "Running: PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig"
-PINNIPED_DEBUG=true https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped whoami --kubeconfig ./kubeconfig
+# Echo the commands that may be used to login and print the identity of the currently logged in user.
+# Once the CLI has cached your tokens, it will automatically refresh your short-lived credentials whenever
+# they expire, so you should not be prompted to log in again for the rest of the day.
+if [[ "$use_oidc_upstream" == "yes" ]]; then
+  echo "To log in using OIDC, run:"
+  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml"
+  echo
+fi
+if [[ "$use_ldap_upstream" == "yes" ]]; then
+  echo "To log in using LDAP, run:"
+  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml"
+  echo
+fi
+if [[ "$use_ad_upstream" == "yes" ]]; then
+  echo "To log in using AD, run:"
+  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
+  echo
+fi

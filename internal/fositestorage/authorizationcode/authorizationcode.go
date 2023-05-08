@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -32,7 +32,8 @@ const (
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
-	authorizeCodeStorageVersion = "4"
+	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
+	authorizeCodeStorageVersion = "5"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}

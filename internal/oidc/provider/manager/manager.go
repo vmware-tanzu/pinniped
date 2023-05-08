@@ -19,6 +19,7 @@ import (
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/dynamiccodec"
 	"go.pinniped.dev/internal/oidc/idpdiscovery"
+	"go.pinniped.dev/internal/oidc/idplister"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
@@ -36,11 +37,11 @@ import (
 type Manager struct {
 	mu                  sync.RWMutex
 	providers           []*provider.FederationDomainIssuer
-	providerHandlers    map[string]http.Handler              // map of all routes for all providers
-	nextHandler         http.Handler                         // the next handler in a chain, called when this manager didn't know how to handle a request
-	dynamicJWKSProvider jwks.DynamicJWKSProvider             // in-memory cache of per-issuer JWKS data
-	upstreamIDPs        oidc.UpstreamIdentityProvidersLister // in-memory cache of upstream IDPs
-	secretCache         *secret.Cache                        // in-memory cache of cryptographic material
+	providerHandlers    map[string]http.Handler                   // map of all routes for all providers
+	nextHandler         http.Handler                              // the next handler in a chain, called when this manager didn't know how to handle a request
+	dynamicJWKSProvider jwks.DynamicJWKSProvider                  // in-memory cache of per-issuer JWKS data
+	upstreamIDPs        idplister.UpstreamIdentityProvidersLister // in-memory cache of upstream IDPs
+	secretCache         *secret.Cache                             // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 	oidcClientsClient   v1alpha1.OIDCClientInterface
 }
@@ -52,7 +53,7 @@ type Manager struct {
 func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
-	upstreamIDPs oidc.UpstreamIdentityProvidersLister,
+	upstreamIDPs idplister.UpstreamIdentityProvidersLister,
 	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 	oidcClientsClient v1alpha1.OIDCClientInterface,
@@ -83,17 +84,17 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 	m.providers = federationDomains
 	m.providerHandlers = make(map[string]http.Handler)
 
-	var csrfCookieEncoder = dynamiccodec.New(
+	csrfCookieEncoder := dynamiccodec.New(
 		oidc.CSRFCookieLifespan,
 		m.secretCache.GetCSRFCookieEncoderHashKey,
 		func() []byte { return nil },
 	)
 
-	for _, incomingProvider := range federationDomains {
-		issuer := incomingProvider.Issuer()
-		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
+	for _, incomingFederationDomain := range federationDomains {
+		issuerURL := incomingFederationDomain.Issuer()
+		issuerHostWithPath := strings.ToLower(incomingFederationDomain.IssuerHost()) + "/" + incomingFederationDomain.IssuerPath()
 
-		tokenHMACKeyGetter := wrapGetter(incomingProvider.Issuer(), m.secretCache.GetTokenHMACKey)
+		tokenHMACKeyGetter := wrapGetter(incomingFederationDomain.Issuer(), m.secretCache.GetTokenHMACKey)
 
 		timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
 
@@ -101,7 +102,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		// the upstream callback endpoint is called later.
 		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(
 			oidc.NewNullStorage(m.secretsClient, m.oidcClientsClient, oidcclientvalidator.DefaultMinBcryptCost),
-			issuer,
+			issuerURL,
 			tokenHMACKeyGetter,
 			nil,
 			timeoutsConfiguration,
@@ -110,27 +111,29 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
 		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(
 			oidc.NewKubeStorage(m.secretsClient, m.oidcClientsClient, timeoutsConfiguration, oidcclientvalidator.DefaultMinBcryptCost),
-			issuer,
+			issuerURL,
 			tokenHMACKeyGetter,
 			m.dynamicJWKSProvider,
 			timeoutsConfiguration,
 		)
 
-		var upstreamStateEncoder = dynamiccodec.New(
+		upstreamStateEncoder := dynamiccodec.New(
 			timeoutsConfiguration.UpstreamStateParamLifespan,
-			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderHashKey),
-			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderBlockKey),
+			wrapGetter(incomingFederationDomain.Issuer(), m.secretCache.GetStateEncoderHashKey),
+			wrapGetter(incomingFederationDomain.Issuer(), m.secretCache.GetStateEncoderBlockKey),
 		)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
+		idpLister := provider.NewFederationDomainUpstreamIdentityProvidersLister(incomingFederationDomain, m.upstreamIDPs)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
+		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuerURL)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPathV1Alpha1)] = idpdiscovery.NewHandler(m.upstreamIDPs)
+		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuerURL, m.dynamicJWKSProvider)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPathV1Alpha1)] = idpdiscovery.NewHandler(idpLister)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.AuthorizationEndpointPath)] = auth.NewHandler(
-			issuer,
-			m.upstreamIDPs,
+			issuerURL,
+			idpLister,
 			oauthHelperWithNullStorage,
 			oauthHelperWithKubeStorage,
 			csrftoken.Generate,
@@ -141,26 +144,26 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
-			m.upstreamIDPs,
+			idpLister,
 			oauthHelperWithKubeStorage,
 			upstreamStateEncoder,
 			csrfCookieEncoder,
-			issuer+oidc.CallbackEndpointPath,
+			issuerURL+oidc.CallbackEndpointPath,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
-			m.upstreamIDPs,
+			idpLister,
 			oauthHelperWithKubeStorage,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(
 			upstreamStateEncoder,
 			csrfCookieEncoder,
-			login.NewGetHandler(incomingProvider.IssuerPath()+oidc.PinnipedLoginPath),
-			login.NewPostHandler(issuer, m.upstreamIDPs, oauthHelperWithKubeStorage),
+			login.NewGetHandler(incomingFederationDomain.IssuerPath()+oidc.PinnipedLoginPath),
+			login.NewPostHandler(issuerURL, idpLister, oauthHelperWithKubeStorage),
 		)
 
-		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)
+		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuerURL)
 	}
 }
 

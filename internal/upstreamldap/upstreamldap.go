@@ -28,7 +28,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -120,7 +120,7 @@ type ProviderConfig struct {
 	GroupAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
 
 	// RefreshAttributeChecks are extra checks that attributes in a refresh response are as expected.
-	RefreshAttributeChecks map[string]func(*ldap.Entry, provider.RefreshAttributes) error
+	RefreshAttributeChecks map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -167,7 +167,7 @@ type Provider struct {
 	c ProviderConfig
 }
 
-var _ provider.UpstreamLDAPIdentityProviderI = &Provider{}
+var _ upstreamprovider.UpstreamLDAPIdentityProviderI = &Provider{}
 var _ authenticators.UserAuthenticator = &Provider{}
 
 // New creates a Provider. The config is not a pointer to ensure that a copy of the config is created,
@@ -188,7 +188,7 @@ func closeAndLogError(conn Conn, doingWhat string) {
 	}
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes provider.RefreshAttributes) ([]string, error) {
+func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes) ([]string, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	userDN := storedRefreshAttributes.DN

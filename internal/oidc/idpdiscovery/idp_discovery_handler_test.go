@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package idpdiscovery
@@ -12,7 +12,7 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
 
@@ -99,16 +99,16 @@ func TestIDPDiscovery(t *testing.T) {
 			}
 
 			// Change the list of IDPs in the cache.
-			idpLister.SetLDAPIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
+			idpLister.SetLDAPIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
 				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ldap-idp-1"},
 				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ldap-idp-2"},
 			})
-			idpLister.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
+			idpLister.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1", AllowPasswordGrant: true},
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-2"},
 			})
 
-			idpLister.SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
+			idpLister.SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
 				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-2"},
 				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-1"},
 			})

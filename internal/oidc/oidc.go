@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by Pinniped.
@@ -7,7 +7,6 @@ package oidc
 import (
 	"context"
 	"crypto/subtle"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,12 +17,10 @@ import (
 	"github.com/ory/fosite/compose"
 	errorsx "github.com/pkg/errors"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
@@ -279,24 +276,6 @@ func FositeErrorForLog(err error) []interface{} {
 	return keysAndValues
 }
 
-type UpstreamOIDCIdentityProvidersLister interface {
-	GetOIDCIdentityProviders() []provider.UpstreamOIDCIdentityProviderI
-}
-
-type UpstreamLDAPIdentityProvidersLister interface {
-	GetLDAPIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
-}
-
-type UpstreamActiveDirectoryIdentityProviderLister interface {
-	GetActiveDirectoryIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
-}
-
-type UpstreamIdentityProvidersLister interface {
-	UpstreamOIDCIdentityProvidersLister
-	UpstreamLDAPIdentityProvidersLister
-	UpstreamActiveDirectoryIdentityProviderLister
-}
-
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {
 	if ScopeWasRequested(authorizeRequester, scopeName) {
 		authorizeRequester.GrantScope(scopeName)
@@ -375,41 +354,6 @@ func validateCSRFValue(state *UpstreamStateParamData, csrfCookieValue csrftoken.
 		return httperr.New(http.StatusForbidden, "CSRF value does not match")
 	}
 	return nil
-}
-
-// FindUpstreamIDPByNameAndType finds the requested IDP by name and type, or returns an error.
-// Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
-func FindUpstreamIDPByNameAndType(
-	idpLister UpstreamIdentityProvidersLister,
-	upstreamName string,
-	upstreamType string,
-) (
-	provider.UpstreamOIDCIdentityProviderI,
-	provider.UpstreamLDAPIdentityProviderI,
-	psession.ProviderType,
-	error,
-) {
-	switch upstreamType {
-	case string(v1alpha1.IDPTypeOIDC):
-		for _, p := range idpLister.GetOIDCIdentityProviders() {
-			if p.GetName() == upstreamName {
-				return p, nil, psession.ProviderTypeOIDC, nil
-			}
-		}
-	case string(v1alpha1.IDPTypeLDAP):
-		for _, p := range idpLister.GetLDAPIdentityProviders() {
-			if p.GetName() == upstreamName {
-				return nil, p, psession.ProviderTypeLDAP, nil
-			}
-		}
-	case string(v1alpha1.IDPTypeActiveDirectory):
-		for _, p := range idpLister.GetActiveDirectoryIdentityProviders() {
-			if p.GetName() == upstreamName {
-				return nil, p, psession.ProviderTypeActiveDirectory, nil
-			}
-		}
-	}
-	return nil, nil, "", errors.New("provider not found")
 }
 
 // WriteAuthorizeError writes an authorization error as it should be returned by the authorization endpoint and other

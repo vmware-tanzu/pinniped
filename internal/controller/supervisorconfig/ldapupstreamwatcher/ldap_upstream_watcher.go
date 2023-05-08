@@ -20,7 +20,7 @@ import (
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
@@ -133,7 +133,7 @@ func (s *ldapUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
 
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
 type UpstreamLDAPIdentityProviderICache interface {
-	SetLDAPIdentityProviders([]provider.UpstreamLDAPIdentityProviderI)
+	SetLDAPIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI)
 }
 
 type ldapWatcherController struct {
@@ -207,7 +207,7 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	}
 
 	requeue := false
-	validatedUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
+	validatedUpstreams := make([]upstreamprovider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
 		valid, requestedRequeue := c.validateUpstream(ctx.Context, upstream)
 		if valid != nil {
@@ -226,7 +226,7 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
+func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) (p upstreamprovider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
 	config := &upstreamldap.ProviderConfig{

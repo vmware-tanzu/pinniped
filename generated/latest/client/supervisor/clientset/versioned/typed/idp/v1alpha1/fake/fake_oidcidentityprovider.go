@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -23,9 +22,9 @@ type FakeOIDCIdentityProviders struct {
 	ns   string
 }
 
-var oidcidentityprovidersResource = schema.GroupVersionResource{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "oidcidentityproviders"}
+var oidcidentityprovidersResource = v1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders")
 
-var oidcidentityprovidersKind = schema.GroupVersionKind{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Kind: "OIDCIdentityProvider"}
+var oidcidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("OIDCIdentityProvider")
 
 // Get takes name of the oIDCIdentityProvider, and returns the corresponding oIDCIdentityProvider object, and an error if there is any.
 func (c *FakeOIDCIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.OIDCIdentityProvider, err error) {

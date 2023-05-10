@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -23,9 +22,9 @@ type FakeFederationDomains struct {
 	ns   string
 }
 
-var federationdomainsResource = schema.GroupVersionResource{Group: "config.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "federationdomains"}
+var federationdomainsResource = v1alpha1.SchemeGroupVersion.WithResource("federationdomains")
 
-var federationdomainsKind = schema.GroupVersionKind{Group: "config.supervisor.pinniped.dev", Version: "v1alpha1", Kind: "FederationDomain"}
+var federationdomainsKind = v1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
 
 // Get takes name of the federationDomain, and returns the corresponding federationDomain object, and an error if there is any.
 func (c *FakeFederationDomains) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.FederationDomain, err error) {

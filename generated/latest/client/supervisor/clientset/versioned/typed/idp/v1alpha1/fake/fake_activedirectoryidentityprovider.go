@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -23,9 +22,9 @@ type FakeActiveDirectoryIdentityProviders struct {
 	ns   string
 }
 
-var activedirectoryidentityprovidersResource = schema.GroupVersionResource{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "activedirectoryidentityproviders"}
+var activedirectoryidentityprovidersResource = v1alpha1.SchemeGroupVersion.WithResource("activedirectoryidentityproviders")
 
-var activedirectoryidentityprovidersKind = schema.GroupVersionKind{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Kind: "ActiveDirectoryIdentityProvider"}
+var activedirectoryidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("ActiveDirectoryIdentityProvider")
 
 // Get takes name of the activeDirectoryIdentityProvider, and returns the corresponding activeDirectoryIdentityProvider object, and an error if there is any.
 func (c *FakeActiveDirectoryIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {

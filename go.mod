@@ -2,11 +2,6 @@ module go.pinniped.dev
 
 go 1.19
 
-// replace required because https://github.com/kubernetes/apiserver/blob/v0.26.2/pkg/server/routes/openapi.go#L44
-// is not updated to use k8s.io/kube-openapi@4b54b81d.
-// See https://github.com/kubernetes/kube-openapi/commit/4b54b81dd9c724d5b77bb1582a103bb175cf5a04
-replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230307230338-69ee2d25a840
-
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.5.0

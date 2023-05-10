@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package credentialrequest provides REST functionality for the CredentialRequest resource.
@@ -52,6 +52,7 @@ var _ interface {
 	rest.Scoper
 	rest.Storage
 	rest.CategoriesProvider
+	rest.SingularNameProvider
 	rest.Lister
 } = (*REST)(nil)
 
@@ -84,6 +85,10 @@ func (*REST) NamespaceScoped() bool {
 
 func (*REST) Categories() []string {
 	return []string{"pinniped"}
+}
+
+func (*REST) GetSingularName() string {
+	return "tokencredentialrequest"
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {

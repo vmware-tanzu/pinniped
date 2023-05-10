@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package whoamirequest
@@ -25,6 +25,7 @@ func TestNew(t *testing.T) {
 	require.NotNil(t, r)
 	require.False(t, r.NamespaceScoped())
 	require.Equal(t, []string{"pinniped"}, r.Categories())
+	require.Equal(t, "whoamirequest", r.GetSingularName())
 	require.IsType(t, &identityapi.WhoAmIRequest{}, r.New())
 	require.IsType(t, &identityapi.WhoAmIRequestList{}, r.NewList())
 

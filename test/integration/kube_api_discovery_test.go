@@ -79,11 +79,12 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 			resourceByVersion: map[string][]metav1.APIResource{
 				loginConciergeGV.String(): {
 					{
-						Name:       "tokencredentialrequests",
-						Kind:       "TokenCredentialRequest",
-						Verbs:      []string{"create", "list"},
-						Namespaced: false,
-						Categories: []string{"pinniped"},
+						Name:         "tokencredentialrequests",
+						SingularName: "tokencredentialrequest",
+						Kind:         "TokenCredentialRequest",
+						Verbs:        []string{"create", "list"},
+						Namespaced:   false,
+						Categories:   []string{"pinniped"},
 					},
 				},
 			},
@@ -105,11 +106,12 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 			resourceByVersion: map[string][]metav1.APIResource{
 				identityConciergeGV.String(): {
 					{
-						Name:       "whoamirequests",
-						Kind:       "WhoAmIRequest",
-						Verbs:      []string{"create", "list"},
-						Namespaced: false,
-						Categories: []string{"pinniped"},
+						Name:         "whoamirequests",
+						SingularName: "whoamirequest",
+						Kind:         "WhoAmIRequest",
+						Verbs:        []string{"create", "list"},
+						Namespaced:   false,
+						Categories:   []string{"pinniped"},
 					},
 				},
 			},
@@ -131,11 +133,12 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 			resourceByVersion: map[string][]metav1.APIResource{
 				clientSecretSupervisorGV.String(): {
 					{
-						Name:       "oidcclientsecretrequests",
-						Kind:       "OIDCClientSecretRequest",
-						Verbs:      []string{"create", "list"},
-						Namespaced: true,
-						Categories: []string{"pinniped"},
+						Name:         "oidcclientsecretrequests",
+						SingularName: "oidcclientsecretrequest",
+						Kind:         "OIDCClientSecretRequest",
+						Verbs:        []string{"create", "list"},
+						Namespaced:   true,
+						Categories:   []string{"pinniped"},
 					},
 				},
 			},

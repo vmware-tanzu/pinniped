@@ -1,11 +1,10 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -88,7 +87,7 @@ func RequireEventually(
 	)
 
 	// Run the check until it completes with no assertion failures.
-	waitErr := wait.PollImmediate(tick, waitFor, func() (bool, error) {
+	waitErr := wait.PollUntilContextTimeout(context.Background(), tick, waitFor, true, func(ctx context.Context) (bool, error) {
 		t.Helper()
 		attempts++
 
@@ -133,7 +132,10 @@ func RequireEventuallyWithoutError(
 	msgAndArgs ...interface{},
 ) {
 	t.Helper()
-	require.NoError(t, wait.PollImmediate(tick, waitFor, f), msgAndArgs...)
+	// This previously used wait.PollImmediate (now deprecated), which did not take a ctx arg in the func.
+	// Hide this detail from the callers for now to keep the old signature.
+	fWithCtx := func(ctx context.Context) (bool, error) { return f() }
+	require.NoError(t, wait.PollUntilContextTimeout(context.Background(), tick, waitFor, true, fWithCtx), msgAndArgs...)
 }
 
 // RequireNeverWithoutError is similar to require.Never() except that it also allows the caller to
@@ -147,9 +149,11 @@ func RequireNeverWithoutError(
 	msgAndArgs ...interface{},
 ) {
 	t.Helper()
-	err := wait.PollImmediate(tick, waitFor, f)
-	isWaitTimeout := errors.Is(err, wait.ErrWaitTimeout)
-	if err != nil && !isWaitTimeout {
+	// This previously used wait.PollImmediate (now deprecated), which did not take a ctx arg in the func.
+	// Hide this detail from the callers for now to keep the old signature.
+	fWithCtx := func(ctx context.Context) (bool, error) { return f() }
+	err := wait.PollUntilContextTimeout(context.Background(), tick, waitFor, true, fWithCtx)
+	if err != nil && !wait.Interrupted(err) {
 		require.NoError(t, err, msgAndArgs...) // this will fail and throw the right error message
 	}
 	if err == nil {

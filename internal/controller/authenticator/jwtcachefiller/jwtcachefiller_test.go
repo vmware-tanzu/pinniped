@@ -486,7 +486,7 @@ func TestController(t *testing.T) {
 						authenticated bool
 						err           error
 					)
-					_ = wait.PollImmediate(10*time.Millisecond, 5*time.Second, func() (bool, error) {
+					_ = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
 						rsp, authenticated, err = cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
 						return !isNotInitialized(err), nil
 					})

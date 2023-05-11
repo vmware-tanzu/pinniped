@@ -604,8 +604,17 @@ func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName
 	output := runKubectlExplain(t, resourceName, resourceGroupVersion)
 
 	// Check that the output is as expected.
+	if strings.Contains(output, "GROUP: ") {
+		// At some point kubectl split the group and version into two separate fields in the output.
+		splitGroupAndVersion := strings.Split(resourceGroupVersion, "/")
+		require.Len(t, splitGroupAndVersion, 2)
+		require.Regexp(t, `(?m)^GROUP:\s+`+regexp.QuoteMeta(splitGroupAndVersion[0])+`$`, output)
+		require.Regexp(t, `(?m)^VERSION:\s+`+regexp.QuoteMeta(splitGroupAndVersion[1])+`$`, output)
+	} else {
+		// kubectl used to show "VERSION: clientsecret.supervisor.pinniped.dev/v1alpha1" and not have any "GROUP:"
+		require.Regexp(t, `(?m)^VERSION:\s+`+regexp.QuoteMeta(resourceGroupVersion)+`$`, output)
+	}
 	require.Regexp(t, `(?m)^KIND:\s+`+regexp.QuoteMeta(resourceKind)+`$`, output)
-	require.Regexp(t, `(?m)^VERSION:\s+`+regexp.QuoteMeta(resourceGroupVersion)+`$`, output)
 	require.Regexp(t, `(?m)^DESCRIPTION:$`, output)
 
 	// Use assert here so that the test keeps running when a description is empty, so we can find all the empty descriptions.

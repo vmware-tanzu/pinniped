@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package credentialrequest
@@ -36,6 +36,7 @@ func TestNew(t *testing.T) {
 	require.NotNil(t, r)
 	require.False(t, r.NamespaceScoped())
 	require.Equal(t, []string{"pinniped"}, r.Categories())
+	require.Equal(t, "tokencredentialrequest", r.GetSingularName())
 	require.IsType(t, &loginapi.TokenCredentialRequest{}, r.New())
 	require.IsType(t, &loginapi.TokenCredentialRequestList{}, r.NewList())
 

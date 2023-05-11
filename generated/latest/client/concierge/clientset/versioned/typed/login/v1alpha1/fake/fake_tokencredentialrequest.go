@@ -10,7 +10,6 @@ import (
 
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -19,9 +18,9 @@ type FakeTokenCredentialRequests struct {
 	Fake *FakeLoginV1alpha1
 }
 
-var tokencredentialrequestsResource = schema.GroupVersionResource{Group: "login.concierge.pinniped.dev", Version: "v1alpha1", Resource: "tokencredentialrequests"}
+var tokencredentialrequestsResource = v1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")
 
-var tokencredentialrequestsKind = schema.GroupVersionKind{Group: "login.concierge.pinniped.dev", Version: "v1alpha1", Kind: "TokenCredentialRequest"}
+var tokencredentialrequestsKind = v1alpha1.SchemeGroupVersion.WithKind("TokenCredentialRequest")
 
 // Create takes the representation of a tokenCredentialRequest and creates it.  Returns the server's representation of the tokenCredentialRequest, and an error, if there is any.
 func (c *FakeTokenCredentialRequests) Create(ctx context.Context, tokenCredentialRequest *v1alpha1.TokenCredentialRequest, opts v1.CreateOptions) (result *v1alpha1.TokenCredentialRequest, err error) {

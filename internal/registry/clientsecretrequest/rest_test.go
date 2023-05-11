@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clientsecretrequest
@@ -50,6 +50,7 @@ func TestNew(t *testing.T) {
 	require.NotNil(t, r)
 	require.True(t, r.NamespaceScoped())
 	require.Equal(t, []string{"pinniped"}, r.Categories())
+	require.Equal(t, "oidcclientsecretrequest", r.GetSingularName())
 
 	require.IsType(t, &clientsecretapi.OIDCClientSecretRequest{}, r.New())
 	require.IsType(t, &clientsecretapi.OIDCClientSecretRequestList{}, r.NewList())

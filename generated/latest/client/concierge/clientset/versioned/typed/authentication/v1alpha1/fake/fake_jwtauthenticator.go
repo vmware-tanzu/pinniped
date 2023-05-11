@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -22,9 +21,9 @@ type FakeJWTAuthenticators struct {
 	Fake *FakeAuthenticationV1alpha1
 }
 
-var jwtauthenticatorsResource = schema.GroupVersionResource{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Resource: "jwtauthenticators"}
+var jwtauthenticatorsResource = v1alpha1.SchemeGroupVersion.WithResource("jwtauthenticators")
 
-var jwtauthenticatorsKind = schema.GroupVersionKind{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Kind: "JWTAuthenticator"}
+var jwtauthenticatorsKind = v1alpha1.SchemeGroupVersion.WithKind("JWTAuthenticator")
 
 // Get takes name of the jWTAuthenticator, and returns the corresponding jWTAuthenticator object, and an error if there is any.
 func (c *FakeJWTAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.JWTAuthenticator, err error) {

@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -23,9 +22,9 @@ type FakeLDAPIdentityProviders struct {
 	ns   string
 }
 
-var ldapidentityprovidersResource = schema.GroupVersionResource{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "ldapidentityproviders"}
+var ldapidentityprovidersResource = v1alpha1.SchemeGroupVersion.WithResource("ldapidentityproviders")
 
-var ldapidentityprovidersKind = schema.GroupVersionKind{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Kind: "LDAPIdentityProvider"}
+var ldapidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("LDAPIdentityProvider")
 
 // Get takes name of the lDAPIdentityProvider, and returns the corresponding lDAPIdentityProvider object, and an error if there is any.
 func (c *FakeLDAPIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.LDAPIdentityProvider, err error) {

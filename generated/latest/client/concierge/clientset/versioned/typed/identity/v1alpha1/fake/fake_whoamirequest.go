@@ -10,7 +10,6 @@ import (
 
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -19,9 +18,9 @@ type FakeWhoAmIRequests struct {
 	Fake *FakeIdentityV1alpha1
 }
 
-var whoamirequestsResource = schema.GroupVersionResource{Group: "identity.concierge.pinniped.dev", Version: "v1alpha1", Resource: "whoamirequests"}
+var whoamirequestsResource = v1alpha1.SchemeGroupVersion.WithResource("whoamirequests")
 
-var whoamirequestsKind = schema.GroupVersionKind{Group: "identity.concierge.pinniped.dev", Version: "v1alpha1", Kind: "WhoAmIRequest"}
+var whoamirequestsKind = v1alpha1.SchemeGroupVersion.WithKind("WhoAmIRequest")
 
 // Create takes the representation of a whoAmIRequest and creates it.  Returns the server's representation of the whoAmIRequest, and an error, if there is any.
 func (c *FakeWhoAmIRequests) Create(ctx context.Context, whoAmIRequest *v1alpha1.WhoAmIRequest, opts v1.CreateOptions) (result *v1alpha1.WhoAmIRequest, err error) {

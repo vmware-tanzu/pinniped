@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -22,9 +21,9 @@ type FakeCredentialIssuers struct {
 	Fake *FakeConfigV1alpha1
 }
 
-var credentialissuersResource = schema.GroupVersionResource{Group: "config.concierge.pinniped.dev", Version: "v1alpha1", Resource: "credentialissuers"}
+var credentialissuersResource = v1alpha1.SchemeGroupVersion.WithResource("credentialissuers")
 
-var credentialissuersKind = schema.GroupVersionKind{Group: "config.concierge.pinniped.dev", Version: "v1alpha1", Kind: "CredentialIssuer"}
+var credentialissuersKind = v1alpha1.SchemeGroupVersion.WithKind("CredentialIssuer")
 
 // Get takes name of the credentialIssuer, and returns the corresponding credentialIssuer object, and an error if there is any.
 func (c *FakeCredentialIssuers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuer, err error) {

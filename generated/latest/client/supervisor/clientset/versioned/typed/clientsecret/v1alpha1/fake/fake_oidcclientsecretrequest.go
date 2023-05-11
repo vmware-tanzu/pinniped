@@ -10,7 +10,6 @@ import (
 
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"
 )
 
@@ -20,9 +19,9 @@ type FakeOIDCClientSecretRequests struct {
 	ns   string
 }
 
-var oidcclientsecretrequestsResource = schema.GroupVersionResource{Group: "clientsecret.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "oidcclientsecretrequests"}
+var oidcclientsecretrequestsResource = v1alpha1.SchemeGroupVersion.WithResource("oidcclientsecretrequests")
 
-var oidcclientsecretrequestsKind = schema.GroupVersionKind{Group: "clientsecret.supervisor.pinniped.dev", Version: "v1alpha1", Kind: "OIDCClientSecretRequest"}
+var oidcclientsecretrequestsKind = v1alpha1.SchemeGroupVersion.WithKind("OIDCClientSecretRequest")
 
 // Create takes the representation of a oIDCClientSecretRequest and creates it.  Returns the server's representation of the oIDCClientSecretRequest, and an error, if there is any.
 func (c *FakeOIDCClientSecretRequests) Create(ctx context.Context, oIDCClientSecretRequest *v1alpha1.OIDCClientSecretRequest, opts v1.CreateOptions) (result *v1alpha1.OIDCClientSecretRequest, err error) {

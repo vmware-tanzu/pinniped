@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -22,9 +21,9 @@ type FakeWebhookAuthenticators struct {
 	Fake *FakeAuthenticationV1alpha1
 }
 
-var webhookauthenticatorsResource = schema.GroupVersionResource{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Resource: "webhookauthenticators"}
+var webhookauthenticatorsResource = v1alpha1.SchemeGroupVersion.WithResource("webhookauthenticators")
 
-var webhookauthenticatorsKind = schema.GroupVersionKind{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Kind: "WebhookAuthenticator"}
+var webhookauthenticatorsKind = v1alpha1.SchemeGroupVersion.WithKind("WebhookAuthenticator")
 
 // Get takes name of the webhookAuthenticator, and returns the corresponding webhookAuthenticator object, and an error if there is any.
 func (c *FakeWebhookAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.WebhookAuthenticator, err error) {

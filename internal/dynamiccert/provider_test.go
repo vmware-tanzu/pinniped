@@ -4,6 +4,7 @@
 package dynamiccert
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -194,7 +195,7 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 			var lastTLSConfig *tls.Config
 
 			// it will take some time for the controller to catch up
-			err = wait.PollImmediate(time.Second, 30*time.Second, func() (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 				actualTLSConfig, err := tlsConfig.GetConfigForClient(&tls.ClientHelloInfo{ServerName: "force-standard-sni"})
 				if err != nil {
 					return false, err

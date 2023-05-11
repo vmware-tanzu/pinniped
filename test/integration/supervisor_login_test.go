@@ -1738,9 +1738,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			wantAuthcodeExchangeError: "oauth2: cannot fetch token: 401 Unauthorized\n" +
-				`Response: {"error":"invalid_client","error_description":"Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."}`,
+			requestAuthorization:      requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantAuthcodeExchangeError: `oauth2: "invalid_client" "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."`,
 		},
 	}
 
@@ -2239,12 +2238,7 @@ func testSupervisorLogin(
 		_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()
 		// Should have got an error since the upstream refresh should have failed.
 		require.Error(t, err)
-		require.Regexp(t,
-			regexp.QuoteMeta("oauth2: cannot fetch token: 401 Unauthorized\n")+
-				regexp.QuoteMeta(`Response: {"error":"error","error_description":"Error during upstream refresh. Upstream refresh failed`)+
-				"[^']+",
-			err.Error(),
-		)
+		require.EqualError(t, err, `oauth2: "error" "Error during upstream refresh. Upstream refresh failed."`)
 	}
 }
 

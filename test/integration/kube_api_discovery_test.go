@@ -414,6 +414,11 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 	t.Run("every API can show its docs to the user via kubectl explain, including aggregated APIs, and everything has a description", func(t *testing.T) {
 		t.Parallel()
 
+		// Log the version of kubectl to make it appear in CI output for easier debugging.
+		runKubectlVersion(t)
+
+		foundFieldNames := 0
+
 		for _, r := range resources {
 			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
 				continue
@@ -428,9 +433,18 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 				// Note that this test might indirectly depend on the kubectl discovery cache, found in $HOME/.kube/cache/discovery.
 				// If you are working on changing API type struct comments, then you may need to clear your discovery cache
 				// (or wait ~10 minutes for the cache to expire) for the new comments to appear in the `kubectl explain` results.
-				requireKubectlExplainShowsDescriptionForResource(t, a.Name, a.Kind, r.GroupVersion)
+				foundFieldNames += requireKubectlExplainShowsDescriptionForResource(t, a.Name, a.Kind, r.GroupVersion)
 			}
 		}
+
+		// Because we are parsing text from `kubectl explain` and because the format of that text can change
+		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
+		// Pinniped API resources. Without this, the test could accidentally skip parts of the tree if the
+		// format has changed.
+		require.Equal(t, 225, foundFieldNames,
+			"Expected to find all known fields of all Pinniped API resources. "+
+				"You may will need to update this expectation if you added new fields to the API types.",
+		)
 	})
 
 	t.Run("Pinniped resources do not have short names", func(t *testing.T) {
@@ -599,13 +613,13 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		"did not find expected number of Pinniped CRDs to check for additionalPrinterColumns")
 }
 
-func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName string, resourceKind string, resourceGroupVersion string) {
+func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName string, resourceKind string, resourceGroupVersion string) int {
 	// Run kubectl explain on the resource.
 	output := runKubectlExplain(t, resourceName, resourceGroupVersion)
 
 	// Check that the output is as expected.
 	if strings.Contains(output, "GROUP: ") {
-		// At some point kubectl split the group and version into two separate fields in the output.
+		// Starting in kubectl v1.27, kubectl split the group and version into two separate fields in the output.
 		splitGroupAndVersion := strings.Split(resourceGroupVersion, "/")
 		require.Len(t, splitGroupAndVersion, 2)
 		require.Regexp(t, `(?m)^GROUP:\s+`+regexp.QuoteMeta(splitGroupAndVersion[0])+`$`, output)
@@ -620,45 +634,49 @@ func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName
 	// Use assert here so that the test keeps running when a description is empty, so we can find all the empty descriptions.
 	assert.NotRegexp(t, `(?m)^\s*<empty>\s*$`, output, "resource or field should not have an empty description in kubectl explain")
 
-	if strings.Contains(output, "\nFIELD: ") {
-		// We must have explained a leaf field, which has no children fields.
-		return
-	}
-
 	if resourceName == "whoamirequests.spec" {
 		// This is an exception because this field is declared to be an empty struct in its type definition. It is
 		// not a leaf field because it is a struct, but it also has no children because the struct contains no fields.
 		// So it has neither the `FIELD:` section nor the `FIELDS:` section in the output.
-		return
+		return 0
+	}
+
+	if !strings.Contains(output, "\nFIELDS:\n") {
+		// We must have explained a leaf field, which has no children fields.
+		return 0
 	}
 
 	// Otherwise, we must have explained a resource or field which has children fields, so it should have a fields list.
-	require.Contains(t, output, "\nFIELDS:\n")
-
 	// Grab everything after the line that says `FIELDS:`.
 	fieldsSectionMatches := regexp.MustCompile(`(?s).+\nFIELDS:\n(.+)`).FindStringSubmatch(output)
 	require.Len(t, fieldsSectionMatches, 2)
 	allFieldsDescribedText := fieldsSectionMatches[1]
 
 	// Grab the names of all the fields from the fields description.
+	foundFieldNames := 0
 	fieldNames := []string{}
 	for _, line := range strings.Split(allFieldsDescribedText, "\n") {
 		if strings.HasPrefix(line, "    ") {
-			// Field names are indented by exactly three spaces.
-			// Skip lines that are indented deeper, which are field descriptions.
+			// Field names are indented by exactly 2 or 3 spaces (depending on the version of kubectl).
+			// Skip lines that are indented deeper (by at least 4 spaces), which are field descriptions.
+			// Starting in kubectl v1.27, field names became indented by 3 spaces.
 			continue
 		}
 		if len(strings.TrimSpace(line)) == 0 {
 			// Ignore empty lines.
 			continue
 		}
-		// Field name lines start with 3 spaces, then the field name, then some tabs/spaces, then the field type.
-		// Grab just the field name.
-		fieldsNameMatches := regexp.MustCompile(`^ {3}(\S+)\s+`).FindStringSubmatch(line)
-		require.Len(t, fieldsNameMatches, 2, fmt.Sprintf("field name line which did not match: %s", line))
-		fieldNames = append(fieldNames, fieldsNameMatches[1])
+		// Field name lines start with exactly 2 or 3 spaces (depending on the version of kubectl), then the field name,
+		// then some tabs/spaces, then the field type. Grab just the field name.
+		// Starting in kubectl v1.27, field names became indented by 3 spaces.
+		fieldsNameMatches := regexp.MustCompile(`^ {2,3}(\S+)\s+`).FindStringSubmatch(line)
+		require.Len(t, fieldsNameMatches, 2, fmt.Sprintf("field name line which did not match: %s\nwhole actual value:\n%s", line, output))
+		fieldName := fieldsNameMatches[1]
+		fieldNames = append(fieldNames, fieldName)
+		t.Logf("  Found field: %s.%s", resourceName, fieldName)
 	}
 	require.Greater(t, len(fieldNames), 0, "should have found some field names in the kubectl explain output, but didn't find any")
+	foundFieldNames += len(fieldNames)
 
 	// For each field, check to see that docs were provided for that field by making a recursive call to this function.
 	for _, fieldName := range fieldNames {
@@ -666,8 +684,18 @@ func requireKubectlExplainShowsDescriptionForResource(t *testing.T, resourceName
 			// Skip these since the docs are implemented by k8s packages, so we can assume that they are correct.
 			continue
 		}
-		requireKubectlExplainShowsDescriptionForResource(t, fmt.Sprintf("%s.%s", resourceName, fieldName), resourceKind, resourceGroupVersion)
+		foundFieldNames += requireKubectlExplainShowsDescriptionForResource(t, fmt.Sprintf("%s.%s", resourceName, fieldName), resourceKind, resourceGroupVersion)
 	}
+
+	return foundFieldNames
+}
+
+func runKubectlVersion(t *testing.T) {
+	t.Helper()
+	t.Log("Running: kubectl version")
+	out, err := exec.Command("kubectl", "version").CombinedOutput()
+	require.NoError(t, err)
+	t.Log(string(out))
 }
 
 func runKubectlExplain(t *testing.T, resourceName string, apiVersion string) string {

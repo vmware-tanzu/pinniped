@@ -251,7 +251,7 @@ func TestPlog(t *testing.T) {
 				testAllPlogMethods(l.withDepth(-3))
 			},
 			want: `
-{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.3/zapr.go:<line>$zapr.(*zapLogger).Error","message":"e","panda":2,"error":"some err"}
+{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.4/zapr.go:<line>$zapr.(*zapLogger).Error","message":"e","panda":2,"error":"some err"}
 {"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"w","warning":true,"panda":2}
 {"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"we","warning":true,"error":"some err","panda":2}
 {"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"i","panda":2}
@@ -260,9 +260,8 @@ func TestPlog(t *testing.T) {
 {"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"de","error":"some err","panda":2}
 {"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"t","panda":2}
 {"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.2.4/logr.go:<line>$logr.Logger.Info","message":"te","error":"some err","panda":2}
-{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.3/zapr.go:<line>$zapr.(*zapLogger).Info","message":"all","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.3/zapr.go:<line>$zapr.(*zapLogger).Info","message":"always","panda":2}
-`,
+{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.4/zapr.go:<line>$zapr.(*zapLogger).Info","message":"all","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.2.4/zapr.go:<line>$zapr.(*zapLogger).Info","message":"always","panda":2}`,
 		},
 		{
 			name: "closure",

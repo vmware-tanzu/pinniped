@@ -1,4 +1,4 @@
-#! Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -116,6 +116,31 @@ ldap.ldif: |
   objectClass: groupOfNames
   member: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
   member: cn=olive,ou=users,dc=pinniped,dc=dev
+
+  # ball-game-players group again, but this time defined as a posixGroup
+  dn: cn=ball-game-players-posix,ou=groups,dc=pinniped,dc=dev
+  objectClass: posixGroup
+  objectClass: top
+  cn: ball-game-players-posix
+  gidNumber: 1001
+  memberUid: pinny
+  memberUid: olive
+
+  # seals group again, but this time defined as a posixGroup
+  dn: cn=seals-posix,ou=groups,dc=pinniped,dc=dev
+  objectClass: posixGroup
+  objectClass: top
+  cn: seals-posix
+  gidNumber: 1002
+  memberUid: pinny
+
+  # walruses group again, but this time defined as a posixGroup
+  dn: cn=walruses-posix,ou=groups,dc=pinniped,dc=dev
+  objectClass: posixGroup
+  objectClass: top
+  cn: walruses-posix
+  gidNumber: 1002
+  memberUid: wally
 #@ end
 
 ---

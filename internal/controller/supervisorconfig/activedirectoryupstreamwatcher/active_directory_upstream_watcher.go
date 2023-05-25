@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package activedirectoryupstreamwatcher implements a controller which watches ActiveDirectoryIdentityProviders.
@@ -201,6 +201,10 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Filter() string {
 		return defaultActiveDirectoryGroupSearchFilter
 	}
 	return g.groupSearch.Filter
+}
+
+func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) UserAttributeForFilter() string {
+	return ""
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {

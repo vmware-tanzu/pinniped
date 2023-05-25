@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ldapupstreamwatcher
@@ -148,20 +148,25 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	now := metav1.NewTime(time.Now().UTC())
 
 	const (
-		testNamespace         = "test-namespace"
-		testName              = "test-name"
-		testResourceUID       = "test-resource-uid"
-		testSecretName        = "test-bind-secret"
-		testBindUsername      = "test-bind-username"
-		testBindPassword      = "test-bind-password"
-		testHost              = "ldap.example.com:123"
-		testUserSearchBase    = "test-user-search-base"
-		testUserSearchFilter  = "test-user-search-filter"
-		testGroupSearchBase   = "test-group-search-base"
-		testGroupSearchFilter = "test-group-search-filter"
-		testUsernameAttrName  = "test-username-attr"
-		testGroupNameAttrName = "test-group-name-attr"
-		testUIDAttrName       = "test-uid-attr"
+		testNamespace   = "test-namespace"
+		testName        = "test-name"
+		testResourceUID = "test-resource-uid"
+
+		testHost = "ldap.example.com:123"
+
+		testBindSecretName = "test-bind-secret"
+		testBindUsername   = "test-bind-username"
+		testBindPassword   = "test-bind-password"
+
+		testUserSearchBase             = "test-user-search-base"
+		testUserSearchFilter           = "test-user-search-filter"
+		testUserSearchUsernameAttrName = "test-username-attr"
+		testUserSearchUIDAttrName      = "test-uid-attr"
+
+		testGroupSearchBase                   = "test-group-search-base"
+		testGroupSearchFilter                 = "test-group-search-filter"
+		testGroupSearchUserAttributeForFilter = "test-group-search-filter-user-attr-for-filter"
+		testGroupSearchNameAttrName           = "test-group-name-attr"
 	)
 
 	testValidSecretData := map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
@@ -181,20 +186,21 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		Spec: v1alpha1.LDAPIdentityProviderSpec{
 			Host: testHost,
 			TLS:  &v1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
-			Bind: v1alpha1.LDAPIdentityProviderBind{SecretName: testSecretName},
+			Bind: v1alpha1.LDAPIdentityProviderBind{SecretName: testBindSecretName},
 			UserSearch: v1alpha1.LDAPIdentityProviderUserSearch{
 				Base:   testUserSearchBase,
 				Filter: testUserSearchFilter,
 				Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributes{
-					Username: testUsernameAttrName,
-					UID:      testUIDAttrName,
+					Username: testUserSearchUsernameAttrName,
+					UID:      testUserSearchUIDAttrName,
 				},
 			},
 			GroupSearch: v1alpha1.LDAPIdentityProviderGroupSearch{
-				Base:   testGroupSearchBase,
-				Filter: testGroupSearchFilter,
+				Base:                   testGroupSearchBase,
+				Filter:                 testGroupSearchFilter,
+				UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
 				Attributes: v1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-					GroupName: testGroupNameAttrName,
+					GroupName: testGroupSearchNameAttrName,
 				},
 				SkipGroupRefresh: false,
 			},
@@ -217,13 +223,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              testUserSearchBase,
 			Filter:            testUserSearchFilter,
-			UsernameAttribute: testUsernameAttrName,
-			UIDAttribute:      testUIDAttrName,
+			UsernameAttribute: testUserSearchUsernameAttrName,
+			UIDAttribute:      testUserSearchUIDAttrName,
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
-			Base:               testGroupSearchBase,
-			Filter:             testGroupSearchFilter,
-			GroupNameAttribute: testGroupNameAttrName,
+			Base:                   testGroupSearchBase,
+			Filter:                 testGroupSearchFilter,
+			UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+			GroupNameAttribute:     testGroupSearchNameAttrName,
 		},
 	}
 
@@ -250,7 +257,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			Reason:             "Success",
 			Message: fmt.Sprintf(
 				`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-				testHost, testBindUsername, testSecretName, secretVersion),
+				testHost, testBindUsername, testBindSecretName, secretVersion),
 			ObservedGeneration: gen,
 		}
 	}
@@ -282,7 +289,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 
 	validBindUserSecret := func(secretVersion string) *corev1.Secret {
 		return &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace, ResourceVersion: secretVersion},
+			ObjectMeta: metav1.ObjectMeta{Name: testBindSecretName, Namespace: testNamespace, ResourceVersion: secretVersion},
 			Type:       corev1.SecretTypeBasicAuth,
 			Data:       testValidSecretData,
 		}
@@ -346,7 +353,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretNotFound",
-							Message:            fmt.Sprintf(`secret "%s" not found`, testSecretName),
+							Message:            fmt.Sprintf(`secret "%s" not found`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
 						tlsConfigurationValidLoadedTrueCondition(1234),
@@ -358,7 +365,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			name:           "secret has wrong type",
 			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testBindSecretName, Namespace: testNamespace},
 				Type:       "some-other-type",
 				Data:       testValidSecretData,
 			}},
@@ -374,7 +381,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretWrongType",
-							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testSecretName),
+							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
 						tlsConfigurationValidLoadedTrueCondition(1234),
@@ -386,7 +393,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			name:           "secret is missing key",
 			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testBindSecretName, Namespace: testNamespace},
 				Type:       corev1.SecretTypeBasicAuth,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
@@ -401,7 +408,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretMissingKeys",
-							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testSecretName),
+							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
 						tlsConfigurationValidLoadedTrueCondition(1234),
@@ -484,13 +491,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
+						UsernameAttribute: testUserSearchUsernameAttrName,
+						UIDAttribute:      testUserSearchUIDAttrName,
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
+						Base:                   testGroupSearchBase,
+						Filter:                 testGroupSearchFilter,
+						UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 				},
 			},
@@ -548,13 +556,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
+						UsernameAttribute: testUserSearchUsernameAttrName,
+						UIDAttribute:      testUserSearchUIDAttrName,
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
+						Base:                   testGroupSearchBase,
+						Filter:                 testGroupSearchFilter,
+						UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 				},
 			},
@@ -571,7 +580,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Success",
 							Message: fmt.Sprintf(
 								`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-								"ldap.example.com", testBindUsername, testSecretName, "4242"),
+								"ldap.example.com", testBindUsername, testBindSecretName, "4242"),
 							ObservedGeneration: 1234,
 						},
 						tlsConfigurationValidLoadedTrueCondition(1234),
@@ -590,7 +599,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Reason: "Success",
 					Message: fmt.Sprintf(
 						`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-						"ldap.example.com", testBindUsername, testSecretName, "4242"),
+						"ldap.example.com", testBindUsername, testBindSecretName, "4242"),
 				},
 			}},
 		},
@@ -619,13 +628,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
+						UsernameAttribute: testUserSearchUsernameAttrName,
+						UIDAttribute:      testUserSearchUIDAttrName,
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
+						Base:                   testGroupSearchBase,
+						Filter:                 testGroupSearchFilter,
+						UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 				},
 			},
@@ -675,13 +685,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
+						UsernameAttribute: testUserSearchUsernameAttrName,
+						UIDAttribute:      testUserSearchUIDAttrName,
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
+						Base:                   testGroupSearchBase,
+						Filter:                 testGroupSearchFilter,
+						UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+						GroupNameAttribute:     testGroupSearchNameAttrName,
 					},
 				},
 			},
@@ -1077,14 +1088,15 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
+						UsernameAttribute: testUserSearchUsernameAttrName,
+						UIDAttribute:      testUserSearchUIDAttrName,
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
-						SkipGroupRefresh:   true,
+						Base:                   testGroupSearchBase,
+						Filter:                 testGroupSearchFilter,
+						UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
+						GroupNameAttribute:     testGroupSearchNameAttrName,
+						SkipGroupRefresh:       true,
 					},
 				},
 			},

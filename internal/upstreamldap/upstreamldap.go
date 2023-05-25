@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package upstreamldap implements an abstraction of upstream LDAP IDP interactions.
@@ -149,6 +149,10 @@ type GroupSearchConfig struct {
 	// Filter is the filter to use for the group search in the upstream LDAP IDP. Empty means to use `member={}`.
 	Filter string
 
+	// UserAttributeForFilter is the name of the user attribute whose value should be used to replace the placeholder
+	// in the Filter. Empty means to use 'dn'.
+	UserAttributeForFilter string
+
 	// GroupNameAttribute is the attribute in the LDAP group entry from which the group name should be
 	// retrieved. Empty means to use 'cn'.
 	GroupNameAttribute string
@@ -166,13 +170,13 @@ type Provider struct {
 var _ provider.UpstreamLDAPIdentityProviderI = &Provider{}
 var _ authenticators.UserAuthenticator = &Provider{}
 
-// Create a Provider. The config is not a pointer to ensure that a copy of the config is created,
+// New creates a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
 func New(config ProviderConfig) *Provider {
 	return &Provider{c: config}
 }
 
-// A reader for the config. Returns a copy of the config to keep the underlying config read-only.
+// GetConfig is a reader for the config. Returns a copy of the config to keep the underlying config read-only.
 func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }
@@ -245,7 +249,15 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes p
 		return nil, nil
 	}
 
-	mappedGroupNames, err := p.searchGroupsForUserDN(conn, userDN)
+	var groupSearchUserAttributeForFilterValue string
+	if p.useGroupSearchUserAttributeForFilter() {
+		groupSearchUserAttributeForFilterValue, err = p.getSearchResultAttributeValue(p.c.GroupSearch.UserAttributeForFilter, userEntry, newUsername)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	mappedGroupNames, err := p.searchGroupsForUserMembership(conn, userDN, groupSearchUserAttributeForFilterValue)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +370,7 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 	return ptls.DefaultLDAP(rootCAs), nil
 }
 
-// A name for this upstream provider.
+// GetName returns a name for this upstream provider.
 func (p *Provider) GetName() string {
 	return p.c.Name
 }
@@ -367,7 +379,7 @@ func (p *Provider) GetResourceUID() types.UID {
 	return p.c.ResourceUID
 }
 
-// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234?base=user-search-base".
+// GetURL returns a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234?base=user-search-base".
 // This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 // identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
 func (p *Provider) GetURL() *url.URL {
@@ -412,7 +424,7 @@ func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string, 
 	return p.authenticateUserImpl(ctx, username, grantedScopes, endUserBindFunc)
 }
 
-// Authenticate an end user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
+// AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
@@ -463,13 +475,13 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, gr
 	return response, true, nil
 }
 
-func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, error) {
+func (p *Provider) searchGroupsForUserMembership(conn Conn, userDN string, groupSearchUserAttributeForFilterValue string) ([]string, error) {
 	// If we do not have group search configured, skip this search.
 	if len(p.c.GroupSearch.Base) == 0 {
 		return []string{}, nil
 	}
 
-	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN), groupSearchPageSize)
+	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN, groupSearchUserAttributeForFilterValue), groupSearchPageSize)
 	if err != nil {
 		return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
 	}
@@ -594,7 +606,15 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, grantedScopes [
 
 	var mappedGroupNames []string
 	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
-		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
+		var groupSearchUserAttributeForFilterValue string
+		if p.useGroupSearchUserAttributeForFilter() {
+			groupSearchUserAttributeForFilterValue, err = p.getSearchResultAttributeValue(p.c.GroupSearch.UserAttributeForFilter, userEntry, username)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		mappedGroupNames, err = p.searchGroupsForUserMembership(conn, userEntry.DN, groupSearchUserAttributeForFilterValue)
 		if err != nil {
 			return nil, err
 		}
@@ -668,7 +688,7 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 	}
 }
 
-func (p *Provider) groupSearchRequest(userDN string) *ldap.SearchRequest {
+func (p *Provider) groupSearchRequest(userDN string, groupSearchUserAttributeForFilterValue string) *ldap.SearchRequest {
 	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
 	return &ldap.SearchRequest{
 		BaseDN:       p.c.GroupSearch.Base,
@@ -677,7 +697,7 @@ func (p *Provider) groupSearchRequest(userDN string) *ldap.SearchRequest {
 		SizeLimit:    0, // unlimited size because we will search with paging
 		TimeLimit:    90,
 		TypesOnly:    false,
-		Filter:       p.groupSearchFilter(userDN),
+		Filter:       p.groupSearchFilter(userDN, groupSearchUserAttributeForFilterValue),
 		Attributes:   p.groupSearchRequestedAttributes(),
 		Controls:     nil, // nil because ldap.SearchWithPaging() will set the appropriate controls for us
 	}
@@ -698,6 +718,11 @@ func (p *Provider) refreshUserSearchRequest(dn string) *ldap.SearchRequest {
 	}
 }
 
+func (p *Provider) useGroupSearchUserAttributeForFilter() bool {
+	return len(p.c.GroupSearch.UserAttributeForFilter) > 0 &&
+		p.c.GroupSearch.UserAttributeForFilter != distinguishedNameAttributeName
+}
+
 func (p *Provider) userSearchRequestedAttributes() []string {
 	attributes := make([]string, 0, len(p.c.RefreshAttributeChecks)+2)
 	if p.c.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
@@ -705,6 +730,9 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 	}
 	if p.c.UserSearch.UIDAttribute != distinguishedNameAttributeName {
 		attributes = append(attributes, p.c.UserSearch.UIDAttribute)
+	}
+	if p.useGroupSearchUserAttributeForFilter() {
+		attributes = append(attributes, p.c.GroupSearch.UserAttributeForFilter)
 	}
 	for k := range p.c.RefreshAttributeChecks {
 		attributes = append(attributes, k)
@@ -733,15 +761,20 @@ func (p *Provider) userSearchFilter(username string) string {
 	return interpolateSearchFilter(p.c.UserSearch.Filter, safeUsername)
 }
 
-func (p *Provider) groupSearchFilter(userDN string) string {
-	// The DN can contain characters that are considered special characters by LDAP searches, so it should be
-	// escaped before being included in the search filter to prevent bad search syntax.
-	// E.g. for the DN `CN=My User (Admin),OU=Users,OU=my,DC=my,DC=domain` we must escape the parens.
-	safeUserDN := p.escapeForSearchFilter(userDN)
-	if len(p.c.GroupSearch.Filter) == 0 {
-		return fmt.Sprintf("(member=%s)", safeUserDN)
+func (p *Provider) groupSearchFilter(userDN string, groupSearchUserAttributeForFilterValue string) string {
+	valueToInterpolate := userDN
+	if p.useGroupSearchUserAttributeForFilter() {
+		// Instead of using the DN in placeholder substitution, use the value of the specified attribute.
+		valueToInterpolate = groupSearchUserAttributeForFilterValue
 	}
-	return interpolateSearchFilter(p.c.GroupSearch.Filter, safeUserDN)
+	// The value to interpolate can contain characters that are considered special characters by LDAP searches,
+	// so it should be escaped before being included in the search filter to prevent bad search syntax.
+	// E.g. for the DN `CN=My User (Admin),OU=Users,OU=my,DC=my,DC=domain` we must escape the parens.
+	escapedValueToInterpolate := p.escapeForSearchFilter(valueToInterpolate)
+	if len(p.c.GroupSearch.Filter) == 0 {
+		return fmt.Sprintf("(member=%s)", escapedValueToInterpolate)
+	}
+	return interpolateSearchFilter(p.c.GroupSearch.Filter, escapedValueToInterpolate)
 }
 
 func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) string {

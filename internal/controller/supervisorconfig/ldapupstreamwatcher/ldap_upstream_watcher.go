@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package ldapupstreamwatcher implements a controller which watches LDAPIdentityProviders.
@@ -113,6 +113,10 @@ func (g *ldapUpstreamGenericLDAPGroupSearch) Base() string {
 
 func (g *ldapUpstreamGenericLDAPGroupSearch) Filter() string {
 	return g.groupSearch.Filter
+}
+
+func (g *ldapUpstreamGenericLDAPGroupSearch) UserAttributeForFilter() string {
+	return g.groupSearch.UserAttributeForFilter
 }
 
 func (g *ldapUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
@@ -236,10 +240,11 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 			UIDAttribute:      spec.UserSearch.Attributes.UID,
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
-			Base:               spec.GroupSearch.Base,
-			Filter:             spec.GroupSearch.Filter,
-			GroupNameAttribute: spec.GroupSearch.Attributes.GroupName,
-			SkipGroupRefresh:   spec.GroupSearch.SkipGroupRefresh,
+			Base:                   spec.GroupSearch.Base,
+			Filter:                 spec.GroupSearch.Filter,
+			UserAttributeForFilter: spec.GroupSearch.UserAttributeForFilter,
+			GroupNameAttribute:     spec.GroupSearch.Attributes.GroupName,
+			SkipGroupRefresh:       spec.GroupSearch.SkipGroupRefresh,
 		},
 		Dialer: c.ldapDialer,
 	}

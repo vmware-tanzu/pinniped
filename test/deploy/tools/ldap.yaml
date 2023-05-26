@@ -122,7 +122,7 @@ ldap.ldif: |
   objectClass: posixGroup
   objectClass: top
   cn: ball-game-players-posix
-  gidNumber: 1001
+  gidNumber: 1002
   memberUid: pinny
   memberUid: olive
 
@@ -131,7 +131,7 @@ ldap.ldif: |
   objectClass: posixGroup
   objectClass: top
   cn: seals-posix
-  gidNumber: 1002
+  gidNumber: 1001
   memberUid: pinny
 
   # walruses group again, but this time defined as a posixGroup
@@ -139,7 +139,7 @@ ldap.ldif: |
   objectClass: posixGroup
   objectClass: top
   cn: walruses-posix
-  gidNumber: 1002
+  gidNumber: 1000
   memberUid: wally
 #@ end
 

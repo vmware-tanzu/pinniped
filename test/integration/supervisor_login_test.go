@@ -134,11 +134,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				},
 			},
 			GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-				Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-				Filter: "",
+				Base:                   env.SupervisorUpstreamLDAP.GroupSearchBase,
+				Filter:                 "",
+				UserAttributeForFilter: "",
 				Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
 					GroupName: "dn",
 				},
+				SkipGroupRefresh: false,
 			},
 		}
 
@@ -470,6 +472,38 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap using posix groups by using the UserAttributeForFilter option to adjust the group search filter behavior",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					spec.GroupSearch.Filter = "&(objectClass=posixGroup)(memberUid={})"
+					spec.GroupSearch.UserAttributeForFilter = "uid"
+					spec.GroupSearch.Attributes.GroupName = "cn"
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectPosixGroupsCNs,
 		},
 		{
 			name:      "ldap without requesting username and groups scope gets them anyway for pinniped-cli for backwards compatibility with old CLIs",

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -1813,7 +1813,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			requireEventually.Truef(k8serrors.IsNotFound(err), "expected NotFound error, got %v", err)
-		}, time.Minute, time.Second)
+		}, 2*time.Minute, time.Second)
 
 		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
 		// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when

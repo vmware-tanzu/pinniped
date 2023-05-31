@@ -56,11 +56,13 @@ const (
 	testUserDNWithSpecialCharsEscaped             = `user DN with \2a \5c special characters \28\29`
 
 	expectedGroupSearchPageSize = uint32(250)
+
+	testGroupSearchFilterInterpolationSpec = "(some-group-filter=%s-and-more-filter=%s)"
 )
 
 var (
 	testUserSearchFilterInterpolated  = fmt.Sprintf("(some-user-filter=%s-and-more-filter=%s)", testUpstreamUsername, testUpstreamUsername)
-	testGroupSearchFilterInterpolated = fmt.Sprintf("(some-group-filter=%s-and-more-filter=%s)", testUserSearchResultDNValue, testUserSearchResultDNValue)
+	testGroupSearchFilterInterpolated = fmt.Sprintf(testGroupSearchFilterInterpolationSpec, testUserSearchResultDNValue, testUserSearchResultDNValue)
 )
 
 func TestEndUserAuthentication(t *testing.T) {
@@ -713,6 +715,236 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantError: testutil.WantExactErrorString("found 0 values for attribute \"some-attribute-to-check-during-refresh\" while searching for user \"some-upstream-username\", but expected 1 result"),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					// need to interpolate the attr's value into the filter instead of interpolating the default (user's dn)
+					r.Filter = fmt.Sprintf(testGroupSearchFilterInterpolationSpec, "someUserAttrValue", "someUserAttrValue")
+				}), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:          "when the UserAttributeForFilter is set to something other than dn but groups scope is not granted so skips validating UserAttributeForFilter attribute value",
+			username:      testUpstreamUsername,
+			password:      testUpstreamPassword,
+			grantedScopes: []string{}, // no groups scope
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(exampleUserSearchResult, nil).Times(1) // result does not contain someUserAttrName, but does not matter since group search is skipped
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
+				info := r.User.(*user.DefaultInfo)
+				info.Groups = nil
+			}),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn but that attribute is not returned by the user search",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: testutil.WantExactErrorString("found 0 values for attribute \"someUserAttrName\" while searching for user \"some-upstream-username\", but expected 1 result"),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn but that attribute is returned by the user search with an empty value",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{""}), // empty value!
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: testutil.WantExactErrorString("found empty value for attribute \"someUserAttrName\" while searching for user \"some-upstream-username\", but expected value to be non-empty"),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn but that attribute is returned by the user search with multiple values",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue1", "someUserAttrValue2"}), // oops, multiple values!
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: testutil.WantExactErrorString("found 2 values for attribute \"someUserAttrName\" while searching for user \"some-upstream-username\", but expected 1 result"),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to dn, it should act the same as when it is not set",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "dn"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn and the value of that attr contains special characters which need to be escaped for an LDAP filter",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue&(abc)"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					// need to interpolate the attr's value into the filter instead of interpolating the default (user's dn)
+					r.Filter = fmt.Sprintf(testGroupSearchFilterInterpolationSpec, `someUserAttrValue&\28abc\29`, `someUserAttrValue&\28abc\29`)
+				}), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
+		},
+		{
+			name:     "when the UserAttributeForFilter is set to something other than dn but the group search filter is not set",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.Filter = ""
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testUserSearchResultUIDAttributeValue}),
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue&(abc)"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					// need to interpolate the attr's value into the filter instead of interpolating the default (user's dn)
+					r.Filter = `(member=someUserAttrValue&\28abc\29)` // note that "member={}" is the default group search filter
+				}), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(nil),
 		},
 		{
 			name:           "when dial fails",
@@ -1486,7 +1718,8 @@ func TestUpstreamRefresh(t *testing.T) {
 			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1) // note that group search is not expected
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1)
+				// note that group search is not expected
 				conn.EXPECT().Close().Times(1)
 			},
 			wantGroups: nil, // do not update groups
@@ -1497,10 +1730,239 @@ func TestUpstreamRefresh(t *testing.T) {
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1)
+				// note that group search is not expected
 				conn.EXPECT().Close().Times(1)
 			},
 			grantedScopes: []string{},
 			wantGroups:    nil,
+		},
+		{
+			name: "happy path where group search is configured but skipGroupRefresh is set, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.SkipGroupRefresh = true
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(happyPathUserSearchResult, nil).Times(1)
+				// note that group search is not expected
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: nil, // do not update groups
+		},
+		{
+			name: "happy path where group search is configured but groups scope isn't included, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(happyPathUserSearchResult, nil).Times(1)
+				// note that group search is not expected
+				conn.EXPECT().Close().Times(1)
+			},
+			grantedScopes: []string{},
+			wantGroups:    nil,
+		},
+		{
+			name: "happy path when the UserAttributeForFilter is set to something other than dn",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+								{
+									Name:       pwdLastSetAttribute,
+									Values:     []string{"132801740800000000"},
+									ByteValues: [][]byte{[]byte("132801740800000000")},
+								},
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					// need to interpolate the attr's value into the filter instead of interpolating the default (user's dn)
+					r.Filter = fmt.Sprintf(testGroupSearchFilterInterpolationSpec, "someUserAttrValue", "someUserAttrValue")
+				}), expectedGroupSearchPageSize).Return(happyPathGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
+		},
+		{
+			name: "happy path when the UserAttributeForFilter is set to something other than dn but the group search filter is not set",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.Filter = ""
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+								{
+									Name:       pwdLastSetAttribute,
+									Values:     []string{"132801740800000000"},
+									ByteValues: [][]byte{[]byte("132801740800000000")},
+								},
+								// additionally get back the attr from the user search
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue&(abc)"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					// need to interpolate the attr's value into the filter instead of interpolating the default (user's dn)
+					r.Filter = `(member=someUserAttrValue&\28abc\29)` // member={} is the default, and special chars are escaped
+				}), expectedGroupSearchPageSize).Return(happyPathGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
+		},
+		{
+			name: "when the UserAttributeForFilter is set to something other than dn but that attribute is not returned by the user search",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+								{
+									Name:       pwdLastSetAttribute,
+									Values:     []string{"132801740800000000"},
+									ByteValues: [][]byte{[]byte("132801740800000000")},
+								},
+								// did not return "someUserAttrName" attribute
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 0 values for attribute \"someUserAttrName\" while searching for user \"some-upstream-username-value\", but expected 1 result",
+		},
+		{
+			name: "when the UserAttributeForFilter is set to something other than dn but that attribute is returned by the user search with an empty value",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+								{
+									Name:       pwdLastSetAttribute,
+									Values:     []string{"132801740800000000"},
+									ByteValues: [][]byte{[]byte("132801740800000000")},
+								},
+								ldap.NewEntryAttribute("someUserAttrName", []string{""}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found empty value for attribute \"someUserAttrName\" while searching for user \"some-upstream-username-value\", but expected value to be non-empty",
+		},
+		{
+			name: "when the UserAttributeForFilter is set to something other than dn but that attribute is returned by the user search with a multiple values",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
+					// need to additionally ask for the attribute when performing user search
+					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testUserSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testUserSearchResultUsernameAttributeValue}),
+								{
+									Name:       testUserSearchUIDAttribute,
+									ByteValues: [][]byte{[]byte(testUserSearchResultUIDAttributeValue)},
+								},
+								{
+									Name:       pwdLastSetAttribute,
+									Values:     []string{"132801740800000000"},
+									ByteValues: [][]byte{[]byte("132801740800000000")},
+								},
+								ldap.NewEntryAttribute("someUserAttrName", []string{"someUserAttrValue1", "someUserAttrValue2"}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr: "found 2 values for attribute \"someUserAttrName\" while searching for user \"some-upstream-username-value\", but expected 1 result",
+		},
+		{
+			name: "happy path when the UserAttributeForFilter is set to dn, it should act the same as when it is not set",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "dn"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(nil), expectedGroupSearchPageSize).Return(happyPathGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantGroups: []string{testGroupSearchResultGroupNameAttributeValue1, testGroupSearchResultGroupNameAttributeValue2},
 		},
 		{
 			name:           "error where dial fails",

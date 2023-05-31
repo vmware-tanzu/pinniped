@@ -131,8 +131,17 @@ spec:
 
     # Specify the search filter which should be applied when searching for
     # groups for a user. "{}" will be replaced by the dn (distinguished
-    # name) of the user entry found as a result of the user search.
+    # name) of the user entry found as a result of the user search, or by
+    # the attribute specified by userAttributeForFilter below.
     filter: "&(objectClass=group)(member={})"
+
+    # Specify what user attribute should be used to replace the "{}"
+    # placeholder in the group search filter. This defaults to "dn".
+    # For example, if you wanted to instead use posixGroups, you
+    # would set the group search filter to
+    # "&(objectClass=posixGroup)(memberUid={})" and set the
+    # userAttributeForFilter to "uid".
+    userAttributeForFilter: "dn"
 
     # Specify which fields from each group entry should be used upon
     # successful login.

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamwatchers
@@ -126,6 +126,7 @@ type UpstreamGenericLDAPUserSearch interface {
 type UpstreamGenericLDAPGroupSearch interface {
 	Base() string
 	Filter() string
+	UserAttributeForFilter() string
 	GroupNameAttribute() string
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package activedirectoryupstreamwatcher implements a controller which watches ActiveDirectoryIdentityProviders.
@@ -203,6 +203,10 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Filter() string {
 	return g.groupSearch.Filter
 }
 
+func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) UserAttributeForFilter() string {
+	return g.groupSearch.UserAttributeForFilter
+}
+
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
 	if len(g.groupSearch.Attributes.GroupName) == 0 {
 		return defaultActiveDirectoryGroupNameAttributeName
@@ -329,10 +333,11 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			UIDAttribute:      adUpstreamImpl.Spec().UserSearch().UIDAttribute(),
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
-			Base:               spec.GroupSearch.Base,
-			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
-			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
-			SkipGroupRefresh:   spec.GroupSearch.SkipGroupRefresh,
+			Base:                   spec.GroupSearch.Base,
+			Filter:                 adUpstreamImpl.Spec().GroupSearch().Filter(),
+			UserAttributeForFilter: adUpstreamImpl.Spec().GroupSearch().UserAttributeForFilter(),
+			GroupNameAttribute:     adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
+			SkipGroupRefresh:       spec.GroupSearch.SkipGroupRefresh,
 		},
 		Dialer: c.ldapDialer,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){

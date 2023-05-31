@@ -204,7 +204,7 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Filter() string {
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) UserAttributeForFilter() string {
-	return ""
+	return g.groupSearch.UserAttributeForFilter
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
@@ -333,10 +333,11 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			UIDAttribute:      adUpstreamImpl.Spec().UserSearch().UIDAttribute(),
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
-			Base:               spec.GroupSearch.Base,
-			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
-			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
-			SkipGroupRefresh:   spec.GroupSearch.SkipGroupRefresh,
+			Base:                   spec.GroupSearch.Base,
+			Filter:                 adUpstreamImpl.Spec().GroupSearch().Filter(),
+			UserAttributeForFilter: adUpstreamImpl.Spec().GroupSearch().UserAttributeForFilter(),
+			GroupNameAttribute:     adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
+			SkipGroupRefresh:       spec.GroupSearch.SkipGroupRefresh,
 		},
 		Dialer: c.ldapDialer,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){

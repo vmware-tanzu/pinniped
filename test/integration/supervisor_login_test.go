@@ -1001,6 +1001,54 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
 		},
 		{
+			name:      "active directory with custom options including UserAttributeForFilter",
+			maybeSkip: skipActiveDirectoryTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
+					spec.UserSearch = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamActiveDirectory.UserSearchBase,
+						Filter: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName + "={}",
+						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName,
+						},
+					}
+					spec.GroupSearch = idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch{
+						// This is not a common way to configure Filter but is rather a silly hack to be able to test
+						// that UserAttributeForFilter is also working for AD. It assumes that the user appears directly
+						// under the user search base, which is the case for our test AD server. Also note that by using
+						// "member=" we are excluding nested groups from the search.
+						Filter:                 fmt.Sprintf("member=CN={},%s", env.SupervisorUpstreamActiveDirectory.UserSearchBase),
+						Base:                   env.SupervisorUpstreamActiveDirectory.GroupSearchBase,
+						UserAttributeForFilter: "cn", // substitute the user's CN into the "{}" placeholder in the Filter
+						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					}
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase)+
+					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
+		},
+		{
 			name:      "active directory login still works after updating bind secret",
 			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {

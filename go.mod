@@ -28,8 +28,8 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.3
-	github.com/tdewolff/minify/v2 v2.12.5
+	github.com/stretchr/testify v1.8.4
+	github.com/tdewolff/minify/v2 v2.12.6
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.9.0
 	golang.org/x/net v0.10.0
@@ -47,7 +47,7 @@ require (
 	k8s.io/gengo v0.0.0-20230306165830-ab3349d207d4
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kube-aggregator v0.27.2
-	k8s.io/kube-openapi v0.0.0-20230515203736-54b630e78af5
+	k8s.io/kube-openapi v0.0.0-20230530175149-33f04d5d6b58
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 	sigs.k8s.io/yaml v1.3.0
 )
@@ -123,7 +123,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.6.5 // indirect
+	github.com/tdewolff/parse/v2 v2.6.6 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.7 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.7 // indirect

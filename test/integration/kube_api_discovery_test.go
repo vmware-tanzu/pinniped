@@ -441,7 +441,7 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
 		// Pinniped API resources. Without this, the test could accidentally skip parts of the tree if the
 		// format has changed.
-		require.Equal(t, 226, foundFieldNames,
+		require.Equal(t, 227, foundFieldNames,
 			"Expected to find all known fields of all Pinniped API resources. "+
 				"You may will need to update this expectation if you added new fields to the API types.",
 		)

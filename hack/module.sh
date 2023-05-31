@@ -17,21 +17,11 @@ function lint_cmd() {
 }
 
 function test_cmd() {
-  if [ -x "$(command -v gotest)" ]; then
-    cmd='gotest'
-  else
-    cmd='go test'
-  fi
-  echo "${cmd} -count 1 -race ./..."
+  echo "go test -count 1 -race ./..."
 }
 
 function unittest_cmd() {
-  if [ -x "$(command -v gotest)" ]; then
-    cmd='gotest'
-  else
-    cmd='go test'
-  fi
-  echo "${cmd} -short -race ./..."
+  echo "go test -short -race ./..."
 }
 
 function with_modules() {

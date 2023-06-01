@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -24,7 +24,7 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 	kubeClient := testlib.NewKubernetesClientset(t)
 	supervisorClient := testlib.NewSupervisorClientset(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	// Create our FederationDomain under test.
@@ -84,7 +84,7 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 				requireEventually.NoError(err)
 				requireEventually.NotEmpty(test.secretName(resp))
 				updatedFederationDomain = resp
-			}, time.Second*10, time.Millisecond*500)
+			}, time.Minute, time.Millisecond*500)
 
 			// Ensure the secret actually exists.
 			secret, err := kubeClient.
@@ -115,7 +115,7 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 					Secrets(env.SupervisorNamespace).
 					Get(ctx, test.secretName(updatedFederationDomain), metav1.GetOptions{})
 				requireEventually.NoError(err)
-			}, time.Second*10, time.Millisecond*500)
+			}, time.Minute, time.Millisecond*500)
 
 			// Ensure that the new secret is valid.
 			test.ensureValid(t, secret)

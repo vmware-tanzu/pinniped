@@ -96,15 +96,16 @@ spec:
                       used as the search base when searching for groups. E.g. "ou=groups,dc=example,dc=com".
                       When not specified, no group search will be performed and authenticated
                       users will not belong to any groups from the LDAP provider.
-                      Also, when not specified, the values of Filter and Attributes
-                      are ignored.
+                      Also, when not specified, the values of Filter, UserAttributeForFilter,
+                      Attributes, and SkipGroupRefresh are ignored.
                     type: string
                   filter:
                     description: Filter is the LDAP search filter which should be
                       applied when searching for groups for a user. The pattern "{}"
                       must occur in the filter at least once and will be dynamically
-                      replaced by the dn (distinguished name) of the user entry found
-                      as a result of the user search. E.g. "member={}" or "&(objectClass=groupOfNames)(member={})".
+                      replaced by the value of an attribute of the user entry found
+                      as a result of the user search. Which attribute's value is used
+                      to replace the placeholder(s) depends on the value of UserAttributeForFilter.
                       For more information about LDAP filters, see https://ldap.com/ldap-filters.
                       Note that the dn (distinguished name) is not an attribute of
                       an entry, so "dn={}" cannot be used. Optional. When not specified,
@@ -134,6 +135,20 @@ spec:
                       carefully read all release notes before upgrading to ensure
                       that the meaning of this field has not changed."
                     type: boolean
+                  userAttributeForFilter:
+                    description: UserAttributeForFilter specifies which attribute's
+                      value from the user entry found as a result of the user search
+                      will be used to replace the "{}" placeholder(s) in the group
+                      search Filter. For example, specifying "uid" as the UserAttributeForFilter
+                      while specifying "&(objectClass=posixGroup)(memberUid={})" as
+                      the Filter would search for groups by replacing the "{}" placeholder
+                      in the Filter with the value of the user's "uid" attribute.
+                      Optional. When not specified, the default will act as if "dn"
+                      were specified. For example, leaving UserAttributeForFilter
+                      unspecified while specifying "&(objectClass=groupOfNames)(member={})"
+                      as the Filter would search for groups by replacing the "{}"
+                      placeholder(s) with the dn (distinguished name) of the user.
+                    type: string
                 type: object
               host:
                 description: 'Host is the hostname of this LDAP identity provider,

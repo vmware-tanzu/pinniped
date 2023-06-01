@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -98,6 +98,7 @@ type TestLDAPUpstream struct {
 	TestUserUniqueIDAttributeName                   string   `json:"testUserUniqueIDAttributeName"`
 	TestUserUniqueIDAttributeValue                  string   `json:"testUserUniqueIDAttributeValue"`
 	TestUserDirectGroupsCNs                         []string `json:"testUserDirectGroupsCNs"`
+	TestUserDirectPosixGroupsCNs                    []string `json:"testUserDirectPosixGroupsCNs"`
 	TestUserDirectGroupsDNs                         []string `json:"testUserDirectGroupsDNs"` //nolint:revive // this is "distinguished names", not "DNS"
 	TestUserSAMAccountNameValue                     string   `json:"testUserSAMAccountNameValue"`
 	TestUserPrincipalNameValue                      string   `json:"testUserPrincipalNameValue"`
@@ -267,6 +268,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserMailAttributeName:      needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"),
 		TestUserMailAttributeValue:     needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE"),
 		TestUserDirectGroupsCNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN"), ";")),
+		TestUserDirectPosixGroupsCNs:   filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_POSIX_GROUPS_CN"), ";")),
 		TestUserDirectGroupsDNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_DN"), ";")),
 		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
 	}

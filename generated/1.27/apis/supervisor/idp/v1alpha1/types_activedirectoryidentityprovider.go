@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -114,9 +114,10 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 
 	// Filter is the ActiveDirectory search filter which should be applied when searching for groups for a user.
 	// The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the
-	// dn (distinguished name) of the user entry found as a result of the user search. E.g. "member={}" or
-	// "&(objectClass=groupOfNames)(member={})". For more information about ActiveDirectory filters, see
-	// https://ldap.com/ldap-filters.
+	// value of an attribute of the user entry found as a result of the user search. Which attribute's
+	// value is used to replace the placeholder(s) depends on the value of UserAttributeForFilter.
+	// E.g. "member={}" or "&(objectClass=groupOfNames)(member={})".
+	// For more information about ActiveDirectory filters, see https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
 	// Optional. When not specified, the default will act as if the filter were specified as
 	// "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})".
@@ -126,6 +127,17 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// "(&(objectClass=group)(member={})"
 	// +optional
 	Filter string `json:"filter,omitempty"`
+
+	// UserAttributeForFilter specifies which attribute's value from the user entry found as a result of
+	// the user search will be used to replace the "{}" placeholder(s) in the group search Filter.
+	// For example, specifying "uid" as the UserAttributeForFilter while specifying
+	// "&(objectClass=posixGroup)(memberUid={})" as the Filter would search for groups by replacing
+	// the "{}" placeholder in the Filter with the value of the user's "uid" attribute.
+	// Optional. When not specified, the default will act as if "dn" were specified. For example, leaving
+	// UserAttributeForFilter unspecified while specifying "&(objectClass=groupOfNames)(member={})" as the Filter
+	// would search for groups by replacing the "{}" placeholder(s) with the dn (distinguished name) of the user.
+	// +optional
+	UserAttributeForFilter string `json:"userAttributeForFilter,omitempty"`
 
 	// Attributes specifies how the group's information should be read from each ActiveDirectory entry which was found as
 	// the result of the group search.

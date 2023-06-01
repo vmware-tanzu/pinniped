@@ -348,6 +348,98 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			},
 		},
 		{
+			name:     "using a group search with UserAttributeForFilter set to uid",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "&(objectClass=posixGroup)(memberUid={})"
+				p.GroupSearch.UserAttributeForFilter = "uid"
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players-posix", "seals-posix"}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter set to cn",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "&(objectClass=posixGroup)(memberUid={})"
+				p.GroupSearch.UserAttributeForFilter = "cn" // this only works because pinny's uid and cn are both "pinny"
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players-posix", "seals-posix"}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter and a creative filter",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "&(objectClass=groupOfNames)(member=cn={},ou=users,dc=pinniped,dc=dev)" // not the typical usage, but possible
+				p.GroupSearch.UserAttributeForFilter = "cn"
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter set to givenName",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "&(objectClass=posixGroup)(memberUid={})"
+				p.GroupSearch.UserAttributeForFilter = "givenName" // pinny's givenName is not "pinny" so it should not find any groups, and also should not error on the emoji in the givenName
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter set to gidNumber",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "&(objectClass=posixGroup)(gidNumber={})"
+				p.GroupSearch.UserAttributeForFilter = "gidNumber"
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"walruses-posix"}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter set to dn",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "dn" // this should act the same as when it is not set
+			})),
+			wantAuthResponse: &authenticators.Response{
+				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
+				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
+				ExtraRefreshAttributes: map[string]string{},
+			},
+		},
+		{
+			name:     "using a group search with UserAttributeForFilter set to an attribute that does not exist on the user",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.UserAttributeForFilter = "foobar"
+			})),
+			wantError: testutil.WantExactErrorString(`found 0 values for attribute "foobar" while searching for user "pinny", but expected 1 result`),
+		},
+		{
 			name:      "when the bind user username is not a valid DN",
 			username:  "pinny",
 			password:  pinnyPassword,

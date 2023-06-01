@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -626,8 +626,8 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 	client := NewKubernetesClientset(t)
 	pods := client.CoreV1().Pods(namespace)
 
-	const podCreateTimeout = 2 * time.Minute
-	ctx, cancel := context.WithTimeout(ctx, podCreateTimeout+time.Second)
+	const podCreateTimeout = 4 * time.Minute // it may take some time for the cluster to pull the container image
+	ctx, cancel := context.WithTimeout(ctx, podCreateTimeout+time.Minute)
 	defer cancel()
 
 	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: testObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})

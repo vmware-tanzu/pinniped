@@ -38,5 +38,5 @@ token credential request API strategy by default.
 To choose the strategy to use with the concierge, use the `--concierge-mode` flag with `pinniped get kubeconfig`.
 Possible values are `ImpersonationProxy` and `TokenCredentialRequestAPI`.
 
-Do not use the command line option `--anonymous-auth=false` in the `kube-apiserver` CLI for a cluster that does not use `impersonation proxy`. This is because the `kube-apiserver` blocks unauthenticated access to `TokenCredentialRequest` API of the Concierge. 
-This does not matter while using `impersonation proxy`, which will allow these TokenCredentialRequests requests anyway.
+Do not use the command line option `--anonymous-auth=false` in the `kube-apiserver` CLI for a cluster that does not use the impersonation proxy strategy. This is because the `kube-apiserver` blocks unauthenticated access to the TokenCredentialRequest API of the Concierge, which will prevent users from being able to authenticate. 
+This does not matter while using the impersonation proxy strategy, which will allow these TokenCredentialRequests requests anyway.

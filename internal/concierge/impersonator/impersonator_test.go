@@ -688,7 +688,7 @@ func TestImpersonator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			t.Cleanup(cancel)
 
 			// we need to create this listener ourselves because the API server

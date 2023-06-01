@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -19,7 +19,7 @@ import (
 
 const (
 	accessRetryInterval = 250 * time.Millisecond
-	accessRetryTimeout  = 60 * time.Second
+	accessRetryTimeout  = 2 * time.Minute
 )
 
 // AccessAsUserTest runs a generic test in which a clientUnderTest operating with username

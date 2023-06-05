@@ -82,7 +82,15 @@ func TestFederationDomainIssuerValidations(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewFederationDomainIssuer(tt.issuer)
+			_, err := NewFederationDomainIssuer(tt.issuer, nil)
+			if tt.wantError != "" {
+				require.EqualError(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+
+			// This alternate constructor should perform all the same validations on the issuer string.
+			_, err = NewFederationDomainIssuerWithDefaultIDP(tt.issuer, nil)
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 			} else {

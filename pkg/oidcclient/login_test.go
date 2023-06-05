@@ -321,10 +321,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 		cache := &mockSessionCache{t: t, getReturnsToken: nil}
 		cacheKey := SessionCacheKey{
-			Issuer:      successServer.URL,
-			ClientID:    "test-client-id",
-			Scopes:      []string{"test-scope"},
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               successServer.URL,
+			ClientID:             "test-client-id",
+			Scopes:               []string{"test-scope"},
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: "some-upstream-name",
 		}
 		t.Cleanup(func() {
 			require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -916,7 +917,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
-			name:     "upstream name and type are included in authorize request if upstream name is provided",
+			name:     "upstream name and type are included in authorize request and session cache key if upstream name is provided",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -926,10 +927,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1207,10 +1209,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1314,10 +1317,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1425,10 +1429,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)

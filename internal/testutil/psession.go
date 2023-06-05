@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -24,10 +24,12 @@ func NewFakePinnipedSession() *psession.PinnipedSession {
 			Subject:   "panda",
 		},
 		Custom: &psession.CustomSessionData{
-			Username:     "fake-username",
-			ProviderUID:  "fake-provider-uid",
-			ProviderType: "fake-provider-type",
-			ProviderName: "fake-provider-name",
+			Username:         "fake-username",
+			ProviderUID:      "fake-provider-uid",
+			ProviderType:     "fake-provider-type",
+			ProviderName:     "fake-provider-name",
+			UpstreamUsername: "fake-upstream-username",
+			UpstreamGroups:   []string{"fake-upstream-group1", "fake-upstream-group2"},
 			OIDC: &psession.OIDCSessionData{
 				UpstreamRefreshToken: "fake-upstream-refresh-token",
 				UpstreamSubject:      "some-subject",

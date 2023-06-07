@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package concierge contains functionality to load/store Config's from/to
@@ -35,7 +35,7 @@ const (
 	impersonationProxyPortDefault = 8444
 )
 
-// FromPath loads an Config from a provided local file path, inserts any
+// FromPath loads a Config from a provided local file path, inserts any
 // defaults (from the Config documentation), and verifies that the config is
 // valid (per the Config documentation).
 //

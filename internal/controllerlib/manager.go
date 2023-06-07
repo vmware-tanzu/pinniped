@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -39,8 +39,8 @@ func (c *controllerManager) WithController(controller Controller, workers int) M
 	return c
 }
 
-// Start will run all managed controllers and block until all controllers shutdown.
-// When the context passed is cancelled, all controllers are signalled to shutdown.
+// Start will run all managed controllers and block until all controllers have shut down.
+// When the context passed is cancelled, all controllers are signalled to shut down.
 func (c *controllerManager) Start(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(len(c.controllers))

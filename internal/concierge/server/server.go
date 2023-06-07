@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package server is the command line entry point for pinniped-concierge.
@@ -118,17 +118,17 @@ func (a *App) runServer(ctx context.Context) error {
 
 	// This cert provider will provide certs to the API server and will
 	// be mutated by a controller to keep the certs up to date with what
-	// is stored in a k8s Secret. Therefore it also effectively acting as
-	// an in-memory cache of what is stored in the k8s Secret, helping to
-	// keep incoming requests fast.
+	// is stored in a k8s Secret. Therefore, it acts as an in-memory cache
+	// of what is stored in the k8s Secret, helping to keep incoming requests
+	// fast.
 	dynamicServingCertProvider := dynamiccert.NewServingCert("concierge-serving-cert")
 
 	// This cert provider will be used to provide the Kube signing key to the
-	// cert issuer used to issue certs to Pinniped clients wishing to login.
+	// cert issuer used to issue certs to Pinniped clients wishing to log in.
 	dynamicSigningCertProvider := dynamiccert.NewCA("concierge-kube-signing-cert")
 
 	// This cert provider will be used to provide the impersonation proxy signing key to the
-	// cert issuer used to issue certs to Pinniped clients wishing to login.
+	// cert issuer used to issue certs to Pinniped clients wishing to log in.
 	impersonationProxySigningCertProvider := dynamiccert.NewCA("impersonation-proxy-signing-cert")
 
 	// Get the "real" name of the login concierge API group (i.e., the API group name with the
@@ -256,7 +256,8 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func main() error { // return an error instead of plog.Fatal to allow defer statements to run
+// main returns an error instead of calling plog.Fatal to allow defer statements to run
+func main() error {
 	defer plog.Setup()()
 
 	// Dump out the time since compile (mostly useful for benchmarking our local development cycle latency).

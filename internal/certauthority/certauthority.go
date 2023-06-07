@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package certauthority implements a simple x509 certificate authority suitable for use in an aggregated API service.
@@ -179,13 +179,13 @@ func (c *CA) IssueServerCert(dnsNames []string, ips []net.IP, ttl time.Duration)
 	return c.issueCert(x509.ExtKeyUsageServerAuth, pkix.Name{}, dnsNames, ips, ttl)
 }
 
-// Similar to IssueClientCert, but returning the new cert as a pair of PEM-formatted byte slices
+// IssueClientCertPEM is similar to IssueClientCert, but returns the new cert as a pair of PEM-formatted byte slices
 // for the certificate and private key.
 func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	return toPEM(c.IssueClientCert(username, groups, ttl))
 }
 
-// Similar to IssueServerCert, but returning the new cert as a pair of PEM-formatted byte slices
+// IssueServerCertPEM is similar to IssueServerCert, but returns the new cert as a pair of PEM-formatted byte slices
 // for the certificate and private key.
 func (c *CA) IssueServerCertPEM(dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
 	return toPEM(c.IssueServerCert(dnsNames, ips, ttl))
@@ -260,7 +260,7 @@ func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {
 	return certPEM, keyPEM, nil
 }
 
-// Encode a tls.Certificate into a private key PEM and a cert chain PEM.
+// ToPEM encodes a tls.Certificate into a private key PEM and a cert chain PEM.
 func ToPEM(cert *tls.Certificate) ([]byte, []byte, error) {
 	// Encode the certificate(s) to PEM.
 	certPEMBlocks := make([][]byte, 0, len(cert.Certificate))

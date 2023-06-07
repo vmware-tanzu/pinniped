@@ -47,13 +47,16 @@ func (p *TransformationPipeline) AppendTransformation(t IdentityTransformation) 
 // short-circuited but no error is returned. Only unexpected errors are returned as errors. This is safe to call
 // from multiple goroutines.
 func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+	if groups == nil {
+		groups = []string{}
+	}
 	accumulatedResult := &TransformationResult{
 		Username:              username,
 		Groups:                groups,
 		AuthenticationAllowed: true,
 	}
-	var err error
 	for i, transform := range p.transforms {
+		var err error
 		accumulatedResult, err = transform.Evaluate(ctx, accumulatedResult.Username, accumulatedResult.Groups)
 		if err != nil {
 			// There was an unexpected error evaluating a transformation.
@@ -65,6 +68,9 @@ func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, 
 		}
 		if strings.TrimSpace(accumulatedResult.Username) == "" {
 			return nil, fmt.Errorf("identity transformation returned an empty username, which is not allowed")
+		}
+		if accumulatedResult.Groups == nil {
+			return nil, fmt.Errorf("identity transformation returned a null list of groups, which is not allowed")
 		}
 	}
 	// There were no unexpected errors and no policy which rejected auth.

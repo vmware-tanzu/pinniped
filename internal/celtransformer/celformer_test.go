@@ -299,6 +299,36 @@ func TestTransformer(t *testing.T) {
 			wantGroups:   []string{"admins", "developers", "other", "new-group"},
 		},
 		{
+			name:     "a nil passed as groups will be converted to an empty list",
+			username: "ryan",
+			groups:   nil,
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{},
+		},
+		{
+			name:     "a nil passed as groups will be converted to an empty list and can be used with CEL operators",
+			username: "ryan",
+			groups:   nil,
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups == [] ? ["the-groups-list-was-an-empty-list"] : ["the-groups-list-was-not-an-empty-list"]`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{"the-groups-list-was-an-empty-list"},
+		},
+		{
+			name:     "an empty list of groups is allowed",
+			username: "ryan",
+			groups:   []string{},
+			transforms: []CELTransformation{
+				&GroupsTransformation{Expression: `groups`},
+			},
+			wantUsername: "ryan",
+			wantGroups:   []string{},
+		},
+		{
 			name:     "can add a group from a const",
 			username: "ryan",
 			groups:   []string{"admins", "developers", "other"},

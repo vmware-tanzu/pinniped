@@ -44,6 +44,10 @@ func (p *FederationDomainIssuer) validate() error {
 		return constable.Error(`issuer must have "https" scheme`)
 	}
 
+	if issuerURL.Hostname() == "" {
+		return constable.Error(`issuer must have a hostname`)
+	}
+
 	if issuerURL.User != nil {
 		return constable.Error(`issuer must not have username or password`)
 	}

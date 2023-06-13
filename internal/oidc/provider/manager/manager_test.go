@@ -277,7 +277,7 @@ func TestManager(t *testing.T) {
 			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient, oidcClientsClient)
 		})
 
-		when("given no providers via SetProviders()", func() {
+		when("given no providers via SetFederationDomains()", func() {
 			it("sends all requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
 				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest("/anything"))
@@ -375,13 +375,13 @@ func TestManager(t *testing.T) {
 			requireTokenRequestToBeHandled(issuer2DifferentCaseHostname, downstreamAuthCode4, issuer2JWKS, issuer2)
 		}
 
-		when("given some valid providers via SetProviders()", func() {
+		when("given some valid providers via SetFederationDomains()", func() {
 			it.Before(func() {
-				p1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
+				fd1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				p2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
+				fd2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				subject.SetProviders(p1, p2)
+				subject.SetFederationDomains(fd1, fd2)
 
 				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},
@@ -418,13 +418,13 @@ func TestManager(t *testing.T) {
 			})
 		})
 
-		when("given the same valid providers as arguments to SetProviders() in reverse order", func() {
+		when("given the same valid providers as arguments to SetFederationDomains() in reverse order", func() {
 			it.Before(func() {
-				p1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
+				fd1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				p2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
+				fd2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				subject.SetProviders(p2, p1)
+				subject.SetFederationDomains(fd2, fd1)
 
 				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},

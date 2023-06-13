@@ -69,7 +69,7 @@ func NewManager(
 	}
 }
 
-// SetProviders adds or updates all the given providerHandlers using each provider's issuer string
+// SetFederationDomains adds or updates all the given providerHandlers using each provider's issuer string
 // as the name of the provider to decide if it is an add or update operation.
 //
 // It also removes any providerHandlers that were previously added but were not passed in to
@@ -77,7 +77,7 @@ func NewManager(
 //
 // This method assumes that all of the FederationDomainIssuer arguments have already been validated
 // by someone else before they are passed to this method.
-func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIssuer) {
+func (m *Manager) SetFederationDomains(federationDomains ...*provider.FederationDomainIssuer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

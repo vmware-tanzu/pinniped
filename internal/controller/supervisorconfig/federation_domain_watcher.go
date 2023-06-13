@@ -30,17 +30,17 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// ProvidersSetter can be notified of all known valid providers with its SetIssuer function.
+// FederationDomainsSetter can be notified of all known valid providers with its SetIssuer function.
 // If there are no longer any valid issuers, then it can be called with no arguments.
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
-type ProvidersSetter interface {
-	SetProviders(federationDomains ...*provider.FederationDomainIssuer)
+type FederationDomainsSetter interface {
+	SetFederationDomains(federationDomains ...*provider.FederationDomainIssuer)
 }
 
 type federationDomainWatcherController struct {
-	providerSetter ProvidersSetter
-	clock          clock.Clock
-	client         pinnipedclientset.Interface
+	federationDomainsSetter FederationDomainsSetter
+	clock                   clock.Clock
+	client                  pinnipedclientset.Interface
 
 	federationDomainInformer                configinformers.FederationDomainInformer
 	oidcIdentityProviderInformer            idpinformers.OIDCIdentityProviderInformer
@@ -51,7 +51,7 @@ type federationDomainWatcherController struct {
 // NewFederationDomainWatcherController creates a controllerlib.Controller that watches
 // FederationDomain objects and notifies a callback object of the collection of provider configs.
 func NewFederationDomainWatcherController(
-	providerSetter ProvidersSetter,
+	federationDomainsSetter FederationDomainsSetter,
 	clock clock.Clock,
 	client pinnipedclientset.Interface,
 	federationDomainInformer configinformers.FederationDomainInformer,
@@ -64,7 +64,7 @@ func NewFederationDomainWatcherController(
 		controllerlib.Config{
 			Name: "FederationDomainWatcherController",
 			Syncer: &federationDomainWatcherController{
-				providerSetter:                          providerSetter,
+				federationDomainsSetter:                 federationDomainsSetter,
 				clock:                                   clock,
 				client:                                  client,
 				federationDomainInformer:                federationDomainInformer,
@@ -438,7 +438,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
 	}
 
-	c.providerSetter.SetProviders(federationDomainIssuers...)
+	c.federationDomainsSetter.SetFederationDomains(federationDomainIssuers...)
 
 	return errors.NewAggregate(errs)
 }

@@ -93,7 +93,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck // old test with no log assertions
 				withInformer.WithInformer,
 			)
 

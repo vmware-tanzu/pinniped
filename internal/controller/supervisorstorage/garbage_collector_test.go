@@ -361,7 +361,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the active authcode session.
@@ -485,7 +485,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the active authcode session.
@@ -562,7 +562,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't read the invalid secret.
@@ -633,7 +633,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
@@ -704,7 +704,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
@@ -777,7 +777,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(provider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -802,7 +802,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(errors.New("some upstream revocation error not worth retrying"))
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -881,7 +881,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -1004,7 +1004,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the downstream session which had offline_access granted.
@@ -1128,7 +1128,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the downstream session which had offline_access granted.
@@ -1206,7 +1206,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is revoked.
@@ -1283,7 +1283,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is revoked.

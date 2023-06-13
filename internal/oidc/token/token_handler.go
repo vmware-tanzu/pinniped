@@ -125,6 +125,7 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 	}
 }
 
+//nolint:funlen
 func upstreamOIDCRefresh(
 	ctx context.Context,
 	session *psession.PinnipedSession,
@@ -201,7 +202,7 @@ func upstreamOIDCRefresh(
 
 	var refreshedUntransformedGroups []string
 	groupsScope := slices.Contains(grantedScopes, oidcapi.ScopeGroups)
-	if groupsScope { //nolint:nestif
+	if groupsScope {
 		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
 		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
 		// claim name. It could also be missing because the claim was originally found in the ID token during login, but

@@ -59,7 +59,7 @@ type TransformationConstants struct {
 	StringListConstants map[string][]string
 }
 
-// Valid identifiers in CEL expressions are defined by the CEL language spec as: [_a-zA-Z][_a-zA-Z0-9]*
+// Valid identifiers in CEL expressions are defined as [_a-zA-Z][_a-zA-Z0-9]* by the CEL language spec.
 var validIdentifiersRegexp = regexp.MustCompile(`^[_a-zA-Z][_a-zA-Z0-9]*$`)
 
 func (t *TransformationConstants) validateVariableNames() error {

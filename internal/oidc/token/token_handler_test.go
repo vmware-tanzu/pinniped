@@ -881,7 +881,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 		})
 	}
 }
@@ -916,7 +916,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// First call - should be successful.
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
@@ -1577,7 +1577,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().Build(), test.kubeResources)
+				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -2466,12 +2466,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships from LDAP, it updates groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups([]string{"new-group1", "new-group2", "new-group3"}).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
@@ -2493,12 +2494,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships from LDAP, it updates groups, using dynamic client - updates groups without outputting warnings",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups([]string{"new-group1", "new-group2", "new-group3"}).
+				Build(),
+			),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: happyLDAPCustomSessionData,
@@ -2527,12 +2529,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns empty list of group memberships from LDAP, it updates groups to an empty list",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: []string{},
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups([]string{}).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
@@ -2553,12 +2556,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "ldap refresh grant when the upstream refresh when username and groups scopes are not requested on original request or refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups([]string{"new-group1", "new-group2", "new-group3"}).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
 				customSessionData: happyLDAPCustomSessionData,
@@ -2694,12 +2698,13 @@ func TestRefreshGrant(t *testing.T) {
 			// fosite does not look at the scopes provided in refresh requests, although it is a valid parameter.
 			// even if 'groups' is not sent in the refresh request, we will send groups all the same.
 			name: "refresh grant when the upstream refresh when groups scope requested on original request but not refresh refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: []string{"new-group1", "new-group2", "new-group3"},
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups([]string{"new-group1", "new-group2", "new-group3"}).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyLDAPCustomSessionData,
@@ -3469,12 +3474,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: goodGroups,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForLDAP(
@@ -3484,12 +3490,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: goodGroups,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				Build(),
+			),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) {
@@ -3507,12 +3514,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path without downstream username scope granted, using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 ldapUpstreamName,
-				ResourceUID:          ldapUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: goodGroups,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				Build(),
+			),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) {
@@ -3549,12 +3557,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh happy path",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:                 activeDirectoryUpstreamName,
-				ResourceUID:          activeDirectoryUpstreamResourceUID,
-				URL:                  ldapUpstreamURL,
-				PerformRefreshGroups: goodGroups,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(activeDirectoryUpstreamName).
+				WithResourceUID(activeDirectoryUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
@@ -3570,11 +3579,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh when the LDAP session data is nil",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: &psession.CustomSessionData{
@@ -3606,11 +3616,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh when the ad session data is nil",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        activeDirectoryUpstreamName,
-				ResourceUID: activeDirectoryUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(activeDirectoryUpstreamName).
+				WithResourceUID(activeDirectoryUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: &psession.CustomSessionData{
@@ -3642,11 +3653,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh when the LDAP session data does not contain dn",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: &psession.CustomSessionData{
@@ -3682,11 +3694,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh when the active directory session data does not contain dn",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        activeDirectoryUpstreamName,
-				ResourceUID: activeDirectoryUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(activeDirectoryUpstreamName).
+				WithResourceUID(activeDirectoryUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: &psession.CustomSessionData{
@@ -3722,12 +3735,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh returns an error",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:              ldapUpstreamName,
-				ResourceUID:       ldapUpstreamResourceUID,
-				URL:               ldapUpstreamURL,
-				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshErr(errors.New("Some error performing upstream refresh")).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
@@ -3744,12 +3758,13 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh returns an error",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:              activeDirectoryUpstreamName,
-				ResourceUID:       activeDirectoryUpstreamResourceUID,
-				URL:               ldapUpstreamURL,
-				PerformRefreshErr: errors.New("Some error performing upstream refresh"),
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(activeDirectoryUpstreamName).
+				WithResourceUID(activeDirectoryUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshErr(errors.New("Some error performing upstream refresh")).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
@@ -3810,11 +3825,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "fosite session is empty",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
@@ -3841,11 +3857,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "groups not found in extra field when the groups scope was granted",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyLDAPCustomSessionData,
@@ -3878,11 +3895,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "username in custom session is empty string during refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyLDAPCustomSessionData,
@@ -3915,11 +3933,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the ldap provider in the session storage is found but has the wrong resource UID during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: "the-wrong-uid",
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID("the-wrong-uid").
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
@@ -3935,11 +3954,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the active directory provider in the session storage is found but has the wrong resource UID during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        activeDirectoryUpstreamName,
-				ResourceUID: "the-wrong-uid",
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(activeDirectoryUpstreamName).
+				WithResourceUID("the-wrong-uid").
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
@@ -3961,11 +3981,12 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "auth time is the zero value", // time.Times can never be nil, but it is possible that it would be the zero value which would mean something's wrong
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{
-				Name:        ldapUpstreamName,
-				ResourceUID: ldapUpstreamResourceUID,
-				URL:         ldapUpstreamURL,
-			}),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				Build(),
+			),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *oidc.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				refreshTokenSignature := getFositeDataSignature(t, refreshToken)
@@ -4002,7 +4023,7 @@ func TestRefreshGrant(t *testing.T) {
 			// its actually fine to use this function even when simulating ldap (which uses a different flow) because it's
 			// just populating a secret in storage.
 			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, test.idps.Build(), test.kubeResources)
+				test.authcodeExchange, test.idps.BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -4149,7 +4170,7 @@ func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[st
 func exchangeAuthcodeForTokens(
 	t *testing.T,
 	test authcodeExchangeInputs,
-	idps provider.DynamicUpstreamIDPProvider,
+	idps provider.FederationDomainIdentityProvidersListerFinderI,
 	kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset),
 ) (
 	subject http.Handler,

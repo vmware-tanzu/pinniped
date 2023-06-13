@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package controllermanager provides an entrypoint into running all of the controllers that run as
@@ -222,7 +222,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				agentConfig,
 				client,
 				informers.installationNamespaceK8s.Core().V1().Pods(),
-				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -232,7 +232,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -240,7 +240,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			jwtcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -249,7 +249,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
 			singletonWorker,
 		).
@@ -275,7 +275,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
-				plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
 			singletonWorker,
 		).

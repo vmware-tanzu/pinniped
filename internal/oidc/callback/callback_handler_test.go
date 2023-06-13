@@ -122,11 +122,11 @@ var (
 func TestCallbackEndpoint(t *testing.T) {
 	require.Len(t, happyDownstreamState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
 
-	otherUpstreamOIDCIdentityProvider := oidctestutil.TestUpstreamOIDCIdentityProvider{
-		Name:     "other-upstream-idp-name",
-		ClientID: "other-some-client-id",
-		Scopes:   []string{"other-scope1", "other-scope2"},
-	}
+	otherUpstreamOIDCIdentityProvider := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+		WithName("other-upstream-idp-name").
+		WithClientID("other-some-client-id").
+		WithScopes([]string{"other-scope1", "other-scope2"}).
+		Build()
 
 	var stateEncoderHashKey = []byte("fake-hash-secret")
 	var stateEncoderBlockKey = []byte("0123456789ABCDEF") // block encryption requires 16/24/32 bytes for AES
@@ -1160,7 +1160,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "the OIDCIdentityProvider CRD has been deleted",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&otherUpstreamOIDCIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(otherUpstreamOIDCIdentityProvider),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -1457,7 +1457,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
-			subject := NewHandler(test.idps.Build(), oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
+			subject := NewHandler(test.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest(test.method, test.path, nil).WithContext(reqContext)
 			if test.csrfCookie != "" {

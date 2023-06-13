@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"go.pinniped.dev/internal/idtransform"
 )
 
 func TestFederationDomainIssuerValidations(t *testing.T) {
@@ -82,7 +84,7 @@ func TestFederationDomainIssuerValidations(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewFederationDomainIssuer(tt.issuer, nil)
+			_, err := NewFederationDomainIssuer(tt.issuer, []*FederationDomainIdentityProvider{})
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 			} else {
@@ -90,7 +92,11 @@ func TestFederationDomainIssuerValidations(t *testing.T) {
 			}
 
 			// This alternate constructor should perform all the same validations on the issuer string.
-			_, err = NewFederationDomainIssuerWithDefaultIDP(tt.issuer, nil)
+			_, err = NewFederationDomainIssuerWithDefaultIDP(tt.issuer, &FederationDomainIdentityProvider{
+				DisplayName: "foobar",
+				UID:         "foo-123",
+				Transforms:  idtransform.NewTransformationPipeline(),
+			})
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 			} else {

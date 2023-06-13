@@ -2338,7 +2338,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				logger:    plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				logger:    plog.Logr(), //nolint:staticcheck // old test with no log assertions
 				issuer:    "https://valid-issuer.com/with/some/path",
 			}
 			if tt.opt != nil {

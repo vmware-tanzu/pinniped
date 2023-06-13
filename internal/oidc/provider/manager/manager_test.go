@@ -1,10 +1,9 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -29,9 +28,6 @@ import (
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
-	"go.pinniped.dev/pkg/oidcclient/nonce"
-	"go.pinniped.dev/pkg/oidcclient/oidctypes"
-	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 func TestManager(t *testing.T) {
@@ -249,25 +245,19 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{
-				Name:             upstreamIDPName,
-				ClientID:         "test-client-id",
-				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
-				Scopes:           []string{"test-scope"},
-				ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
-					return &oidctypes.Token{
-						IDToken: &oidctypes.IDToken{
-							Claims: map[string]interface{}{
-								"iss":      "https://some-issuer.com",
-								"sub":      "some-subject",
-								"username": "test-username",
-								"groups":   "test-group1",
-							},
-						},
-						RefreshToken: &oidctypes.RefreshToken{Token: "some-opaque-token"},
-					}, nil
-				},
-			}).Build()
+			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+				WithName(upstreamIDPName).
+				WithClientID("test-client-id").
+				WithAuthorizationURL(*parsedUpstreamIDPAuthorizationURL).
+				WithScopes([]string{"test-scope"}).
+				WithIDTokenClaim("iss", "https://some-issuer.com").
+				WithIDTokenClaim("sub", "some-subject").
+				WithIDTokenClaim("username", "test-username").
+				WithIDTokenClaim("groups", "test-group1").
+				WithRefreshToken("some-opaque-token").
+				WithoutAccessToken().
+				Build(),
+			).BuildDynamicUpstreamIDPProvider()
 
 			kubeClient = fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
@@ -387,9 +377,9 @@ func TestManager(t *testing.T) {
 
 		when("given some valid providers via SetProviders()", func() {
 			it.Before(func() {
-				p1, err := provider.NewFederationDomainIssuer(issuer1)
+				p1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				p2, err := provider.NewFederationDomainIssuer(issuer2)
+				p2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
 				subject.SetProviders(p1, p2)
 
@@ -430,9 +420,9 @@ func TestManager(t *testing.T) {
 
 		when("given the same valid providers as arguments to SetProviders() in reverse order", func() {
 			it.Before(func() {
-				p1, err := provider.NewFederationDomainIssuer(issuer1)
+				p1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
-				p2, err := provider.NewFederationDomainIssuer(issuer2)
+				p2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
 				r.NoError(err)
 				subject.SetProviders(p2, p1)
 

@@ -12,7 +12,6 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
 
@@ -71,15 +70,15 @@ func TestIDPDiscovery(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "z-some-oidc-idp", AllowPasswordGrant: true}).
-				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "x-some-idp"}).
-				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "a-some-ldap-idp"}).
-				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "a-some-oidc-idp"}).
-				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ldap-idp"}).
-				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "x-some-idp"}).
-				WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ad-idp"}).
-				WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "y-some-ad-idp"}).
-				Build()
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("z-some-oidc-idp").WithAllowPasswordGrant(true).Build()).
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-idp").Build()).
+				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("a-some-ldap-idp").Build()).
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("a-some-oidc-idp").Build()).
+				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ldap-idp").Build()).
+				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("x-some-idp").Build()).
+				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ad-idp").Build()).
+				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("y-some-ad-idp").Build()).
+				BuildFederationDomainIdentityProvidersListerFinder()
 
 			handler := NewHandler(idpLister)
 			req := httptest.NewRequest(test.method, test.path, nil)
@@ -99,18 +98,17 @@ func TestIDPDiscovery(t *testing.T) {
 			}
 
 			// Change the list of IDPs in the cache.
-			idpLister.SetLDAPIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
-				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ldap-idp-1"},
-				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ldap-idp-2"},
+			idpLister.SetLDAPIdentityProviders([]*oidctestutil.TestUpstreamLDAPIdentityProvider{
+				oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("some-other-ldap-idp-1").Build(),
+				oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("some-other-ldap-idp-2").Build(),
 			})
-			idpLister.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1", AllowPasswordGrant: true},
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-2"},
+			idpLister.SetOIDCIdentityProviders([]*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("some-other-oidc-idp-1").WithAllowPasswordGrant(true).Build(),
+				oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("some-other-oidc-idp-2").Build(),
 			})
-
-			idpLister.SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
-				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-2"},
-				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-1"},
+			idpLister.SetActiveDirectoryIdentityProviders([]*oidctestutil.TestUpstreamLDAPIdentityProvider{
+				oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("some-other-ad-idp-2").Build(),
+				oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("some-other-ad-idp-1").Build(),
 			})
 
 			// Make the same request to the same handler instance again, and expect different results.

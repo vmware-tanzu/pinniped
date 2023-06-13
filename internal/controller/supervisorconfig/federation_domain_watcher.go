@@ -103,7 +103,7 @@ func NewFederationDomainWatcherController(
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) error {
+func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) error { //nolint:funlen,gocyclo
 	federationDomains, err := c.federationDomainInformer.Lister().List(labels.Everything())
 	if err != nil {
 		return err
@@ -325,7 +325,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				result, _ := pipeline.Evaluate(context.TODO(), e.Username, e.Groups)
 				// TODO: handle err
 				resultWasAuthRejected := !result.AuthenticationAllowed
-				if e.Expects.Rejected && !resultWasAuthRejected {
+				if e.Expects.Rejected && !resultWasAuthRejected { //nolint:gocritic,nestif
 					// TODO: handle this failed example
 					plog.Warning("FederationDomain identity provider transformations example failed: expected authentication to be rejected but it was not",
 						"federationDomain", federationDomain.Name,

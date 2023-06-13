@@ -64,6 +64,11 @@ type FederationDomainIdentityProvidersListerI interface {
 	GetActiveDirectoryIdentityProviders() []*FederationDomainResolvedLDAPIdentityProvider
 }
 
+type FederationDomainIdentityProvidersListerFinderI interface {
+	FederationDomainIdentityProvidersListerI
+	FederationDomainIdentityProvidersFinderI
+}
+
 // FederationDomainIdentityProvidersLister wraps an UpstreamIdentityProvidersLister. The lister which is being
 // wrapped should contain all valid upstream providers that are currently defined in the Supervisor.
 // FederationDomainIdentityProvidersLister provides a lookup method which only looks up IDPs within those which

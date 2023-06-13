@@ -34,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	pkce2 "go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestoragei"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
@@ -97,15 +98,107 @@ type ValidateRefreshArgs struct {
 	StoredAttributes upstreamprovider.RefreshAttributes
 }
 
+func NewTestUpstreamLDAPIdentityProviderBuilder() *TestUpstreamLDAPIdentityProviderBuilder {
+	return &TestUpstreamLDAPIdentityProviderBuilder{}
+}
+
+type TestUpstreamLDAPIdentityProviderBuilder struct {
+	name                           string
+	resourceUID                    types.UID
+	url                            *url.URL
+	authenticateFunc               func(ctx context.Context, username, password string) (*authenticators.Response, bool, error)
+	performRefreshCallCount        int
+	performRefreshArgs             []*PerformRefreshArgs
+	performRefreshErr              error
+	performRefreshGroups           []string
+	displayNameForFederationDomain string
+	transformsForFederationDomain  *idtransform.TransformationPipeline
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithName(name string) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.name = name
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithResourceUID(uid types.UID) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.resourceUID = uid
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithURL(url *url.URL) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.url = url
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithAuthenticateFunc(f func(ctx context.Context, username, password string) (*authenticators.Response, bool, error)) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.authenticateFunc = f
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithPerformRefreshCallCount(count int) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.performRefreshCallCount = count
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithPerformRefreshArgs(args []*PerformRefreshArgs) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.performRefreshArgs = args
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithPerformRefreshErr(err error) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.performRefreshErr = err
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithPerformRefreshGroups(groups []string) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.performRefreshGroups = groups
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithDisplayNameForFederationDomain(displayName string) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.displayNameForFederationDomain = displayName
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) WithTransformsForFederationDomain(transforms *idtransform.TransformationPipeline) *TestUpstreamLDAPIdentityProviderBuilder {
+	t.transformsForFederationDomain = transforms
+	return t
+}
+
+func (t *TestUpstreamLDAPIdentityProviderBuilder) Build() *TestUpstreamLDAPIdentityProvider {
+	if t.displayNameForFederationDomain == "" {
+		// default it to the CR name
+		t.displayNameForFederationDomain = t.name
+	}
+	if t.transformsForFederationDomain == nil {
+		// default to an empty pipeline
+		t.transformsForFederationDomain = idtransform.NewTransformationPipeline()
+	}
+	return &TestUpstreamLDAPIdentityProvider{
+		Name:                           t.name,
+		ResourceUID:                    t.resourceUID,
+		URL:                            t.url,
+		AuthenticateFunc:               t.authenticateFunc,
+		performRefreshCallCount:        t.performRefreshCallCount,
+		performRefreshArgs:             t.performRefreshArgs,
+		PerformRefreshErr:              t.performRefreshErr,
+		PerformRefreshGroups:           t.performRefreshGroups,
+		DisplayNameForFederationDomain: t.displayNameForFederationDomain,
+		TransformsForFederationDomain:  t.transformsForFederationDomain,
+	}
+}
+
 type TestUpstreamLDAPIdentityProvider struct {
-	Name                    string
-	ResourceUID             types.UID
-	URL                     *url.URL
-	AuthenticateFunc        func(ctx context.Context, username, password string) (*authenticators.Response, bool, error)
-	performRefreshCallCount int
-	performRefreshArgs      []*PerformRefreshArgs
-	PerformRefreshErr       error
-	PerformRefreshGroups    []string
+	Name                           string
+	ResourceUID                    types.UID
+	URL                            *url.URL
+	AuthenticateFunc               func(ctx context.Context, username, password string) (*authenticators.Response, bool, error)
+	performRefreshCallCount        int
+	performRefreshArgs             []*PerformRefreshArgs
+	PerformRefreshErr              error
+	PerformRefreshGroups           []string
+	DisplayNameForFederationDomain string
+	TransformsForFederationDomain  *idtransform.TransformationPipeline
 }
 
 var _ upstreamprovider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
@@ -155,18 +248,20 @@ func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshArgs(call int) *Perform
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
-	Name                     string
-	ClientID                 string
-	ResourceUID              types.UID
-	AuthorizationURL         url.URL
-	UserInfoURL              bool
-	RevocationURL            *url.URL
-	UsernameClaim            string
-	GroupsClaim              string
-	Scopes                   []string
-	AdditionalAuthcodeParams map[string]string
-	AdditionalClaimMappings  map[string]string
-	AllowPasswordGrant       bool
+	Name                           string
+	ClientID                       string
+	ResourceUID                    types.UID
+	AuthorizationURL               url.URL
+	UserInfoURL                    bool
+	RevocationURL                  *url.URL
+	UsernameClaim                  string
+	GroupsClaim                    string
+	Scopes                         []string
+	AdditionalAuthcodeParams       map[string]string
+	AdditionalClaimMappings        map[string]string
+	AllowPasswordGrant             bool
+	DisplayNameForFederationDomain string
+	TransformsForFederationDomain  *idtransform.TransformationPipeline
 
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
@@ -364,6 +459,104 @@ func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfoArgs
 	return u.validateTokenAndMergeWithUserInfoArgs[call]
 }
 
+type TestFederationDomainIdentityProvidersListerFinder struct {
+	upstreamOIDCIdentityProviders            []*TestUpstreamOIDCIdentityProvider
+	upstreamLDAPIdentityProviders            []*TestUpstreamLDAPIdentityProvider
+	upstreamActiveDirectoryIdentityProviders []*TestUpstreamLDAPIdentityProvider
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*provider.FederationDomainResolvedOIDCIdentityProvider {
+	fdIDPs := make([]*provider.FederationDomainResolvedOIDCIdentityProvider, len(t.upstreamOIDCIdentityProviders))
+	for i, testIDP := range t.upstreamOIDCIdentityProviders {
+		fdIDP := &provider.FederationDomainResolvedOIDCIdentityProvider{
+			DisplayName:         testIDP.DisplayNameForFederationDomain,
+			Provider:            testIDP,
+			SessionProviderType: psession.ProviderTypeOIDC,
+			Transforms:          testIDP.TransformsForFederationDomain,
+		}
+		fdIDPs[i] = fdIDP
+	}
+	return fdIDPs
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProviders() []*provider.FederationDomainResolvedLDAPIdentityProvider {
+	fdIDPs := make([]*provider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamLDAPIdentityProviders))
+	for i, testIDP := range t.upstreamLDAPIdentityProviders {
+		fdIDP := &provider.FederationDomainResolvedLDAPIdentityProvider{
+			DisplayName:         testIDP.DisplayNameForFederationDomain,
+			Provider:            testIDP,
+			SessionProviderType: psession.ProviderTypeLDAP,
+			Transforms:          testIDP.TransformsForFederationDomain,
+		}
+		fdIDPs[i] = fdIDP
+	}
+	return fdIDPs
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetActiveDirectoryIdentityProviders() []*provider.FederationDomainResolvedLDAPIdentityProvider {
+	fdIDPs := make([]*provider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamActiveDirectoryIdentityProviders))
+	for i, testIDP := range t.upstreamActiveDirectoryIdentityProviders {
+		fdIDP := &provider.FederationDomainResolvedLDAPIdentityProvider{
+			DisplayName:         testIDP.DisplayNameForFederationDomain,
+			Provider:            testIDP,
+			SessionProviderType: psession.ProviderTypeActiveDirectory,
+			Transforms:          testIDP.TransformsForFederationDomain,
+		}
+		fdIDPs[i] = fdIDP
+	}
+	return fdIDPs
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+	return nil, nil, fmt.Errorf("TODO: implement me") // TODO
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+	for _, testIDP := range t.upstreamOIDCIdentityProviders {
+		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
+			return &provider.FederationDomainResolvedOIDCIdentityProvider{
+				DisplayName:         testIDP.DisplayNameForFederationDomain,
+				Provider:            testIDP,
+				SessionProviderType: psession.ProviderTypeOIDC,
+				Transforms:          testIDP.TransformsForFederationDomain,
+			}, nil, nil
+		}
+	}
+	for _, testIDP := range t.upstreamLDAPIdentityProviders {
+		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
+			return nil, &provider.FederationDomainResolvedLDAPIdentityProvider{
+				DisplayName:         testIDP.DisplayNameForFederationDomain,
+				Provider:            testIDP,
+				SessionProviderType: psession.ProviderTypeLDAP,
+				Transforms:          testIDP.TransformsForFederationDomain,
+			}, nil
+		}
+	}
+	for _, testIDP := range t.upstreamActiveDirectoryIdentityProviders {
+		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
+			return nil, &provider.FederationDomainResolvedLDAPIdentityProvider{
+				DisplayName:         testIDP.DisplayNameForFederationDomain,
+				Provider:            testIDP,
+				SessionProviderType: psession.ProviderTypeActiveDirectory,
+				Transforms:          testIDP.TransformsForFederationDomain,
+			}, nil
+		}
+	}
+	return nil, nil, fmt.Errorf("did not find IDP with name %q", upstreamIDPDisplayName)
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetOIDCIdentityProviders(providers []*TestUpstreamOIDCIdentityProvider) {
+	t.upstreamOIDCIdentityProviders = providers
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetLDAPIdentityProviders(providers []*TestUpstreamLDAPIdentityProvider) {
+	t.upstreamLDAPIdentityProviders = providers
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetActiveDirectoryIdentityProviders(providers []*TestUpstreamLDAPIdentityProvider) {
+	t.upstreamActiveDirectoryIdentityProviders = providers
+}
+
 type UpstreamIDPListerBuilder struct {
 	upstreamOIDCIdentityProviders            []*TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*TestUpstreamLDAPIdentityProvider
@@ -385,7 +578,15 @@ func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryId
 	return b
 }
 
-func (b *UpstreamIDPListerBuilder) Build() provider.DynamicUpstreamIDPProvider {
+func (b *UpstreamIDPListerBuilder) BuildFederationDomainIdentityProvidersListerFinder() *TestFederationDomainIdentityProvidersListerFinder {
+	return &TestFederationDomainIdentityProvidersListerFinder{
+		upstreamOIDCIdentityProviders:            b.upstreamOIDCIdentityProviders,
+		upstreamLDAPIdentityProviders:            b.upstreamLDAPIdentityProviders,
+		upstreamActiveDirectoryIdentityProviders: b.upstreamActiveDirectoryIdentityProviders,
+	}
+}
+
+func (b *UpstreamIDPListerBuilder) BuildDynamicUpstreamIDPProvider() provider.DynamicUpstreamIDPProvider {
 	idpProvider := provider.NewDynamicUpstreamIDPProvider()
 
 	oidcUpstreams := make([]upstreamprovider.UpstreamOIDCIdentityProviderI, len(b.upstreamOIDCIdentityProviders))
@@ -643,6 +844,8 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	performRefreshErr                    error
 	revokeTokenErr                       error
 	validateTokenAndMergeWithUserInfoErr error
+	displayNameForFederationDomain       string
+	transformsForFederationDomain        *idtransform.TransformationPipeline
 }
 
 func (u *TestUpstreamOIDCIdentityProviderBuilder) WithName(value string) *TestUpstreamOIDCIdentityProviderBuilder {
@@ -792,19 +995,40 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithRevokeTokenError(err error
 	return u
 }
 
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithDisplayNameForFederationDomain(displayName string) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.displayNameForFederationDomain = displayName
+	return u
+}
+
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithTransformsForFederationDomain(transforms *idtransform.TransformationPipeline) *TestUpstreamOIDCIdentityProviderBuilder {
+	u.transformsForFederationDomain = transforms
+	return u
+}
+
 func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdentityProvider {
+	if u.displayNameForFederationDomain == "" {
+		// default it to the CR name
+		u.displayNameForFederationDomain = u.name
+	}
+	if u.transformsForFederationDomain == nil {
+		// default to an empty pipeline
+		u.transformsForFederationDomain = idtransform.NewTransformationPipeline()
+	}
+
 	return &TestUpstreamOIDCIdentityProvider{
-		Name:                     u.name,
-		ClientID:                 u.clientID,
-		ResourceUID:              u.resourceUID,
-		UsernameClaim:            u.usernameClaim,
-		GroupsClaim:              u.groupsClaim,
-		Scopes:                   u.scopes,
-		AllowPasswordGrant:       u.allowPasswordGrant,
-		AuthorizationURL:         u.authorizationURL,
-		UserInfoURL:              u.hasUserInfoURL,
-		AdditionalAuthcodeParams: u.additionalAuthcodeParams,
-		AdditionalClaimMappings:  u.additionalClaimMappings,
+		Name:                           u.name,
+		ClientID:                       u.clientID,
+		ResourceUID:                    u.resourceUID,
+		UsernameClaim:                  u.usernameClaim,
+		GroupsClaim:                    u.groupsClaim,
+		Scopes:                         u.scopes,
+		AllowPasswordGrant:             u.allowPasswordGrant,
+		AuthorizationURL:               u.authorizationURL,
+		UserInfoURL:                    u.hasUserInfoURL,
+		AdditionalAuthcodeParams:       u.additionalAuthcodeParams,
+		AdditionalClaimMappings:        u.additionalClaimMappings,
+		DisplayNameForFederationDomain: u.displayNameForFederationDomain,
+		TransformsForFederationDomain:  u.transformsForFederationDomain,
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr

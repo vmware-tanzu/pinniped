@@ -21,6 +21,7 @@ import (
 
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
@@ -38,6 +39,7 @@ func TestManager(t *testing.T) {
 			nextHandler              http.HandlerFunc
 			fallbackHandlerWasCalled bool
 			dynamicJWKSProvider      jwks.DynamicJWKSProvider
+			federationDomainIDPs     []*provider.FederationDomainIdentityProvider
 			kubeClient               *fake.Clientset
 		)
 
@@ -50,6 +52,7 @@ func TestManager(t *testing.T) {
 			issuer2KeyID                 = "issuer2-key"
 			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
 			upstreamIDPName              = "test-idp"
+			upstreamResourceUID          = "test-resource-uid"
 			upstreamIDPType              = "oidc"
 			downstreamClientID           = "pinniped-cli"
 			downstreamRedirectURL        = "http://127.0.0.1:12345/callback"
@@ -245,9 +248,19 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
+
+			federationDomainIDPs = []*provider.FederationDomainIdentityProvider{
+				{
+					DisplayName: upstreamIDPName,
+					UID:         upstreamResourceUID,
+					Transforms:  idtransform.NewTransformationPipeline(),
+				},
+			}
+
 			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 				WithName(upstreamIDPName).
 				WithClientID("test-client-id").
+				WithResourceUID(upstreamResourceUID).
 				WithAuthorizationURL(*parsedUpstreamIDPAuthorizationURL).
 				WithScopes([]string{"test-scope"}).
 				WithIDTokenClaim("iss", "https://some-issuer.com").
@@ -332,6 +345,7 @@ func TestManager(t *testing.T) {
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
 
 			authRequestParams := "?" + url.Values{
+				"pinniped_idp_name":     []string{upstreamIDPName},
 				"response_type":         []string{"code"},
 				"scope":                 []string{"openid profile email username groups"},
 				"client_id":             []string{downstreamClientID},
@@ -377,9 +391,9 @@ func TestManager(t *testing.T) {
 
 		when("given some valid providers via SetFederationDomains()", func() {
 			it.Before(func() {
-				fd1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
+				fd1, err := provider.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
 				r.NoError(err)
-				fd2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
+				fd2, err := provider.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
 				r.NoError(err)
 				subject.SetFederationDomains(fd1, fd2)
 
@@ -420,9 +434,9 @@ func TestManager(t *testing.T) {
 
 		when("given the same valid providers as arguments to SetFederationDomains() in reverse order", func() {
 			it.Before(func() {
-				fd1, err := provider.NewFederationDomainIssuer(issuer1, []*provider.FederationDomainIdentityProvider{})
+				fd1, err := provider.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
 				r.NoError(err)
-				fd2, err := provider.NewFederationDomainIssuer(issuer2, []*provider.FederationDomainIdentityProvider{})
+				fd2, err := provider.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
 				r.NoError(err)
 				subject.SetFederationDomains(fd2, fd1)
 

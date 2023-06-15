@@ -194,12 +194,14 @@ func TestPostLoginEndpoint(t *testing.T) {
 		Build()
 
 	expectedHappyActiveDirectoryUpstreamCustomSession := &psession.CustomSessionData{
-		Username:     happyLDAPUsernameFromAuthenticator,
-		ProviderUID:  activeDirectoryUpstreamResourceUID,
-		ProviderName: activeDirectoryUpstreamName,
-		ProviderType: psession.ProviderTypeActiveDirectory,
-		OIDC:         nil,
-		LDAP:         nil,
+		Username:         happyLDAPUsernameFromAuthenticator,
+		ProviderUID:      activeDirectoryUpstreamResourceUID,
+		ProviderName:     activeDirectoryUpstreamName,
+		ProviderType:     psession.ProviderTypeActiveDirectory,
+		UpstreamUsername: happyLDAPUsernameFromAuthenticator,
+		UpstreamGroups:   happyLDAPGroups,
+		OIDC:             nil,
+		LDAP:             nil,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
 			UserDN:                 happyLDAPUserDN,
 			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
@@ -207,11 +209,13 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}
 
 	expectedHappyLDAPUpstreamCustomSession := &psession.CustomSessionData{
-		Username:     happyLDAPUsernameFromAuthenticator,
-		ProviderUID:  ldapUpstreamResourceUID,
-		ProviderName: ldapUpstreamName,
-		ProviderType: psession.ProviderTypeLDAP,
-		OIDC:         nil,
+		Username:         happyLDAPUsernameFromAuthenticator,
+		ProviderUID:      ldapUpstreamResourceUID,
+		ProviderName:     ldapUpstreamName,
+		ProviderType:     psession.ProviderTypeLDAP,
+		UpstreamUsername: happyLDAPUsernameFromAuthenticator,
+		UpstreamGroups:   happyLDAPGroups,
+		OIDC:             nil,
 		LDAP: &psession.LDAPSessionData{
 			UserDN:                 happyLDAPUserDN,
 			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
@@ -944,14 +948,14 @@ func TestPostLoginEndpoint(t *testing.T) {
 			idps:         oidctestutil.NewUpstreamIDPListerBuilder(), // empty
 			decodedState: happyLDAPDecodedState,
 			formParams:   happyUsernamePasswordFormParams,
-			wantErr:      "error finding upstream provider: provider not found",
+			wantErr:      "error finding upstream provider: did not find IDP with name \"some-ldap-idp\"",
 		},
 		{
 			name:         "upstream provider cannot be found by name and type",
 			idps:         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: happyActiveDirectoryDecodedState, // correct upstream IDP name, but wrong upstream IDP type
 			formParams:   happyUsernamePasswordFormParams,
-			wantErr:      "error finding upstream provider: provider not found",
+			wantErr:      "error finding upstream provider: did not find IDP with name \"some-active-directory-idp\"",
 		},
 	}
 

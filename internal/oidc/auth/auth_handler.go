@@ -63,7 +63,7 @@ func NewHandler(
 		oidcUpstream, ldapUpstream, err := chooseUpstreamIDP(idpNameQueryParamValue, idpFinder)
 		if err != nil {
 			plog.WarningErr("authorize upstream config", err)
-			return err
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
 		if oidcUpstream != nil {

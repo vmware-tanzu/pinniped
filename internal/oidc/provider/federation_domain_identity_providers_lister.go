@@ -69,6 +69,9 @@ type FederationDomainIdentityProvidersListerFinderI interface {
 	FederationDomainIdentityProvidersFinderI
 }
 
+// FederationDomainIdentityProvidersLister implements FederationDomainIdentityProvidersListerFinderI.
+var _ FederationDomainIdentityProvidersListerFinderI = (*FederationDomainIdentityProvidersLister)(nil)
+
 // FederationDomainIdentityProvidersLister wraps an UpstreamIdentityProvidersLister. The lister which is being
 // wrapped should contain all valid upstream providers that are currently defined in the Supervisor.
 // FederationDomainIdentityProvidersLister provides a lookup method which only looks up IDPs within those which

@@ -53,9 +53,10 @@ func (mr *MockConnMockRecorder) Bind(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // Close mocks base method.
-func (m *MockConn) Close() {
+func (m *MockConn) Close() error {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
+	return nil
 }
 
 // Close indicates an expected call of Close.

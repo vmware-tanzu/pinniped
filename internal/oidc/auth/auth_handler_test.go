@@ -71,6 +71,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		downstreamPKCEChallengeMethod          = "S256"
 		happyState                             = "8b-state"
 		upstreamLDAPURL                        = "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev"
+		plainContentType                       = "text/plain; charset=utf-8"
 		htmlContentType                        = "text/html; charset=utf-8"
 		jsonContentType                        = "application/json; charset=utf-8"
 		formContentType                        = "application/x-www-form-urlencoded"
@@ -406,24 +407,65 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap)
 
-	modifiedHappyGetRequestQueryMap := func(queryOverrides map[string]string) map[string]string {
-		copyOfHappyGetRequestQueryMap := map[string]string{}
-		for k, v := range happyGetRequestQueryMap {
-			copyOfHappyGetRequestQueryMap[k] = v
+	modifiedQueryMap := func(modifyThisMap map[string]string, queryOverrides map[string]string) map[string]string {
+		copyModifyThisMap := map[string]string{}
+		for k, v := range modifyThisMap {
+			copyModifyThisMap[k] = v
 		}
 		for k, v := range queryOverrides {
-			_, hasKey := copyOfHappyGetRequestQueryMap[k]
+			_, hasKey := copyModifyThisMap[k]
 			if v == "" && hasKey {
-				delete(copyOfHappyGetRequestQueryMap, k)
+				delete(copyModifyThisMap, k)
 			} else {
-				copyOfHappyGetRequestQueryMap[k] = v
+				copyModifyThisMap[k] = v
 			}
 		}
-		return copyOfHappyGetRequestQueryMap
+		return copyModifyThisMap
+	}
+
+	modifiedHappyGetRequestQueryMap := func(queryOverrides map[string]string) map[string]string {
+		return modifiedQueryMap(happyGetRequestQueryMap, queryOverrides)
 	}
 
 	modifiedHappyGetRequestPath := func(queryOverrides map[string]string) string {
 		return pathWithQuery("/some/path", modifiedHappyGetRequestQueryMap(queryOverrides))
+	}
+
+	happyGetRequestPathForOIDCUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": oidcUpstreamName})
+	happyGetRequestPathForOIDCPasswordGrantUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": oidcPasswordGrantUpstreamName})
+	happyGetRequestPathForLDAPUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": ldapUpstreamName})
+	happyGetRequestPathForADUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": activeDirectoryUpstreamName})
+
+	modifiedHappyGetRequestPathForOIDCUpstream := func(queryOverrides map[string]string) string {
+		queryOverrides["pinniped_idp_name"] = oidcUpstreamName
+		return modifiedHappyGetRequestPath(queryOverrides)
+	}
+	modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream := func(queryOverrides map[string]string) string {
+		queryOverrides["pinniped_idp_name"] = oidcPasswordGrantUpstreamName
+		return modifiedHappyGetRequestPath(queryOverrides)
+	}
+	modifiedHappyGetRequestPathForLDAPUpstream := func(queryOverrides map[string]string) string {
+		queryOverrides["pinniped_idp_name"] = ldapUpstreamName
+		return modifiedHappyGetRequestPath(queryOverrides)
+	}
+	modifiedHappyGetRequestPathForADUpstream := func(queryOverrides map[string]string) string {
+		queryOverrides["pinniped_idp_name"] = activeDirectoryUpstreamName
+		return modifiedHappyGetRequestPath(queryOverrides)
+	}
+
+	happyGetRequestQueryMapForOIDCUpstream := modifiedQueryMap(happyGetRequestQueryMap, map[string]string{"pinniped_idp_name": oidcUpstreamName})
+	happyGetRequestQueryMapForOIDCPasswordGrantUpstream := modifiedQueryMap(happyGetRequestQueryMap, map[string]string{"pinniped_idp_name": oidcPasswordGrantUpstreamName})
+	happyGetRequestQueryMapForLDAPUpstream := modifiedQueryMap(happyGetRequestQueryMap, map[string]string{"pinniped_idp_name": ldapUpstreamName})
+	happyGetRequestQueryMapForADUpstream := modifiedQueryMap(happyGetRequestQueryMap, map[string]string{"pinniped_idp_name": activeDirectoryUpstreamName})
+
+	modifiedHappyGetRequestQueryMapForOIDCUpstream := func(queryOverrides map[string]string) map[string]string {
+		return modifiedQueryMap(happyGetRequestQueryMapForOIDCUpstream, queryOverrides)
+	}
+	modifiedHappyGetRequestQueryMapForLDAPUpstream := func(queryOverrides map[string]string) map[string]string {
+		return modifiedQueryMap(happyGetRequestQueryMapForLDAPUpstream, queryOverrides)
+	}
+	modifiedHappyGetRequestQueryMapForADUpstream := func(queryOverrides map[string]string) map[string]string {
+		return modifiedQueryMap(happyGetRequestQueryMapForADUpstream, queryOverrides)
 	}
 
 	expectedUpstreamStateParam := func(queryOverrides map[string]string, csrfValueOverride, upstreamName, upstreamType string) string {
@@ -464,12 +506,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyActiveDirectoryUpstreamCustomSession := &psession.CustomSessionData{
-		Username:     happyLDAPUsernameFromAuthenticator,
-		ProviderUID:  activeDirectoryUpstreamResourceUID,
-		ProviderName: activeDirectoryUpstreamName,
-		ProviderType: psession.ProviderTypeActiveDirectory,
-		OIDC:         nil,
-		LDAP:         nil,
+		Username:         happyLDAPUsernameFromAuthenticator,
+		UpstreamUsername: happyLDAPUsernameFromAuthenticator,
+		UpstreamGroups:   happyLDAPGroups,
+		ProviderUID:      activeDirectoryUpstreamResourceUID,
+		ProviderName:     activeDirectoryUpstreamName,
+		ProviderType:     psession.ProviderTypeActiveDirectory,
+		OIDC:             nil,
+		LDAP:             nil,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
 			UserDN:                 happyLDAPUserDN,
 			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
@@ -477,11 +521,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyLDAPUpstreamCustomSession := &psession.CustomSessionData{
-		Username:     happyLDAPUsernameFromAuthenticator,
-		ProviderUID:  ldapUpstreamResourceUID,
-		ProviderName: ldapUpstreamName,
-		ProviderType: psession.ProviderTypeLDAP,
-		OIDC:         nil,
+		Username:         happyLDAPUsernameFromAuthenticator,
+		UpstreamUsername: happyLDAPUsernameFromAuthenticator,
+		UpstreamGroups:   happyLDAPGroups,
+		ProviderUID:      ldapUpstreamResourceUID,
+		ProviderName:     ldapUpstreamName,
+		ProviderType:     psession.ProviderTypeLDAP,
+		OIDC:             nil,
 		LDAP: &psession.LDAPSessionData{
 			UserDN:                 happyLDAPUserDN,
 			ExtraRefreshAttributes: map[string]string{happyLDAPExtraRefreshAttribute: happyLDAPExtraRefreshValue},
@@ -490,10 +536,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	expectedHappyOIDCPasswordGrantCustomSession := &psession.CustomSessionData{
-		Username:     oidcUpstreamUsername,
-		ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
-		ProviderName: oidcPasswordGrantUpstreamName,
-		ProviderType: psession.ProviderTypeOIDC,
+		Username:         oidcUpstreamUsername,
+		UpstreamUsername: oidcUpstreamUsername,
+		UpstreamGroups:   oidcUpstreamGroupMembership,
+		ProviderUID:      oidcPasswordGrantUpstreamResourceUID,
+		ProviderName:     oidcPasswordGrantUpstreamName,
+		ProviderType:     psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamRefreshToken: oidcPasswordGrantUpstreamRefreshToken,
 			UpstreamSubject:      oidcUpstreamSubject,
@@ -501,19 +549,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 	}
 
-	expectedHappyOIDCPasswordGrantCustomSessionWithUsername := func(wantUsername string) *psession.CustomSessionData {
+	expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups := func(wantUsername string, wantGroups []string) *psession.CustomSessionData {
 		copyOfCustomSession := *expectedHappyOIDCPasswordGrantCustomSession
 		copyOfOIDC := *(expectedHappyOIDCPasswordGrantCustomSession.OIDC)
 		copyOfCustomSession.OIDC = &copyOfOIDC
 		copyOfCustomSession.Username = wantUsername
+		copyOfCustomSession.UpstreamUsername = wantUsername
+		copyOfCustomSession.UpstreamGroups = wantGroups
 		return &copyOfCustomSession
 	}
 
 	expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken := &psession.CustomSessionData{
-		Username:     oidcUpstreamUsername,
-		ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
-		ProviderName: oidcPasswordGrantUpstreamName,
-		ProviderType: psession.ProviderTypeOIDC,
+		Username:         oidcUpstreamUsername,
+		UpstreamUsername: oidcUpstreamUsername,
+		UpstreamGroups:   oidcUpstreamGroupMembership,
+		ProviderUID:      oidcPasswordGrantUpstreamResourceUID,
+		ProviderName:     oidcPasswordGrantUpstreamName,
+		ProviderType:     psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamAccessToken: oidcUpstreamAccessToken,
 			UpstreamSubject:     oidcUpstreamSubject,
@@ -592,7 +644,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForOIDCUpstream,
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -610,7 +662,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                                   modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -627,7 +679,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForLDAPUpstream,
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -645,7 +697,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                                   modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -662,7 +714,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForADUpstream,
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -680,7 +732,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                                   modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
@@ -692,7 +744,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "OIDC upstream password grant happy path using GET",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -722,7 +774,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				WithIDTokenClaim("upstreamOtherClaim", []interface{}{"hello", true}).
 				Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -753,7 +805,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				WithIDTokenClaim("not-upstream", "value").
 				Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -776,7 +828,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "LDAP cli upstream happy path using GET",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
 			customPasswordHeader:              ptr.To(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
@@ -797,7 +849,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "ActiveDirectory cli upstream happy path using GET",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForADUpstream,
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
 			customPasswordHeader:              ptr.To(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
@@ -823,7 +875,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForOIDCUpstream,
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
@@ -840,7 +892,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForLDAPUpstream,
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
@@ -857,7 +909,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   happyGetRequestPath,
+			path:                                   happyGetRequestPathForADUpstream,
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
@@ -876,7 +928,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(happyGetRequestQueryMap),
+			body:                                   encodeQuery(happyGetRequestQueryMapForOIDCUpstream),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -896,7 +948,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMapForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -915,7 +967,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(happyGetRequestQueryMap),
+			body:                                   encodeQuery(happyGetRequestQueryMapForLDAPUpstream),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -935,7 +987,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMapForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -954,7 +1006,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(happyGetRequestQueryMap),
+			body:                                   encodeQuery(happyGetRequestQueryMapForADUpstream),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -974,7 +1026,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            formContentType,
-			body:                                   encodeQuery(modifiedHappyGetRequestQueryMap(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
+			body:                                   encodeQuery(modifiedHappyGetRequestQueryMapForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep})),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        "",
 			wantBodyString:                         "",
@@ -988,7 +1040,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                            http.MethodPost,
 			path:                              "/some/path",
 			contentType:                       formContentType,
-			body:                              encodeQuery(happyGetRequestQueryMap),
+			body:                              encodeQuery(happyGetRequestQueryMapForOIDCPasswordGrantUpstream),
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -1012,7 +1064,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                            http.MethodPost,
 			path:                              "/some/path",
 			contentType:                       formContentType,
-			body:                              encodeQuery(happyGetRequestQueryMap),
+			body:                              encodeQuery(happyGetRequestQueryMapForLDAPUpstream),
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
 			customPasswordHeader:              ptr.To(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
@@ -1035,7 +1087,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                            http.MethodPost,
 			path:                              "/some/path",
 			contentType:                       formContentType,
-			body:                              encodeQuery(happyGetRequestQueryMap),
+			body:                              encodeQuery(happyGetRequestQueryMapForADUpstream),
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
 			customPasswordHeader:              ptr.To(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
@@ -1061,7 +1113,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
+			path:                                   modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"prompt": "login"}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
@@ -1078,7 +1130,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": "currently-ignored", "pinniped_idp_type": "oidc"}),
+			path:                                   modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"pinniped_idp_type": "oidc"}),
 			contentType:                            formContentType,
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
@@ -1096,7 +1148,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                           happyStateEncoder,
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
-			path:                                   modifiedHappyGetRequestPath(map[string]string{"prompt": "login"}),
+			path:                                   modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"prompt": "login"}),
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantBodyStringWithLocationInHref:       true,
@@ -1113,7 +1165,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"prompt": "none"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeLoginRequiredErrorQuery),
@@ -1128,7 +1180,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusSeeOther,
 			wantContentType: htmlContentType,
@@ -1147,7 +1199,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:  happyStateEncoder,
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
 			wantStatus:                  http.StatusSeeOther,
@@ -1169,7 +1221,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:  happyStateEncoder,
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 				"client_id":    dynamicClientID,
 				"scope":        testutil.AllDynamicClientScopesSpaceSep,
@@ -1189,7 +1241,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:   "OIDC upstream password grant happy path when downstream redirect uri matches what is configured for client except for the port number",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
@@ -1213,7 +1265,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:   "LDAP upstream happy path when downstream redirect uri matches what is configured for client except for the port number",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method: http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
@@ -1241,7 +1293,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:                happyStateEncoder,
 			cookieEncoder:               happyCookieEncoder,
 			method:                      http.MethodGet,
-			path:                        modifiedHappyGetRequestPath(map[string]string{"scope": "openid offline_access"}),
+			path:                        modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"scope": "openid offline_access"}),
 			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
@@ -1255,7 +1307,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token but it did return an access token and has a userinfo endpoint",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -1277,7 +1329,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "OIDC password grant happy path when upstream IDP returned empty refresh token and an access token that has a short lifetime",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -1294,11 +1346,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: &psession.CustomSessionData{
-				Username:     oidcUpstreamUsername,
-				ProviderUID:  oidcPasswordGrantUpstreamResourceUID,
-				ProviderName: oidcPasswordGrantUpstreamName,
-				ProviderType: psession.ProviderTypeOIDC,
-				Warnings:     []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
+				Username:         oidcUpstreamUsername,
+				UpstreamUsername: oidcUpstreamUsername,
+				UpstreamGroups:   oidcUpstreamGroupMembership,
+				ProviderUID:      oidcPasswordGrantUpstreamResourceUID,
+				ProviderName:     oidcPasswordGrantUpstreamName,
+				ProviderType:     psession.ProviderTypeOIDC,
+				Warnings:         []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
 				OIDC: &psession.OIDCSessionData{
 					UpstreamAccessToken: oidcUpstreamAccessToken,
 					UpstreamSubject:     oidcUpstreamSubject,
@@ -1310,7 +1364,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                              "OIDC password grant happy path when upstream IDP did not return a refresh token but it did return an access token and has a userinfo endpoint",
 			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -1332,7 +1386,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "error during upstream LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(erroringUpstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusBadGateway,
@@ -1343,7 +1397,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "error during upstream Active Directory authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusBadGateway,
@@ -1359,7 +1413,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					Build(),
 			),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To("wrong-password"),
 			wantPasswordGrantCall: &expectedPasswordGrant{
@@ -1377,7 +1431,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "wrong upstream password for LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To("wrong-password"),
 			wantStatus:           http.StatusFound,
@@ -1389,7 +1443,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "wrong upstream password for Active Directory authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To("wrong-password"),
 			wantStatus:           http.StatusFound,
@@ -1401,7 +1455,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "wrong upstream username for LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To("wrong-username"),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1413,7 +1467,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "wrong upstream username for Active Directory authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To("wrong-username"),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1425,7 +1479,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream username but has password on request for OIDC password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader: nil, // do not send header
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1437,7 +1491,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream username but has password on request for LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: nil, // do not send header
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1449,7 +1503,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream username on request for Active Directory authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: nil, // do not send header
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1461,7 +1515,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream password on request for LDAP authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: nil, // do not send header
 			wantStatus:           http.StatusFound,
@@ -1473,7 +1527,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream password on request for Active Directory authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: nil, // do not send header
 			wantStatus:           http.StatusFound,
@@ -1485,7 +1539,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns no refresh token with an access token but has no userinfo endpoint",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1498,7 +1552,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns empty refresh token with an access token but has no userinfo endpoint",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1511,7 +1565,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns empty refresh token and empty access token",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1524,7 +1578,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns no refresh and no access token",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithoutAccessToken().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1537,7 +1591,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns no refresh token and empty access token",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutRefreshToken().WithEmptyAccessToken().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1550,7 +1604,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                  "password grant returns an error when upstream IDP returns empty refresh token and no access token",
 			idps:                  oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithEmptyRefreshToken().WithoutAccessToken().Build()),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -1563,7 +1617,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing upstream password on request for OIDC password grant authentication",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: nil, // do not send header
 			wantStatus:           http.StatusFound,
@@ -1575,7 +1629,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "using the custom username header on request for OIDC password grant authentication when OIDCIdentityProvider does not allow password grants",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
+			path:                 happyGetRequestPathForOIDCUpstream,
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1588,7 +1642,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1601,7 +1655,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1614,7 +1668,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1631,7 +1685,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:  happyStateEncoder,
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
 			}),
 			wantStatus:      http.StatusBadRequest,
@@ -1648,7 +1702,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:  happyStateEncoder,
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-dynamic-client",
 				"client_id":    dynamicClientID,
 				"scope":        testutil.AllDynamicClientScopesSpaceSep,
@@ -1661,7 +1715,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:   "downstream redirect uri does not match what is configured for client when using OIDC upstream password grant",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
 			}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
@@ -1674,7 +1728,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:   "downstream redirect uri does not match what is configured for client when using LDAP upstream",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method: http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
 			}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1687,7 +1741,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:   "downstream redirect uri does not match what is configured for client when using active directory upstream",
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method: http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForADUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
 			}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1705,7 +1759,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			path:            modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": "invalid-client"}),
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: jsonContentType,
 			wantBodyJSON:    fositeInvalidClientErrorBody,
@@ -1714,7 +1768,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream client does not exist when using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"client_id": "invalid-client"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusUnauthorized,
@@ -1725,7 +1779,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "downstream client does not exist when using LDAP upstream",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			path:            modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": "invalid-client"}),
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: jsonContentType,
 			wantBodyJSON:    fositeInvalidClientErrorBody,
@@ -1734,7 +1788,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "downstream client does not exist when using active directory upstream",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			path:            modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": "invalid-client"}),
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: jsonContentType,
 			wantBodyJSON:    fositeInvalidClientErrorBody,
@@ -1748,7 +1802,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
@@ -1764,7 +1818,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:  happyStateEncoder,
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
 				"scope":         testutil.AllDynamicClientScopesSpaceSep,
@@ -1778,7 +1832,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "response type is unsupported when using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"response_type": "unsupported"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1790,7 +1844,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "response type is unsupported when using LDAP cli upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": "unsupported"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1802,7 +1856,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "response type is unsupported when using LDAP browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
@@ -1813,7 +1867,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
 				"scope":         testutil.AllDynamicClientScopesSpaceSep,
@@ -1827,7 +1881,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "response type is unsupported when using active directory cli upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": "unsupported"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1839,7 +1893,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "response type is unsupported when using active directory browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
@@ -1850,7 +1904,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
+			path: modifiedHappyGetRequestPathForADUpstream(map[string]string{
 				"response_type": "unsupported",
 				"client_id":     dynamicClientID,
 				"scope":         testutil.AllDynamicClientScopesSpaceSep,
@@ -1869,7 +1923,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"scope": "openid profile email tuna"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
@@ -1885,7 +1939,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": "openid tuna"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": "openid tuna"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
@@ -1895,7 +1949,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream scopes do not match what is configured for client using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"scope": "openid profile email tuna"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -1912,7 +1966,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"response_mode": "form_post", "scope": "openid profile email tuna"}),
+			path:            modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"response_mode": "form_post", "scope": "openid profile email tuna"}),
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
 			wantBodyRegex:   `<input type="hidden" name="encoded_params" value="error=invalid_scope&amp;error_description=The&#43;requested&#43;scope&#43;is&#43;invalid`,
@@ -1927,7 +1981,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"response_mode": "form_post", "client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			path:            modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"response_mode": "form_post", "client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
 			wantStatus:      http.StatusOK, // this is weird, but fosite uses a form_post response to tell the client that it is not allowed to use form_post responses
 			wantContentType: htmlContentType,
 			wantBodyRegex:   `<input type="hidden" name="encoded_params" value="error=unsupported_response_mode&amp;error_description=The&#43;authorization&#43;server&#43;does&#43;not&#43;support&#43;obtaining&#43;a&#43;response&#43;using&#43;this&#43;response&#43;mode.`,
@@ -1936,7 +1990,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream scopes do not match what is configured for client using LDAP upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"scope": "openid tuna"}),
+			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"scope": "openid tuna"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1948,7 +2002,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream scopes do not match what is configured for client using Active Directory upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"scope": "openid tuna"}),
+			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"scope": "openid tuna"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -1965,7 +2019,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -1981,7 +2035,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -1991,7 +2045,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing response type in request using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"response_type": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -2003,7 +2057,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing response type in request using LDAP cli upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -2015,7 +2069,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "missing response type in request using LDAP browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -2026,7 +2080,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
+			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -2036,7 +2090,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing response type in request using Active Directory cli upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -2048,7 +2102,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "missing response type in request using Active Directory browser upstream",
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -2059,7 +2113,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
+			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
@@ -2074,7 +2128,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": ""}),
+			path:            modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": ""}),
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: jsonContentType,
 			wantBodyJSON:    fositeInvalidClientErrorBody,
@@ -2083,7 +2137,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "missing client id in request using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": ""}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"client_id": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusUnauthorized,
@@ -2094,7 +2148,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "missing client id in request using LDAP upstream",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": ""}),
+			path:            modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": ""}),
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: jsonContentType,
 			wantBodyJSON:    fositeInvalidClientErrorBody,
@@ -2108,7 +2162,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"code_challenge": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
@@ -2124,7 +2178,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
@@ -2134,7 +2188,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "missing PKCE code_challenge in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			path:                         modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"code_challenge": ""}),
 			customUsernameHeader:         ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:         ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
@@ -2148,7 +2202,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "missing PKCE code_challenge in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge": ""}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
 			customPasswordHeader:         ptr.To(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
@@ -2166,7 +2220,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
@@ -2182,7 +2236,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
@@ -2192,7 +2246,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "invalid value for PKCE code_challenge_method in request using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			path:                         modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			customUsernameHeader:         ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:         ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
@@ -2206,7 +2260,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "invalid value for PKCE code_challenge_method in request using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
 			customPasswordHeader:         ptr.To(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
@@ -2224,7 +2278,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"code_challenge_method": "plain"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2240,7 +2294,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "plain"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": "plain"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2250,7 +2304,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "when PKCE code_challenge_method in request is `plain` using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			path:                         modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"code_challenge_method": "plain"}),
 			customUsernameHeader:         ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:         ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
@@ -2264,7 +2318,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "when PKCE code_challenge_method in request is `plain` using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": "plain"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
 			customPasswordHeader:         ptr.To(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
@@ -2282,7 +2336,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"code_challenge_method": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2298,7 +2352,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": ""}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "code_challenge_method": ""}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -2308,7 +2362,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "missing PKCE code_challenge_method in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			path:                         modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"code_challenge_method": ""}),
 			customUsernameHeader:         ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:         ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
@@ -2322,7 +2376,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "missing PKCE code_challenge_method in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": ""}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
 			customPasswordHeader:         ptr.To(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
@@ -2342,7 +2396,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"prompt": "none login"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
@@ -2360,7 +2414,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "prompt": "none login"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "prompt": "none login"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
@@ -2372,7 +2426,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream password grant",
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			path:                         modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"prompt": "none login"}),
 			customUsernameHeader:         ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:         ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
@@ -2388,7 +2442,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                         "prompt param is not allowed to have none and another legal value at the same time using LDAP upstream",
 			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:                       http.MethodGet,
-			path:                         modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"prompt": "none login"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
 			customPasswordHeader:         ptr.To(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
@@ -2407,7 +2461,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-			path:                        modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			path:                        modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"prompt": "none login", "scope": "email"}),
 			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
@@ -2428,7 +2482,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder: happyCookieEncoder,
 			method:        http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-			path:                        modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": "groups", "prompt": "none login"}),
+			path:                        modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": "groups", "prompt": "none login"}),
 			wantStatus:                  http.StatusSeeOther,
 			wantContentType:             htmlContentType,
 			wantCSRFValueInCookieHeader: happyCSRF,
@@ -2443,7 +2497,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-			path:                              modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			path:                              modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"prompt": "none login", "scope": "email"}),
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2466,7 +2520,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method: http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-			path:                              modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			path:                              modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"prompt": "none login", "scope": "email"}),
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
 			customPasswordHeader:              ptr.To(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
@@ -2489,7 +2543,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2505,7 +2559,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername(oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped),
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped,
+				nil,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
@@ -2515,7 +2572,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2531,7 +2588,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe@whitehouse.gov"),
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				"joe@whitehouse.gov",
+				oidcUpstreamGroupMembership,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
@@ -2542,7 +2602,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", true).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2558,7 +2618,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe@whitehouse.gov"),
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				"joe@whitehouse.gov",
+				oidcUpstreamGroupMembership,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
@@ -2570,7 +2633,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", false).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2586,7 +2649,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername("joe"),
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				"joe",
+				oidcUpstreamGroupMembership,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
@@ -2597,7 +2663,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2615,7 +2681,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", false).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2630,7 +2696,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithUsernameClaim("sub").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2646,7 +2712,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSessionWithUsername(oidcUpstreamSubject),
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				oidcUpstreamSubject,
+				oidcUpstreamGroupMembership,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token has a non-array value",
@@ -2655,7 +2724,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim(oidcUpstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2671,7 +2740,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				oidcUpstreamUsername,
+				[]string{"notAnArrayGroup1 notAnArrayGroup2"},
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token is a slice of interfaces",
@@ -2680,7 +2752,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2696,7 +2768,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				oidcUpstreamUsername,
+				[]string{"group1", "group2"},
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream ID token does not contain requested username claim",
@@ -2704,7 +2779,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim(oidcUpstreamUsernameClaim).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2719,7 +2794,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim(oidcUpstreamGroupsClaim).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              happyGetRequestPath,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
@@ -2735,7 +2810,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+				oidcUpstreamUsername,
+				nil,
+			),
 		},
 		{
 			name: "OIDC upstream password grant: upstream ID token contains username claim with weird format",
@@ -2743,7 +2821,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamUsernameClaim, 42).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2758,7 +2836,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamUsernameClaim, "").Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2773,7 +2851,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim("iss").WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2788,7 +2866,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2803,7 +2881,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2818,7 +2896,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim("sub").WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2833,7 +2911,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("sub", "").WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2848,7 +2926,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("sub", 42).WithoutUsernameClaim().Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2863,7 +2941,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, 42).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2878,7 +2956,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2893,7 +2971,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, nil).Build(),
 			),
 			method:                http.MethodGet,
-			path:                  happyGetRequestPath,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
 			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
 			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
 			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
@@ -2911,7 +2989,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"state": "short"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
@@ -2927,7 +3005,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:       happyStateEncoder,
 			cookieEncoder:      happyCookieEncoder,
 			method:             http.MethodGet,
-			path:               modifiedHappyGetRequestPath(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "state": "short"}),
+			path:               modifiedHappyGetRequestPathForOIDCUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "state": "short"}),
 			wantStatus:         http.StatusSeeOther,
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
@@ -2937,7 +3015,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream state does not have enough entropy using OIDC upstream password grant",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
+			path:                 modifiedHappyGetRequestPathForOIDCPasswordGrantUpstream(map[string]string{"state": "short"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
 			customPasswordHeader: ptr.To(oidcUpstreamPassword),
 			wantStatus:           http.StatusFound,
@@ -2949,7 +3027,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:                 "downstream state does not have enough entropy using LDAP upstream",
 			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
+			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"state": "short"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
 			customPasswordHeader: ptr.To(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
@@ -2966,9 +3044,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    &errorReturningEncoder{},
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			wantStatus:      http.StatusInternalServerError,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Internal Server Error: error encoding upstream state param\n",
 		},
 		{
@@ -2980,9 +3058,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   &errorReturningEncoder{},
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			wantStatus:      http.StatusInternalServerError,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Internal Server Error: error encoding CSRF cookie\n",
 		},
 		{
@@ -2994,9 +3072,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			wantStatus:      http.StatusInternalServerError,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Internal Server Error: error generating CSRF token\n",
 		},
 		{
@@ -3008,9 +3086,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			wantStatus:      http.StatusInternalServerError,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Internal Server Error: error generating nonce param\n",
 		},
 		{
@@ -3022,64 +3100,51 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			stateEncoder:    happyStateEncoder,
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
+			path:            happyGetRequestPathForOIDCUpstream,
 			wantStatus:      http.StatusInternalServerError,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Internal Server Error: error generating PKCE param\n",
 		},
 		{
-			name:            "no upstream providers are configured",
+			name:            "no default upstream provider is configured and no specific IDP was requested in the request params",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(), // empty
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: No upstream providers are configured\n",
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: plainContentType,
+			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. 'pinniped_idp_name' param error: identity provider not found: this federation domain does not have a default identity provider"}`,
 		},
 		{
-			name:            "too many upstream providers are configured: multiple OIDC",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build(), upstreamOIDCIdentityProviderBuilder().Build()), // more than one not allowed
-			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: Too many upstream providers are configured (support for multiple upstreams is not yet implemented)\n",
+			name:            "post with invalid form in the body",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			method:          http.MethodPost,
+			path:            "/some/path",
+			contentType:     formContentType,
+			body:            "this is not a valid form because of the semi-colons;;;;",
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: plainContentType,
+			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse form params, make sure to send a properly formatted query params or form request body."}`,
 		},
 		{
-			name:            "too many upstream providers are configured: multiple LDAP",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider, upstreamLDAPIdentityProvider), // more than one not allowed
-			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: Too many upstream providers are configured (support for multiple upstreams is not yet implemented)\n",
+			name:            "post with invalid multipart form in the body",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			method:          http.MethodPost,
+			path:            "/some/path",
+			contentType:     "multipart/form-data",
+			body:            "this is not a valid multipart form",
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: plainContentType,
+			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse multipart HTTP body, make sure to send a properly formatted form request body."}`,
 		},
 		{
-			name:            "too many upstream providers are configured: multiple Active Directory",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamLDAPIdentityProvider, upstreamLDAPIdentityProvider), // more than one not allowed
+			name:            "get with invalid query",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: Too many upstream providers are configured (support for multiple upstreams is not yet implemented)\n",
-		},
-		{
-			name:            "too many upstream providers are configured: both OIDC and LDAP",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).WithLDAP(upstreamLDAPIdentityProvider), // more than one not allowed
-			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: Too many upstream providers are configured (support for multiple upstreams is not yet implemented)\n",
-		},
-		{
-			name:            "too many upstream providers are configured: OIDC, LDAP and AD",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).WithLDAP(upstreamLDAPIdentityProvider).WithActiveDirectory(upstreamActiveDirectoryIdentityProvider), // more than one not allowed
-			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: Too many upstream providers are configured (support for multiple upstreams is not yet implemented)\n",
+			path:            "/some/path?param=this-is-not-a-valid-query-due-to-the-semicolons;;;;",
+			contentType:     formContentType,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: plainContentType,
+			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse form params, make sure to send a properly formatted query params or form request body."}`,
 		},
 		{
 			name:            "PUT is a bad method",
@@ -3087,7 +3152,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:          http.MethodPut,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: PUT (try GET or POST)\n",
 		},
 		{
@@ -3096,7 +3161,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:          http.MethodPatch,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: PATCH (try GET or POST)\n",
 		},
 		{
@@ -3105,7 +3170,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:          http.MethodDelete,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
-			wantContentType: "text/plain; charset=utf-8",
+			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: DELETE (try GET or POST)\n",
 		},
 	}
@@ -3286,6 +3351,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			WithAdditionalAuthcodeParams(map[string]string{"prompt": "consent", "abc": "123"}).
 			Build()
 		idpLister.SetOIDCIdentityProviders([]*oidctestutil.TestUpstreamOIDCIdentityProvider{newProviderSettings})
+
+		test.path = modifiedHappyGetRequestPath(map[string]string{
+			// update the IDP name in the request to match the name of the new IDP
+			"pinniped_idp_name": "some-other-new-idp-name",
+		})
 
 		// Update the expectations of the test case to match the new upstream IDP settings.
 		test.wantLocationHeader = urlWithQuery(upstreamAuthURL.String(),

@@ -56,23 +56,54 @@ func NewHandler(
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
 		}
 
+		requestedBrowserlessFlow := len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0 ||
+			len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0
+
+		// Need to parse the request params so we can get the IDP name. The style and text of the error is inspired by
+		// fosite's implementation of NewAuthorizeRequest(). Fosite only calls ParseMultipartForm() there. However,
+		// although ParseMultipartForm() calls ParseForm(), it swallows errors from ParseForm() sometimes. To avoid
+		// having any errors swallowed, we call both. When fosite calls ParseMultipartForm() later, it will be a noop.
+		if err := r.ParseForm(); err != nil {
+			oidc.WriteAuthorizeError(r, w,
+				oauthHelperWithoutStorage,
+				fosite.NewAuthorizeRequest(),
+				fosite.ErrInvalidRequest.
+					WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
+					WithWrap(err).WithDebug(err.Error()),
+				requestedBrowserlessFlow)
+			return nil
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
+			oidc.WriteAuthorizeError(r, w,
+				oauthHelperWithoutStorage,
+				fosite.NewAuthorizeRequest(),
+				fosite.ErrInvalidRequest.
+					WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
+					WithWrap(err).WithDebug(err.Error()),
+				requestedBrowserlessFlow)
+			return nil
+		}
+
 		// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
-		// oidcapi.AuthorizeUpstreamIDPTypeParamName query params to request a certain upstream IDP.
+		// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.
 		// The Pinniped CLI has been sending these params since v0.9.0.
-		idpNameQueryParamValue := r.URL.Query().Get(oidcapi.AuthorizeUpstreamIDPNameParamName)
+		idpNameQueryParamValue := r.Form.Get(oidcapi.AuthorizeUpstreamIDPNameParamName)
 		oidcUpstream, ldapUpstream, err := chooseUpstreamIDP(idpNameQueryParamValue, idpFinder)
 		if err != nil {
-			plog.WarningErr("authorize upstream config", err)
-			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+			oidc.WriteAuthorizeError(r, w,
+				oauthHelperWithoutStorage,
+				fosite.NewAuthorizeRequest(),
+				fosite.ErrInvalidRequest.
+					WithHintf("%q param error: %s", oidcapi.AuthorizeUpstreamIDPNameParamName, err.Error()).
+					WithWrap(err).WithDebug(err.Error()),
+				requestedBrowserlessFlow)
+			return nil
 		}
 
 		if oidcUpstream != nil {
-			if len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0 ||
-				len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0 {
+			if requestedBrowserlessFlow {
 				// The client set a username header, so they are trying to log in with a username/password.
-				return handleAuthRequestForOIDCUpstreamPasswordGrant(
-					r,
-					w,
+				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w,
 					oauthHelperWithStorage,
 					oidcUpstream.Provider,
 					oidcUpstream.Transforms,
@@ -91,8 +122,7 @@ func NewHandler(
 		}
 
 		// We know it's an AD/LDAP upstream.
-		if len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0 ||
-			len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0 {
+		if requestedBrowserlessFlow {
 			// The client set a username header, so they are trying to log in with a username/password.
 			return handleAuthRequestForLDAPUpstreamCLIFlow(r, w,
 				oauthHelperWithStorage,
@@ -102,13 +132,9 @@ func NewHandler(
 				idpNameQueryParamValue,
 			)
 		}
-		return handleAuthRequestForLDAPUpstreamBrowserFlow(
-			r,
-			w,
+		return handleAuthRequestForLDAPUpstreamBrowserFlow(r, w,
 			oauthHelperWithoutStorage,
-			generateCSRF,
-			generateNonce,
-			generatePKCE,
+			generateCSRF, generateNonce, generatePKCE,
 			ldapUpstream,
 			ldapUpstream.SessionProviderType,
 			downstreamIssuer,

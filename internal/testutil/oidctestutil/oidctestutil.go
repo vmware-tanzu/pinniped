@@ -463,6 +463,11 @@ type TestFederationDomainIdentityProvidersListerFinder struct {
 	upstreamOIDCIdentityProviders            []*TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*TestUpstreamLDAPIdentityProvider
+	defaultIDPDisplayName                    string
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetDefaultIDPDisplayName(displayName string) {
+	t.defaultIDPDisplayName = displayName
 }
 
 func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*provider.FederationDomainResolvedOIDCIdentityProvider {
@@ -508,7 +513,10 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetActiveDirectoryId
 }
 
 func (t *TestFederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
-	return nil, nil, fmt.Errorf("TODO: implement me") // TODO
+	if t.defaultIDPDisplayName == "" {
+		return nil, nil, fmt.Errorf("identity provider not found: this federation domain does not have a default identity provider")
+	}
+	return t.FindUpstreamIDPByDisplayName(t.defaultIDPDisplayName)
 }
 
 func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {

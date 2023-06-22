@@ -16,8 +16,8 @@ import (
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/fositestorage"
-	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
 )
 

@@ -28,9 +28,9 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/upstreamldap"
 )
@@ -1139,7 +1139,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
-			cache := provider.NewDynamicUpstreamIDPProvider()
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 			cache.SetLDAPIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{
 				upstreamldap.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
 			})

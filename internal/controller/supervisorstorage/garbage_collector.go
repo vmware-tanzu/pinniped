@@ -21,13 +21,13 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 )
@@ -144,7 +144,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 				// cleaning them out of etcd storage.
 				fourHoursAgo := frozenClock.Now().Add(-4 * time.Hour)
 				nowIsLessThanFourHoursBeyondSecretGCTime := garbageCollectAfterTime.After(fourHoursAgo)
-				if errors.As(revokeErr, &provider.RetryableRevocationError{}) && nowIsLessThanFourHoursBeyondSecretGCTime {
+				if errors.As(revokeErr, &dynamicupstreamprovider.RetryableRevocationError{}) && nowIsLessThanFourHoursBeyondSecretGCTime {
 					// Hasn't been very long since secret expired, so skip deletion to try revocation again later.
 					plog.Trace("garbage collector keeping Secret to retry upstream OIDC token revocation later", logKV(secret)...)
 					continue

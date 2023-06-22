@@ -25,12 +25,12 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
-	"go.pinniped.dev/internal/oidc/clientregistry"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -138,7 +138,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
-		var startInformersAndController = func(idpCache provider.DynamicUpstreamIDPProvider) {
+		var startInformersAndController = func(idpCache dynamicupstreamprovider.DynamicUpstreamIDPProvider) {
 			// Set this at the last second to allow for injection of server override.
 			subject = GarbageCollectorController(
 				idpCache,
@@ -774,7 +774,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					// make the upstream revocation fail in a retryable way
-					WithRevokeTokenError(provider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
+					WithRevokeTokenError(dynamicupstreamprovider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())

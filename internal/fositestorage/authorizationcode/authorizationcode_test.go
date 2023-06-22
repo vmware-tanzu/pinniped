@@ -34,8 +34,8 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/fositestorage"
-	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 )

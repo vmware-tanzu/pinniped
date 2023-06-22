@@ -23,9 +23,9 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/mocks/mockkeyset"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -715,8 +715,8 @@ func TestProviderConfig(t *testing.T) {
 					testutil.RequireErrorStringFromErr(t, err, tt.wantErr)
 
 					if tt.wantRetryableErrType {
-						require.ErrorAs(t, err, &provider.RetryableRevocationError{})
-					} else if errors.As(err, &provider.RetryableRevocationError{}) {
+						require.ErrorAs(t, err, &dynamicupstreamprovider.RetryableRevocationError{})
+					} else if errors.As(err, &dynamicupstreamprovider.RetryableRevocationError{}) {
 						// There is no NotErrorAs() assertion available in the current version of testify, so do the equivalent.
 						require.Fail(t, "error should not be As RetryableRevocationError")
 					}

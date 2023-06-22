@@ -16,7 +16,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )

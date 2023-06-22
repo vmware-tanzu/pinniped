@@ -3,4 +3,4 @@
 
 package mockupstreamoidcidentityprovider
 
-//go:generate go run -v github.com/golang/mock/mockgen  -destination=mockupstreamoidcidentityprovider.go -package=mockupstreamoidcidentityprovider -copyright_file=../../../hack/header.txt go.pinniped.dev/internal/oidc/provider/upstreamprovider UpstreamOIDCIdentityProviderI
+//go:generate go run -v github.com/golang/mock/mockgen  -destination=mockupstreamoidcidentityprovider.go -package=mockupstreamoidcidentityprovider -copyright_file=../../../hack/header.txt go.pinniped.dev/internal/federationdomain/upstreamprovider UpstreamOIDCIdentityProviderI

@@ -34,8 +34,8 @@ import (
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
@@ -94,7 +94,7 @@ type UpstreamOIDCIdentityProviderICache interface {
 	SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI)
 }
 
-// lruValidatorCache caches the *oidc.Provider associated with a particular issuer/TLS configuration.
+// lruValidatorCache caches the *coreosoidc.Provider associated with a particular issuer/TLS configuration.
 type lruValidatorCache struct{ cache *cache.Expiring }
 
 type lruValidatorCacheEntry struct {

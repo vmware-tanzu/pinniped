@@ -58,12 +58,13 @@ import (
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/federationdomain/dynamictlscertprovider"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
+	"go.pinniped.dev/internal/federationdomain/endpointsmanager"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
-	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/manager"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/secret"
@@ -129,10 +130,10 @@ func signalCtx() context.Context {
 //nolint:funlen
 func prepareControllers(
 	cfg *supervisor.Config,
-	issuerManager *manager.Manager,
+	issuerManager *endpointsmanager.Manager,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
-	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
-	dynamicUpstreamIDPProvider provider.DynamicUpstreamIDPProvider,
+	dynamicTLSCertProvider dynamictlscertprovider.DynamicTLSCertProvider,
+	dynamicUpstreamIDPProvider dynamicupstreamprovider.DynamicUpstreamIDPProvider,
 	dynamicServingCertProvider dynamiccert.Private,
 	secretCache *secret.Cache,
 	supervisorDeployment *appsv1.Deployment,
@@ -436,12 +437,12 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 	dynamicServingCertProvider := dynamiccert.NewServingCert("supervisor-serving-cert")
 
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
-	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
-	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
+	dynamicTLSCertProvider := dynamictlscertprovider.NewDynamicTLSCertProvider()
+	dynamicUpstreamIDPProvider := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 	secretCache := secret.Cache{}
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
-	oidProvidersManager := manager.NewManager(
+	oidProvidersManager := endpointsmanager.NewManager(
 		healthMux,
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,

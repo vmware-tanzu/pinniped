@@ -19,8 +19,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/httputil/securityheader"
-	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/test/testlib"
 	"go.pinniped.dev/test/testlib/browsertest"
 )

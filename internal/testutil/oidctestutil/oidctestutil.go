@@ -30,19 +30,19 @@ import (
 
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
-	pkce2 "go.pinniped.dev/internal/fositestorage/pkce"
+	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/idtransform"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/resolvedprovider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
-	"go.pinniped.dev/pkg/oidcclient/pkce"
+	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 // Test helpers for the OIDC package.
@@ -52,7 +52,7 @@ import (
 type ExchangeAuthcodeAndValidateTokenArgs struct {
 	Ctx                  context.Context
 	Authcode             string
-	PKCECodeVerifier     pkce.Code
+	PKCECodeVerifier     oidcpkce.Code
 	ExpectedIDTokenNonce nonce.Nonce
 	RedirectURI          string
 }
@@ -267,7 +267,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
 		authcode string,
-		pkceCodeVerifier pkce.Code,
+		pkceCodeVerifier oidcpkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
 	) (*oidctypes.Token, error)
 
@@ -358,7 +358,7 @@ func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTo
 func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	ctx context.Context,
 	authcode string,
-	pkceCodeVerifier pkce.Code,
+	pkceCodeVerifier oidcpkce.Code,
 	expectedIDTokenNonce nonce.Nonce,
 	redirectURI string,
 ) (*oidctypes.Token, error) {
@@ -595,8 +595,8 @@ func (b *UpstreamIDPListerBuilder) BuildFederationDomainIdentityProvidersListerF
 	}
 }
 
-func (b *UpstreamIDPListerBuilder) BuildDynamicUpstreamIDPProvider() provider.DynamicUpstreamIDPProvider {
-	idpProvider := provider.NewDynamicUpstreamIDPProvider()
+func (b *UpstreamIDPListerBuilder) BuildDynamicUpstreamIDPProvider() dynamicupstreamprovider.DynamicUpstreamIDPProvider {
+	idpProvider := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 
 	oidcUpstreams := make([]upstreamprovider.UpstreamOIDCIdentityProviderI, len(b.upstreamOIDCIdentityProviders))
 	for i := range b.upstreamOIDCIdentityProviders {
@@ -1038,7 +1038,7 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) Build() *TestUpstreamOIDCIdent
 		AdditionalClaimMappings:        u.additionalClaimMappings,
 		DisplayNameForFederationDomain: u.displayNameForFederationDomain,
 		TransformsForFederationDomain:  u.transformsForFederationDomain,
-		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier oidcpkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
 			}
@@ -1223,7 +1223,7 @@ func RequireAuthCodeRegexpMatch(
 	)
 
 	// One PKCE should have been stored.
-	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secretsClient, labels.Set{crud.SecretLabelKey: pkce2.TypeLabelValue}, 1)
+	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secretsClient, labels.Set{crud.SecretLabelKey: pkce.TypeLabelValue}, 1)
 
 	validatePKCEStorage(
 		t,

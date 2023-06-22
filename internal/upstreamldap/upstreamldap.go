@@ -27,8 +27,8 @@ import (
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
-	"go.pinniped.dev/internal/oidc/downstreamsession"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/downstreamsession"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 )
 

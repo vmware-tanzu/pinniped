@@ -21,9 +21,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
-	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -221,7 +221,7 @@ func (p *ProviderConfig) tryRevokeToken(
 	if err != nil {
 		// Couldn't connect to the server or some similar error.
 		// Could be a temporary network problem, so it might be worth retrying.
-		return false, provider.NewRetryableRevocationError(err)
+		return false, dynamicupstreamprovider.NewRetryableRevocationError(err)
 	}
 	defer resp.Body.Close()
 
@@ -271,7 +271,7 @@ func (p *ProviderConfig) tryRevokeToken(
 		// be caused by an underlying problem which could potentially become resolved in the near future. We'll be
 		// optimistic and call all 5xx errors retryable.
 		plog.Trace("RevokeToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", status)
-		return false, provider.NewRetryableRevocationError(fmt.Errorf("server responded with status %d", status))
+		return false, dynamicupstreamprovider.NewRetryableRevocationError(fmt.Errorf("server responded with status %d", status))
 	default:
 		// Any other error is probably not due to failed client auth, and is probably not worth retrying later.
 		plog.Trace("RevokeToken() got unexpected error response from provider's revocation endpoint", "providerName", p.Name, "usedBasicAuth", useBasicAuth, "statusCode", status)

@@ -21,7 +21,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/plog"
 )

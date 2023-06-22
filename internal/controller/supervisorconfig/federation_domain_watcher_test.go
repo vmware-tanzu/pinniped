@@ -27,8 +27,8 @@ import (
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/testutil"
 )
 

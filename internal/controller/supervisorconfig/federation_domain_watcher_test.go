@@ -28,7 +28,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -91,10 +91,10 @@ func TestInformerFilters(t *testing.T) {
 
 type fakeFederationDomainsSetter struct {
 	SetFederationDomainsWasCalled bool
-	FederationDomainsReceived     []*provider.FederationDomainIssuer
+	FederationDomainsReceived     []*federationdomainproviders.FederationDomainIssuer
 }
 
-func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...*provider.FederationDomainIssuer) {
+func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...*federationdomainproviders.FederationDomainIssuer) {
 	f.SetFederationDomainsWasCalled = true
 	f.FederationDomainsReceived = federationDomains
 }
@@ -196,15 +196,15 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				fd1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+				fd1, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 				r.NoError(err)
 
-				fd2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+				fd2, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 				r.NoError(err)
 
 				r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 				r.ElementsMatch(
-					[]*provider.FederationDomainIssuer{
+					[]*federationdomainproviders.FederationDomainIssuer{
 						fd1,
 						fd2,
 					},
@@ -297,15 +297,15 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 
-					fd1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+					fd1, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 					r.NoError(err)
 
-					fd2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+					fd2, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 					r.NoError(err)
 
 					r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 					r.ElementsMatch(
-						[]*provider.FederationDomainIssuer{
+						[]*federationdomainproviders.FederationDomainIssuer{
 							fd1,
 							fd2,
 						},
@@ -335,10 +335,10 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					fd1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+					fd1, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain1.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 					r.NoError(err)
 
-					fd2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+					fd2, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain2.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 					r.NoError(err)
 
 					r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
@@ -554,12 +554,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				validFederationDomain, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+				validFederationDomain, err := federationdomainproviders.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 				r.NoError(err)
 
 				r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 				r.Equal(
-					[]*provider.FederationDomainIssuer{
+					[]*federationdomainproviders.FederationDomainIssuer{
 						validFederationDomain,
 					},
 					federationDomainsSetter.FederationDomainsReceived,
@@ -628,12 +628,12 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					validFederationDomain, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+					validFederationDomain, err := federationdomainproviders.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 					r.NoError(err)
 
 					r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 					r.Equal(
-						[]*provider.FederationDomainIssuer{
+						[]*federationdomainproviders.FederationDomainIssuer{
 							validFederationDomain,
 						},
 						federationDomainsSetter.FederationDomainsReceived,
@@ -718,12 +718,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				nonDuplicateFederationDomain, err := provider.NewFederationDomainIssuer(federationDomain.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+				nonDuplicateFederationDomain, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 				r.NoError(err)
 
 				r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 				r.Equal(
-					[]*provider.FederationDomainIssuer{
+					[]*federationdomainproviders.FederationDomainIssuer{
 						nonDuplicateFederationDomain,
 					},
 					federationDomainsSetter.FederationDomainsReceived,
@@ -891,12 +891,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				nonDuplicateFederationDomain, err := provider.NewFederationDomainIssuer(federationDomainDifferentIssuerAddress.Spec.Issuer, []*provider.FederationDomainIdentityProvider{})
+				nonDuplicateFederationDomain, err := federationdomainproviders.NewFederationDomainIssuer(federationDomainDifferentIssuerAddress.Spec.Issuer, []*federationdomainproviders.FederationDomainIdentityProvider{})
 				r.NoError(err)
 
 				r.True(federationDomainsSetter.SetFederationDomainsWasCalled)
 				r.Equal(
-					[]*provider.FederationDomainIssuer{
+					[]*federationdomainproviders.FederationDomainIssuer{
 						nonDuplicateFederationDomain,
 					},
 					federationDomainsSetter.FederationDomainsReceived,

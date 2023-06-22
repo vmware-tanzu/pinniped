@@ -23,7 +23,7 @@ import (
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/login"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/secret"
@@ -36,7 +36,7 @@ import (
 // It is thread-safe.
 type Manager struct {
 	mu                  sync.RWMutex
-	providers           []*provider.FederationDomainIssuer
+	providers           []*federationdomainproviders.FederationDomainIssuer
 	providerHandlers    map[string]http.Handler                   // map of all routes for all providers
 	nextHandler         http.Handler                              // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider                  // in-memory cache of per-issuer JWKS data
@@ -77,7 +77,7 @@ func NewManager(
 //
 // This method assumes that all of the FederationDomainIssuer arguments have already been validated
 // by someone else before they are passed to this method.
-func (m *Manager) SetFederationDomains(federationDomains ...*provider.FederationDomainIssuer) {
+func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainproviders.FederationDomainIssuer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -123,7 +123,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*provider.Federation
 			wrapGetter(incomingFederationDomain.Issuer(), m.secretCache.GetStateEncoderBlockKey),
 		)
 
-		idpLister := provider.NewFederationDomainUpstreamIdentityProvidersLister(incomingFederationDomain, m.upstreamIDPs)
+		idpLister := federationdomainproviders.NewFederationDomainIdentityProvidersListerFinder(incomingFederationDomain, m.upstreamIDPs)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuerURL)
 

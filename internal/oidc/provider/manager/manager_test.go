@@ -25,7 +25,7 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -39,7 +39,7 @@ func TestManager(t *testing.T) {
 			nextHandler              http.HandlerFunc
 			fallbackHandlerWasCalled bool
 			dynamicJWKSProvider      jwks.DynamicJWKSProvider
-			federationDomainIDPs     []*provider.FederationDomainIdentityProvider
+			federationDomainIDPs     []*federationdomainproviders.FederationDomainIdentityProvider
 			kubeClient               *fake.Clientset
 		)
 
@@ -249,7 +249,7 @@ func TestManager(t *testing.T) {
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
 
-			federationDomainIDPs = []*provider.FederationDomainIdentityProvider{
+			federationDomainIDPs = []*federationdomainproviders.FederationDomainIdentityProvider{
 				{
 					DisplayName: upstreamIDPName,
 					UID:         upstreamResourceUID,
@@ -391,9 +391,9 @@ func TestManager(t *testing.T) {
 
 		when("given some valid providers via SetFederationDomains()", func() {
 			it.Before(func() {
-				fd1, err := provider.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
+				fd1, err := federationdomainproviders.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
 				r.NoError(err)
-				fd2, err := provider.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
+				fd2, err := federationdomainproviders.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
 				r.NoError(err)
 				subject.SetFederationDomains(fd1, fd2)
 
@@ -434,9 +434,9 @@ func TestManager(t *testing.T) {
 
 		when("given the same valid providers as arguments to SetFederationDomains() in reverse order", func() {
 			it.Before(func() {
-				fd1, err := provider.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
+				fd1, err := federationdomainproviders.NewFederationDomainIssuer(issuer1, federationDomainIDPs)
 				r.NoError(err)
-				fd2, err := provider.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
+				fd2, err := federationdomainproviders.NewFederationDomainIssuer(issuer2, federationDomainIDPs)
 				r.NoError(err)
 				subject.SetFederationDomains(fd2, fd1)
 

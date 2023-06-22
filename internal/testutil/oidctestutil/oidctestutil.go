@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/resolvedprovider"
 	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
@@ -470,10 +471,10 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) SetDefaultIDPDisplay
 	t.defaultIDPDisplayName = displayName
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*provider.FederationDomainResolvedOIDCIdentityProvider {
-	fdIDPs := make([]*provider.FederationDomainResolvedOIDCIdentityProvider, len(t.upstreamOIDCIdentityProviders))
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider {
+	fdIDPs := make([]*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, len(t.upstreamOIDCIdentityProviders))
 	for i, testIDP := range t.upstreamOIDCIdentityProviders {
-		fdIDP := &provider.FederationDomainResolvedOIDCIdentityProvider{
+		fdIDP := &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
 			DisplayName:         testIDP.DisplayNameForFederationDomain,
 			Provider:            testIDP,
 			SessionProviderType: psession.ProviderTypeOIDC,
@@ -484,10 +485,10 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProvi
 	return fdIDPs
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProviders() []*provider.FederationDomainResolvedLDAPIdentityProvider {
-	fdIDPs := make([]*provider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamLDAPIdentityProviders))
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider {
+	fdIDPs := make([]*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamLDAPIdentityProviders))
 	for i, testIDP := range t.upstreamLDAPIdentityProviders {
-		fdIDP := &provider.FederationDomainResolvedLDAPIdentityProvider{
+		fdIDP := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 			DisplayName:         testIDP.DisplayNameForFederationDomain,
 			Provider:            testIDP,
 			SessionProviderType: psession.ProviderTypeLDAP,
@@ -498,10 +499,10 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProvi
 	return fdIDPs
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) GetActiveDirectoryIdentityProviders() []*provider.FederationDomainResolvedLDAPIdentityProvider {
-	fdIDPs := make([]*provider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamActiveDirectoryIdentityProviders))
+func (t *TestFederationDomainIdentityProvidersListerFinder) GetActiveDirectoryIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider {
+	fdIDPs := make([]*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, len(t.upstreamActiveDirectoryIdentityProviders))
 	for i, testIDP := range t.upstreamActiveDirectoryIdentityProviders {
-		fdIDP := &provider.FederationDomainResolvedLDAPIdentityProvider{
+		fdIDP := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 			DisplayName:         testIDP.DisplayNameForFederationDomain,
 			Provider:            testIDP,
 			SessionProviderType: psession.ProviderTypeActiveDirectory,
@@ -512,17 +513,17 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetActiveDirectoryId
 	return fdIDPs
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+func (t *TestFederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, error) {
 	if t.defaultIDPDisplayName == "" {
 		return nil, nil, fmt.Errorf("identity provider not found: this federation domain does not have a default identity provider")
 	}
 	return t.FindUpstreamIDPByDisplayName(t.defaultIDPDisplayName)
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, error) {
 	for _, testIDP := range t.upstreamOIDCIdentityProviders {
 		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
-			return &provider.FederationDomainResolvedOIDCIdentityProvider{
+			return &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
 				DisplayName:         testIDP.DisplayNameForFederationDomain,
 				Provider:            testIDP,
 				SessionProviderType: psession.ProviderTypeOIDC,
@@ -532,7 +533,7 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDis
 	}
 	for _, testIDP := range t.upstreamLDAPIdentityProviders {
 		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
-			return nil, &provider.FederationDomainResolvedLDAPIdentityProvider{
+			return nil, &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 				DisplayName:         testIDP.DisplayNameForFederationDomain,
 				Provider:            testIDP,
 				SessionProviderType: psession.ProviderTypeLDAP,
@@ -542,7 +543,7 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDis
 	}
 	for _, testIDP := range t.upstreamActiveDirectoryIdentityProviders {
 		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
-			return nil, &provider.FederationDomainResolvedLDAPIdentityProvider{
+			return nil, &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 				DisplayName:         testIDP.DisplayNameForFederationDomain,
 				Provider:            testIDP,
 				SessionProviderType: psession.ProviderTypeActiveDirectory,

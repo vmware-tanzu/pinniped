@@ -1,7 +1,7 @@
 // Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package provider
+package federationdomainproviders
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-// FederationDomainIssuer represents all the settings and state for a downstream OIDC provider
-// as defined by a FederationDomain.
+// FederationDomainIssuer is a parsed FederationDomain representing all the settings for a downstream OIDC provider
+// and contains configuration representing a set of upstream identity providers.
 type FederationDomainIssuer struct {
 	issuer     string
 	issuerHost string

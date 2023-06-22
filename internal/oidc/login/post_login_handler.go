@@ -12,11 +12,11 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewPostHandler(issuerURL string, upstreamIDPs provider.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
+func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
 		_, ldapUpstream, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)

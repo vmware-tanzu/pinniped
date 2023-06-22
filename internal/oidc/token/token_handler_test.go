@@ -54,7 +54,7 @@ import (
 	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
@@ -4170,7 +4170,7 @@ func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[st
 func exchangeAuthcodeForTokens(
 	t *testing.T,
 	test authcodeExchangeInputs,
-	idps provider.FederationDomainIdentityProvidersListerFinderI,
+	idps federationdomainproviders.FederationDomainIdentityProvidersListerFinderI,
 	kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset),
 ) (
 	subject http.Handler,

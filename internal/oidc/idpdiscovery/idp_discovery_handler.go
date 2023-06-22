@@ -11,11 +11,11 @@ import (
 	"sort"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 )
 
 // NewHandler returns an http.Handler that serves the upstream IDP discovery endpoint.
-func NewHandler(upstreamIDPs provider.FederationDomainIdentityProvidersListerI) http.Handler {
+func NewHandler(upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersListerI) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `Method not allowed (try GET)`, http.StatusMethodNotAllowed)
@@ -36,7 +36,7 @@ func NewHandler(upstreamIDPs provider.FederationDomainIdentityProvidersListerI) 
 	})
 }
 
-func responseAsJSON(upstreamIDPs provider.FederationDomainIdentityProvidersListerI) ([]byte, error) {
+func responseAsJSON(upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersListerI) ([]byte, error) {
 	r := v1alpha1.IDPDiscoveryResponse{PinnipedIDPs: []v1alpha1.PinnipedIDP{}}
 
 	// The cache of IDPs could change at any time, so always recalculate the list.

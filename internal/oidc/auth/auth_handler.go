@@ -23,8 +23,9 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/login"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
+	"go.pinniped.dev/internal/oidc/provider/resolvedprovider"
 	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
@@ -39,7 +40,7 @@ const (
 
 func NewHandler(
 	downstreamIssuer string,
-	idpFinder provider.FederationDomainIdentityProvidersFinderI,
+	idpFinder federationdomainproviders.FederationDomainIdentityProvidersFinderI,
 	oauthHelperWithoutStorage fosite.OAuth2Provider,
 	oauthHelperWithStorage fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
@@ -213,7 +214,7 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-	ldapUpstream *provider.FederationDomainResolvedLDAPIdentityProvider,
+	ldapUpstream *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
 	idpType psession.ProviderType,
 	downstreamIssuer string,
 	upstreamStateEncoder oidc.Encoder,
@@ -332,7 +333,7 @@ func handleAuthRequestForOIDCUpstreamBrowserFlow(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-	oidcUpstream *provider.FederationDomainResolvedOIDCIdentityProvider,
+	oidcUpstream *resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
 	downstreamIssuer string,
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
@@ -448,7 +449,7 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 
 // chooseUpstreamIDP selects either an OIDC, an LDAP, or an AD IDP, or returns an error.
 // Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
-func chooseUpstreamIDP(idpDisplayName string, idpLister provider.FederationDomainIdentityProvidersFinderI) (*provider.FederationDomainResolvedOIDCIdentityProvider, *provider.FederationDomainResolvedLDAPIdentityProvider, error) {
+func chooseUpstreamIDP(idpDisplayName string, idpLister federationdomainproviders.FederationDomainIdentityProvidersFinderI) (*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, error) {
 	// When a request is made to the authorization endpoint which does not specify the IDP name, then it might
 	// be an old dynamic client (OIDCClient). We need to make this work, but only in the backwards compatibility case
 	// where there is exactly one IDP defined in the namespace and no IDPs listed on the FederationDomain.

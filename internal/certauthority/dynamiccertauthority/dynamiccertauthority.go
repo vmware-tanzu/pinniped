@@ -11,7 +11,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/issuer"
+	"go.pinniped.dev/internal/clientcertissuer"
 )
 
 // ca is a type capable of issuing certificates.
@@ -21,7 +21,7 @@ type ca struct {
 
 // New creates a ClientCertIssuer, ready to issue certs whenever
 // the given CertKeyContentProvider has a keypair to provide.
-func New(provider dynamiccertificates.CertKeyContentProvider) issuer.ClientCertIssuer {
+func New(provider dynamiccertificates.CertKeyContentProvider) clientcertissuer.ClientCertIssuer {
 	return &ca{
 		provider: provider,
 	}

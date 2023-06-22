@@ -22,14 +22,15 @@ import (
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
+	"go.pinniped.dev/internal/oidc/provider/resolvedprovider"
 	"go.pinniped.dev/internal/oidc/provider/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 )
 
 func NewHandler(
-	idpLister provider.FederationDomainIdentityProvidersListerI,
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -97,7 +98,7 @@ func errUpstreamRefreshError() *fosite.RFC6749Error {
 	}
 }
 
-func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, idpLister provider.FederationDomainIdentityProvidersListerI) error {
+func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
 
 	customSessionData := session.Custom
@@ -129,7 +130,7 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 func upstreamOIDCRefresh(
 	ctx context.Context,
 	session *psession.PinnipedSession,
-	idpLister provider.FederationDomainIdentityProvidersListerI,
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	grantedScopes []string,
 	clientID string,
 ) error {
@@ -310,8 +311,8 @@ func getString(m map[string]interface{}, key string) (string, bool) {
 
 func findOIDCProviderByNameAndValidateUID(
 	s *psession.CustomSessionData,
-	idpLister provider.FederationDomainIdentityProvidersListerI,
-) (*provider.FederationDomainResolvedOIDCIdentityProvider, error) {
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+) (*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, error) {
 	for _, p := range idpLister.GetOIDCIdentityProviders() {
 		if p.Provider.GetName() == s.ProviderName {
 			if p.Provider.GetResourceUID() != s.ProviderUID {
@@ -328,7 +329,7 @@ func findOIDCProviderByNameAndValidateUID(
 
 func upstreamLDAPRefresh(
 	ctx context.Context,
-	idpLister provider.FederationDomainIdentityProvidersListerI,
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	session *psession.PinnipedSession,
 	grantedScopes []string,
 	clientID string,
@@ -439,9 +440,9 @@ func transformRefreshedIdentity(
 
 func findLDAPProviderByNameAndValidateUID(
 	s *psession.CustomSessionData,
-	idpLister provider.FederationDomainIdentityProvidersListerI,
-) (*provider.FederationDomainResolvedLDAPIdentityProvider, string, error) {
-	var providers []*provider.FederationDomainResolvedLDAPIdentityProvider
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+) (*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, string, error) {
+	var providers []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
 	var dn string
 	if s.ProviderType == psession.ProviderTypeLDAP {
 		providers = idpLister.GetLDAPIdentityProviders()

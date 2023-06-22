@@ -26,7 +26,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/idtransform"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -34,7 +34,7 @@ import (
 // If there are no longer any valid issuers, then it can be called with no arguments.
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type FederationDomainsSetter interface {
-	SetFederationDomains(federationDomains ...*provider.FederationDomainIssuer)
+	SetFederationDomains(federationDomains ...*federationdomainproviders.FederationDomainIssuer)
 }
 
 type federationDomainWatcherController struct {
@@ -145,7 +145,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 	var errs []error
 
-	federationDomainIssuers := make([]*provider.FederationDomainIssuer, 0)
+	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
 	for _, federationDomain := range federationDomains {
 		issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
 
@@ -187,8 +187,8 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		// Create the list of IDPs for this FederationDomain.
 		// Don't worry if the IDP CRs themselves is phase=Ready because those which are not ready will not be loaded
 		// into the provider cache, so they cannot actually be used to authenticate.
-		federationDomainIdentityProviders := []*provider.FederationDomainIdentityProvider{}
-		var defaultFederationDomainIdentityProvider *provider.FederationDomainIdentityProvider
+		federationDomainIdentityProviders := []*federationdomainproviders.FederationDomainIdentityProvider{}
+		var defaultFederationDomainIdentityProvider *federationdomainproviders.FederationDomainIdentityProvider
 		if len(federationDomain.Spec.IdentityProviders) == 0 {
 			// When the FederationDomain does not list any IDPs, then we might be in backwards compatibility mode.
 			oidcIdentityProviders, _ := c.oidcIdentityProviderInformer.Lister().List(labels.Everything())
@@ -200,7 +200,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			idpCRsCount := len(oidcIdentityProviders) + len(ldapIdentityProviders) + len(activeDirectoryIdentityProviders)
 			if idpCRsCount == 1 {
 				// If so, default that IDP's DisplayName to be the same as its resource Name.
-				defaultFederationDomainIdentityProvider = &provider.FederationDomainIdentityProvider{}
+				defaultFederationDomainIdentityProvider = &federationdomainproviders.FederationDomainIdentityProvider{}
 				switch {
 				case len(oidcIdentityProviders) == 1:
 					defaultFederationDomainIdentityProvider.DisplayName = oidcIdentityProviders[0].Name
@@ -388,7 +388,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				}
 			}
 			// For each valid IDP (unique displayName, valid objectRef + valid transforms), add it to the list.
-			federationDomainIdentityProviders = append(federationDomainIdentityProviders, &provider.FederationDomainIdentityProvider{
+			federationDomainIdentityProviders = append(federationDomainIdentityProviders, &federationdomainproviders.FederationDomainIdentityProvider{
 				DisplayName: idp.DisplayName,
 				UID:         idpResourceUID,
 				Transforms:  pipeline,
@@ -401,14 +401,14 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 
 		// Now that we have the list of IDPs for this FederationDomain, create the issuer.
-		var federationDomainIssuer *provider.FederationDomainIssuer
+		var federationDomainIssuer *federationdomainproviders.FederationDomainIssuer
 		err = nil
 		if defaultFederationDomainIdentityProvider != nil {
 			// This is the constructor for the backwards compatibility mode.
-			federationDomainIssuer, err = provider.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
+			federationDomainIssuer, err = federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
 		} else {
 			// This is the constructor for any other case, including when there is an empty list of IDPs.
-			federationDomainIssuer, err = provider.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
+			federationDomainIssuer, err = federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
 		}
 		if err != nil {
 			// Note that the FederationDomainIssuer constructors validate the Issuer URL.

@@ -14,13 +14,13 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/federationdomainproviders"
 	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
 )
 
 func NewHandler(
-	upstreamIDPs provider.FederationDomainIdentityProvidersFinderI,
+	upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI,
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
 	redirectURI string,

@@ -90,28 +90,34 @@ var (
 	happyDownstreamRequestParamsForDynamicClient = happyDownstreamRequestParamsQueryForDynamicClient.Encode()
 
 	happyDownstreamCustomSessionData = &psession.CustomSessionData{
-		Username:     oidcUpstreamUsername,
-		ProviderUID:  happyUpstreamIDPResourceUID,
-		ProviderName: happyUpstreamIDPName,
-		ProviderType: psession.ProviderTypeOIDC,
+		Username:         oidcUpstreamUsername,
+		UpstreamUsername: oidcUpstreamUsername,
+		UpstreamGroups:   oidcUpstreamGroupMembership,
+		ProviderUID:      happyUpstreamIDPResourceUID,
+		ProviderName:     happyUpstreamIDPName,
+		ProviderType:     psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamRefreshToken: oidcUpstreamRefreshToken,
 			UpstreamIssuer:       oidcUpstreamIssuer,
 			UpstreamSubject:      oidcUpstreamSubject,
 		},
 	}
-	happyDownstreamCustomSessionDataWithUsername = func(wantUsername string) *psession.CustomSessionData {
+	happyDownstreamCustomSessionDataWithUsernameAndGroups = func(wantUsername string, wantGroups []string) *psession.CustomSessionData {
 		copyOfCustomSession := *happyDownstreamCustomSessionData
 		copyOfOIDC := *(happyDownstreamCustomSessionData.OIDC)
 		copyOfCustomSession.OIDC = &copyOfOIDC
 		copyOfCustomSession.Username = wantUsername
+		copyOfCustomSession.UpstreamUsername = wantUsername
+		copyOfCustomSession.UpstreamGroups = wantGroups
 		return &copyOfCustomSession
 	}
 	happyDownstreamAccessTokenCustomSessionData = &psession.CustomSessionData{
-		Username:     oidcUpstreamUsername,
-		ProviderUID:  happyUpstreamIDPResourceUID,
-		ProviderName: happyUpstreamIDPName,
-		ProviderType: psession.ProviderTypeOIDC,
+		Username:         oidcUpstreamUsername,
+		UpstreamUsername: oidcUpstreamUsername,
+		UpstreamGroups:   oidcUpstreamGroupMembership,
+		ProviderUID:      happyUpstreamIDPResourceUID,
+		ProviderName:     happyUpstreamIDPName,
+		ProviderType:     psession.ProviderTypeOIDC,
 		OIDC: &psession.OIDCSessionData{
 			UpstreamAccessToken: oidcUpstreamAccessToken,
 			UpstreamIssuer:      oidcUpstreamIssuer,
@@ -395,11 +401,13 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: &psession.CustomSessionData{
-				Username:     oidcUpstreamUsername,
-				ProviderUID:  happyUpstreamIDPResourceUID,
-				ProviderName: happyUpstreamIDPName,
-				ProviderType: psession.ProviderTypeOIDC,
-				Warnings:     []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
+				Username:         oidcUpstreamUsername,
+				UpstreamUsername: oidcUpstreamUsername,
+				UpstreamGroups:   oidcUpstreamGroupMembership,
+				ProviderUID:      happyUpstreamIDPResourceUID,
+				ProviderName:     happyUpstreamIDPName,
+				ProviderType:     psession.ProviderTypeOIDC,
+				Warnings:         []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."},
 				OIDC: &psession.OIDCSessionData{
 					UpstreamAccessToken: oidcUpstreamAccessToken,
 					UpstreamIssuer:      oidcUpstreamIssuer,
@@ -431,7 +439,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername(oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped),
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups(oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped, nil),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -457,7 +465,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe@whitehouse.gov"),
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups("joe@whitehouse.gov", oidcUpstreamGroupMembership),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -485,7 +493,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe@whitehouse.gov"),
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups("joe@whitehouse.gov", oidcUpstreamGroupMembership),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -514,7 +522,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername("joe"),
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups("joe", oidcUpstreamGroupMembership),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -645,7 +653,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsername(oidcUpstreamSubject),
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups(oidcUpstreamSubject, oidcUpstreamGroupMembership),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -671,7 +679,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups(oidcUpstreamUsername, []string{"notAnArrayGroup1 notAnArrayGroup2"}),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -697,7 +705,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups(oidcUpstreamUsername, []string{"group1", "group2"}),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -1252,7 +1260,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataWithUsernameAndGroups(oidcUpstreamUsername, nil),
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -17,7 +17,9 @@ echo -n "PINNIPED_TEST_GOLAND_RUNNER=true;"
 
 printenv | grep PINNIPED_TEST_ | sed 's/=.*//g' | grep -v CLUSTER_CAPABILITY_YAML | while read -r var ; do
     echo -n "${var}="
-    echo -n "${!var}" | tr -d '\n'
+    # Goland will treat semicolons as key/value pair separators.
+    # Within a value, a semicolon needs to be escaped with a backslash for Goland.
+    echo -n "${!var}" | sed 's/;/\\;/g' | tr -d '\n'
     echo -n ";"
 done
 

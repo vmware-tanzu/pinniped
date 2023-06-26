@@ -1763,10 +1763,12 @@ func TestRefreshGrant(t *testing.T) {
 
 	initialUpstreamOIDCRefreshTokenCustomSessionData := func() *psession.CustomSessionData {
 		return &psession.CustomSessionData{
-			Username:     goodUsername,
-			ProviderName: oidcUpstreamName,
-			ProviderUID:  oidcUpstreamResourceUID,
-			ProviderType: oidcUpstreamType,
+			Username:         goodUsername,
+			UpstreamUsername: goodUsername,
+			UpstreamGroups:   goodGroups,
+			ProviderName:     oidcUpstreamName,
+			ProviderUID:      oidcUpstreamResourceUID,
+			ProviderType:     oidcUpstreamType,
 			OIDC: &psession.OIDCSessionData{
 				UpstreamRefreshToken: oidcUpstreamInitialRefreshToken,
 				UpstreamSubject:      goodUpstreamSubject,
@@ -1777,10 +1779,12 @@ func TestRefreshGrant(t *testing.T) {
 
 	initialUpstreamOIDCAccessTokenCustomSessionData := func() *psession.CustomSessionData {
 		return &psession.CustomSessionData{
-			Username:     goodUsername,
-			ProviderName: oidcUpstreamName,
-			ProviderUID:  oidcUpstreamResourceUID,
-			ProviderType: oidcUpstreamType,
+			Username:         goodUsername,
+			UpstreamUsername: goodUsername,
+			UpstreamGroups:   goodGroups,
+			ProviderName:     oidcUpstreamName,
+			ProviderUID:      oidcUpstreamResourceUID,
+			ProviderType:     oidcUpstreamType,
 			OIDC: &psession.OIDCSessionData{
 				UpstreamAccessToken: oidcUpstreamAccessToken,
 				UpstreamSubject:     goodUpstreamSubject,
@@ -1917,20 +1921,24 @@ func TestRefreshGrant(t *testing.T) {
 	}
 
 	happyActiveDirectoryCustomSessionData := &psession.CustomSessionData{
-		Username:     goodUsername,
-		ProviderUID:  activeDirectoryUpstreamResourceUID,
-		ProviderName: activeDirectoryUpstreamName,
-		ProviderType: activeDirectoryUpstreamType,
+		Username:         goodUsername,
+		UpstreamUsername: goodUsername,
+		UpstreamGroups:   goodGroups,
+		ProviderUID:      activeDirectoryUpstreamResourceUID,
+		ProviderName:     activeDirectoryUpstreamName,
+		ProviderType:     activeDirectoryUpstreamType,
 		ActiveDirectory: &psession.ActiveDirectorySessionData{
 			UserDN: activeDirectoryUpstreamDN,
 		},
 	}
 
 	happyLDAPCustomSessionData := &psession.CustomSessionData{
-		Username:     goodUsername,
-		ProviderUID:  ldapUpstreamResourceUID,
-		ProviderName: ldapUpstreamName,
-		ProviderType: ldapUpstreamType,
+		Username:         goodUsername,
+		UpstreamUsername: goodUsername,
+		UpstreamGroups:   goodGroups,
+		ProviderUID:      ldapUpstreamResourceUID,
+		ProviderName:     ldapUpstreamName,
+		ProviderType:     ldapUpstreamType,
 		LDAP: &psession.LDAPSessionData{
 			UserDN: ldapUpstreamDN,
 		},

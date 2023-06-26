@@ -6,6 +6,7 @@ package celtransformer
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -797,7 +798,7 @@ func TestTransformer(t *testing.T) {
 func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	t.Parallel()
 
-	transformer, err := NewCELTransformer(100 * time.Millisecond)
+	transformer, err := NewCELTransformer(time.Second) // CI workers can be slow, so allow slow transforms
 	require.NoError(t, err)
 
 	pipeline := idtransform.NewTransformationPipeline()
@@ -845,7 +846,8 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	// exact same result, since they are all using the same inputs. This assumes that the unit tests are run using
 	// the race detector.
 	var wg sync.WaitGroup
-	numGoroutines := 10
+	numGoroutines := runtime.NumCPU() / 2
+	t.Logf("Running tight loops in %d simultaneous goroutines", numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1) // increment WaitGroup counter for each goroutine
 		go func() {

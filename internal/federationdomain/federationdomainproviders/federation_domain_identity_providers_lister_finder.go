@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package federationdomainproviders
@@ -128,7 +128,7 @@ func (u *FederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplay
 			return nil, p, nil
 		}
 	}
-	return nil, nil, fmt.Errorf("identity provider not found: %q", upstreamIDPDisplayName)
+	return nil, nil, fmt.Errorf("identity provider not available: %q", upstreamIDPDisplayName)
 }
 
 // FindDefaultIDP works like FindUpstreamIDPByDisplayName, but finds the default IDP instead of finding by name.

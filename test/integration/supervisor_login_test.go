@@ -297,11 +297,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value after we refresh.
+				// Even if we update this group to the some names that did not come from the OIDC server,
+				// we expect that it will return to the real groups from the OIDC server after we refresh.
 				// However if there are no expected groups then they will not update, so we should skip this.
 				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
-					sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+					initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+					sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+					sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				}
 				return env.SupervisorUpstreamOIDC.ExpectedGroups
 			},
@@ -450,9 +452,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value after we refresh.
-				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
@@ -656,11 +660,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// update the list of groups to the wrong thing and see that they do not get updated because
-				// skip group refresh is set
-				wrongGroups := []string{"some-wrong-group", "some-other-group"}
-				sessionData.Fosite.Claims.Extra["groups"] = wrongGroups
-				return wrongGroups
+				// Update the list of groups to some groups that would not come from the real LDAP queries,
+				// and see that these become the user's new groups after refresh, because LDAP skip group refresh is set.
+				// Since we are skipping the LDAP group query during refresh, the refresh should use what the session
+				// says is the original list of untransformed groups from the initial login, and then perform the
+				// transformations on them again. However, since there are no transformations configured, they will not
+				// be changed by any transformations in this case.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"} // these groups are not in LDAP server
+				sessionData.Custom.UpstreamGroups = initialGroupMembership                 // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership         // downstream group names in session
+				return initialGroupMembership                                              // these are the expected groups after the refresh is performed
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -709,9 +718,12 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value (no groups) after we refresh.
-				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh,
+				// which in this case is no groups since this test uses a group search base which results in no groups.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				return []string{}
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {

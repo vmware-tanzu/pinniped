@@ -116,10 +116,8 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, session, idpLister, grantedScopes, clientID)
-	case psession.ProviderTypeLDAP:
-		return upstreamLDAPRefresh(ctx, idpLister, session, grantedScopes, clientID)
-	case psession.ProviderTypeActiveDirectory:
+		return upstreamOIDCRefresh(ctx, idpLister, session, grantedScopes, clientID)
+	case psession.ProviderTypeLDAP, psession.ProviderTypeActiveDirectory:
 		return upstreamLDAPRefresh(ctx, idpLister, session, grantedScopes, clientID)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -129,8 +127,8 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 //nolint:funlen
 func upstreamOIDCRefresh(
 	ctx context.Context,
-	session *psession.PinnipedSession,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+	session *psession.PinnipedSession,
 	grantedScopes []string,
 	clientID string,
 ) error {
@@ -215,10 +213,12 @@ func upstreamOIDCRefresh(
 	// but if it is, verify that the transformed version of it hasn't changed.
 	refreshedUntransformedUsername, hasRefreshedUntransformedUsername := getString(mergedClaims, p.Provider.GetUsernameClaim())
 
+	oldUntransformedUsername := s.UpstreamUsername
+	oldUntransformedGroups := s.UpstreamGroups
 	if !hasRefreshedUntransformedUsername {
 		// If we could not get a new username, then we still need the untransformed username to be able to
 		// run the transformations again, so fetch the original untransformed username from the session.
-		refreshedUntransformedUsername = s.UpstreamUsername
+		refreshedUntransformedUsername = oldUntransformedUsername
 	}
 	if refreshedUntransformedGroups == nil {
 		// If we could not get a new list of groups, then we still need the untransformed groups list to be able to
@@ -227,7 +227,7 @@ func upstreamOIDCRefresh(
 		// because a transformation policy may want to reject the authentication based on the group memberships, even
 		// though the group memberships will not be shared with the client (in the code below) due to the groups scope
 		// not being granted.
-		refreshedUntransformedGroups = s.UpstreamGroups
+		refreshedUntransformedGroups = oldUntransformedGroups
 	}
 
 	oldTransformedUsername, err := getDownstreamUsernameFromPinnipedSession(session)
@@ -256,7 +256,7 @@ func upstreamOIDCRefresh(
 
 	if groupsScopeGranted {
 		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
-		// Replace the old value with the new value.
+		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups
 	}
 
@@ -385,11 +385,12 @@ func upstreamLDAPRefresh(
 		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
 
 	oldUntransformedUsername := s.UpstreamUsername
+	oldUntransformedGroups := s.UpstreamGroups
 	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.RefreshAttributes{
 		Username:             oldUntransformedUsername,
 		Subject:              session.Fosite.Claims.Subject,
 		DN:                   dn,
-		Groups:               s.UpstreamGroups,
+		Groups:               oldUntransformedGroups,
 		AdditionalAttributes: additionalAttributes,
 		GrantedScopes:        grantedScopes,
 	})
@@ -413,7 +414,7 @@ func upstreamLDAPRefresh(
 
 	if groupsScopeGranted {
 		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
-		// Replace the old value with the new value.
+		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups
 	}
 

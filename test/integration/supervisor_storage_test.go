@@ -91,7 +91,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// Note that CreateAuthorizeCodeSession() sets Active to true and also sets the Version before storing the session,
 	// so expect those here.
 	session.Active = true
-	session.Version = "4" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
+	session.Version = "5" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
 	expectedSessionStorageJSON, err := json.Marshal(session)
 	require.NoError(t, err)
 	require.JSONEq(t, string(expectedSessionStorageJSON), string(initialSecret.Data["pinniped-storage-data"]))

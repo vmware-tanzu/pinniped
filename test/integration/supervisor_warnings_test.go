@@ -106,7 +106,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -174,10 +174,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
-			Issuer:      downstream.Spec.Issuer,
-			ClientID:    "pinniped-cli",
-			Scopes:      downstreamScopes,
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               downstream.Spec.Issuer,
+			ClientID:             "pinniped-cli",
+			Scopes:               downstreamScopes,
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: createdProvider.Name,
 		}
 		// use it to get the cache entry
 		token := cache.GetToken(sessionCacheKey)
@@ -195,7 +196,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// change the groups to simulate them changing in the IDP.
 		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+		pinnipedSession.Custom.UpstreamGroups = []string{"some-wrong-group", "some-other-group"}         // update upstream groups
+		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"} // update downstream groups
 
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, refreshTokenSignature))
 		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, storedRefreshSession))
@@ -372,7 +374,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -482,10 +484,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
-			Issuer:      downstream.Spec.Issuer,
-			ClientID:    "pinniped-cli",
-			Scopes:      downstreamScopes,
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               downstream.Spec.Issuer,
+			ClientID:             "pinniped-cli",
+			Scopes:               downstreamScopes,
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: createdProvider.Name,
 		}
 		// use it to get the cache entry
 		token := cache.GetToken(sessionCacheKey)

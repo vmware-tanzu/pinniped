@@ -2539,7 +2539,14 @@ func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *t
 	require.NoError(t, err)
 	authorizeResp, err := httpClient.Do(authorizeRequest)
 	require.NoError(t, err)
+	body, err := io.ReadAll(authorizeResp.Body)
+	require.NoError(t, err)
 	require.NoError(t, authorizeResp.Body.Close())
+	if authorizeResp.StatusCode >= 400 {
+		// The request should not have failed, so print the response for debugging purposes.
+		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response: %#v", authorizeResp)
+		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response body: %q", body)
+	}
 	expectSecurityHeaders(t, authorizeResp, false)
 }
 

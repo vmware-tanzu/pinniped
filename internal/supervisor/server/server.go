@@ -441,7 +441,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 	dynamicUpstreamIDPProvider := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 	secretCache := secret.Cache{}
 
-	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
+	// OIDC endpoints will be served by the endpoints manager, and any non-OIDC paths will fallback to the healthMux.
 	oidProvidersManager := endpointsmanager.NewManager(
 		healthMux,
 		dynamicJWKSProvider,

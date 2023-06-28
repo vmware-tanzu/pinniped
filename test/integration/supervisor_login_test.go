@@ -2547,6 +2547,8 @@ func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *t
 		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response: %#v", authorizeResp)
 		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response body: %q", body)
 	}
+	require.Less(t, authorizeResp.StatusCode, 400,
+		"expected a successful authorize response, but got a response status indicating an error (see log above)")
 	expectSecurityHeaders(t, authorizeResp, false)
 }
 

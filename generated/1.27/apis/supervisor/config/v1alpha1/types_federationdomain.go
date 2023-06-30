@@ -8,14 +8,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=Success;Duplicate;Invalid;SameIssuerHostMustUseSameSecret
-type FederationDomainStatusCondition string
+type FederationDomainPhase string
 
 const (
-	SuccessFederationDomainStatusCondition                         = FederationDomainStatusCondition("Success")
-	DuplicateFederationDomainStatusCondition                       = FederationDomainStatusCondition("Duplicate")
-	SameIssuerHostMustUseSameSecretFederationDomainStatusCondition = FederationDomainStatusCondition("SameIssuerHostMustUseSameSecret")
-	InvalidFederationDomainStatusCondition                         = FederationDomainStatusCondition("Invalid")
+	// FederationDomainPhasePending is the default phase for newly-created FederationDomain resources.
+	FederationDomainPhasePending FederationDomainPhase = "Pending"
+
+	// FederationDomainPhaseReady is the phase for an FederationDomain resource in a healthy state.
+	FederationDomainPhaseReady FederationDomainPhase = "Ready"
+
+	// FederationDomainPhaseError is the phase for an FederationDomain in an unhealthy state.
+	FederationDomainPhaseError FederationDomainPhase = "Error"
 )
 
 // FederationDomainTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.
@@ -263,20 +266,17 @@ type FederationDomainSecrets struct {
 
 // FederationDomainStatus is a struct that describes the actual state of an OIDC Provider.
 type FederationDomainStatus struct {
-	// Status holds an enum that describes the state of this OIDC Provider. Note that this Status can
-	// represent success or failure.
-	// +optional
-	Status FederationDomainStatusCondition `json:"status,omitempty"`
+	// Phase summarizes the overall status of the FederationDomain.
+	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase FederationDomainPhase `json:"phase,omitempty"`
 
-	// Message provides human-readable details about the Status.
-	// +optional
-	Message string `json:"message,omitempty"`
-
-	// LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get
-	// around some undesirable behavior with respect to the empty metav1.Time value (see
-	// https://github.com/kubernetes/kubernetes/issues/86811).
-	// +optional
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Conditions represent the observations of an FederationDomain's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Secrets contains information about this OIDC Provider's secrets.
 	// +optional
@@ -288,7 +288,7 @@ type FederationDomainStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped
 // +kubebuilder:printcolumn:name="Issuer",type=string,JSONPath=`.spec.issuer`
-// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.status`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:subresource:status
 type FederationDomain struct {

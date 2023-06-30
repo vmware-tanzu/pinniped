@@ -16,7 +16,6 @@ import (
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,7 +27,6 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
-	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -113,8 +111,21 @@ func TestSync(t *testing.T) {
 		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var frozenNow time.Time
+		var frozenMetav1Now metav1.Time
 		var federationDomainsSetter *fakeFederationDomainsSetter
 		var federationDomainGVR schema.GroupVersionResource
+		var allHappyConditions func(issuer string, time metav1.Time, observedGeneration int64) []v1alpha1.Condition
+		var happyReadyCondition func(issuer string, time metav1.Time, observedGeneration int64) v1alpha1.Condition
+		var happyIssuerIsUniqueCondition,
+			unknownIssuerIsUniqueCondition,
+			sadIssuerIsUniqueCondition,
+			happyOneTLSSecretPerIssuerHostnameCondition,
+			unknownOneTLSSecretPerIssuerHostnameCondition,
+			sadOneTLSSecretPerIssuerHostnameCondition,
+			happyIssuerURLValidCondition,
+			sadIssuerURLValidConditionCannotHaveQuery,
+			sadIssuerURLValidConditionCannotParse,
+			sadReadyCondition func(time metav1.Time, observedGeneration int64) v1alpha1.Condition
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -163,6 +174,139 @@ func TestSync(t *testing.T) {
 				Version:  v1alpha1.SchemeGroupVersion.Version,
 				Resource: "federationdomains",
 			}
+
+			frozenMetav1Now = metav1.NewTime(frozenNow)
+
+			happyReadyCondition = func(issuer string, time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "Ready",
+					Status:             "True",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "Success",
+					Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
+						"the discovery endpoint is %s/.well-known/openid-configuration", issuer),
+				}
+			}
+
+			sadReadyCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "Ready",
+					Status:             "False",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "NotReady",
+					Message:            "the FederationDomain is not ready: see other conditions for details",
+				}
+			}
+
+			happyIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerIsUnique",
+					Status:             "True",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "Success",
+					Message:            "spec.issuer is unique among all FederationDomains",
+				}
+			}
+
+			unknownIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerIsUnique",
+					Status:             "Unknown",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "UnableToValidate",
+					Message:            "unable to check if spec.issuer is unique among all FederationDomains because URL cannot be parsed",
+				}
+			}
+
+			sadIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerIsUnique",
+					Status:             "False",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "DuplicateIssuer",
+					Message:            "multiple FederationDomains have the same spec.issuer URL: these URLs must be unique (can use different hosts or paths)",
+				}
+			}
+
+			happyOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "OneTLSSecretPerIssuerHostname",
+					Status:             "True",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "Success",
+					Message:            "all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL",
+				}
+			}
+
+			unknownOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "OneTLSSecretPerIssuerHostname",
+					Status:             "Unknown",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "UnableToValidate",
+					Message:            "unable to check if all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL because URL cannot be parsed",
+				}
+			}
+
+			sadOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "OneTLSSecretPerIssuerHostname",
+					Status:             "False",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "DifferentSecretRefsFound",
+					Message:            "when different FederationDomains are using the same hostname in the spec.issuer URL then they must also use the same TLS secretRef: different secretRefs found",
+				}
+			}
+
+			happyIssuerURLValidCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerURLValid",
+					Status:             "True",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "Success",
+					Message:            "spec.issuer is a valid URL",
+				}
+			}
+
+			sadIssuerURLValidConditionCannotHaveQuery = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerURLValid",
+					Status:             "False",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "InvalidIssuerURL",
+					Message:            "issuer must not have query",
+				}
+			}
+
+			sadIssuerURLValidConditionCannotParse = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
+				return v1alpha1.Condition{
+					Type:               "IssuerURLValid",
+					Status:             "False",
+					ObservedGeneration: observedGeneration,
+					LastTransitionTime: time,
+					Reason:             "InvalidIssuerURL",
+					Message:            `could not parse issuer as URL: parse ":/host//path": missing protocol scheme`,
+				}
+			}
+
+			allHappyConditions = func(issuer string, time metav1.Time, observedGeneration int64) []v1alpha1.Condition {
+				return []v1alpha1.Condition{
+					happyIssuerIsUniqueCondition(time, observedGeneration),
+					happyIssuerURLValidCondition(time, observedGeneration),
+					happyOneTLSSecretPerIssuerHostnameCondition(time, observedGeneration),
+					happyReadyCondition(issuer, time, observedGeneration),
+				}
+			}
 		})
 
 		it.After(func() {
@@ -177,14 +321,14 @@ func TestSync(t *testing.T) {
 
 			it.Before(func() {
 				federationDomain1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain1))
 
 				federationDomain2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain2))
@@ -212,35 +356,23 @@ func TestSync(t *testing.T) {
 				)
 			})
 
-			it("updates the status to success in the FederationDomains", func() {
+			it("updates the status to ready in the FederationDomains", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain1.Status.Message = "Provider successfully created"
-				federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain2.Status.Message = "Provider successfully created"
-				federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain1.Namespace,
-						federationDomain1.Name,
-					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
 						"status",
 						federationDomain1.Namespace,
 						federationDomain1,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain2.Namespace,
-						federationDomain2.Name,
 					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
@@ -254,9 +386,8 @@ func TestSync(t *testing.T) {
 
 			when("one FederationDomain is already up to date", func() {
 				it.Before(func() {
-					federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain1.Status.Message = "Provider successfully created"
-					federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
 					r.NoError(pinnipedAPIClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
 					r.NoError(pinnipedInformerClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
@@ -267,21 +398,10 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 
-					federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain2.Status.Message = "Provider successfully created"
-					federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain1.Namespace,
-							federationDomain1.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain2.Namespace,
-							federationDomain2.Name,
-						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
 							"status",
@@ -314,7 +434,7 @@ func TestSync(t *testing.T) {
 				})
 			})
 
-			when("updating only one FederationDomain fails for a reason other than conflict", func() {
+			when("updating only one FederationDomain fails", func() {
 				it.Before(func() {
 					once := sync.Once{}
 					pinnipedAPIClient.PrependReactor(
@@ -354,30 +474,18 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain1.Status.Message = "Provider successfully created"
-					federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
-					federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain2.Status.Message = "Provider successfully created"
-					federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain1.Namespace,
-							federationDomain1.Name,
-						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
 							"status",
 							federationDomain1.Namespace,
 							federationDomain1,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain2.Namespace,
-							federationDomain2.Name,
 						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
@@ -398,67 +506,14 @@ func TestSync(t *testing.T) {
 
 			it.Before(func() {
 				federationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "config", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain))
 			})
 
-			when("there is a conflict while updating an FederationDomain", func() {
-				it.Before(func() {
-					once := sync.Once{}
-					pinnipedAPIClient.PrependReactor(
-						"update",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							var err error
-							once.Do(func() {
-								err = k8serrors.NewConflict(schema.GroupResource{}, "", nil)
-							})
-							return true, nil, err
-						},
-					)
-				})
-
-				it("retries updating the FederationDomain", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.NoError(err)
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain.Namespace,
-							federationDomain,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain.Namespace,
-							federationDomain,
-						),
-					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-
-			when("updating the FederationDomain fails for a reason other than conflict", func() {
+			when("updating the FederationDomain fails", func() {
 				it.Before(func() {
 					pinnipedAPIClient.PrependReactor(
 						"update",
@@ -474,16 +529,10 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					federationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain.Status.Conditions = allHappyConditions(federationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
 							"status",
@@ -491,38 +540,7 @@ func TestSync(t *testing.T) {
 							federationDomain,
 						),
 					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-
-			when("there is an error when getting the FederationDomain", func() {
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							return true, nil, errors.New("some get error")
-						},
-					)
-				})
-
-				it("returns the get error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: get failed: some get error")
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
+					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
 				})
 			})
 		})
@@ -535,14 +553,14 @@ func TestSync(t *testing.T) {
 
 			it.Before(func() {
 				validFederationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "valid-config", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "valid-config", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://valid-issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(validFederationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(validFederationDomain))
 
 				invalidFederationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(invalidFederationDomain))
@@ -566,35 +584,28 @@ func TestSync(t *testing.T) {
 				)
 			})
 
-			it("updates the status to success/invalid in the FederationDomains", func() {
+			it("updates the status in each FederationDomain", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				validFederationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				validFederationDomain.Status.Message = "Provider successfully created"
-				validFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				validFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				validFederationDomain.Status.Conditions = allHappyConditions(validFederationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-				invalidFederationDomain.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-				invalidFederationDomain.Status.Message = "Invalid: issuer must not have query"
-				invalidFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				invalidFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseError
+				invalidFederationDomain.Status.Conditions = []v1alpha1.Condition{
+					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
 				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						invalidFederationDomain.Namespace,
-						invalidFederationDomain.Name,
-					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
 						"status",
 						invalidFederationDomain.Namespace,
 						invalidFederationDomain,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						validFederationDomain.Namespace,
-						validFederationDomain.Name,
 					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
@@ -606,7 +617,7 @@ func TestSync(t *testing.T) {
 				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
 			})
 
-			when("updating only the invalid FederationDomain fails for a reason other than conflict", func() {
+			when("updating only the invalid FederationDomain fails", func() {
 				it.Before(func() {
 					pinnipedAPIClient.PrependReactor(
 						"update",
@@ -645,30 +656,23 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					validFederationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					validFederationDomain.Status.Message = "Provider successfully created"
-					validFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					validFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					validFederationDomain.Status.Conditions = allHappyConditions(validFederationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-					invalidFederationDomain.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-					invalidFederationDomain.Status.Message = "Invalid: issuer must not have query"
-					invalidFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+					invalidFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseError
+					invalidFederationDomain.Status.Conditions = []v1alpha1.Condition{
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					}
 
 					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							invalidFederationDomain.Namespace,
-							invalidFederationDomain.Name,
-						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
 							"status",
 							invalidFederationDomain.Namespace,
 							invalidFederationDomain,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							validFederationDomain.Namespace,
-							validFederationDomain.Name,
 						),
 						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
@@ -693,20 +697,20 @@ func TestSync(t *testing.T) {
 				// Hostnames are case-insensitive, so consider them to be duplicates if they only differ by case.
 				// Paths are case-sensitive, so having a path that differs only by case makes a new issuer.
 				federationDomainDuplicate1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainDuplicate1))
 				federationDomainDuplicate2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate2))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainDuplicate2))
 
 				federationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
@@ -735,45 +739,37 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain.Status.Message = "Provider successfully created"
-				federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain.Status.Conditions = allHappyConditions(federationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomainDuplicate1.Status.Status = v1alpha1.DuplicateFederationDomainStatusCondition
-				federationDomainDuplicate1.Status.Message = "Duplicate issuer: https://iSSueR-duPlicAte.cOm/a"
-				federationDomainDuplicate1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainDuplicate1.Status.Phase = v1alpha1.FederationDomainPhaseError
+				federationDomainDuplicate1.Status.Conditions = []v1alpha1.Condition{
+					sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					happyIssuerURLValidCondition(frozenMetav1Now, 123),
+					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
-				federationDomainDuplicate2.Status.Status = v1alpha1.DuplicateFederationDomainStatusCondition
-				federationDomainDuplicate2.Status.Message = "Duplicate issuer: https://issuer-duplicate.com/a"
-				federationDomainDuplicate2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainDuplicate2.Status.Phase = v1alpha1.FederationDomainPhaseError
+				federationDomainDuplicate2.Status.Conditions = []v1alpha1.Condition{
+					sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					happyIssuerURLValidCondition(frozenMetav1Now, 123),
+					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
 				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDuplicate1.Namespace,
-						federationDomainDuplicate1.Name,
-					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
 						"status",
 						federationDomainDuplicate1.Namespace,
 						federationDomainDuplicate1,
 					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDuplicate2.Namespace,
-						federationDomainDuplicate2.Name,
-					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
 						"status",
 						federationDomainDuplicate2.Namespace,
 						federationDomainDuplicate2,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain.Namespace,
-						federationDomain.Name,
 					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
@@ -783,50 +779,6 @@ func TestSync(t *testing.T) {
 					),
 				}
 				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("we cannot talk to the API", func() {
-				var count int
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							count++
-							return true, nil, fmt.Errorf("some get error %d", count)
-						},
-					)
-				})
-
-				it("returns the get errors", func() {
-					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3]`)
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, expectedError)
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDuplicate1.Namespace,
-							federationDomainDuplicate1.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDuplicate2.Namespace,
-							federationDomainDuplicate2.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
 			})
 		})
 
@@ -840,7 +792,7 @@ func TestSync(t *testing.T) {
 
 			it.Before(func() {
 				federationDomainSameIssuerAddress1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
 					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://iSSueR-duPlicAte-adDress.cOm/path1",
 						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
@@ -849,7 +801,7 @@ func TestSync(t *testing.T) {
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainSameIssuerAddress1))
 				federationDomainSameIssuerAddress2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
 					Spec: v1alpha1.FederationDomainSpec{
 						// Validation treats these as the same DNS hostname even though they have different port numbers,
 						// because SNI information on the incoming requests is not going to include port numbers.
@@ -861,7 +813,7 @@ func TestSync(t *testing.T) {
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainSameIssuerAddress2))
 
 				federationDomainDifferentIssuerAddress = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
 					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer-not-duplicate.com",
 						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
@@ -876,7 +828,7 @@ func TestSync(t *testing.T) {
 				_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
 				r.Error(err)
 				federationDomainWithInvalidIssuerURL = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace},
+					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
 					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: invalidIssuerURL,
 						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
@@ -908,27 +860,39 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomainDifferentIssuerAddress.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomainDifferentIssuerAddress.Status.Message = "Provider successfully created"
-				federationDomainDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainDifferentIssuerAddress.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomainDifferentIssuerAddress.Status.Conditions = allHappyConditions(federationDomainDifferentIssuerAddress.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomainSameIssuerAddress1.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition
-				federationDomainSameIssuerAddress1.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
-				federationDomainSameIssuerAddress1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainSameIssuerAddress1.Status.Phase = v1alpha1.FederationDomainPhaseError
+				federationDomainSameIssuerAddress1.Status.Conditions = []v1alpha1.Condition{
+					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					happyIssuerURLValidCondition(frozenMetav1Now, 123),
+					sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
-				federationDomainSameIssuerAddress2.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition
-				federationDomainSameIssuerAddress2.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
-				federationDomainSameIssuerAddress2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainSameIssuerAddress2.Status.Phase = v1alpha1.FederationDomainPhaseError
+				federationDomainSameIssuerAddress2.Status.Conditions = []v1alpha1.Condition{
+					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					happyIssuerURLValidCondition(frozenMetav1Now, 123),
+					sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
-				federationDomainWithInvalidIssuerURL.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-				federationDomainWithInvalidIssuerURL.Status.Message = `Invalid: could not parse issuer as URL: parse ":/host//path": missing protocol scheme`
-				federationDomainWithInvalidIssuerURL.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+				federationDomainWithInvalidIssuerURL.Status.Phase = v1alpha1.FederationDomainPhaseError
+				federationDomainWithInvalidIssuerURL.Status.Conditions = []v1alpha1.Condition{
+					unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
+					sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
+					unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+					sadReadyCondition(frozenMetav1Now, 123),
+				}
 
 				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
-						federationDomainSameIssuerAddress1.Namespace,
-						federationDomainSameIssuerAddress1.Name,
+						"status",
+						federationDomainDifferentIssuerAddress.Namespace,
+						federationDomainDifferentIssuerAddress,
 					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
@@ -936,32 +900,11 @@ func TestSync(t *testing.T) {
 						federationDomainSameIssuerAddress1.Namespace,
 						federationDomainSameIssuerAddress1,
 					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainSameIssuerAddress2.Namespace,
-						federationDomainSameIssuerAddress2.Name,
-					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
 						"status",
 						federationDomainSameIssuerAddress2.Namespace,
 						federationDomainSameIssuerAddress2,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDifferentIssuerAddress.Namespace,
-						federationDomainDifferentIssuerAddress.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainDifferentIssuerAddress.Namespace,
-						federationDomainDifferentIssuerAddress,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainWithInvalidIssuerURL.Namespace,
-						federationDomainWithInvalidIssuerURL.Name,
 					),
 					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
@@ -971,55 +914,6 @@ func TestSync(t *testing.T) {
 					),
 				}
 				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("we cannot talk to the API", func() {
-				var count int
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							count++
-							return true, nil, fmt.Errorf("some get error %d", count)
-						},
-					)
-				})
-
-				it("returns the get errors", func() {
-					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3, could not update status: get failed: some get error 4]`)
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, expectedError)
-
-					federationDomainDifferentIssuerAddress.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomainDifferentIssuerAddress.Status.Message = "Provider successfully created"
-					federationDomainDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainSameIssuerAddress1.Namespace,
-							federationDomainSameIssuerAddress1.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainSameIssuerAddress2.Namespace,
-							federationDomainSameIssuerAddress2.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDifferentIssuerAddress.Namespace,
-							federationDomainDifferentIssuerAddress.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainWithInvalidIssuerURL.Namespace,
-							federationDomainWithInvalidIssuerURL.Name,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
 			})
 		})
 

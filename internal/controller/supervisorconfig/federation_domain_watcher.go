@@ -10,12 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -24,10 +23,27 @@ import (
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/celtransformer"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/plog"
+)
+
+const (
+	typeReady                         = "Ready"
+	typeIssuerURLValid                = "IssuerURLValid"
+	typeOneTLSSecretPerIssuerHostname = "OneTLSSecretPerIssuerHostname"
+	typeIssuerIsUnique                = "IssuerIsUnique"
+
+	reasonSuccess                  = "Success"
+	reasonNotReady                 = "NotReady"
+	reasonUnableToValidate         = "UnableToValidate"
+	reasonInvalidIssuerURL         = "InvalidIssuerURL"
+	reasonDuplicateIssuer          = "DuplicateIssuer"
+	reasonDifferentSecretRefsFound = "DifferentSecretRefsFound"
+
+	celTransformerMaxExpressionRuntime = 5 * time.Second
 )
 
 // FederationDomainsSetter can be notified of all known valid providers with its SetIssuer function.
@@ -109,75 +125,14 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		return err
 	}
 
-	// Make a map of issuer strings -> count of how many times we saw that issuer string.
-	// This will help us complain when there are duplicate issuer strings.
-	// Also make a helper function for forming keys into this map.
-	issuerCounts := make(map[string]int)
-	issuerURLToIssuerKey := func(issuerURL *url.URL) string {
-		return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
-	}
-
-	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
-	// multiple FederationDomains have the same issuer hostname (excluding port) but specify
-	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
-	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
-	// port numbers. Also make a helper function for forming keys into this map.
-	uniqueSecretNamesPerIssuerAddress := make(map[string]map[string]bool)
-	issuerURLToHostnameKey := lowercaseHostWithoutPort
-
-	for _, federationDomain := range federationDomains {
-		issuerURL, err := url.Parse(federationDomain.Spec.Issuer)
-		if err != nil {
-			continue // Skip url parse errors because they will be validated again below.
-		}
-
-		issuerCounts[issuerURLToIssuerKey(issuerURL)]++
-
-		setOfSecretNames := uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]
-		if setOfSecretNames == nil {
-			setOfSecretNames = make(map[string]bool)
-			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
-		}
-		if federationDomain.Spec.TLS != nil {
-			setOfSecretNames[federationDomain.Spec.TLS.SecretName] = true
-		}
-	}
-
 	var errs []error
-
 	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
+	crossDomainConfigValidator := newCrossFederationDomainConfigValidator(federationDomains)
+
 	for _, federationDomain := range federationDomains {
-		issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
+		conditions := make([]*configv1alpha1.Condition, 0, 4)
 
-		// Skip url parse errors because they will be validated below.
-		if urlParseErr == nil {
-			if issuerCount := issuerCounts[issuerURLToIssuerKey(issuerURL)]; issuerCount > 1 {
-				if err := c.updateStatus(
-					ctx.Context,
-					federationDomain.Namespace,
-					federationDomain.Name,
-					configv1alpha1.DuplicateFederationDomainStatusCondition,
-					"Duplicate issuer: "+federationDomain.Spec.Issuer,
-				); err != nil {
-					errs = append(errs, fmt.Errorf("could not update status: %w", err))
-				}
-				continue
-			}
-		}
-
-		// Skip url parse errors because they will be validated below.
-		if urlParseErr == nil && len(uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
-			if err := c.updateStatus(
-				ctx.Context,
-				federationDomain.Namespace,
-				federationDomain.Name,
-				configv1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition,
-				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
-			); err != nil {
-				errs = append(errs, fmt.Errorf("could not update status: %w", err))
-			}
-			continue
-		}
+		conditions = crossDomainConfigValidator.Validate(federationDomain, conditions)
 
 		// TODO: Move all this identity provider stuff into helper functions. This is just a sketch of how the code would
 		//  work in the sense that this is not doing error handling, is not validating everything that it should, and
@@ -232,7 +187,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 
 		// If there is an explicit list of IDPs on the FederationDomain, then process the list.
-		celTransformer, _ := celtransformer.NewCELTransformer(time.Second) // TODO: what is a good duration limit here?
+		celTransformer, _ := celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime) // TODO: what is a good duration limit here?
 		// TODO: handle err
 		for _, idp := range federationDomain.Spec.IdentityProviders {
 			var idpResourceUID types.UID
@@ -375,7 +330,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 					}
 					if !stringSlicesEqual(e.Expects.Groups, result.Groups) {
 						// TODO: Do we need to make this insensitive to ordering, or should the transformations evaluator be changed to always return sorted group names at the end of the pipeline?
-						// TODO: What happens if the user did not write any group expectation? Treat it like expecting any empty list of groups?
+						// TODO: What happens if the user did not write any group expectation? Treat it like expecting an empty list of groups?
 						// TODO: handle this failed example
 						plog.Warning("FederationDomain identity provider transformations example failed: expected a different transformed groups list",
 							"federationDomain", federationDomain.Name,
@@ -402,7 +357,6 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 		// Now that we have the list of IDPs for this FederationDomain, create the issuer.
 		var federationDomainIssuer *federationdomainproviders.FederationDomainIssuer
-		err = nil
 		if defaultFederationDomainIdentityProvider != nil {
 			// This is the constructor for the backwards compatibility mode.
 			federationDomainIssuer, err = federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
@@ -411,36 +365,191 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			federationDomainIssuer, err = federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
 		}
 		if err != nil {
-			// Note that the FederationDomainIssuer constructors validate the Issuer URL.
-			if err := c.updateStatus(
-				ctx.Context,
-				federationDomain.Namespace,
-				federationDomain.Name,
-				configv1alpha1.InvalidFederationDomainStatusCondition,
-				"Invalid: "+err.Error(),
-			); err != nil {
-				errs = append(errs, fmt.Errorf("could not update status: %w", err))
-			}
-			continue
+			// Note that the FederationDomainIssuer constructors only validate the Issuer URL,
+			// so these are always issuer URL validation errors.
+			conditions = append(conditions, &configv1alpha1.Condition{
+				Type:    typeIssuerURLValid,
+				Status:  configv1alpha1.ConditionFalse,
+				Reason:  reasonInvalidIssuerURL,
+				Message: err.Error(),
+			})
+		} else {
+			conditions = append(conditions, &configv1alpha1.Condition{
+				Type:    typeIssuerURLValid,
+				Status:  configv1alpha1.ConditionTrue,
+				Reason:  reasonSuccess,
+				Message: "spec.issuer is a valid URL",
+			})
 		}
 
-		if err := c.updateStatus(
-			ctx.Context,
-			federationDomain.Namespace,
-			federationDomain.Name,
-			configv1alpha1.SuccessFederationDomainStatusCondition,
-			"Provider successfully created",
-		); err != nil {
+		if err = c.updateStatus(ctx.Context, federationDomain, conditions); err != nil {
 			errs = append(errs, fmt.Errorf("could not update status: %w", err))
 			continue
 		}
 
-		federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
+		if !hadErrorCondition(conditions) {
+			// Successfully validated the FederationDomain, so allow it to be loaded.
+			federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
+		}
 	}
 
 	c.federationDomainsSetter.SetFederationDomains(federationDomainIssuers...)
 
 	return errors.NewAggregate(errs)
+}
+
+func (c *federationDomainWatcherController) updateStatus(
+	ctx context.Context,
+	federationDomain *configv1alpha1.FederationDomain,
+	conditions []*configv1alpha1.Condition,
+) error {
+	updated := federationDomain.DeepCopy()
+
+	if hadErrorCondition(conditions) {
+		updated.Status.Phase = configv1alpha1.FederationDomainPhaseError
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeReady,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonNotReady,
+			Message: "the FederationDomain is not ready: see other conditions for details",
+		})
+	} else {
+		updated.Status.Phase = configv1alpha1.FederationDomainPhaseReady
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeReady,
+			Status: configv1alpha1.ConditionTrue,
+			Reason: reasonSuccess,
+			Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
+				"the discovery endpoint is %s/.well-known/openid-configuration", federationDomain.Spec.Issuer),
+		})
+	}
+
+	_ = conditionsutil.MergeConfigConditions(conditions,
+		federationDomain.Generation, &updated.Status.Conditions, plog.New(), metav1.NewTime(c.clock.Now()))
+
+	if equality.Semantic.DeepEqual(federationDomain, updated) {
+		return nil
+	}
+
+	_, err := c.client.
+		ConfigV1alpha1().
+		FederationDomains(federationDomain.Namespace).
+		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	return err
+}
+
+type crossFederationDomainConfigValidator struct {
+	issuerCounts                      map[string]int
+	uniqueSecretNamesPerIssuerAddress map[string]map[string]bool
+}
+
+func issuerURLToHostnameKey(issuerURL *url.URL) string {
+	return lowercaseHostWithoutPort(issuerURL)
+}
+
+func issuerURLToIssuerKey(issuerURL *url.URL) string {
+	return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
+}
+
+func (v *crossFederationDomainConfigValidator) Validate(federationDomain *configv1alpha1.FederationDomain, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
+
+	if urlParseErr != nil {
+		// Don't write a condition about the issuer URL being invalid because that is added elsewhere in the controller.
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeIssuerIsUnique,
+			Status:  configv1alpha1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: "unable to check if spec.issuer is unique among all FederationDomains because URL cannot be parsed",
+		})
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeOneTLSSecretPerIssuerHostname,
+			Status:  configv1alpha1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: "unable to check if all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL because URL cannot be parsed",
+		})
+		return conditions
+	}
+
+	if issuerCount := v.issuerCounts[issuerURLToIssuerKey(issuerURL)]; issuerCount > 1 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeIssuerIsUnique,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonDuplicateIssuer,
+			Message: "multiple FederationDomains have the same spec.issuer URL: these URLs must be unique (can use different hosts or paths)",
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeIssuerIsUnique,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "spec.issuer is unique among all FederationDomains",
+		})
+	}
+
+	if len(v.uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeOneTLSSecretPerIssuerHostname,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonDifferentSecretRefsFound,
+			Message: "when different FederationDomains are using the same hostname in the spec.issuer URL then they must also use the same TLS secretRef: different secretRefs found",
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeOneTLSSecretPerIssuerHostname,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL",
+		})
+	}
+
+	return conditions
+}
+
+func newCrossFederationDomainConfigValidator(federationDomains []*configv1alpha1.FederationDomain) *crossFederationDomainConfigValidator {
+	// Make a map of issuer strings -> count of how many times we saw that issuer string.
+	// This will help us complain when there are duplicate issuer strings.
+	// Also make a helper function for forming keys into this map.
+	issuerCounts := make(map[string]int)
+
+	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
+	// multiple FederationDomains have the same issuer hostname (excluding port) but specify
+	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
+	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
+	// port numbers. Also make a helper function for forming keys into this map.
+	uniqueSecretNamesPerIssuerAddress := make(map[string]map[string]bool)
+
+	for _, federationDomain := range federationDomains {
+		issuerURL, err := url.Parse(federationDomain.Spec.Issuer)
+		if err != nil {
+			continue // Skip url parse errors because they will be handled in the Validate function.
+		}
+
+		issuerCounts[issuerURLToIssuerKey(issuerURL)]++
+
+		setOfSecretNames := uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]
+		if setOfSecretNames == nil {
+			setOfSecretNames = make(map[string]bool)
+			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
+		}
+		if federationDomain.Spec.TLS != nil {
+			setOfSecretNames[federationDomain.Spec.TLS.SecretName] = true
+		}
+	}
+
+	return &crossFederationDomainConfigValidator{
+		issuerCounts:                      issuerCounts,
+		uniqueSecretNamesPerIssuerAddress: uniqueSecretNamesPerIssuerAddress,
+	}
+}
+
+func hadErrorCondition(conditions []*configv1alpha1.Condition) bool {
+	for _, c := range conditions {
+		if c.Status != configv1alpha1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 func stringSlicesEqual(a []string, b []string) bool {
@@ -454,38 +563,3 @@ func stringSlicesEqual(a []string, b []string) bool {
 	}
 	return true
 }
-
-func (c *federationDomainWatcherController) updateStatus(
-	ctx context.Context,
-	namespace, name string,
-	status configv1alpha1.FederationDomainStatusCondition,
-	message string,
-) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		federationDomain, err := c.client.ConfigV1alpha1().FederationDomains(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("get failed: %w", err)
-		}
-
-		if federationDomain.Status.Status == status && federationDomain.Status.Message == message {
-			return nil
-		}
-
-		plog.Debug(
-			"attempting status update",
-			"federationdomain",
-			klog.KRef(namespace, name),
-			"status",
-			status,
-			"message",
-			message,
-		)
-		federationDomain.Status.Status = status
-		federationDomain.Status.Message = message
-		federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
-		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).UpdateStatus(ctx, federationDomain, metav1.UpdateOptions{})
-		return err
-	})
-}
-
-func timePtr(t metav1.Time) *metav1.Time { return &t }

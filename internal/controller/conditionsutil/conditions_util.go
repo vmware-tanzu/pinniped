@@ -67,11 +67,11 @@ func mergeIDPCondition(existing *[]v1.Condition, new *v1.Condition) bool {
 }
 
 // MergeConfigConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger) bool {
+func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger, now v1.Time) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
-		cond.LastTransitionTime = v1.Now()
+		cond.LastTransitionTime = now
 		cond.ObservedGeneration = observedGeneration
 		if mergeConfigCondition(conditionsToUpdate, cond) {
 			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)

@@ -272,7 +272,13 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 // current test's lifetime.
 // If the provided issuer is not the empty string, then it will be used for the
 // FederationDomain.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.FederationDomainStatusCondition) *configv1alpha1.FederationDomain {
+func CreateTestFederationDomain(
+	ctx context.Context,
+	t *testing.T,
+	issuer string,
+	certSecretName string,
+	expectStatus configv1alpha1.FederationDomainPhase,
+) *configv1alpha1.FederationDomain {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -283,8 +289,8 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
 	}
 
-	federationDomains := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
-	federationDomain, err := federationDomains.Create(createContext, &configv1alpha1.FederationDomain{
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
 		Spec: configv1alpha1.FederationDomainSpec{
 			Issuer: issuer,
@@ -299,7 +305,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		t.Logf("cleaning up test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		err := federationDomains.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
+		err := federationDomainsClient.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
@@ -313,22 +319,31 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	}
 
 	// Wait for the FederationDomain to enter the expected phase (or time out).
+	WaitForTestFederationDomainStatus(ctx, t, federationDomain.Name, expectStatus)
+
+	return federationDomain
+}
+
+func WaitForTestFederationDomainStatus(ctx context.Context, t *testing.T, federationDomainName string, expectStatus configv1alpha1.FederationDomainPhase) {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+
 	var result *configv1alpha1.FederationDomain
 	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
-		result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
+		result, err = federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
 		requireEventually.NoError(err)
-		requireEventually.Equal(expectStatus, result.Status.Status)
+		requireEventually.Equal(expectStatus, result.Status.Phase)
 
 		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-		if expectStatus == configv1alpha1.SuccessFederationDomainStatusCondition {
+		if expectStatus == configv1alpha1.FederationDomainPhaseReady {
 			requireEventually.NotEmpty(result.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
 			requireEventually.NotEmpty(result.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
 			requireEventually.NotEmpty(result.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
 			requireEventually.NotEmpty(result.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
 		}
 	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
-	return federationDomain
 }
 
 func RandBytes(t *testing.T, numBytes int) []byte {

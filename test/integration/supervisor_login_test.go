@@ -1469,7 +1469,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
@@ -1502,7 +1502,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			// the ID token Subject should include the upstream user ID after the upstream issuer name
@@ -1526,7 +1526,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1558,7 +1558,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // token exchange grant type not allowed
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // a validation requires that we also disallow the pinniped:request-audience scope
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1592,7 +1592,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1626,7 +1626,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1652,7 +1652,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1678,7 +1678,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1711,7 +1711,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1750,7 +1750,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access"}, // validations require that when username/groups are excluded, then token exchange must also not be allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1789,7 +1789,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization: func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t,
@@ -1825,7 +1825,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 				return clientID, "wrong-client-secret"
 			},
 			testUser: func(t *testing.T) (string, string) {
@@ -2080,7 +2080,7 @@ func testSupervisorLogin(
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
 		issuerURL.String(),
 		certSecret.Name,
-		configv1alpha1.SuccessFederationDomainStatusCondition,
+		configv1alpha1.FederationDomainPhaseReady, // TODO: expect another phase because this is a legacy FederationDomain and there is no IDP yet, so it is not safe to try to do logins until the IDP exists and the controller has a chance to run again to set the default IDP
 	)
 
 	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
@@ -2103,6 +2103,9 @@ func testSupervisorLogin(
 
 	// Create upstream IDP and wait for it to become ready.
 	idpName := createIDP(t)
+
+	// Now that both the FederationDomain and the IDP are created, the FederationDomain should be ready.
+	testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 	// Start a callback server on localhost.
 	localCallbackServer := startLocalCallbackServer(t)

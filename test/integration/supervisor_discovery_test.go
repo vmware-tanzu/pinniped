@@ -125,14 +125,24 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, issuer6, "", "")
-			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
-			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
+			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
+				"Ready":                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                v1alpha1.ConditionFalse,
+				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
+				"IssuerURLValid":                v1alpha1.ConditionTrue,
+			})
+			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
+				"Ready":                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                v1alpha1.ConditionFalse,
+				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
+				"IssuerURLValid":                v1alpha1.ConditionTrue,
+			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
 			// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
 			requireDelete(t, client, ns, config6Duplicate1.Name)
 			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
-			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+			requireFullySuccessfulStatus(t, client, ns, config6Duplicate2.Name)
 
 			// When we finally delete all issuers, the endpoint should be down.
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
@@ -144,7 +154,12 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 
 			// When we create a provider with an invalid issuer, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, badIssuer, "", "")
-			requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidFederationDomainStatusCondition)
+			requireStatus(t, client, ns, badConfig.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
+				"Ready":                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                v1alpha1.ConditionTrue,
+				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
+				"IssuerURLValid":                v1alpha1.ConditionFalse,
+			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
 		})
@@ -172,7 +187,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 
 	// Create an FederationDomain with a spec.tls.secretName.
 	federationDomain1 := testlib.CreateTestFederationDomain(ctx, t, issuer1, certSecretName1, "")
-	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name)
 
 	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
@@ -212,7 +227,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 
 	// Create an FederationDomain with a spec.tls.secretName.
 	federationDomain2 := testlib.CreateTestFederationDomain(ctx, t, issuer2, certSecretName2, "")
-	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name)
 
 	// Create the Secret.
 	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
@@ -256,7 +271,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 
 	// Create an FederationDomain without a spec.tls.secretName.
 	federationDomain1 := testlib.CreateTestFederationDomain(ctx, t, issuerUsingIPAddress, "", "")
-	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name)
 
 	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
@@ -270,7 +285,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	// Create an FederationDomain with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
 	federationDomain2 := testlib.CreateTestFederationDomain(ctx, t, issuerUsingHostname, certSecretName, "")
-	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name)
 
 	// Create the Secret.
 	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
@@ -458,7 +473,7 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	t.Helper()
 	newFederationDomain := testlib.CreateTestFederationDomain(ctx, t, issuerName, "", "")
 	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
-	requireStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	requireFullySuccessfulStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name)
 	return newFederationDomain, jwksResult
 }
 
@@ -626,7 +641,16 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	require.NoError(t, err)
 }
 
-func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.FederationDomainStatusCondition) {
+func requireFullySuccessfulStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
+	requireStatus(t, client, ns, name, v1alpha1.FederationDomainPhaseReady, map[string]v1alpha1.ConditionStatus{
+		"Ready":                         v1alpha1.ConditionTrue,
+		"IssuerIsUnique":                v1alpha1.ConditionTrue,
+		"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
+		"IssuerURLValid":                v1alpha1.ConditionTrue,
+	})
+}
+
+func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, phase v1alpha1.FederationDomainPhase, conditionTypeToStatus map[string]v1alpha1.ConditionStatus) {
 	t.Helper()
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
@@ -636,8 +660,14 @@ func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name st
 		federationDomain, err := client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
 		requireEventually.NoError(err)
 
-		t.Logf("found FederationDomain %s/%s with status %s", ns, name, federationDomain.Status.Status)
-		requireEventually.Equalf(status, federationDomain.Status.Status, "unexpected status (message = '%s')", federationDomain.Status.Message)
+		t.Logf("found FederationDomain %s/%s with phase %s", ns, name, federationDomain.Status.Phase)
+		requireEventually.Equalf(phase, federationDomain.Status.Phase, "unexpected phase (conditions = '%#v')", federationDomain.Status.Conditions)
+
+		actualConditionTypeToStatus := map[string]v1alpha1.ConditionStatus{}
+		for _, c := range federationDomain.Status.Conditions {
+			actualConditionTypeToStatus[c.Type] = c.Status
+		}
+		requireEventually.Equal(conditionTypeToStatus, actualConditionTypeToStatus, "unexpected statuses for conditions by type")
 	}, 5*time.Minute, 200*time.Millisecond)
 }
 

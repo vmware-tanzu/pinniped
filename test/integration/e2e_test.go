@@ -103,7 +103,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	downstream := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		issuerURL.String(),
 		certSecret.Name,
-		configv1alpha1.SuccessFederationDomainStatusCondition,
+		configv1alpha1.FederationDomainPhaseReady,
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.

@@ -558,7 +558,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		addSuffix("federationdomains.config.supervisor"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
-				{Name: "Status", Type: "string", JSONPath: ".status.status"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

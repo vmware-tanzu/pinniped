@@ -22,7 +22,7 @@ spec:
       name: Issuer
       type: string
     - jsonPath: .status.phase
-      name: Phase
+      name: Status
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age

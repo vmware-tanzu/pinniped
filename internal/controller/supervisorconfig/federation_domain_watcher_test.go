@@ -16,13 +16,15 @@ import (
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
@@ -30,20 +32,63 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-func TestInformerFilters(t *testing.T) {
-	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
-		var r *require.Assertions
-		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var configMapInformerFilter controllerlib.Filter
+func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
+	t.Parallel()
 
-		it.Before(func() {
-			r = require.New(t)
-			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
-			oidcIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
-			ldapIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
-			adIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
-			_ = NewFederationDomainWatcherController(
+	federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
+	oidcIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
+	ldapIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
+	adIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
+
+	tests := []struct {
+		name       string
+		obj        metav1.Object
+		informer   controllerlib.InformerGetter
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "any FederationDomain changes",
+			obj:        &configv1alpha1.FederationDomain{},
+			informer:   federationDomainInformer,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name:       "any OIDCIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.OIDCIdentityProvider{},
+			informer:   oidcIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+		{
+			name:       "any LDAPIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.LDAPIdentityProvider{},
+			informer:   ldapIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+		{
+			name:       "any ActiveDirectoryIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.ActiveDirectoryIdentityProvider{},
+			informer:   adIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			NewFederationDomainWatcherController(
 				nil,
 				nil,
 				nil,
@@ -51,40 +96,17 @@ func TestInformerFilters(t *testing.T) {
 				oidcIdentityProviderInformer,
 				ldapIdentityProviderInformer,
 				adIdentityProviderInformer,
-				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+				withInformer.WithInformer, // make it possible to observe the behavior of the Filters
 			)
-			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(federationDomainInformer)
+
+			unrelatedObj := corev1.Secret{}
+			filter := withInformer.GetFilterForInformer(test.informer)
+			require.Equal(t, test.wantAdd, filter.Add(test.obj))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelatedObj, test.obj))
+			require.Equal(t, test.wantUpdate, filter.Update(test.obj, &unrelatedObj))
+			require.Equal(t, test.wantDelete, filter.Delete(test.obj))
 		})
-
-		when("watching FederationDomain objects", func() {
-			var subject controllerlib.Filter
-			var target, otherNamespace, otherName *v1alpha1.FederationDomain
-
-			it.Before(func() {
-				subject = configMapInformerFilter
-				target = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"}}
-				otherNamespace = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "other-namespace"}}
-				otherName = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "other-name", Namespace: "some-namespace"}}
-			})
-
-			when("any FederationDomain changes", func() {
-				it("returns true to trigger the sync method", func() {
-					r.True(subject.Add(target))
-					r.True(subject.Add(otherName))
-					r.True(subject.Add(otherNamespace))
-					r.True(subject.Update(target, otherName))
-					r.True(subject.Update(otherName, otherName))
-					r.True(subject.Update(otherNamespace, otherName))
-					r.True(subject.Update(otherName, target))
-					r.True(subject.Update(otherName, otherName))
-					r.True(subject.Update(otherName, otherNamespace))
-					r.True(subject.Delete(target))
-					r.True(subject.Delete(otherName))
-					r.True(subject.Delete(otherNamespace))
-				})
-			})
-		})
-	}, spec.Parallel(), spec.Report(report.Terminal{}))
+	}
 }
 
 type fakeFederationDomainsSetter struct {
@@ -97,7 +119,7 @@ func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...
 	f.FederationDomainsReceived = federationDomains
 }
 
-func TestSync(t *testing.T) {
+func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const namespace = "some-namespace"
 
@@ -114,8 +136,8 @@ func TestSync(t *testing.T) {
 		var frozenMetav1Now metav1.Time
 		var federationDomainsSetter *fakeFederationDomainsSetter
 		var federationDomainGVR schema.GroupVersionResource
-		var allHappyConditions func(issuer string, time metav1.Time, observedGeneration int64) []v1alpha1.Condition
-		var happyReadyCondition func(issuer string, time metav1.Time, observedGeneration int64) v1alpha1.Condition
+		var allHappyConditions func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition
+		var happyReadyCondition func(issuer string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition
 		var happyIssuerIsUniqueCondition,
 			unknownIssuerIsUniqueCondition,
 			sadIssuerIsUniqueCondition,
@@ -125,7 +147,7 @@ func TestSync(t *testing.T) {
 			happyIssuerURLValidCondition,
 			sadIssuerURLValidConditionCannotHaveQuery,
 			sadIssuerURLValidConditionCannotParse,
-			sadReadyCondition func(time metav1.Time, observedGeneration int64) v1alpha1.Condition
+			sadReadyCondition func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -170,15 +192,15 @@ func TestSync(t *testing.T) {
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 
 			federationDomainGVR = schema.GroupVersionResource{
-				Group:    v1alpha1.SchemeGroupVersion.Group,
-				Version:  v1alpha1.SchemeGroupVersion.Version,
+				Group:    configv1alpha1.SchemeGroupVersion.Group,
+				Version:  configv1alpha1.SchemeGroupVersion.Version,
 				Resource: "federationdomains",
 			}
 
 			frozenMetav1Now = metav1.NewTime(frozenNow)
 
-			happyReadyCondition = func(issuer string, time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			happyReadyCondition = func(issuer string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "Ready",
 					Status:             "True",
 					ObservedGeneration: observedGeneration,
@@ -189,8 +211,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			sadReadyCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			sadReadyCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "Ready",
 					Status:             "False",
 					ObservedGeneration: observedGeneration,
@@ -200,8 +222,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			happyIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			happyIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerIsUnique",
 					Status:             "True",
 					ObservedGeneration: observedGeneration,
@@ -211,8 +233,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			unknownIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			unknownIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerIsUnique",
 					Status:             "Unknown",
 					ObservedGeneration: observedGeneration,
@@ -222,8 +244,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			sadIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			sadIssuerIsUniqueCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerIsUnique",
 					Status:             "False",
 					ObservedGeneration: observedGeneration,
@@ -233,8 +255,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			happyOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			happyOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "OneTLSSecretPerIssuerHostname",
 					Status:             "True",
 					ObservedGeneration: observedGeneration,
@@ -244,8 +266,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			unknownOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			unknownOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "OneTLSSecretPerIssuerHostname",
 					Status:             "Unknown",
 					ObservedGeneration: observedGeneration,
@@ -255,8 +277,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			sadOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			sadOneTLSSecretPerIssuerHostnameCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "OneTLSSecretPerIssuerHostname",
 					Status:             "False",
 					ObservedGeneration: observedGeneration,
@@ -266,8 +288,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			happyIssuerURLValidCondition = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			happyIssuerURLValidCondition = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerURLValid",
 					Status:             "True",
 					ObservedGeneration: observedGeneration,
@@ -277,8 +299,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			sadIssuerURLValidConditionCannotHaveQuery = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			sadIssuerURLValidConditionCannotHaveQuery = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerURLValid",
 					Status:             "False",
 					ObservedGeneration: observedGeneration,
@@ -288,8 +310,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			sadIssuerURLValidConditionCannotParse = func(time metav1.Time, observedGeneration int64) v1alpha1.Condition {
-				return v1alpha1.Condition{
+			sadIssuerURLValidConditionCannotParse = func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+				return configv1alpha1.Condition{
 					Type:               "IssuerURLValid",
 					Status:             "False",
 					ObservedGeneration: observedGeneration,
@@ -299,8 +321,8 @@ func TestSync(t *testing.T) {
 				}
 			}
 
-			allHappyConditions = func(issuer string, time metav1.Time, observedGeneration int64) []v1alpha1.Condition {
-				return []v1alpha1.Condition{
+			allHappyConditions = func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
+				return []configv1alpha1.Condition{
 					happyIssuerIsUniqueCondition(time, observedGeneration),
 					happyIssuerURLValidCondition(time, observedGeneration),
 					happyOneTLSSecretPerIssuerHostnameCondition(time, observedGeneration),
@@ -315,21 +337,21 @@ func TestSync(t *testing.T) {
 
 		when("there are some valid FederationDomains in the informer", func() {
 			var (
-				federationDomain1 *v1alpha1.FederationDomain
-				federationDomain2 *v1alpha1.FederationDomain
+				federationDomain1 *configv1alpha1.FederationDomain
+				federationDomain2 *configv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				federationDomain1 = &v1alpha1.FederationDomain{
+				federationDomain1 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain1))
 
-				federationDomain2 = &v1alpha1.FederationDomain{
+				federationDomain2 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain2))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain2))
@@ -361,10 +383,10 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain1.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 				federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain2.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 				federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 				expectedActions := []coretesting.Action{
@@ -386,7 +408,7 @@ func TestSync(t *testing.T) {
 
 			when("one FederationDomain is already up to date", func() {
 				it.Before(func() {
-					federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain1.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
 					r.NoError(pinnipedAPIClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
@@ -398,7 +420,7 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 
-					federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain2.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
@@ -474,10 +496,10 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					federationDomain1.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain1.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					federationDomain1.Status.Conditions = allHappyConditions(federationDomain1.Spec.Issuer, frozenMetav1Now, 123)
 
-					federationDomain2.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain2.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					federationDomain2.Status.Conditions = allHappyConditions(federationDomain2.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
@@ -501,13 +523,13 @@ func TestSync(t *testing.T) {
 
 		when("there are errors updating the FederationDomains", func() {
 			var (
-				federationDomain *v1alpha1.FederationDomain
+				federationDomain *configv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				federationDomain = &v1alpha1.FederationDomain{
+				federationDomain = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer.com"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain))
@@ -529,7 +551,7 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					federationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					federationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					federationDomain.Status.Conditions = allHappyConditions(federationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
 					expectedActions := []coretesting.Action{
@@ -547,21 +569,21 @@ func TestSync(t *testing.T) {
 
 		when("there are both valid and invalid FederationDomains in the informer", func() {
 			var (
-				validFederationDomain   *v1alpha1.FederationDomain
-				invalidFederationDomain *v1alpha1.FederationDomain
+				validFederationDomain   *configv1alpha1.FederationDomain
+				invalidFederationDomain *configv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				validFederationDomain = &v1alpha1.FederationDomain{
+				validFederationDomain = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "valid-config", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://valid-issuer.com"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://valid-issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(validFederationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(validFederationDomain))
 
-				invalidFederationDomain = &v1alpha1.FederationDomain{
+				invalidFederationDomain = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(invalidFederationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(invalidFederationDomain))
@@ -589,11 +611,11 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				validFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				validFederationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 				validFederationDomain.Status.Conditions = allHappyConditions(validFederationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-				invalidFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseError
-				invalidFederationDomain.Status.Conditions = []v1alpha1.Condition{
+				invalidFederationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				invalidFederationDomain.Status.Conditions = []configv1alpha1.Condition{
 					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
 					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -624,7 +646,7 @@ func TestSync(t *testing.T) {
 						"federationdomains",
 						func(action coretesting.Action) (bool, runtime.Object, error) {
 							updateAction := action.(coretesting.UpdateActionImpl)
-							federationDomain := updateAction.Object.(*v1alpha1.FederationDomain)
+							federationDomain := updateAction.Object.(*configv1alpha1.FederationDomain)
 							if federationDomain.Name == validFederationDomain.Name {
 								return true, nil, nil
 							}
@@ -656,11 +678,11 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not update status: some update error")
 
-					validFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+					validFederationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 					validFederationDomain.Status.Conditions = allHappyConditions(validFederationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-					invalidFederationDomain.Status.Phase = v1alpha1.FederationDomainPhaseError
-					invalidFederationDomain.Status.Conditions = []v1alpha1.Condition{
+					invalidFederationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseError
+					invalidFederationDomain.Status.Conditions = []configv1alpha1.Condition{
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
 						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -688,30 +710,30 @@ func TestSync(t *testing.T) {
 
 		when("there are FederationDomains with duplicate issuer names in the informer", func() {
 			var (
-				federationDomainDuplicate1 *v1alpha1.FederationDomain
-				federationDomainDuplicate2 *v1alpha1.FederationDomain
-				federationDomain           *v1alpha1.FederationDomain
+				federationDomainDuplicate1 *configv1alpha1.FederationDomain
+				federationDomainDuplicate2 *configv1alpha1.FederationDomain
+				federationDomain           *configv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
 				// Hostnames are case-insensitive, so consider them to be duplicates if they only differ by case.
 				// Paths are case-sensitive, so having a path that differs only by case makes a new issuer.
-				federationDomainDuplicate1 = &v1alpha1.FederationDomain{
+				federationDomainDuplicate1 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainDuplicate1))
-				federationDomainDuplicate2 = &v1alpha1.FederationDomain{
+				federationDomainDuplicate2 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate2))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainDuplicate2))
 
-				federationDomain = &v1alpha1.FederationDomain{
+				federationDomain = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomain))
@@ -739,19 +761,19 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomain.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomain.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 				federationDomain.Status.Conditions = allHappyConditions(federationDomain.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomainDuplicate1.Status.Phase = v1alpha1.FederationDomainPhaseError
-				federationDomainDuplicate1.Status.Conditions = []v1alpha1.Condition{
+				federationDomainDuplicate1.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				federationDomainDuplicate1.Status.Conditions = []configv1alpha1.Condition{
 					sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					happyIssuerURLValidCondition(frozenMetav1Now, 123),
 					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
 					sadReadyCondition(frozenMetav1Now, 123),
 				}
 
-				federationDomainDuplicate2.Status.Phase = v1alpha1.FederationDomainPhaseError
-				federationDomainDuplicate2.Status.Conditions = []v1alpha1.Condition{
+				federationDomainDuplicate2.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				federationDomainDuplicate2.Status.Conditions = []configv1alpha1.Condition{
 					sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					happyIssuerURLValidCondition(frozenMetav1Now, 123),
 					happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -784,39 +806,39 @@ func TestSync(t *testing.T) {
 
 		when("there are FederationDomains with the same issuer DNS hostname using different secretNames", func() {
 			var (
-				federationDomainSameIssuerAddress1     *v1alpha1.FederationDomain
-				federationDomainSameIssuerAddress2     *v1alpha1.FederationDomain
-				federationDomainDifferentIssuerAddress *v1alpha1.FederationDomain
-				federationDomainWithInvalidIssuerURL   *v1alpha1.FederationDomain
+				federationDomainSameIssuerAddress1     *configv1alpha1.FederationDomain
+				federationDomainSameIssuerAddress2     *configv1alpha1.FederationDomain
+				federationDomainDifferentIssuerAddress *configv1alpha1.FederationDomain
+				federationDomainWithInvalidIssuerURL   *configv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				federationDomainSameIssuerAddress1 = &v1alpha1.FederationDomain{
+				federationDomainSameIssuerAddress1 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
-					Spec: v1alpha1.FederationDomainSpec{
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: "https://iSSueR-duPlicAte-adDress.cOm/path1",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainSameIssuerAddress1))
-				federationDomainSameIssuerAddress2 = &v1alpha1.FederationDomain{
+				federationDomainSameIssuerAddress2 = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
-					Spec: v1alpha1.FederationDomainSpec{
+					Spec: configv1alpha1.FederationDomainSpec{
 						// Validation treats these as the same DNS hostname even though they have different port numbers,
 						// because SNI information on the incoming requests is not going to include port numbers.
 						Issuer: "https://issuer-duplicate-address.com:1234/path2",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress2))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainSameIssuerAddress2))
 
-				federationDomainDifferentIssuerAddress = &v1alpha1.FederationDomain{
+				federationDomainDifferentIssuerAddress = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
-					Spec: v1alpha1.FederationDomainSpec{
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer-not-duplicate.com",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDifferentIssuerAddress))
@@ -827,11 +849,11 @@ func TestSync(t *testing.T) {
 				invalidIssuerURL := ":/host//path"
 				_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
 				r.Error(err)
-				federationDomainWithInvalidIssuerURL = &v1alpha1.FederationDomain{
+				federationDomainWithInvalidIssuerURL = &configv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
-					Spec: v1alpha1.FederationDomainSpec{
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: invalidIssuerURL,
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
@@ -860,27 +882,27 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				federationDomainDifferentIssuerAddress.Status.Phase = v1alpha1.FederationDomainPhaseReady
+				federationDomainDifferentIssuerAddress.Status.Phase = configv1alpha1.FederationDomainPhaseReady
 				federationDomainDifferentIssuerAddress.Status.Conditions = allHappyConditions(federationDomainDifferentIssuerAddress.Spec.Issuer, frozenMetav1Now, 123)
 
-				federationDomainSameIssuerAddress1.Status.Phase = v1alpha1.FederationDomainPhaseError
-				federationDomainSameIssuerAddress1.Status.Conditions = []v1alpha1.Condition{
+				federationDomainSameIssuerAddress1.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				federationDomainSameIssuerAddress1.Status.Conditions = []configv1alpha1.Condition{
 					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					happyIssuerURLValidCondition(frozenMetav1Now, 123),
 					sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
 					sadReadyCondition(frozenMetav1Now, 123),
 				}
 
-				federationDomainSameIssuerAddress2.Status.Phase = v1alpha1.FederationDomainPhaseError
-				federationDomainSameIssuerAddress2.Status.Conditions = []v1alpha1.Condition{
+				federationDomainSameIssuerAddress2.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				federationDomainSameIssuerAddress2.Status.Conditions = []configv1alpha1.Condition{
 					happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					happyIssuerURLValidCondition(frozenMetav1Now, 123),
 					sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
 					sadReadyCondition(frozenMetav1Now, 123),
 				}
 
-				federationDomainWithInvalidIssuerURL.Status.Phase = v1alpha1.FederationDomainPhaseError
-				federationDomainWithInvalidIssuerURL.Status.Conditions = []v1alpha1.Condition{
+				federationDomainWithInvalidIssuerURL.Status.Phase = configv1alpha1.FederationDomainPhaseError
+				federationDomainWithInvalidIssuerURL.Status.Conditions = []configv1alpha1.Condition{
 					unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
 					sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
 					unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),

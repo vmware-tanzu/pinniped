@@ -256,7 +256,7 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-// main returns an error instead of calling plog.Fatal to allow defer statements to run
+// main returns an error instead of calling plog.Fatal to allow defer statements to run.
 func main() error {
 	defer plog.Setup()()
 

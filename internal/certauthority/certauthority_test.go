@@ -36,7 +36,6 @@ var (
 )
 
 func TestLoad(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		cert    string

@@ -70,17 +70,17 @@ func (p *FederationDomainIssuer) validate() error {
 	return nil
 }
 
-// Issuer returns the issuer
+// Issuer returns the issuer.
 func (p *FederationDomainIssuer) Issuer() string {
 	return p.issuer
 }
 
-// IssuerHost returns the issuerHost
+// IssuerHost returns the issuerHost.
 func (p *FederationDomainIssuer) IssuerHost() string {
 	return p.issuerHost
 }
 
-// IssuerPath returns the issuerPath
+// IssuerPath returns the issuerPath.
 func (p *FederationDomainIssuer) IssuerPath() string {
 	return p.issuerPath
 }

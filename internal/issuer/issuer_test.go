@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+
 	"go.pinniped.dev/internal/mocks/issuermocks"
 )
 

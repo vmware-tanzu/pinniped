@@ -38,7 +38,7 @@ func (c ClientCertIssuers) Name() string {
 }
 
 func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
-	var errs []error
+	errs := make([]error, 0, len(c))
 
 	for _, issuer := range c {
 		certPEM, keyPEM, err := issuer.IssueClientCertPEM(username, groups, ttl)

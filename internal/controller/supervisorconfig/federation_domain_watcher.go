@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/errors"
+	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -37,18 +38,21 @@ const (
 	typeIssuerIsUnique                = "IssuerIsUnique"
 	typeIdentityProvidersFound        = "IdentityProvidersFound"
 
-	reasonSuccess                    = "Success"
-	reasonNotReady                   = "NotReady"
-	reasonUnableToValidate           = "UnableToValidate"
-	reasonInvalidIssuerURL           = "InvalidIssuerURL"
-	reasonDuplicateIssuer            = "DuplicateIssuer"
-	reasonDifferentSecretRefsFound   = "DifferentSecretRefsFound"
-	reasonLegacyConfigurationSuccess = "LegacyConfigurationSuccess"
+	reasonSuccess                                     = "Success"
+	reasonNotReady                                    = "NotReady"
+	reasonUnableToValidate                            = "UnableToValidate"
+	reasonInvalidIssuerURL                            = "InvalidIssuerURL"
+	reasonDuplicateIssuer                             = "DuplicateIssuer"
+	reasonDifferentSecretRefsFound                    = "DifferentSecretRefsFound"
+	reasonLegacyConfigurationSuccess                  = "LegacyConfigurationSuccess"
+	reasonLegacyConfigurationIdentityProviderNotFound = "LegacyConfigurationIdentityProviderNotFound"
+	reasonIdentityProvidersObjectRefsNotFound         = "IdentityProvidersObjectRefsNotFound"
+	reasonIdentityProviderNotSpecified                = "IdentityProviderNotSpecified"
 
 	celTransformerMaxExpressionRuntime = 5 * time.Second
 )
 
-// FederationDomainsSetter can be notified of all known valid providers with its SetIssuer function.
+// FederationDomainsSetter can be notified of all known valid providers with its SetFederationDomains function.
 // If there are no longer any valid issuers, then it can be called with no arguments.
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type FederationDomainsSetter interface {
@@ -155,7 +159,9 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 			// Check if that there is exactly one IDP defined in the Supervisor namespace of any IDP CRD type.
 			idpCRsCount := len(oidcIdentityProviders) + len(ldapIdentityProviders) + len(activeDirectoryIdentityProviders)
-			if idpCRsCount == 1 {
+
+			switch {
+			case idpCRsCount == 1:
 				foundIDPName := ""
 				// If so, default that IDP's DisplayName to be the same as its resource Name.
 				defaultFederationDomainIdentityProvider = &federationdomainproviders.FederationDomainIdentityProvider{}
@@ -173,7 +179,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 					defaultFederationDomainIdentityProvider.UID = activeDirectoryIdentityProviders[0].UID
 					foundIDPName = activeDirectoryIdentityProviders[0].Name
 				}
-				// Backwards compatibility mode always uses an empty identity transformation pipline since no
+				// Backwards compatibility mode always uses an empty identity transformation pipeline since no
 				// transformations are defined on the FederationDomain.
 				defaultFederationDomainIdentityProvider.Transforms = idtransform.NewTransformationPipeline()
 				conditions = append(conditions, &configv1alpha1.Condition{
@@ -185,42 +191,34 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 						"identity provider: please explicitly list identity providers in .spec.identityProviders "+
 						"(this legacy configuration mode may be removed in a future version of Pinniped)", foundIDPName),
 				})
-				plog.Warning("detected FederationDomain identity provider backwards compatibility mode: using the one existing identity provider for authentication",
-					"federationDomain", federationDomain.Name)
-			} else {
-				// TODO(BEN): add the "falsy" status versions of this condition and add tests to cover.
-				//  this matches the above "truthy" version of the condition above.
-				//
-				// There are no IDP CRs or there is more than one IDP CR. Either way, we are not in the backwards
-				// compatibility mode because there is not exactly one IDP CR in the namespace, despite the fact that no
-				// IDPs are listed on the FederationDomain. Create a FederationDomain which has no IDPs and therefore
-				// cannot actually be used to log in, but still serves endpoints.
-				// TODO: Write something into the FederationDomain's status to explain what's happening and how to fix it.
-				//   write code for these two condition~
-				// Type: IdentityProvidersFound
-				// Reason: LegacyConfigurationIdentityProviderNotFound
-				// Message: "no resources were specified by .spec.identityProviders[].objectRef and {number.of.idp.resources} identity provider resources have been found: please update .spec.identityProviders to specify which identity providers this federation domain should use"
-				// Status: false
-				//
-				// Type: IdentityProvidersFound
-				// Reason: LegacyConfigurationIdentityProviderNotFound
-				// Message: "no resources were specified by .spec.identityProviders[].objectRef and no identity provider resources have been found: please create an identity provider resource"
-				// status: false
-				//
-				plog.Warning("FederationDomain has no identity providers listed and there is not exactly one identity provider defined in the namespace: authentication disabled",
-					"federationDomain", federationDomain.Name,
-					"namespace", federationDomain.Namespace,
-					"identityProvidersCustomResourcesCount", idpCRsCount,
-				)
+			case idpCRsCount > 1:
+				conditions = append(conditions, &configv1alpha1.Condition{
+					Type:   typeIdentityProvidersFound,
+					Status: configv1alpha1.ConditionFalse,
+					Reason: reasonIdentityProviderNotSpecified, // vs LegacyConfigurationIdentityProviderNotFound as this is more specific
+					Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef "+
+						"and %q identity provider resources have been found: "+
+						"please update .spec.identityProviders to specify which identity providers "+
+						"this federation domain should use", idpCRsCount),
+				})
+			default:
+				conditions = append(conditions, &configv1alpha1.Condition{
+					Type:   typeIdentityProvidersFound,
+					Status: configv1alpha1.ConditionFalse,
+					Reason: reasonLegacyConfigurationIdentityProviderNotFound,
+					Message: "no resources were specified by .spec.identityProviders[].objectRef and no identity provider " +
+						"resources have been found: please create an identity provider resource",
+				})
 			}
 		}
 
 		// If there is an explicit list of IDPs on the FederationDomain, then process the list.
 		celTransformer, _ := celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime) // TODO: what is a good duration limit here?
-		// TODO: handle err
-		for _, idp := range federationDomain.Spec.IdentityProviders {
+		// TODO: handle err from NewCELTransformer() above
+
+		idpNotFoundIndices := []int{}
+		for index, idp := range federationDomain.Spec.IdentityProviders {
 			var idpResourceUID types.UID
-			var idpResourceName string
 			// TODO: Validate that all displayNames are unique within this FederationDomain's spec's list of identity providers.
 			// TODO: Validate that idp.ObjectRef.APIGroup is the expected APIGroup for IDP CRs "idp.supervisor.pinniped.dev"
 			// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
@@ -228,29 +226,35 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			// that does not resolve, put an error on the FederationDomain status.
 			switch idp.ObjectRef.Kind {
 			case "LDAPIdentityProvider":
-				ldapIDP, _ := c.ldapIdentityProviderInformer.Lister().LDAPIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				// TODO: handle notfound err and also unexpected errors
-				idpResourceName = ldapIDP.Name
-				idpResourceUID = ldapIDP.UID
+				ldapIDP, err := c.ldapIdentityProviderInformer.Lister().LDAPIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
+				if err == nil {
+					idpResourceUID = ldapIDP.UID
+				} else if errors.IsNotFound(err) {
+					idpNotFoundIndices = append(idpNotFoundIndices, index)
+				} else {
+					// TODO: handle unexpected errors
+				}
 			case "ActiveDirectoryIdentityProvider":
-				adIDP, _ := c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				// TODO: handle notfound err and also unexpected errors
-				idpResourceName = adIDP.Name
-				idpResourceUID = adIDP.UID
+				adIDP, err := c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
+				if err == nil {
+					idpResourceUID = adIDP.UID
+				} else if errors.IsNotFound(err) {
+					idpNotFoundIndices = append(idpNotFoundIndices, index)
+				} else {
+					// TODO: handle unexpected errors
+				}
 			case "OIDCIdentityProvider":
-				oidcIDP, _ := c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				// TODO: handle notfound err and also unexpected errors
-				idpResourceName = oidcIDP.Name
-				idpResourceUID = oidcIDP.UID
+				oidcIDP, err := c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
+				if err == nil {
+					idpResourceUID = oidcIDP.UID
+				} else if errors.IsNotFound(err) {
+					idpNotFoundIndices = append(idpNotFoundIndices, index)
+				} else {
+					// TODO: handle unexpected errors
+				}
 			default:
-				// TODO: handle bad user input
+				// TODO: handle an IDP type that we do not understand.
 			}
-			plog.Debug("resolved identity provider object reference",
-				"kind", idp.ObjectRef.Kind,
-				"name", idp.ObjectRef.Name,
-				"foundResourceName", idpResourceName,
-				"foundResourceUID", idpResourceUID,
-			)
 
 			// Prepare the transformations.
 			pipeline := idtransform.NewTransformationPipeline()
@@ -383,18 +387,31 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				"identityProviderResourceUID", idpResourceUID,
 			)
 		}
-		// TODO:
-		// - for the new "non-legacy" version of this to pass, we need to do this work.  however, we don't need this for all of the tests for legacy functionality to work.
-		// Type: IdentityProvidersFound
-		// Reason: IdentityProvidersObjectRefsNotFound
-		// Message: ".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: {list.of.specific.resources.that.cant.be.found.in.case.some.can.be.found.but.not.all}"
-		// Status: false
-		//
-		// TODO: maaaaybe we need this happy case as well for the legacy functionality tests to fully pass?
-		// Type: IdentityProvidersFound
-		// Reason: Success
-		// Message: Non-legacy happy state "the resources specified by .spec.identityProviders[].objectRef were found"
-		// Status: true
+
+		if len(idpNotFoundIndices) != 0 {
+			msgs := []string{}
+			for _, idpIndex := range idpNotFoundIndices {
+				idp := federationDomain.Spec.IdentityProviders[idpIndex]
+				displayName := idp.DisplayName
+				msgs = append(msgs, fmt.Sprintf("IDP with displayName %q at index %d", displayName, idpIndex))
+			}
+			conditions = append(conditions, &configv1alpha1.Condition{
+				Type:    typeIdentityProvidersFound,
+				Status:  configv1alpha1.ConditionFalse,
+				Reason:  reasonIdentityProvidersObjectRefsNotFound,
+				Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s", strings.Join(msgs, ", ")),
+			})
+		} else {
+			// TODO: write tests for this case.
+			// if len(federationDomain.Spec.IdentityProviders) != 0 {
+			// 	conditions = append(conditions, &configv1alpha1.Condition{
+			// 		Type:    typeIdentityProvidersFound,
+			// 		Status:  configv1alpha1.ConditionTrue,
+			// 		Reason:  reasonSuccess,
+			// 		Message: "the resources specified by .spec.identityProviders[].objectRef were found",
+			// 	})
+			// }
+		}
 
 		// Now that we have the list of IDPs for this FederationDomain, create the issuer.
 		var federationDomainIssuer *federationdomainproviders.FederationDomainIssuer
@@ -439,7 +456,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 	// (in test, this is wantFederationDomainIssues)
 	c.federationDomainsSetter.SetFederationDomains(federationDomainIssuers...)
 
-	return errors.NewAggregate(errs)
+	return errorsutil.NewAggregate(errs)
 }
 
 func (c *federationDomainWatcherController) updateStatus(

@@ -402,15 +402,14 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s", strings.Join(msgs, ", ")),
 			})
 		} else {
-			// TODO: write tests for this case.
-			// if len(federationDomain.Spec.IdentityProviders) != 0 {
-			// 	conditions = append(conditions, &configv1alpha1.Condition{
-			// 		Type:    typeIdentityProvidersFound,
-			// 		Status:  configv1alpha1.ConditionTrue,
-			// 		Reason:  reasonSuccess,
-			// 		Message: "the resources specified by .spec.identityProviders[].objectRef were found",
-			// 	})
-			// }
+			if len(federationDomain.Spec.IdentityProviders) != 0 {
+				conditions = append(conditions, &configv1alpha1.Condition{
+					Type:    typeIdentityProvidersFound,
+					Status:  configv1alpha1.ConditionTrue,
+					Reason:  reasonSuccess,
+					Message: "the resources specified by .spec.identityProviders[].objectRef were found",
+				})
+			}
 		}
 
 		// Now that we have the list of IDPs for this FederationDomain, create the issuer.
@@ -450,10 +449,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
 		}
 	}
-	// BEN: notes:
-	// implementer of this function is the endpoint manager.
-	// it should re-setup all of the endpoints for the specified federation domains.
-	// (in test, this is wantFederationDomainIssues)
+
 	c.federationDomainsSetter.SetFederationDomains(federationDomainIssuers...)
 
 	return errorsutil.NewAggregate(errs)

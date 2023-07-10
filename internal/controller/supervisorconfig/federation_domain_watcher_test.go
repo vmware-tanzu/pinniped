@@ -118,6 +118,12 @@ func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...
 	f.FederationDomainsReceived = federationDomains
 }
 
+var federationDomainGVR = schema.GroupVersionResource{
+	Group:    configv1alpha1.SchemeGroupVersion.Group,
+	Version:  configv1alpha1.SchemeGroupVersion.Version,
+	Resource: "federationdomains",
+}
+
 func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	t.Parallel()
 
@@ -127,22 +133,18 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	frozenNow := time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
 	frozenMetav1Now := metav1.NewTime(frozenNow)
 
-	federationDomainGVR := schema.GroupVersionResource{
-		Group:    configv1alpha1.SchemeGroupVersion.Group,
-		Version:  configv1alpha1.SchemeGroupVersion.Version,
-		Resource: "federationdomains",
-	}
-
 	identityProvider1 := &idpv1alpha1.OIDCIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "some-name1",
-			UID:  "some-uid1",
+			Name:      "some-name1",
+			Namespace: namespace,
+			UID:       "some-uid1",
 		},
 	}
 	identityProvider2 := &idpv1alpha1.OIDCIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "some-name2",
-			UID:  "some-uid2",
+			Name:      "some-name2",
+			Namespace: namespace,
+			UID:       "some-uid2",
 		},
 	}
 
@@ -156,9 +158,15 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
 	}
 
-	invalidFederationDomain := &configv1alpha1.FederationDomain{
+	invalidIssuerURLFederationDomain := &configv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace, Generation: 123},
 		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
+	}
+
+	federationDomainIssuerWithIDPs := func(t *testing.T, fedDomainIssuer string, fdIDPs []*federationdomainproviders.FederationDomainIdentityProvider) *federationdomainproviders.FederationDomainIssuer {
+		fdIssuer, err := federationdomainproviders.NewFederationDomainIssuer(fedDomainIssuer, fdIDPs)
+		require.NoError(t, err)
+		return fdIssuer
 	}
 
 	federationDomainIssuerWithDefaultIDP := func(t *testing.T, fedDomainIssuer string, idpObjectMeta metav1.ObjectMeta) *federationdomainproviders.FederationDomainIssuer {
@@ -308,6 +316,17 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
+	happyIdentityProvidersFoundConditionSuccess := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the resources specified by .spec.identityProviders[].objectRef were found",
+		}
+	}
+
 	sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "IdentityProvidersFound",
@@ -345,9 +364,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	allHappyConditionsLegacyConfigurationSuccess := func(issuer, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
+	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
 		return []configv1alpha1.Condition{
-			// sorted alphabetically by type
+			// expect them to be sorted alphabetically by type
 			happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
 			happyIssuerIsUniqueCondition(time, observedGeneration),
 			happyIssuerURLValidCondition(time, observedGeneration),
@@ -356,38 +375,33 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
+	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
+		return []configv1alpha1.Condition{
+			// expect them to be sorted alphabetically by type
+			happyIdentityProvidersFoundConditionSuccess(frozenMetav1Now, 123),
+			happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+			happyIssuerURLValidCondition(frozenMetav1Now, 123),
+			happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+			happyReadyCondition(issuer, frozenMetav1Now, 123),
+		}
+	}
+
 	invalidIssuerURL := ":/host//path"
 	_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
 	require.Error(t, err)
-
-	newCopyWithStatus := func(
-		fd *configv1alpha1.FederationDomain,
-		phase configv1alpha1.FederationDomainPhase,
-		conditions []configv1alpha1.Condition,
-	) *configv1alpha1.FederationDomain {
-		fdCopy := fd.DeepCopy()
-		fdCopy.Status.Phase = phase
-		fdCopy.Status.Conditions = conditions
-		return fdCopy
-	}
 
 	tests := []struct {
 		name                        string
 		inputObjects                []runtime.Object
 		configPinnipedClient        func(*pinnipedfake.Clientset)
 		wantErr                     string
-		wantActions                 func(t *testing.T) []coretesting.Action
-		wantFederationDomainIssuers func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer
+		wantStatusUpdates           []*configv1alpha1.FederationDomain
+		wantFederationDomainIssuers []*federationdomainproviders.FederationDomainIssuer
 	}{
 		{
-			name:         "when there are no FederationDomains, nothing happens",
-			inputObjects: []runtime.Object{},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{}
-			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{}
-			},
+			name:                        "when there are no FederationDomains, no update actions happen and the list of FederationDomainIssuers is set to the empty list",
+			inputObjects:                []runtime.Object{},
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{},
 		},
 		{
 			name: "legacy config: when no identity provider is specified on federation domains, but exactly one identity " +
@@ -398,27 +412,19 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 				identityProvider1,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, identityProvider1.ObjectMeta),
-					federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, identityProvider1.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain1.Namespace,
-						newCopyWithStatus(federationDomain1,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
@@ -426,26 +432,26 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				"the out-of-date FederationDomain",
 			inputObjects: []runtime.Object{
 				identityProvider1,
-				newCopyWithStatus(federationDomain1, configv1alpha1.FederationDomainPhaseReady,
-					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-				),
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: configv1alpha1.FederationDomainStatus{
+						Phase:      configv1alpha1.FederationDomainPhaseReady,
+						Conditions: allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+					},
+				},
 				federationDomain2,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, identityProvider1.ObjectMeta),
-					federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, identityProvider1.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				// only one update, because the other FederationDomain already had the right status
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
@@ -469,71 +475,55 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				)
 			},
 			wantErr: "could not update status: some update error",
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					// federationDomain1 is not included because it encountered an error
-					federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				// federationDomain1 is not included because it encountered an error
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain1.Namespace,
-						newCopyWithStatus(federationDomain1,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
 			name: "when there are both valid and invalid FederationDomains, the status will be correctly set on each " +
 				"FederationDomain individually",
 			inputObjects: []runtime.Object{
-				invalidFederationDomain,
+				invalidIssuerURLFederationDomain,
 				federationDomain2,
 				identityProvider1,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					// only the valid FederationDomain
-					federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				// only the valid FederationDomain
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(invalidFederationDomain,
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
 			name: "when there are both valid and invalid FederationDomains, but updating the invalid one fails, the " +
 				"existing status will be unchanged",
 			inputObjects: []runtime.Object{
-				invalidFederationDomain,
+				invalidIssuerURLFederationDomain,
 				federationDomain2,
 				identityProvider1,
 			},
@@ -543,7 +533,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					"federationdomains",
 					func(action coretesting.Action) (bool, runtime.Object, error) {
 						fd := action.(coretesting.UpdateAction).GetObject().(*configv1alpha1.FederationDomain)
-						if fd.Name == invalidFederationDomain.Name {
+						if fd.Name == invalidIssuerURLFederationDomain.Name {
 							return true, nil, errors.New("some update error")
 						}
 						return false, nil, nil
@@ -551,33 +541,25 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				)
 			},
 			wantErr: "could not update status: some update error",
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					// only the valid FederationDomain
-					federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				// only the valid FederationDomain
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(invalidFederationDomain,
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
@@ -598,57 +580,43 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 				identityProvider1,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					// different path (paths are case-sensitive)
-					federationDomainIssuerWithDefaultIDP(t, "https://issuer-duplicate.com/A", identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, "https://issuer-duplicate.com/A", identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
-								Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
-								Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
-								Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"},
-							},
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/A", identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/A", identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
@@ -687,84 +655,56 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 				identityProvider1,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{
-					federationDomainIssuerWithDefaultIDP(t, "https://issuer-not-duplicate.com", identityProvider1.ObjectMeta),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, "https://issuer-not-duplicate.com", identityProvider1.ObjectMeta),
 			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
-								Spec: configv1alpha1.FederationDomainSpec{
-									Issuer: "https://iSSueR-duPlicAte-adDress.cOm/path1",
-									TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
-								},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
-								Spec: configv1alpha1.FederationDomainSpec{
-									Issuer: "https://issuer-duplicate-address.com:1234/path2",
-									TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
-								},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", invalidFederationDomain.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
-								Spec: configv1alpha1.FederationDomainSpec{
-									Issuer: invalidIssuerURL,
-									TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
-								},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
-								unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
-								unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
-								Spec: configv1alpha1.FederationDomainSpec{
-									Issuer: "https://issuer-not-duplicate.com",
-									TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
-								},
-							},
-							configv1alpha1.FederationDomainPhaseReady,
-							allHappyConditionsLegacyConfigurationSuccess("https://issuer-not-duplicate.com", identityProvider1.Name, frozenMetav1Now, 123),
-						),
-					),
-				}
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(identityProvider1.Name, frozenMetav1Now, 123),
+						unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
+						unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess("https://issuer-not-duplicate.com", identityProvider1.Name, frozenMetav1Now, 123),
+				),
 			},
 		},
 		{
@@ -773,36 +713,28 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain1,
 				federationDomain2,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{}
-			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain1.Namespace,
-						newCopyWithStatus(federationDomain1,
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain2.Namespace,
-						newCopyWithStatus(federationDomain2,
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
 			},
 		},
 		{
@@ -812,24 +744,18 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				identityProvider1,
 				identityProvider2,
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{}
-			},
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", federationDomain1.Namespace,
-						newCopyWithStatus(federationDomain1,
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(2, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(2, frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
 			},
 		},
 		{
@@ -848,62 +774,93 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Name:     "cant-find-me",
 								},
 							},
+							{
+								DisplayName: "cant-find-me-either",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "cant-find-me-either",
+								},
+							},
 						},
 					},
 				},
 			},
-			wantFederationDomainIssuers: func(t *testing.T) []*federationdomainproviders.FederationDomainIssuer {
-				return []*federationdomainproviders.FederationDomainIssuer{}
-			},
-			// TODO: sketch out a way to eliminate the whole wantActions and be more precise
-			// if not wantActions, might wantStatusUpdate?
-			// wantStatusUpdate: func(t *testing.T, []configv1alpha1.FederationDomain) {
-			// 	{
-			// 		Name: "foo",
-			// 		Namespace: "bar",
-			// 		Phase: "Happy",
-			// 		Conditions: []metav1.Condition{},
-			// 	}
-			// },
-			wantActions: func(t *testing.T) []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace,
-						newCopyWithStatus(
-							&configv1alpha1.FederationDomain{
-								ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-								Spec: configv1alpha1.FederationDomainSpec{
-									Issuer: "https://issuer1.com",
-									IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
-										{
-											DisplayName: "cant-find-me",
-											ObjectRef: corev1.TypedLocalObjectReference{
-												APIGroup: pointer.String(apiGroupSupervisor),
-												Kind:     "OIDCIdentityProvider",
-												Name:     "cant-find-me",
-											},
-										},
-									},
-								},
-							},
-							configv1alpha1.FederationDomainPhaseError,
-							[]configv1alpha1.Condition{
-								sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
-									`.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: `+
-										`IDP with displayName "cant-find-me" at index 0`, frozenMetav1Now, 123),
-								happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
-								happyIssuerURLValidCondition(frozenMetav1Now, 123),
-								happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
-								sadReadyCondition(frozenMetav1Now, 123),
-							},
-						),
-					),
-				}
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
+							`.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: `+
+								`IDP with displayName "cant-find-me" at index 0, IDP with displayName "cant-find-me-either" at index 1`,
+							frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					},
+				),
 			},
 		},
-		// {
-		// 	name:    "the federation domain specifies identity providers that exist",
-		// 	wantErr: "", // n/a
-		// },
+		{
+			name: "the federation domain specifies identity providers that all exist",
+			inputObjects: []runtime.Object{
+				identityProvider1,
+				identityProvider2,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     identityProvider1.Name,
+								},
+							},
+							{
+								DisplayName: "can-find-me-too",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     identityProvider2.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFederationDomainIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithIDPs(t, "https://issuer1.com",
+					[]*federationdomainproviders.FederationDomainIdentityProvider{
+						{
+							DisplayName: "can-find-me",
+							UID:         identityProvider1.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
+						{
+							DisplayName: "can-find-me-too",
+							UID:         identityProvider2.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
+					}),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+				),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -950,20 +907,23 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 
 			if tt.wantFederationDomainIssuers != nil {
 				require.True(t, federationDomainsSetter.SetFederationDomainsWasCalled)
-				require.ElementsMatch(t, tt.wantFederationDomainIssuers(t), federationDomainsSetter.FederationDomainsReceived)
+				require.ElementsMatch(t, tt.wantFederationDomainIssuers, federationDomainsSetter.FederationDomainsReceived)
 			} else {
 				require.False(t, federationDomainsSetter.SetFederationDomainsWasCalled)
 			}
 
-			if tt.wantActions != nil {
-				// In this controller we don't actually care about the order of the actions, the FederationDomains
-				// can be updated in any order.  Therefore, we are sorting here to make the test output easier to read.
-				// Unfortunately the timezone nested in the condition still makes it pretty ugly.
-				actualActions := pinnipedAPIClient.Actions()
-				sortActions(t, actualActions)
-				wantedActions := tt.wantActions(t)
-				sortActions(t, wantedActions)
-				require.Equal(t, wantedActions, actualActions)
+			if tt.wantStatusUpdates != nil {
+				// This controller should only perform updates to FederationDomain statuses.
+				// In this controller we don't actually care about the order of the actions, since the FederationDomains
+				// statuses can be updated in any order.  Therefore, we are sorting here so we can use require.Equal
+				// to make the test output easier to read. Unfortunately the timezone nested in the condition can still
+				// make the test failure diffs ugly sometimes, but we do want to assert about timestamps so there's not
+				// much we can do about those.
+				actualFederationDomainUpdates := getFederationDomainStatusUpdates(t, pinnipedAPIClient.Actions())
+				sortFederationDomainsByName(actualFederationDomainUpdates)
+				sortFederationDomainsByName(tt.wantStatusUpdates)
+				// Use require.Equal instead of require.ElementsMatch because require.Equal prints a nice diff.
+				require.Equal(t, tt.wantStatusUpdates, actualFederationDomainUpdates)
 			} else {
 				require.Empty(t, pinnipedAPIClient.Actions())
 			}
@@ -971,18 +931,49 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	}
 }
 
-func sortActions(t *testing.T, actions []coretesting.Action) {
-	sort.SliceStable(actions, func(prev, next int) bool {
-		updateAction1, ok := actions[prev].(coretesting.UpdateAction)
-		require.True(t, ok, "failed to cast an action as an coretesting.UpdateAction for sort comparison %#v", actions[prev])
-		obj1, ok := updateAction1.GetObject().(metav1.Object)
-		require.True(t, ok, "failed to cast an action as a metav1.Object for sort comparison %#v", actions[prev])
+func expectedFederationDomainStatusUpdate(
+	fd *configv1alpha1.FederationDomain,
+	phase configv1alpha1.FederationDomainPhase,
+	conditions []configv1alpha1.Condition,
+) *configv1alpha1.FederationDomain {
+	fdCopy := fd.DeepCopy()
 
-		updateAction2, ok := actions[next].(coretesting.UpdateAction)
-		require.True(t, ok, "failed to cast an action as an coretesting.UpdateAction for sort comparison %#v", actions[next])
-		obj2, ok := updateAction2.GetObject().(metav1.Object)
-		require.True(t, ok, "failed to cast an action as a metav1.Object for sort comparison %#v", actions[next])
+	// We don't care about the spec of a FederationDomain in an update status action,
+	// so clear it out to make it easier to write expected values.
+	fdCopy.Spec = configv1alpha1.FederationDomainSpec{}
 
-		return obj1.GetName() < obj2.GetName()
+	fdCopy.Status.Phase = phase
+	fdCopy.Status.Conditions = conditions
+
+	return fdCopy
+}
+
+func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action) []*configv1alpha1.FederationDomain {
+	federationDomains := []*configv1alpha1.FederationDomain{}
+
+	for _, action := range actions {
+		updateAction, ok := action.(coretesting.UpdateAction)
+		require.True(t, ok, "failed to cast an action as an coretesting.UpdateAction: %#v", action)
+		require.Equal(t, federationDomainGVR, updateAction.GetResource(), "an update action should have updated a FederationDomain but updated something else")
+		require.Equal(t, "status", updateAction.GetSubresource(), "an update action should have updated the status subresource but updated something else")
+
+		fd, ok := updateAction.GetObject().(*configv1alpha1.FederationDomain)
+		require.True(t, ok, "failed to cast an action's object as a FederationDomain: %#v", updateAction.GetObject())
+		require.Equal(t, fd.Namespace, updateAction.GetNamespace(), "an update action might have been called on the wrong namespace for a FederationDomain")
+
+		// We don't care about the spec of a FederationDomain in an update status action,
+		// so clear it out to make it easier to write expected values.
+		copyOfFD := fd.DeepCopy()
+		copyOfFD.Spec = configv1alpha1.FederationDomainSpec{}
+
+		federationDomains = append(federationDomains, copyOfFD)
+	}
+
+	return federationDomains
+}
+
+func sortFederationDomainsByName(federationDomains []*configv1alpha1.FederationDomain) {
+	sort.SliceStable(federationDomains, func(a, b int) bool {
+		return federationDomains[a].GetName() < federationDomains[b].GetName()
 	})
 }

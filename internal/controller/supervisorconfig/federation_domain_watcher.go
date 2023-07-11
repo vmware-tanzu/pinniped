@@ -135,13 +135,17 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 	}
 
 	if c.celTransformer == nil {
-		c.celTransformer, _ = celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime) // TODO: what is a good duration limit here?
-		// TODO: handle err from NewCELTransformer() above
+		c.celTransformer, err = celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime)
+		if err != nil {
+			return err // shouldn't really happen
+		}
 	}
 
 	// Process each FederationDomain to validate its spec and to turn it into a FederationDomainIssuer.
-	federationDomainIssuers, fdToConditionsMap, _ := c.processAllFederationDomains(federationDomains)
-	// TODO: handle err
+	federationDomainIssuers, fdToConditionsMap, err := c.processAllFederationDomains(federationDomains)
+	if err != nil {
+		return err
+	}
 
 	// Load the endpoints of every valid FederationDomain. Removes the endpoints of any
 	// previous FederationDomains which no longer exist or are no longer valid.
@@ -172,8 +176,10 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 
 		conditions = crossDomainConfigValidator.Validate(federationDomain, conditions)
 
-		federationDomainIssuer, conditions, _ := c.makeFederationDomainIssuer(federationDomain, conditions)
-		// TODO: handle err
+		federationDomainIssuer, conditions, err := c.makeFederationDomainIssuer(federationDomain, conditions)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		// Now that we have determined the conditions, save them for after the loop.
 		// For a valid FederationDomain, want to update the conditions after we have
@@ -193,16 +199,21 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 	federationDomain *configv1alpha1.FederationDomain,
 	conditions []*configv1alpha1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
+	var err error
 	// Create the list of IDPs for this FederationDomain.
 	// Don't worry if the IDP CRs themselves is phase=Ready because those which are not ready will not be loaded
 	// into the provider cache, so they cannot actually be used to authenticate.
 	var federationDomainIssuer *federationdomainproviders.FederationDomainIssuer
 	if len(federationDomain.Spec.IdentityProviders) == 0 {
-		federationDomainIssuer, conditions, _ = c.makeLegacyFederationDomainIssuer(federationDomain, conditions)
-		// TODO handle err
+		federationDomainIssuer, conditions, err = c.makeLegacyFederationDomainIssuer(federationDomain, conditions)
+		if err != nil {
+			return nil, nil, err
+		}
 	} else {
-		federationDomainIssuer, conditions, _ = c.makeFederationDomainIssuerWithExplicitIDPs(federationDomain, conditions)
-		// TODO handle err
+		federationDomainIssuer, conditions, err = c.makeFederationDomainIssuerWithExplicitIDPs(federationDomain, conditions)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return federationDomainIssuer, conditions, nil
@@ -215,10 +226,18 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	var defaultFederationDomainIdentityProvider *federationdomainproviders.FederationDomainIdentityProvider
 
 	// When the FederationDomain does not list any IDPs, then we might be in backwards compatibility mode.
-	oidcIdentityProviders, _ := c.oidcIdentityProviderInformer.Lister().List(labels.Everything())
-	ldapIdentityProviders, _ := c.ldapIdentityProviderInformer.Lister().List(labels.Everything())
-	activeDirectoryIdentityProviders, _ := c.activeDirectoryIdentityProviderInformer.Lister().List(labels.Everything())
-	// TODO handle err return value for each of the above three lines
+	oidcIdentityProviders, err := c.oidcIdentityProviderInformer.Lister().List(labels.Everything())
+	if err != nil {
+		return nil, nil, err
+	}
+	ldapIdentityProviders, err := c.ldapIdentityProviderInformer.Lister().List(labels.Everything())
+	if err != nil {
+		return nil, nil, err
+	}
+	activeDirectoryIdentityProviders, err := c.activeDirectoryIdentityProviderInformer.Lister().List(labels.Everything())
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Check if that there is exactly one IDP defined in the Supervisor namespace of any IDP CRD type.
 	idpCRsCount := len(oidcIdentityProviders) + len(ldapIdentityProviders) + len(activeDirectoryIdentityProviders)
@@ -285,7 +304,6 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	federationDomain *configv1alpha1.FederationDomain,
 	conditions []*configv1alpha1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
-	var err error
 	federationDomainIdentityProviders := []*federationdomainproviders.FederationDomainIdentityProvider{}
 	idpNotFoundIndices := []int{}
 
@@ -295,14 +313,18 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 		// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
 		// is phase=Ready, because it will not be loaded into the cache if not ready. For each objectRef
 		// that does not resolve, put an error on the FederationDomain status.
-		idpResourceUID, idpWasFound, _ := c.findIDPsUIDByObjectRef(idp.ObjectRef, federationDomain.Namespace)
-		// TODO handle err
+		idpResourceUID, idpWasFound, err := c.findIDPsUIDByObjectRef(idp.ObjectRef, federationDomain.Namespace)
+		if err != nil {
+			return nil, nil, err
+		}
 		if !idpWasFound {
 			idpNotFoundIndices = append(idpNotFoundIndices, index)
 		}
 
-		pipeline, _ := c.makeTransformationPipelineForIdentityProvider(idp, federationDomain.Name)
-		// TODO handle err
+		pipeline, err := c.makeTransformationPipelineForIdentityProvider(idp, federationDomain.Name)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		// For each valid IDP (unique displayName, valid objectRef + valid transforms), add it to the list.
 		federationDomainIdentityProviders = append(federationDomainIdentityProviders, &federationdomainproviders.FederationDomainIdentityProvider{
@@ -358,7 +380,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	case "OIDCIdentityProvider":
 		foundIDP, err = c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(namespace).Get(objectRef.Name)
 	default:
-		// TODO: handle an IDP type that we do not understand.
+		// TODO: handle an IDP type that we do not understand by writing a status condition
 	}
 
 	switch {
@@ -367,7 +389,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	case errors.IsNotFound(err):
 		return "", false, nil
 	default:
-		// TODO: handle unexpected errors
+		return "", false, err // unexpected error
 	}
 	return idpResourceUID, true, nil
 }
@@ -383,32 +405,34 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 	}
 
 	// Read all the declared constants.
-	for _, c := range idp.Transforms.Constants {
-		switch c.Type {
+	for _, constant := range idp.Transforms.Constants {
+		switch constant.Type {
 		case "string":
-			consts.StringConstants[c.Name] = c.StringValue
+			consts.StringConstants[constant.Name] = constant.StringValue
 		case "stringList":
-			consts.StringListConstants[c.Name] = c.StringListValue
+			consts.StringListConstants[constant.Name] = constant.StringListValue
 		default:
-			// TODO: this shouldn't really happen since the CRD validates it, but handle it as an error
+			// This shouldn't really happen since the CRD validates it, but handle it as an error.
+			return nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
 		}
 	}
 
 	// Compile all the expressions and add them to the pipeline.
-	for idx, e := range idp.Transforms.Expressions {
+	for idx, expr := range idp.Transforms.Expressions {
 		var rawTransform celtransformer.CELTransformation
-		switch e.Type {
+		switch expr.Type {
 		case "username/v1":
-			rawTransform = &celtransformer.UsernameTransformation{Expression: e.Expression}
+			rawTransform = &celtransformer.UsernameTransformation{Expression: expr.Expression}
 		case "groups/v1":
-			rawTransform = &celtransformer.GroupsTransformation{Expression: e.Expression}
+			rawTransform = &celtransformer.GroupsTransformation{Expression: expr.Expression}
 		case "policy/v1":
 			rawTransform = &celtransformer.AllowAuthenticationPolicy{
-				Expression:                    e.Expression,
-				RejectedAuthenticationMessage: e.Message,
+				Expression:                    expr.Expression,
+				RejectedAuthenticationMessage: expr.Message,
 			}
 		default:
-			// TODO: this shouldn't really happen since the CRD validates it, but handle it as an error
+			// This shouldn't really happen since the CRD validates it, but handle it as an error.
+			return nil, fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
 		}
 		compiledTransform, err := c.celTransformer.CompileTransformation(rawTransform, consts)
 		if err != nil {
@@ -417,15 +441,15 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 				"federationDomain", federationDomainName,
 				"idpDisplayName", idp.DisplayName,
 				"transformationIndex", idx,
-				"transformationType", e.Type,
-				"transformationExpression", e.Expression,
+				"transformationType", expr.Type,
+				"transformationExpression", expr.Expression,
 			)
 		}
 		pipeline.AppendTransformation(compiledTransform)
 		plog.Debug("successfully compiled identity transformation expression",
-			"type", e.Type,
-			"expr", e.Expression,
-			"policyMessage", e.Message,
+			"type", expr.Type,
+			"expr", expr.Expression,
+			"policyMessage", expr.Message,
 		)
 	}
 

@@ -895,6 +895,66 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				),
 			},
 		},
+		{
+			name: "the federation domain specifies illegal const type, which shouldn't really happen since the CRD validates it",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{
+											Type: "this is illegal",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `one of spec.identityProvider[].transforms.constants[].type is invalid: "this is illegal"`,
+		},
+		{
+			name: "the federation domain specifies illegal expression type, which shouldn't really happen since the CRD validates it",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{
+											Type: "this is illegal",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `one of spec.identityProvider[].transforms.expressions[].type is invalid: "this is illegal"`,
+		},
 	}
 
 	for _, tt := range tests {

@@ -485,7 +485,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			},
 			wantErr: "could not update status: some update error",
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
-				// federationDomain1 is not included because it encountered an error
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
 			wantStatusUpdates: []*configv1alpha1.FederationDomain{

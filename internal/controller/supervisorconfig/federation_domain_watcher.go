@@ -134,6 +134,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 	var errs []error
 	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
 	crossDomainConfigValidator := newCrossFederationDomainConfigValidator(federationDomains)
+	fdToConditionsMap := map[*configv1alpha1.FederationDomain][]*configv1alpha1.Condition{}
 
 	for _, federationDomain := range federationDomains {
 		conditions := make([]*configv1alpha1.Condition, 0, 4)
@@ -425,10 +426,10 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			})
 		}
 
-		if err = c.updateStatus(ctx.Context, federationDomain, conditions); err != nil {
-			errs = append(errs, fmt.Errorf("could not update status: %w", err))
-			continue
-		}
+		// Now that we have determined the conditions, save them for after the loop.
+		// For a valid FederationDomain, want to update the conditions after we have
+		// made the FederationDomain's endpoints available.
+		fdToConditionsMap[federationDomain] = conditions
 
 		if !hadErrorCondition(conditions) {
 			// Successfully validated the FederationDomain, so allow it to be loaded.
@@ -436,7 +437,18 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 	}
 
+	// Load the endpoints of every valid FederationDomain. Removes the endpoints of any
+	// previous FederationDomains which no longer exist or are no longer valid.
 	c.federationDomainsSetter.SetFederationDomains(federationDomainIssuers...)
+
+	// Now that the endpoints of every valid FederationDomain are available, update the
+	// statuses. This allows clients to wait for Ready without any race conditions in the
+	// endpoints being available.
+	for federationDomain, conditions := range fdToConditionsMap {
+		if err = c.updateStatus(ctx.Context, federationDomain, conditions); err != nil {
+			errs = append(errs, fmt.Errorf("could not update status: %w", err))
+		}
+	}
 
 	return errorsutil.NewAggregate(errs)
 }

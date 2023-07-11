@@ -218,42 +218,30 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 		idpNotFoundIndices := []int{}
 		for index, idp := range federationDomain.Spec.IdentityProviders {
-			var idpResourceUID types.UID
 			// TODO: Validate that all displayNames are unique within this FederationDomain's spec's list of identity providers.
 			// TODO: Validate that idp.ObjectRef.APIGroup is the expected APIGroup for IDP CRs "idp.supervisor.pinniped.dev"
 			// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
 			// is phase=Ready, because it will not be loaded into the cache if not ready. For each objectRef
 			// that does not resolve, put an error on the FederationDomain status.
+			var idpResourceUID types.UID
+			var foundIDP metav1.Object
 			switch idp.ObjectRef.Kind {
 			case "LDAPIdentityProvider":
-				ldapIDP, err := c.ldapIdentityProviderInformer.Lister().LDAPIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				if err == nil {
-					idpResourceUID = ldapIDP.UID
-				} else if errors.IsNotFound(err) {
-					idpNotFoundIndices = append(idpNotFoundIndices, index)
-				} else {
-					// TODO: handle unexpected errors
-				}
+				foundIDP, err = c.ldapIdentityProviderInformer.Lister().LDAPIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
 			case "ActiveDirectoryIdentityProvider":
-				adIDP, err := c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				if err == nil {
-					idpResourceUID = adIDP.UID
-				} else if errors.IsNotFound(err) {
-					idpNotFoundIndices = append(idpNotFoundIndices, index)
-				} else {
-					// TODO: handle unexpected errors
-				}
+				foundIDP, err = c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
 			case "OIDCIdentityProvider":
-				oidcIDP, err := c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
-				if err == nil {
-					idpResourceUID = oidcIDP.UID
-				} else if errors.IsNotFound(err) {
-					idpNotFoundIndices = append(idpNotFoundIndices, index)
-				} else {
-					// TODO: handle unexpected errors
-				}
+				foundIDP, err = c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(federationDomain.Namespace).Get(idp.ObjectRef.Name)
 			default:
 				// TODO: handle an IDP type that we do not understand.
+			}
+			switch {
+			case err == nil:
+				idpResourceUID = foundIDP.GetUID()
+			case errors.IsNotFound(err):
+				idpNotFoundIndices = append(idpNotFoundIndices, index)
+			default:
+				// TODO: handle unexpected errors
 			}
 
 			// Prepare the transformations.
@@ -390,26 +378,24 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 		if len(idpNotFoundIndices) != 0 {
 			msgs := []string{}
-			for _, idpIndex := range idpNotFoundIndices {
-				idp := federationDomain.Spec.IdentityProviders[idpIndex]
-				displayName := idp.DisplayName
-				msgs = append(msgs, fmt.Sprintf("IDP with displayName %q at index %d", displayName, idpIndex))
+			for _, idpNotFoundIndex := range idpNotFoundIndices {
+				msgs = append(msgs, fmt.Sprintf(".spec.identityProviders[%d] with displayName %q", idpNotFoundIndex,
+					federationDomain.Spec.IdentityProviders[idpNotFoundIndex].DisplayName))
 			}
 			conditions = append(conditions, &configv1alpha1.Condition{
-				Type:    typeIdentityProvidersFound,
-				Status:  configv1alpha1.ConditionFalse,
-				Reason:  reasonIdentityProvidersObjectRefsNotFound,
-				Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s", strings.Join(msgs, ", ")),
+				Type:   typeIdentityProvidersFound,
+				Status: configv1alpha1.ConditionFalse,
+				Reason: reasonIdentityProvidersObjectRefsNotFound,
+				Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s",
+					strings.Join(msgs, ", ")),
 			})
-		} else {
-			if len(federationDomain.Spec.IdentityProviders) != 0 {
-				conditions = append(conditions, &configv1alpha1.Condition{
-					Type:    typeIdentityProvidersFound,
-					Status:  configv1alpha1.ConditionTrue,
-					Reason:  reasonSuccess,
-					Message: "the resources specified by .spec.identityProviders[].objectRef were found",
-				})
-			}
+		} else if len(federationDomain.Spec.IdentityProviders) != 0 {
+			conditions = append(conditions, &configv1alpha1.Condition{
+				Type:    typeIdentityProvidersFound,
+				Status:  configv1alpha1.ConditionTrue,
+				Reason:  reasonSuccess,
+				Message: "the resources specified by .spec.identityProviders[].objectRef were found",
+			})
 		}
 
 		// Now that we have the list of IDPs for this FederationDomain, create the issuer.

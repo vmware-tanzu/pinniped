@@ -2078,10 +2078,20 @@ func testSupervisorLogin(
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		issuerURL.String(),
-		certSecret.Name,
-		configv1alpha1.FederationDomainPhaseReady, // TODO: expect another phase because this is a legacy FederationDomain and there is no IDP yet, so it is not safe to try to do logins until the IDP exists and the controller has a chance to run again to set the default IDP
+		configv1alpha1.FederationDomainSpec{
+			Issuer: issuerURL.String(),
+			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+		},
+		// This is a legacy FederationDomain (does not explicitly list any IDPs) and there is no IDP yet,
+		// so it should not be ready yet.
+		configv1alpha1.FederationDomainPhaseError,
 	)
+
+	// Create upstream IDP and wait for it to become ready.
+	idpName := createIDP(t)
+
+	// Now that both the FederationDomain and the IDP are created, the FederationDomain should be ready.
+	testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
 	// the `/jwks.json` endpoint to succeed, because there is no point in proceeding and eventually
@@ -2100,12 +2110,6 @@ func testSupervisorLogin(
 		requireEventually.NoError(rsp.Body.Close())
 		requireEventually.Equal(http.StatusOK, rsp.StatusCode)
 	}, 30*time.Second, 200*time.Millisecond)
-
-	// Create upstream IDP and wait for it to become ready.
-	idpName := createIDP(t)
-
-	// Now that both the FederationDomain and the IDP are created, the FederationDomain should be ready.
-	testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 	// Start a callback server on localhost.
 	localCallbackServer := startLocalCallbackServer(t)

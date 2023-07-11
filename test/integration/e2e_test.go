@@ -101,9 +101,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(topSetupCtx, t,
-		issuerURL.String(),
-		certSecret.Name,
-		configv1alpha1.FederationDomainPhaseReady,
+		configv1alpha1.FederationDomainSpec{
+			Issuer: issuerURL.String(),
+			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+		},
+		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
@@ -156,6 +158,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -238,6 +241,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -322,6 +326,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -442,6 +447,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -569,6 +575,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -638,6 +645,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -710,6 +718,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -765,6 +774,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -824,6 +834,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -891,6 +902,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -946,6 +958,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1015,6 +1028,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1066,6 +1080,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1117,6 +1132,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForTestFederationDomainStatus(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"

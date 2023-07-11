@@ -267,16 +267,13 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	}
 }
 
-// CreateTestFederationDomain creates and returns a test FederationDomain in
+// CreateTestFederationDomain creates and returns a test FederationDomain in the
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
 // current test's lifetime.
-// If the provided issuer is not the empty string, then it will be used for the
-// FederationDomain.Spec.Issuer field. Else, a random issuer will be generated.
 func CreateTestFederationDomain(
 	ctx context.Context,
 	t *testing.T,
-	issuer string,
-	certSecretName string,
+	spec configv1alpha1.FederationDomainSpec,
 	expectStatus configv1alpha1.FederationDomainPhase,
 ) *configv1alpha1.FederationDomain {
 	t.Helper()
@@ -285,17 +282,10 @@ func CreateTestFederationDomain(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	if issuer == "" {
-		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
-	}
-
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
 	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
-		Spec: configv1alpha1.FederationDomainSpec{
-			Issuer: issuer,
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecretName},
-		},
+		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test FederationDomain")
 	t.Logf("created test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
@@ -312,11 +302,6 @@ func CreateTestFederationDomain(
 			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 		}
 	})
-
-	// If we're not expecting any particular status, just return the new FederationDomain immediately.
-	if expectStatus == "" {
-		return federationDomain
-	}
 
 	// Wait for the FederationDomain to enter the expected phase (or time out).
 	WaitForTestFederationDomainStatus(ctx, t, federationDomain.Name, expectStatus)

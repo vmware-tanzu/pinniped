@@ -373,9 +373,32 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
+	happyDisplayNamesUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "DisplayNamesUnique",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the names specified by .spec.identityProviders[].displayName are unique",
+		}
+	}
+
+	sadDisplayNamesUniqueCondition := func(duplicateNames string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "DisplayNamesUnique",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "DuplicateDisplayNames",
+			Message:            fmt.Sprintf("the names specified by .spec.identityProviders[].displayName contain duplicates: %s", duplicateNames),
+		}
+	}
+
 	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
 		return []configv1alpha1.Condition{
 			// expect them to be sorted alphabetically by type
+			happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 			happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
 			happyIssuerIsUniqueCondition(time, observedGeneration),
 			happyIssuerURLValidCondition(time, observedGeneration),
@@ -387,6 +410,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
 		return []configv1alpha1.Condition{
 			// expect them to be sorted alphabetically by type
+			happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 			happyIdentityProvidersFoundConditionSuccess(frozenMetav1Now, 123),
 			happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 			happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -515,6 +539,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
@@ -558,6 +583,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
@@ -599,6 +625,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -612,6 +639,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -674,6 +702,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -687,6 +716,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -700,6 +730,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
@@ -727,6 +758,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain1,
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -737,6 +769,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain2,
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -759,6 +792,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain1,
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(3, frozenMetav1Now, 123),
 						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
 						happyIssuerURLValidCondition(frozenMetav1Now, 123),
@@ -812,6 +846,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 					configv1alpha1.FederationDomainPhaseError,
 					[]configv1alpha1.Condition{
+						happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
 						sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
 							`.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: `+
 								`.spec.identityProviders[0] with displayName "cant-find-me", `+
@@ -893,6 +928,78 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 				),
+			},
+		},
+		{
+			name: "the federation domain has duplicate display names for IDPs",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "duplicate1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					[]configv1alpha1.Condition{
+						sadDisplayNamesUniqueCondition("duplicate1, duplicate2", frozenMetav1Now, 123),
+						happyIdentityProvidersFoundConditionSuccess(frozenMetav1Now, 123),
+						happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+						happyIssuerURLValidCondition(frozenMetav1Now, 123),
+						happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+						sadReadyCondition(frozenMetav1Now, 123),
+					}),
 			},
 		},
 		{

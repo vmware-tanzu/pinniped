@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -38,6 +40,7 @@ const (
 	typeOneTLSSecretPerIssuerHostname = "OneTLSSecretPerIssuerHostname"
 	typeIssuerIsUnique                = "IssuerIsUnique"
 	typeIdentityProvidersFound        = "IdentityProvidersFound"
+	typeDisplayNamesUnique            = "DisplayNamesUnique"
 
 	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
@@ -49,6 +52,7 @@ const (
 	reasonLegacyConfigurationIdentityProviderNotFound = "LegacyConfigurationIdentityProviderNotFound"
 	reasonIdentityProvidersObjectRefsNotFound         = "IdentityProvidersObjectRefsNotFound"
 	reasonIdentityProviderNotSpecified                = "IdentityProviderNotSpecified"
+	reasonDuplicateDisplayNames                       = "DuplicateDisplayNames"
 
 	celTransformerMaxExpressionRuntime = 5 * time.Second
 )
@@ -293,6 +297,8 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 		})
 	}
 
+	conditions = c.addDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
+
 	// This is the constructor for the backwards compatibility mode.
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
 	conditions = appendIssuerURLValidCondition(err, conditions)
@@ -306,10 +312,17 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 ) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
 	federationDomainIdentityProviders := []*federationdomainproviders.FederationDomainIdentityProvider{}
 	idpNotFoundIndices := []int{}
+	displayNames := sets.Set[string]{}
+	duplicateDisplayNames := sets.Set[string]{}
 
 	for index, idp := range federationDomain.Spec.IdentityProviders {
-		// TODO: Validate that all displayNames are unique within this FederationDomain's spec's list of identity providers.
-		// TODO: Validate that idp.ObjectRef.APIGroup is the expected APIGroup for IDP CRs "idp.supervisor.pinniped.dev"
+		if displayNames.Has(idp.DisplayName) {
+			duplicateDisplayNames.Insert(idp.DisplayName)
+		}
+		displayNames.Insert(idp.DisplayName)
+
+		// TODO: Validate that idp.ObjectRef.APIGroup is the expected APIGroup for IDP CRs "idp.supervisor.pinniped.dev" where .pinniped.dev is the configurable suffix
+
 		// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
 		// is phase=Ready, because it will not be loaded into the cache if not ready. For each objectRef
 		// that does not resolve, put an error on the FederationDomain status.
@@ -361,10 +374,34 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 		})
 	}
 
+	conditions = c.addDuplicateDisplayNamesCondition(duplicateDisplayNames, conditions)
+
 	// This is the constructor for any case other than the legacy case, including when there is an empty list of IDPs.
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
 	conditions = appendIssuerURLValidCondition(err, conditions)
 	return federationDomainIssuer, conditions, nil
+}
+
+func (c *federationDomainWatcherController) addDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if duplicateDisplayNames.Len() > 0 {
+		duplicates := duplicateDisplayNames.UnsortedList()
+		sort.Strings(duplicates)
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeDisplayNamesUnique,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonDuplicateDisplayNames,
+			Message: fmt.Sprintf("the names specified by .spec.identityProviders[].displayName contain duplicates: %s",
+				strings.Join(duplicates, ", ")),
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeDisplayNamesUnique,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the names specified by .spec.identityProviders[].displayName are unique",
+		})
+	}
+	return conditions
 }
 
 func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef corev1.TypedLocalObjectReference, namespace string) (types.UID, bool, error) {

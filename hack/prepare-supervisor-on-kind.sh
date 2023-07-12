@@ -351,8 +351,7 @@ spec:
 EOF
 
 echo "Waiting for FederationDomain to initialize or update..."
-# Sleeping is a race, but that's probably good enough for the purposes of this script.
-sleep 5
+kubectl wait --for=condition=Ready FederationDomain/my-federation-domain -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE"
 
 # Test that the federation domain is working before we proceed.
 echo "Fetching FederationDomain discovery info via command: https_proxy=\"$PINNIPED_TEST_PROXY\" curl -fLsS --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""

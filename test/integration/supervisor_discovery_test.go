@@ -133,18 +133,24 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuer6}, v1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                v1alpha1.ConditionFalse,
-				"IdentityProvidersFound":        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
-				"IssuerURLValid":                v1alpha1.ConditionTrue,
+				"Ready":                                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                                v1alpha1.ConditionFalse,
+				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
+				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
+				"IssuerURLValid":                                v1alpha1.ConditionTrue,
+				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
+				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
+				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
 			})
 			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                v1alpha1.ConditionFalse,
-				"IdentityProvidersFound":        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
-				"IssuerURLValid":                v1alpha1.ConditionTrue,
+				"Ready":                                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                                v1alpha1.ConditionFalse,
+				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
+				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
+				"IssuerURLValid":                                v1alpha1.ConditionTrue,
+				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
+				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
+				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
 			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
@@ -164,11 +170,14 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// When we create a provider with an invalid issuer, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: badIssuer}, v1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, badConfig.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                v1alpha1.ConditionTrue,
-				"IdentityProvidersFound":        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
-				"IssuerURLValid":                v1alpha1.ConditionFalse,
+				"Ready":                                         v1alpha1.ConditionFalse,
+				"IssuerIsUnique":                                v1alpha1.ConditionTrue,
+				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
+				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
+				"IssuerURLValid":                                v1alpha1.ConditionFalse,
+				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
+				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
+				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
 			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
@@ -677,11 +686,14 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 
 func requireFullySuccessfulStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
 	requireStatus(t, client, ns, name, v1alpha1.FederationDomainPhaseReady, map[string]v1alpha1.ConditionStatus{
-		"Ready":                         v1alpha1.ConditionTrue,
-		"IssuerIsUnique":                v1alpha1.ConditionTrue,
-		"IdentityProvidersFound":        v1alpha1.ConditionTrue,
-		"OneTLSSecretPerIssuerHostname": v1alpha1.ConditionTrue,
-		"IssuerURLValid":                v1alpha1.ConditionTrue,
+		"Ready":                                         v1alpha1.ConditionTrue,
+		"IssuerIsUnique":                                v1alpha1.ConditionTrue,
+		"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
+		"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
+		"IssuerURLValid":                                v1alpha1.ConditionTrue,
+		"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
+		"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
+		"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
 	})
 }
 

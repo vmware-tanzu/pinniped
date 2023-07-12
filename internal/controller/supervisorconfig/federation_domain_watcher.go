@@ -35,13 +35,14 @@ import (
 )
 
 const (
-	typeReady                         = "Ready"
-	typeIssuerURLValid                = "IssuerURLValid"
-	typeOneTLSSecretPerIssuerHostname = "OneTLSSecretPerIssuerHostname"
-	typeIssuerIsUnique                = "IssuerIsUnique"
-	typeIdentityProvidersFound        = "IdentityProvidersFound"
-	typeDisplayNamesUnique            = "DisplayNamesUnique"
-	typeAPIGroupSuffixValid           = "APIGroupSuffixValid"
+	typeReady                                = "Ready"
+	typeIssuerURLValid                       = "IssuerURLValid"
+	typeOneTLSSecretPerIssuerHostname        = "OneTLSSecretPerIssuerHostname"
+	typeIssuerIsUnique                       = "IssuerIsUnique"
+	typeIdentityProvidersFound               = "IdentityProvidersFound"
+	typeIdentityProvidersDisplayNamesUnique  = "IdentityProvidersDisplayNamesUnique"
+	typeIdentityProvidersAPIGroupSuffixValid = "IdentityProvidersObjectRefAPIGroupSuffixValid"
+	typeIdentityProvidersObjectRefKindValid  = "IdentityProvidersObjectRefKindValid"
 
 	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
@@ -54,7 +55,12 @@ const (
 	reasonIdentityProvidersObjectRefsNotFound         = "IdentityProvidersObjectRefsNotFound"
 	reasonIdentityProviderNotSpecified                = "IdentityProviderNotSpecified"
 	reasonDuplicateDisplayNames                       = "DuplicateDisplayNames"
-	reasonAPIGroupNameUnrecognized                    = "APIGroupNameUnrecognized"
+	reasonAPIGroupNameUnrecognized                    = "APIGroupUnrecognized"
+	reasonKindUnrecognized                            = "KindUnrecognized"
+
+	kindLDAPIdentityProvider            = "LDAPIdentityProvider"
+	kindOIDCIdentityProvider            = "OIDCIdentityProvider"
+	kindActiveDirectoryIdentityProvider = "ActiveDirectoryIdentityProvider"
 
 	celTransformerMaxExpressionRuntime = 5 * time.Second
 )
@@ -78,6 +84,7 @@ type federationDomainWatcherController struct {
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer
 
 	celTransformer *celtransformer.CELTransformer
+	allowedKinds   sets.Set[string]
 }
 
 // NewFederationDomainWatcherController creates a controllerlib.Controller that watches
@@ -93,6 +100,7 @@ func NewFederationDomainWatcherController(
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
+	allowedKinds := sets.New(kindActiveDirectoryIdentityProvider, kindLDAPIdentityProvider, kindOIDCIdentityProvider)
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "FederationDomainWatcherController",
@@ -105,6 +113,7 @@ func NewFederationDomainWatcherController(
 				oidcIdentityProviderInformer:            oidcIdentityProviderInformer,
 				ldapIdentityProviderInformer:            ldapIdentityProviderInformer,
 				activeDirectoryIdentityProviderInformer: activeDirectoryIdentityProviderInformer,
+				allowedKinds:                            allowedKinds,
 			},
 		},
 		withInformer(
@@ -306,8 +315,9 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
 	conditions = appendIssuerURLValidCondition(err, conditions)
 
-	conditions = appendDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
-	conditions = appendAPIGroupSuffixCondition(c.apiGroup, sets.Set[string]{}, conditions)
+	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
+	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, []string{}, conditions)
+	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
 
 	return federationDomainIssuer, conditions, nil
 }
@@ -320,30 +330,47 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	idpNotFoundIndices := []int{}
 	displayNames := sets.Set[string]{}
 	duplicateDisplayNames := sets.Set[string]{}
-	badAPIGroupNames := sets.Set[string]{}
+	badAPIGroupNames := []string{}
+	badKinds := []string{}
 
 	for index, idp := range federationDomain.Spec.IdentityProviders {
+		// The CRD requires the displayName field, and validates that it has at least one character,
+		// so here we only need to validate that they are unique.
 		if displayNames.Has(idp.DisplayName) {
 			duplicateDisplayNames.Insert(idp.DisplayName)
 		}
 		displayNames.Insert(idp.DisplayName)
 
-		apiGroup := "nil"
+		// The objectRef is a required field in the CRD, so it will always exist in practice.
+		// objectRef.name and objectRef.kind are required, but may be empty strings.
+		// objectRef.apiGroup is not required, however, so it may be nil or empty string.
+		canTryToFindIDP := true
+		apiGroup := ""
 		if idp.ObjectRef.APIGroup != nil {
 			apiGroup = *idp.ObjectRef.APIGroup
 		}
 		if apiGroup != c.apiGroup {
-			badAPIGroupNames.Insert(apiGroup)
+			badAPIGroupNames = append(badAPIGroupNames, apiGroup)
+			canTryToFindIDP = false
+		}
+		if !c.allowedKinds.Has(idp.ObjectRef.Kind) {
+			badKinds = append(badKinds, idp.ObjectRef.Kind)
+			canTryToFindIDP = false
 		}
 
-		// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
-		// is phase=Ready, because it will not be loaded into the cache if not ready. For each objectRef
-		// that does not resolve, put an error on the FederationDomain status.
-		idpResourceUID, idpWasFound, err := c.findIDPsUIDByObjectRef(idp.ObjectRef, federationDomain.Namespace)
-		if err != nil {
-			return nil, nil, err
+		var idpResourceUID types.UID
+		idpWasFound := false
+		if canTryToFindIDP {
+			var err error
+			// Validate that each objectRef resolves to an existing IDP. It does not matter if the IDP itself
+			// is phase=Ready, because it will not be loaded into the cache if not ready. For each objectRef
+			// that does not resolve, put an error on the FederationDomain status.
+			idpResourceUID, idpWasFound, err = c.findIDPsUIDByObjectRef(idp.ObjectRef, federationDomain.Namespace)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		if !idpWasFound {
+		if !canTryToFindIDP || !idpWasFound {
 			idpNotFoundIndices = append(idpNotFoundIndices, index)
 		}
 
@@ -391,26 +418,27 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
 	conditions = appendIssuerURLValidCondition(err, conditions)
 
-	conditions = appendDuplicateDisplayNamesCondition(duplicateDisplayNames, conditions)
-	conditions = appendAPIGroupSuffixCondition(c.apiGroup, badAPIGroupNames, conditions)
+	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames, conditions)
+	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, badAPIGroupNames, conditions)
+	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), badKinds, conditions)
 
 	return federationDomainIssuer, conditions, nil
 }
-
 func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef corev1.TypedLocalObjectReference, namespace string) (types.UID, bool, error) {
 	var idpResourceUID types.UID
 	var foundIDP metav1.Object
 	var err error
 
 	switch objectRef.Kind {
-	case "LDAPIdentityProvider":
+	case kindLDAPIdentityProvider:
 		foundIDP, err = c.ldapIdentityProviderInformer.Lister().LDAPIdentityProviders(namespace).Get(objectRef.Name)
-	case "ActiveDirectoryIdentityProvider":
+	case kindActiveDirectoryIdentityProvider:
 		foundIDP, err = c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(namespace).Get(objectRef.Name)
-	case "OIDCIdentityProvider":
+	case kindOIDCIdentityProvider:
 		foundIDP, err = c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(namespace).Get(objectRef.Name)
 	default:
-		// TODO: handle an IDP type that we do not understand by writing a status condition
+		// This shouldn't happen because this helper function is not called when the kind is invalid.
+		return "", false, fmt.Errorf("unexpected kind: %s", objectRef.Kind)
 	}
 
 	switch {
@@ -419,7 +447,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	case errors.IsNotFound(err):
 		return "", false, nil
 	default:
-		return "", false, err // unexpected error
+		return "", false, err // unexpected error from the informer
 	}
 	return idpResourceUID, true, nil
 }
@@ -555,20 +583,42 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 	return pipeline, nil
 }
 
-func appendAPIGroupSuffixCondition(expectedSuffixName string, badSuffixNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if badSuffixNames.Len() > 0 {
-		badNames := badSuffixNames.UnsortedList()
-		sort.Strings(badNames)
+func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
+	return sortAndQuote(c.allowedKinds.UnsortedList())
+}
+
+func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuffixNames []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(badSuffixNames) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeAPIGroupSuffixValid,
+			Type:   typeIdentityProvidersObjectRefKindValid,
 			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonAPIGroupNameUnrecognized,
-			Message: fmt.Sprintf("the API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized (should be %q): %s",
-				expectedSuffixName, strings.Join(badNames, ", ")),
+			Reason: reasonKindUnrecognized,
+			Message: fmt.Sprintf("the kinds specified by .spec.identityProviders[].objectRef.kind are not recognized (should be one of %s): %s",
+				strings.Join(expectedKinds, ", "), strings.Join(sortAndQuote(badSuffixNames), ", ")),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeAPIGroupSuffixValid,
+			Type:    typeIdentityProvidersObjectRefKindValid,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the kinds specified by .spec.identityProviders[].objectRef.kind are recognized",
+		})
+	}
+	return conditions
+}
+
+func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName string, badSuffixNames []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(badSuffixNames) > 0 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeIdentityProvidersAPIGroupSuffixValid,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonAPIGroupNameUnrecognized,
+			Message: fmt.Sprintf("the API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized (should be %q): %s",
+				expectedSuffixName, strings.Join(sortAndQuote(badSuffixNames), ", ")),
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeIdentityProvidersAPIGroupSuffixValid,
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the API groups specified by .spec.identityProviders[].objectRef.apiGroup are recognized",
@@ -577,20 +627,18 @@ func appendAPIGroupSuffixCondition(expectedSuffixName string, badSuffixNames set
 	return conditions
 }
 
-func appendDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
 	if duplicateDisplayNames.Len() > 0 {
-		duplicates := duplicateDisplayNames.UnsortedList()
-		sort.Strings(duplicates)
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeDisplayNamesUnique,
+			Type:   typeIdentityProvidersDisplayNamesUnique,
 			Status: configv1alpha1.ConditionFalse,
 			Reason: reasonDuplicateDisplayNames,
 			Message: fmt.Sprintf("the names specified by .spec.identityProviders[].displayName contain duplicates: %s",
-				strings.Join(duplicates, ", ")),
+				strings.Join(sortAndQuote(duplicateDisplayNames.UnsortedList()), ", ")),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeDisplayNamesUnique,
+			Type:    typeIdentityProvidersDisplayNamesUnique,
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the names specified by .spec.identityProviders[].displayName are unique",
@@ -618,6 +666,15 @@ func appendIssuerURLValidCondition(err error, conditions []*configv1alpha1.Condi
 		})
 	}
 	return conditions
+}
+
+func sortAndQuote(strs []string) []string {
+	quoted := make([]string, 0, len(strs))
+	for _, s := range strs {
+		quoted = append(quoted, fmt.Sprintf("%q", s))
+	}
+	sort.Strings(quoted)
+	return quoted
 }
 
 func (c *federationDomainWatcherController) updateStatus(

@@ -167,6 +167,7 @@ func prepareControllers(
 		WithController(
 			supervisorconfig.NewFederationDomainWatcherController(
 				issuerManager,
+				*cfg.APIGroupSuffix,
 				clock.RealClock{},
 				pinnipedClient,
 				federationDomainInformer,

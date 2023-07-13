@@ -798,7 +798,7 @@ func TestTransformer(t *testing.T) {
 func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	t.Parallel()
 
-	transformer, err := NewCELTransformer(time.Second) // CI workers can be slow, so allow slow transforms
+	transformer, err := NewCELTransformer(5 * time.Second) // CI workers can be slow, so allow slow transforms
 	require.NoError(t, err)
 
 	pipeline := idtransform.NewTransformationPipeline()

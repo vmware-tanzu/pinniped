@@ -1,9 +1,9 @@
 ---
 title: "Multiple Identity Providers"
 authors: [ "@cfryanr" ]
-status: "draft"
+status: "accepted"
 sponsor: []
-approval_date: ""
+approval_date: "July 12, 2023"
 ---
 
 *Disclaimer*: Proposals are point-in-time designs and decisions. Once approved and implemented, they become historical

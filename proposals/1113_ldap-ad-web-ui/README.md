@@ -1,7 +1,7 @@
 ---
 title: "Web UI for LDAP/AD login"
 authors: [ "@margocrawf" ]
-status: "accepted"
+status: "implemented"
 approval_date: "May 11, 2022"
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "Audit Logging"
 authors: [ "@cfryanr" ]
-status: "in-review"
+status: "accepted"
 sponsor: [ ]
 approval_date: ""
 ---

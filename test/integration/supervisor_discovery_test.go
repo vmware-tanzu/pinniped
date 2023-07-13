@@ -141,6 +141,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
 				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
 				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
+				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 			})
 			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
 				"Ready":                                         v1alpha1.ConditionFalse,
@@ -151,6 +152,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
 				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
 				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
+				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
@@ -178,6 +180,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
 				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
 				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
+				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 			})
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
@@ -694,6 +697,7 @@ func requireFullySuccessfulStatus(t *testing.T, client pinnipedclientset.Interfa
 		"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
 		"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
 		"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
+		"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 	})
 }
 

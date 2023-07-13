@@ -43,6 +43,7 @@ const (
 	typeIdentityProvidersDisplayNamesUnique  = "IdentityProvidersDisplayNamesUnique"
 	typeIdentityProvidersAPIGroupSuffixValid = "IdentityProvidersObjectRefAPIGroupSuffixValid"
 	typeIdentityProvidersObjectRefKindValid  = "IdentityProvidersObjectRefKindValid"
+	typeTransformsConstantsNamesUnique       = "TransformsConstantsNamesUnique"
 
 	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
@@ -57,6 +58,7 @@ const (
 	reasonDuplicateDisplayNames                       = "DuplicateDisplayNames"
 	reasonAPIGroupNameUnrecognized                    = "APIGroupUnrecognized"
 	reasonKindUnrecognized                            = "KindUnrecognized"
+	reasonDuplicateConstantsNames                     = "DuplicateConstantsNames"
 
 	kindLDAPIdentityProvider            = "LDAPIdentityProvider"
 	kindOIDCIdentityProvider            = "OIDCIdentityProvider"
@@ -318,6 +320,7 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, []string{}, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
+	conditions = appendTransformsConstantsNamesUniqueCondition(sets.Set[string]{}, conditions)
 
 	return federationDomainIssuer, conditions, nil
 }
@@ -374,7 +377,9 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 			idpNotFoundIndices = append(idpNotFoundIndices, index)
 		}
 
-		pipeline, err := c.makeTransformationPipelineForIdentityProvider(idp, federationDomain.Name)
+		var err error
+		var pipeline *idtransform.TransformationPipeline
+		pipeline, conditions, err = c.makeTransformationPipelineForIdentityProvider(idp, federationDomain.Name, conditions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -455,15 +460,24 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 func (c *federationDomainWatcherController) makeTransformationPipelineForIdentityProvider(
 	idp configv1alpha1.FederationDomainIdentityProvider,
 	federationDomainName string,
-) (*idtransform.TransformationPipeline, error) {
+	conditions []*configv1alpha1.Condition,
+) (*idtransform.TransformationPipeline, []*configv1alpha1.Condition, error) {
 	pipeline := idtransform.NewTransformationPipeline()
 	consts := &celtransformer.TransformationConstants{
 		StringConstants:     map[string]string{},
 		StringListConstants: map[string][]string{},
 	}
+	constNames := sets.Set[string]{}
+	duplicateConstNames := sets.Set[string]{}
 
 	// Read all the declared constants.
 	for _, constant := range idp.Transforms.Constants {
+		// The CRD requires the name field, and validates that it has at least one character,
+		// so here we only need to validate that they are unique.
+		if constNames.Has(constant.Name) {
+			duplicateConstNames.Insert(constant.Name)
+		}
+		constNames.Insert(constant.Name)
 		switch constant.Type {
 		case "string":
 			consts.StringConstants[constant.Name] = constant.StringValue
@@ -471,9 +485,10 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			consts.StringListConstants[constant.Name] = constant.StringListValue
 		default:
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
-			return nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
+			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
 		}
 	}
+	conditions = appendTransformsConstantsNamesUniqueCondition(duplicateConstNames, conditions)
 
 	// Compile all the expressions and add them to the pipeline.
 	for idx, expr := range idp.Transforms.Expressions {
@@ -490,7 +505,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			}
 		default:
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
-			return nil, fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
+			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
 		}
 		compiledTransform, err := c.celTransformer.CompileTransformation(rawTransform, consts)
 		if err != nil {
@@ -580,7 +595,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 		}
 	}
 
-	return pipeline, nil
+	return pipeline, conditions, nil
 }
 
 func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
@@ -642,6 +657,26 @@ func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames 
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the names specified by .spec.identityProviders[].displayName are unique",
+		})
+	}
+	return conditions
+}
+
+func appendTransformsConstantsNamesUniqueCondition(duplicateConstNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if duplicateConstNames.Len() > 0 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeTransformsConstantsNamesUnique,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonDuplicateConstantsNames,
+			Message: fmt.Sprintf("the names specified by .spec.identityProviders[].transforms.constants[].name contain duplicates: %s",
+				strings.Join(sortAndQuote(duplicateConstNames.UnsortedList()), ", ")),
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsConstantsNamesUnique,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
 		})
 	}
 	return conditions

@@ -44,6 +44,7 @@ const (
 	typeIdentityProvidersAPIGroupSuffixValid = "IdentityProvidersObjectRefAPIGroupSuffixValid"
 	typeIdentityProvidersObjectRefKindValid  = "IdentityProvidersObjectRefKindValid"
 	typeTransformsConstantsNamesUnique       = "TransformsConstantsNamesUnique"
+	typeTransformsExpressionsValid           = "TransformsExpressionsValid"
 
 	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
@@ -59,6 +60,7 @@ const (
 	reasonAPIGroupNameUnrecognized                    = "APIGroupUnrecognized"
 	reasonKindUnrecognized                            = "KindUnrecognized"
 	reasonDuplicateConstantsNames                     = "DuplicateConstantsNames"
+	reasonInvalidTransformsExpressions                = "InvalidTransformsExpressions"
 
 	kindLDAPIdentityProvider            = "LDAPIdentityProvider"
 	kindOIDCIdentityProvider            = "OIDCIdentityProvider"
@@ -162,7 +164,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 	}
 
 	// Process each FederationDomain to validate its spec and to turn it into a FederationDomainIssuer.
-	federationDomainIssuers, fdToConditionsMap, err := c.processAllFederationDomains(federationDomains)
+	federationDomainIssuers, fdToConditionsMap, err := c.processAllFederationDomains(ctx.Context, federationDomains)
 	if err != nil {
 		return err
 	}
@@ -185,6 +187,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 }
 
 func (c *federationDomainWatcherController) processAllFederationDomains(
+	ctx context.Context,
 	federationDomains []*configv1alpha1.FederationDomain,
 ) ([]*federationdomainproviders.FederationDomainIssuer, map[*configv1alpha1.FederationDomain][]*configv1alpha1.Condition, error) {
 	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
@@ -196,7 +199,7 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 
 		conditions = crossDomainConfigValidator.Validate(federationDomain, conditions)
 
-		federationDomainIssuer, conditions, err := c.makeFederationDomainIssuer(federationDomain, conditions)
+		federationDomainIssuer, conditions, err := c.makeFederationDomainIssuer(ctx, federationDomain, conditions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -216,6 +219,7 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 }
 
 func (c *federationDomainWatcherController) makeFederationDomainIssuer(
+	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
 	conditions []*configv1alpha1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
@@ -230,7 +234,7 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 			return nil, nil, err
 		}
 	} else {
-		federationDomainIssuer, conditions, err = c.makeFederationDomainIssuerWithExplicitIDPs(federationDomain, conditions)
+		federationDomainIssuer, conditions, err = c.makeFederationDomainIssuerWithExplicitIDPs(ctx, federationDomain, conditions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -313,19 +317,23 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 		})
 	}
 
-	// This is the constructor for the backwards compatibility mode.
+	// This is the constructor for the legacy backwards compatibility mode.
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(federationDomain.Spec.Issuer, defaultFederationDomainIdentityProvider)
 	conditions = appendIssuerURLValidCondition(err, conditions)
 
+	// These conditions can only have errors when the list of IDPs is explicitly configured,
+	// and in this case there are no IDPs explicitly configured, so set these conditions all to have no errors.
 	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, []string{}, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
 	conditions = appendTransformsConstantsNamesUniqueCondition(sets.Set[string]{}, conditions)
+	conditions = appendTransformsExpressionsValidCondition([]string{}, conditions)
 
 	return federationDomainIssuer, conditions, nil
 }
 
 func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplicitIDPs(
+	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
 	conditions []*configv1alpha1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
@@ -337,10 +345,13 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	badKinds := []string{}
 
 	for index, idp := range federationDomain.Spec.IdentityProviders {
+		idpIsValid := true
+
 		// The CRD requires the displayName field, and validates that it has at least one character,
 		// so here we only need to validate that they are unique.
 		if displayNames.Has(idp.DisplayName) {
 			duplicateDisplayNames.Insert(idp.DisplayName)
+			idpIsValid = false
 		}
 		displayNames.Insert(idp.DisplayName)
 
@@ -361,6 +372,7 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 			canTryToFindIDP = false
 		}
 
+		// When the apiGroup and kind are valid, try to find the IDP CR.
 		var idpResourceUID types.UID
 		idpWasFound := false
 		if canTryToFindIDP {
@@ -375,26 +387,31 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 		}
 		if !canTryToFindIDP || !idpWasFound {
 			idpNotFoundIndices = append(idpNotFoundIndices, index)
+			idpIsValid = false
 		}
 
 		var err error
 		var pipeline *idtransform.TransformationPipeline
-		pipeline, conditions, err = c.makeTransformationPipelineForIdentityProvider(idp, federationDomain.Name, conditions)
+		var allExamplesPassed bool
+		pipeline, allExamplesPassed, conditions, err = c.makeTransformationPipelineAndEvaluateExamplesForIdentityProvider(ctx, idp, index, conditions)
 		if err != nil {
 			return nil, nil, err
 		}
+		if !allExamplesPassed {
+			idpIsValid = false
+		}
 
-		// For each valid IDP (unique displayName, valid objectRef + valid transforms), add it to the list.
+		if !idpIsValid {
+			// Something about the IDP was not valid. Don't add it.
+			continue
+		}
+
+		// For a valid IDP (unique displayName, valid objectRef, valid transforms), add it to the list.
 		federationDomainIdentityProviders = append(federationDomainIdentityProviders, &federationdomainproviders.FederationDomainIdentityProvider{
 			DisplayName: idp.DisplayName,
 			UID:         idpResourceUID,
 			Transforms:  pipeline,
 		})
-		plog.Debug("loaded FederationDomain identity provider",
-			"federationDomain", federationDomain.Name,
-			"identityProviderDisplayName", idp.DisplayName,
-			"identityProviderResourceUID", idpResourceUID,
-		)
 	}
 
 	if len(idpNotFoundIndices) != 0 {
@@ -457,12 +474,31 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	return idpResourceUID, true, nil
 }
 
-func (c *federationDomainWatcherController) makeTransformationPipelineForIdentityProvider(
+func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluateExamplesForIdentityProvider(
+	ctx context.Context,
 	idp configv1alpha1.FederationDomainIdentityProvider,
-	federationDomainName string,
+	idpIndex int,
 	conditions []*configv1alpha1.Condition,
-) (*idtransform.TransformationPipeline, []*configv1alpha1.Condition, error) {
-	pipeline := idtransform.NewTransformationPipeline()
+) (*idtransform.TransformationPipeline, bool, []*configv1alpha1.Condition, error) {
+	consts, conditions, err := c.makeTransformsConstants(idp, conditions)
+	if err != nil {
+		return nil, false, nil, err
+	}
+
+	pipeline, conditions, err := c.makeTransformationPipeline(idp, idpIndex, consts, conditions)
+	if err != nil {
+		return nil, false, nil, err
+	}
+
+	allExamplesPassed, conditions := c.evaluateExamples(ctx, idp, pipeline, conditions)
+
+	return pipeline, allExamplesPassed, conditions, nil
+}
+
+func (c *federationDomainWatcherController) makeTransformsConstants(
+	idp configv1alpha1.FederationDomainIdentityProvider,
+	conditions []*configv1alpha1.Condition,
+) (*celtransformer.TransformationConstants, []*configv1alpha1.Condition, error) {
 	consts := &celtransformer.TransformationConstants{
 		StringConstants:     map[string]string{},
 		StringListConstants: map[string][]string{},
@@ -488,10 +524,23 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
 		}
 	}
+
 	conditions = appendTransformsConstantsNamesUniqueCondition(duplicateConstNames, conditions)
 
+	return consts, conditions, nil
+}
+
+func (c *federationDomainWatcherController) makeTransformationPipeline(
+	idp configv1alpha1.FederationDomainIdentityProvider,
+	idpIndex int,
+	consts *celtransformer.TransformationConstants,
+	conditions []*configv1alpha1.Condition,
+) (*idtransform.TransformationPipeline, []*configv1alpha1.Condition, error) {
+	pipeline := idtransform.NewTransformationPipeline()
+	expressionsCompileErrors := []string{}
+
 	// Compile all the expressions and add them to the pipeline.
-	for idx, expr := range idp.Transforms.Expressions {
+	for exprIndex, expr := range idp.Transforms.Expressions {
 		var rawTransform celtransformer.CELTransformation
 		switch expr.Type {
 		case "username/v1":
@@ -507,37 +556,50 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
 			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
 		}
+
 		compiledTransform, err := c.celTransformer.CompileTransformation(rawTransform, consts)
 		if err != nil {
-			// TODO: handle compile err
-			plog.Error("error compiling identity transformation", err,
-				"federationDomain", federationDomainName,
-				"idpDisplayName", idp.DisplayName,
-				"transformationIndex", idx,
-				"transformationType", expr.Type,
-				"transformationExpression", expr.Expression,
-			)
+			expressionsCompileErrors = append(expressionsCompileErrors,
+				fmt.Sprintf("spec.identityProvider[%d].transforms.expressions[%d].expression was invalid:\n%s",
+					idpIndex, exprIndex, err.Error()))
 		}
+
 		pipeline.AppendTransformation(compiledTransform)
-		plog.Debug("successfully compiled identity transformation expression",
-			"type", expr.Type,
-			"expr", expr.Expression,
-			"policyMessage", expr.Message,
-		)
+	}
+
+	conditions = appendTransformsExpressionsValidCondition(expressionsCompileErrors, conditions)
+
+	if len(expressionsCompileErrors) > 0 {
+		// One or more of the expressions did not compile, so we don't have a useful pipeline to return.
+		return nil, conditions, nil
+	}
+
+	return pipeline, conditions, nil
+}
+
+func (c *federationDomainWatcherController) evaluateExamples(
+	ctx context.Context,
+	idp configv1alpha1.FederationDomainIdentityProvider,
+	pipeline *idtransform.TransformationPipeline,
+	conditions []*configv1alpha1.Condition,
+) (bool, []*configv1alpha1.Condition) {
+	if pipeline == nil {
+		// TODO cannot evaluate examples, but still need to write a condition for it
+		return false, conditions
 	}
 
 	// Run all the provided transform examples. If any fail, put errors on the FederationDomain status.
-	for idx, e := range idp.Transforms.Examples {
-		// TODO: use a real context param below
-		result, _ := pipeline.Evaluate(context.TODO(), e.Username, e.Groups)
+	examplesErrors := []string{}
+	for examplesIndex, e := range idp.Transforms.Examples {
+		result, _ := pipeline.Evaluate(ctx, e.Username, e.Groups)
 		// TODO: handle err
 		resultWasAuthRejected := !result.AuthenticationAllowed
 		if e.Expects.Rejected && !resultWasAuthRejected { //nolint:gocritic,nestif
 			// TODO: handle this failed example
+			examplesErrors = append(examplesErrors, "TODO")
 			plog.Warning("FederationDomain identity provider transformations example failed: expected authentication to be rejected but it was not",
-				"federationDomain", federationDomainName,
 				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", idx,
+				"exampleIndex", examplesIndex,
 				"expectedRejected", e.Expects.Rejected,
 				"actualRejectedResult", resultWasAuthRejected,
 				"expectedMessage", e.Expects.Message,
@@ -545,10 +607,10 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			)
 		} else if !e.Expects.Rejected && resultWasAuthRejected {
 			// TODO: handle this failed example
+			examplesErrors = append(examplesErrors, "TODO")
 			plog.Warning("FederationDomain identity provider transformations example failed: expected authentication not to be rejected but it was rejected",
-				"federationDomain", federationDomainName,
 				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", idx,
+				"exampleIndex", examplesIndex,
 				"expectedRejected", e.Expects.Rejected,
 				"actualRejectedResult", resultWasAuthRejected,
 				"expectedMessage", e.Expects.Message,
@@ -557,10 +619,10 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 		} else if e.Expects.Rejected && resultWasAuthRejected && e.Expects.Message != result.RejectedAuthenticationMessage {
 			// TODO: when expected message is blank, then treat it like it expects the default message
 			// TODO: handle this failed example
+			examplesErrors = append(examplesErrors, "TODO")
 			plog.Warning("FederationDomain identity provider transformations example failed: expected a different authentication rejection message",
-				"federationDomain", federationDomainName,
 				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", idx,
+				"exampleIndex", examplesIndex,
 				"expectedRejected", e.Expects.Rejected,
 				"actualRejectedResult", resultWasAuthRejected,
 				"expectedMessage", e.Expects.Message,
@@ -572,10 +634,10 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 			// TODO: when both of these fail, put both errors onto the status (not just the first one)
 			if e.Expects.Username != result.Username {
 				// TODO: handle this failed example
+				examplesErrors = append(examplesErrors, "TODO")
 				plog.Warning("FederationDomain identity provider transformations example failed: expected a different transformed username",
-					"federationDomain", federationDomainName,
 					"idpDisplayName", idp.DisplayName,
-					"exampleIndex", idx,
+					"exampleIndex", examplesIndex,
 					"expectedUsername", e.Expects.Username,
 					"actualUsernameResult", result.Username,
 				)
@@ -584,10 +646,10 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 				// TODO: Do we need to make this insensitive to ordering, or should the transformations evaluator be changed to always return sorted group names at the end of the pipeline?
 				// TODO: What happens if the user did not write any group expectation? Treat it like expecting an empty list of groups?
 				// TODO: handle this failed example
+				examplesErrors = append(examplesErrors, "TODO")
 				plog.Warning("FederationDomain identity provider transformations example failed: expected a different transformed groups list",
-					"federationDomain", federationDomainName,
 					"idpDisplayName", idp.DisplayName,
-					"exampleIndex", idx,
+					"exampleIndex", examplesIndex,
 					"expectedGroups", e.Expects.Groups,
 					"actualGroupsResult", result.Groups,
 				)
@@ -595,7 +657,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 		}
 	}
 
-	return pipeline, conditions, nil
+	return len(examplesErrors) == 0, conditions
 }
 
 func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
@@ -637,6 +699,26 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the API groups specified by .spec.identityProviders[].objectRef.apiGroup are recognized",
+		})
+	}
+	return conditions
+}
+
+func appendTransformsExpressionsValidCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(errors) > 0 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeTransformsExpressionsValid,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonInvalidTransformsExpressions,
+			Message: fmt.Sprintf("the expressions specified by .spec.identityProviders[].transforms.expressions[] were invalid:\n\n%s",
+				strings.Join(errors, "\n\n")),
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsExpressionsValid,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
 		})
 	}
 	return conditions

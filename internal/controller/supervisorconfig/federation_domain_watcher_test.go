@@ -27,6 +27,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -419,6 +420,28 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
+	happyTransformationExpressionsCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "TransformsExpressionsValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
+		}
+	}
+
+	sadTransformationExpressionsCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "TransformsExpressionsValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidTransformsExpressions",
+			Message:            fmt.Sprintf("the expressions specified by .spec.identityProviders[].transforms.expressions[] were invalid:\n\n%s", errorMessages),
+		}
+	}
+
 	happyAPIGroupSuffixCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
@@ -474,22 +497,21 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		return cp
 	}
 
-	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
-		return sortConditionsByType([]configv1alpha1.Condition{
-			happyConstNamesUniqueCondition(frozenMetav1Now, 123),
-			happyKindCondition(frozenMetav1Now, 123),
-			happyAPIGroupSuffixCondition(frozenMetav1Now, 123),
-			happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
-			happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
-			happyIssuerIsUniqueCondition(time, observedGeneration),
-			happyIssuerURLValidCondition(time, observedGeneration),
-			happyOneTLSSecretPerIssuerHostnameCondition(time, observedGeneration),
-			happyReadyCondition(issuer, time, observedGeneration),
-		})
+	replaceConditions := func(conditions []configv1alpha1.Condition, sadConditions []configv1alpha1.Condition) []configv1alpha1.Condition {
+		for _, sadReplaceCondition := range sadConditions {
+			for origIndex, origCondition := range conditions {
+				if origCondition.Type == sadReplaceCondition.Type {
+					conditions[origIndex] = sadReplaceCondition
+					break
+				}
+			}
+		}
+		return conditions
 	}
 
 	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
 		return sortConditionsByType([]configv1alpha1.Condition{
+			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
 			happyConstNamesUniqueCondition(frozenMetav1Now, 123),
 			happyKindCondition(frozenMetav1Now, 123),
 			happyAPIGroupSuffixCondition(frozenMetav1Now, 123),
@@ -502,16 +524,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		})
 	}
 
-	replaceConditions := func(conditions []configv1alpha1.Condition, sadConditions []configv1alpha1.Condition) []configv1alpha1.Condition {
-		for _, sadReplaceCondition := range sadConditions {
-			for origIndex, origCondition := range conditions {
-				if origCondition.Type == sadReplaceCondition.Type {
-					conditions[origIndex] = sadReplaceCondition
-					break
-				}
-			}
-		}
-		return conditions
+	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
+		return replaceConditions(
+			allHappyConditionsSuccess(issuer, time, observedGeneration),
+			[]configv1alpha1.Condition{
+				happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
+			},
+		)
 	}
 
 	invalidIssuerURL := ":/host//path"
@@ -1228,36 +1247,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 								},
 								Transforms: configv1alpha1.FederationDomainTransforms{
 									Constants: []configv1alpha1.FederationDomainTransformsConstant{
-										{
-											Name:        "duplicate1",
-											Type:        "string",
-											StringValue: "abc",
-										},
-										{
-											Name:        "duplicate1",
-											Type:        "string",
-											StringValue: "def",
-										},
-										{
-											Name:        "duplicate1",
-											Type:        "string",
-											StringValue: "efg",
-										},
-										{
-											Name:        "duplicate2",
-											Type:        "string",
-											StringValue: "123",
-										},
-										{
-											Name:        "duplicate2",
-											Type:        "string",
-											StringValue: "456",
-										},
-										{
-											Name:        "unique",
-											Type:        "string",
-											StringValue: "hij",
-										},
+										{Name: "duplicate1", Type: "string", StringValue: "abc"},
+										{Name: "duplicate1", Type: "string", StringValue: "def"},
+										{Name: "duplicate1", Type: "string", StringValue: "efg"},
+										{Name: "duplicate2", Type: "string", StringValue: "123"},
+										{Name: "duplicate2", Type: "string", StringValue: "456"},
+										{Name: "uniqueName", Type: "string", StringValue: "hij"},
 									},
 								},
 							},
@@ -1276,6 +1271,67 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
 							sadConstNamesUniqueCondition(`"duplicate1", "duplicate2"`, frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation expressions which don't compile",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: "this is not a valid cel expression"},
+										{Type: "groups/v1", Expression: "this is also not a valid cel expression"},
+										{Type: "username/v1", Expression: "username"}, // valid
+										{Type: "policy/v1", Expression: "still not a valid cel expression"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]configv1alpha1.Condition{
+							sadTransformationExpressionsCondition(
+								here.Doc(
+									`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
+										CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+										 | this is not a valid cel expression
+										 | .....^
+
+										spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+										CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+										 | this is also not a valid cel expression
+										 | .....^
+
+										spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+										CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
+										 | still not a valid cel expression
+										 | ......^`),
+								frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),

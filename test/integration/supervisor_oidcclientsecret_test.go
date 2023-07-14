@@ -911,20 +911,26 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			)
 			require.NoError(t, err)
 			t.Cleanup(func() {
+				cleanupCtx, cleanupCtxCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+				defer cleanupCtxCancel()
 				deleteErr := supervisorClient.ConfigV1alpha1().
-					OIDCClients(env.SupervisorNamespace).Delete(ctx, oidcClient.Name, metav1.DeleteOptions{})
+					OIDCClients(env.SupervisorNamespace).Delete(cleanupCtx, oidcClient.Name, metav1.DeleteOptions{})
 				require.NoError(t, deleteErr)
 				testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 					_, err := kubeClient.CoreV1().Secrets(oidcClient.Namespace).
-						Get(ctx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
+						Get(cleanupCtx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
 					requireEventually.Error(err, "deleting OIDCClient should result in deleting storage secrets")
 					requireEventually.True(k8serrors.IsNotFound(err),
 						"deleting OIDCClient should result in deleting storage secrets")
 				}, 2*time.Minute, 250*time.Millisecond)
 			})
 
+			type memoKey struct {
+				storedSecretHash, plaintextPassword string
+			}
 			cacheOfGeneratedSecrets := []string{}
 			hasSecretBeenGenerated := false
+			memoizedBcryptHashes := map[memoKey]bool{}
 			for n, ttt := range tt.clientSecretRequests(oidcClient.Name) {
 				clientSecretRequestResponse, err := supervisorClient.ClientsecretV1alpha1().
 					OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx, ttt.secretRequest, metav1.CreateOptions{})
@@ -995,8 +1001,15 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.Len(t, storedClientSecret.SecretHashes, ttt.wantSecretCount)
 
 				for i, storedSecretHash := range storedClientSecret.SecretHashes {
-					require.NoErrorf(t, bcrypt.CompareHashAndPassword([]byte(storedSecretHash), []byte(cacheOfGeneratedSecrets[i])),
-						"hash %q at index %d is not the hash of secret %q at (%s)", storedSecretHash, i, cacheOfGeneratedSecrets[i])
+					plaintextSecret := cacheOfGeneratedSecrets[i]
+					// Calling bcrypt.CompareHashAndPassword is very expensive. If this loop has already called
+					// bcrypt.CompareHashAndPassword with the exact same inputs, then don't call it again.
+					mKey := memoKey{storedSecretHash: storedSecretHash, plaintextPassword: plaintextSecret}
+					if !memoizedBcryptHashes[mKey] {
+						require.NoErrorf(t, bcrypt.CompareHashAndPassword([]byte(storedSecretHash), []byte(plaintextSecret)),
+							"hash %q at index %d is not the hash of secret %q at (%s)", storedSecretHash, i, plaintextSecret)
+						memoizedBcryptHashes[mKey] = true // remember that we already successfully confirmed these params to CompareHashAndPassword
+					}
 				}
 			}
 		})

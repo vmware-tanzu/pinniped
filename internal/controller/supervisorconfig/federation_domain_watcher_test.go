@@ -442,6 +442,39 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
+	happyTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "TransformsExamplesPassed",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
+		}
+	}
+
+	sadTransformationExamplesCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "TransformsExamplesPassed",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "TransformsExamplesFailed",
+			Message:            fmt.Sprintf("the examples specified by .spec.identityProviders[].transforms.examples[] had errors:\n\n%s", errorMessages),
+		}
+	}
+
+	unknownTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+		return configv1alpha1.Condition{
+			Type:               "TransformsExamplesPassed",
+			Status:             "Unknown",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "UnableToValidate",
+			Message:            "unable to check if the examples specified by .spec.identityProviders[].transforms.examples[] had errors because an expression was invalid",
+		}
+	}
+
 	happyAPIGroupSuffixCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
@@ -511,6 +544,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 
 	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
 		return sortConditionsByType([]configv1alpha1.Condition{
+			happyTransformationExamplesCondition(frozenMetav1Now, 123),
 			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
 			happyConstNamesUniqueCondition(frozenMetav1Now, 123),
 			happyKindCondition(frozenMetav1Now, 123),
@@ -1330,7 +1364,248 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										spec.identityProvider[0].transforms.expressions[3].expression was invalid:
 										CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
 										 | still not a valid cel expression
-										 | ......^`),
+										 | ......^`,
+								),
+								frozenMetav1Now, 123),
+							unknownTransformationExamplesCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation examples which don't pass",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
+										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
+										{Type: "username/v1", Expression: `"pre:" + username`},
+										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this example should pass
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"pre:b", "pre:a", "pre:b", "pre:a"}, // order and repeats don't matter, treated like a set
+												Rejected: false,
+											},
+										},
+										{ // this example should pass
+											Username: "other",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "only ryan allowed",
+											},
+										},
+										{ // this example should fail because it expects the user to be rejected but the user was actually not rejected
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "this input is ignored in this case",
+											},
+										},
+										{ // this example should fail because it expects the user not to be rejected but they were actually rejected
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:other",
+												Groups:   []string{"pre:a", "pre:b"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong rejection message
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "wrong message",
+											},
+										},
+										{ // this example should pass even though it does not make any assertion about the rejection message
+											// because the message assertions defaults to asserting the default rejection message
+											Username: "rejectMeWithDefaultMessage",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+											},
+										},
+										{ // this example should fail because it expects both the wrong username and groups
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "wrong",
+												Groups:   []string{},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong username only
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "wrong",
+												Groups:   []string{"pre:b", "pre:a"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong groups only
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"wrong2", "wrong1"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it does not expect anything but the auth actually was successful
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]configv1alpha1.Condition{
+							sadTransformationExamplesCondition(
+								here.Doc(
+									`.spec.identityProviders[0].transforms.examples[2] example failed:
+										expected: authentication to be rejected
+										actual:   authentication was not rejected
+
+										.spec.identityProviders[0].transforms.examples[3] example failed:
+										expected: authentication not to be rejected
+										actual:   authentication was rejected with message "only ryan allowed"
+
+										.spec.identityProviders[0].transforms.examples[4] example failed:
+										expected: authentication rejection message "wrong message"
+										actual:   authentication rejection message "only ryan allowed"
+
+										.spec.identityProviders[0].transforms.examples[6] example failed:
+										expected: username "wrong"
+										actual:   username "pre:ryan"
+
+										.spec.identityProviders[0].transforms.examples[6] example failed:
+										expected: groups []
+										actual:   groups ["pre:a", "pre:b"]
+
+										.spec.identityProviders[0].transforms.examples[7] example failed:
+										expected: username "wrong"
+										actual:   username "pre:ryan"
+
+										.spec.identityProviders[0].transforms.examples[8] example failed:
+										expected: groups ["wrong1", "wrong2"]
+										actual:   groups ["pre:a", "pre:b"]
+
+										.spec.identityProviders[0].transforms.examples[9] example failed:
+										expected: username ""
+										actual:   username "pre:ryan"
+
+										.spec.identityProviders[0].transforms.examples[9] example failed:
+										expected: groups []
+										actual:   groups ["pre:a", "pre:b"]`,
+								),
+								frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation expressions that return illegal values with examples which exercise them",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username == "ryan" ? "" : username`}, // not allowed to return an empty string as the transformed username
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+										{ // this should pass
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "other",
+												Groups:   []string{"a", "b"},
+												Rejected: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]configv1alpha1.Condition{
+							sadTransformationExamplesCondition(
+								here.Doc(
+									`.spec.identityProviders[0].transforms.examples[0] example failed:
+										expected: no transformation errors
+										actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
+
+										.spec.identityProviders[0].transforms.examples[1] example failed:
+										expected: no transformation errors
+										actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
+								),
 								frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),

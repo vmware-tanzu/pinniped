@@ -111,6 +111,29 @@ func TestTransformationPipeline(t *testing.T) {
 			wantRejectionAuthenticationMessage: "none",
 		},
 		{
+			name: "group results are sorted and made unique",
+			transforms: []IdentityTransformation{
+				FakeAppendStringTransformer{},
+			},
+			username: "foo",
+			groups: []string{
+				"b",
+				"a",
+				"b",
+				"a",
+				"c",
+				"b",
+			},
+			wantUsername: "foo:transformed",
+			wantGroups: []string{
+				"a:transformed",
+				"b:transformed",
+				"c:transformed",
+			},
+			wantAuthenticationAllowed:          true,
+			wantRejectionAuthenticationMessage: "none",
+		},
+		{
 			name:     "multiple transformations applied successfully",
 			username: "foo",
 			groups: []string{
@@ -163,7 +186,9 @@ func TestTransformationPipeline(t *testing.T) {
 		{
 			name:     "unexpected error at index",
 			username: "foo",
-			groups:   []string{"foobar"},
+			groups: []string{
+				"foobar",
+			},
 			transforms: []IdentityTransformation{
 				FakeAppendStringTransformer{},
 				FakeErrorTransformer{},
@@ -214,7 +239,9 @@ func TestTransformationPipeline(t *testing.T) {
 		{
 			name:     "any transformation returning nil for the list of groups will cause an error",
 			username: "foo",
-			groups:   []string{"these.will.be.converted.to.nil"},
+			groups: []string{
+				"these.will.be.converted.to.nil",
+			},
 			transforms: []IdentityTransformation{
 				FakeNilGroupTransformer{},
 			},

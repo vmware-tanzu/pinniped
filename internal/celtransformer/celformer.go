@@ -29,7 +29,7 @@ const (
 	constStringVariableName     = "strConst"
 	constStringListVariableName = "strListConst"
 
-	defaultPolicyRejectedAuthMessage = "Authentication was rejected by a configured policy"
+	DefaultPolicyRejectedAuthMessage = "Authentication was rejected by a configured policy"
 )
 
 // CELTransformer can compile any number of transformation expression pipelines.
@@ -95,6 +95,10 @@ func (c *CELTransformer) CompileTransformation(t CELTransformation, consts *Tran
 type CELTransformation interface {
 	compile(transformer *CELTransformer, consts *TransformationConstants) (idtransform.IdentityTransformation, error)
 }
+
+var _ CELTransformation = (*UsernameTransformation)(nil)
+var _ CELTransformation = (*GroupsTransformation)(nil)
+var _ CELTransformation = (*AllowAuthenticationPolicy)(nil)
 
 // UsernameTransformation is a CEL expression that can transform a username (or leave it unchanged).
 // It implements CELTransformation.
@@ -290,7 +294,7 @@ func (c *compiledAllowAuthenticationPolicy) Evaluate(ctx context.Context, userna
 	}
 	if !boolValue {
 		if len(c.rejectedAuthenticationMessage) == 0 {
-			result.RejectedAuthenticationMessage = defaultPolicyRejectedAuthMessage
+			result.RejectedAuthenticationMessage = DefaultPolicyRejectedAuthMessage
 		} else {
 			result.RejectedAuthenticationMessage = c.rejectedAuthenticationMessage
 		}

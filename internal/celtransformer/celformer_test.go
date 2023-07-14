@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestTransformer(t *testing.T) {
 				&GroupsTransformation{Expression: `groups + [username + "2"]`}, // by the time this expression runs, the username was already changed to "other"
 			},
 			wantUsername: "other",
-			wantGroups:   []string{"admins", "developers", "other", "ryan", "other2"},
+			wantGroups:   []string{"admins", "developers", "other", "other2", "ryan"},
 		},
 		{
 			name:     "any transformation can use the provided constants as variables",
@@ -135,7 +136,7 @@ func TestTransformer(t *testing.T) {
 				&AllowAuthenticationPolicy{Expression: `strConst.x == "abc"`},
 			},
 			wantUsername: "abcuvw",
-			wantGroups:   []string{"abc", "def", "xyz", "123"},
+			wantGroups:   []string{"123", "abc", "def", "xyz"},
 		},
 		{
 			name:     "the CEL string extensions are enabled for use in the expressions",
@@ -297,7 +298,7 @@ func TestTransformer(t *testing.T) {
 				&GroupsTransformation{Expression: `groups + ["new-group"]`},
 			},
 			wantUsername: "ryan",
-			wantGroups:   []string{"admins", "developers", "other", "new-group"},
+			wantGroups:   []string{"admins", "developers", "new-group", "other"},
 		},
 		{
 			name:     "a nil passed as groups will be converted to an empty list",
@@ -340,7 +341,7 @@ func TestTransformer(t *testing.T) {
 				&GroupsTransformation{Expression: `groups + [strConst.groupToAlwaysAdd]`},
 			},
 			wantUsername: "ryan",
-			wantGroups:   []string{"admins", "developers", "other", "new-group"},
+			wantGroups:   []string{"admins", "developers", "new-group", "other"},
 		},
 		{
 			name:     "can add a group but only if they already belong to another group - when the user does belong to that other group",
@@ -350,7 +351,7 @@ func TestTransformer(t *testing.T) {
 				&GroupsTransformation{Expression: `"other" in groups ? groups + ["new-group"] : groups`},
 			},
 			wantUsername: "ryan",
-			wantGroups:   []string{"admins", "developers", "other", "new-group"},
+			wantGroups:   []string{"admins", "developers", "new-group", "other"},
 		},
 		{
 			name:     "can add a group but only if they already belong to another group - when the user does NOT belong to that other group",
@@ -424,7 +425,7 @@ func TestTransformer(t *testing.T) {
 				&AllowAuthenticationPolicy{Expression: `["foobar", "foobaz", "foobat"].all(g, g in groups)`, RejectedAuthenticationMessage: `Only users who belong to all groups in a list are allowed`},
 			},
 			wantUsername: "ryan",
-			wantGroups:   []string{"admins", "developers", "other", "foobar", "foobaz", "foobat"},
+			wantGroups:   []string{"admins", "developers", "foobar", "foobat", "foobaz", "other"},
 		},
 		{
 			name:     "can reject auth unless the user belongs to all of the groups in a list - when the user does NOT meet the criteria",
@@ -820,6 +821,7 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 		groups = append(groups, fmt.Sprintf("g%d", i))
 		wantGroups = append(wantGroups, fmt.Sprintf("group_prefix:g%d", i))
 	}
+	sort.Strings(wantGroups)
 
 	// Before looking at performance, check that the behavior of the function is correct.
 	result, err := pipeline.Evaluate(context.Background(), "ryan", groups)

@@ -45,6 +45,7 @@ const (
 	typeIdentityProvidersObjectRefKindValid  = "IdentityProvidersObjectRefKindValid"
 	typeTransformsConstantsNamesUnique       = "TransformsConstantsNamesUnique"
 	typeTransformsExpressionsValid           = "TransformsExpressionsValid"
+	typeTransformsExamplesPassed             = "TransformsExamplesPassed"
 
 	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
@@ -61,6 +62,7 @@ const (
 	reasonKindUnrecognized                            = "KindUnrecognized"
 	reasonDuplicateConstantsNames                     = "DuplicateConstantsNames"
 	reasonInvalidTransformsExpressions                = "InvalidTransformsExpressions"
+	reasonTransformsExamplesFailed                    = "TransformsExamplesFailed"
 
 	kindLDAPIdentityProvider            = "LDAPIdentityProvider"
 	kindOIDCIdentityProvider            = "OIDCIdentityProvider"
@@ -328,10 +330,12 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
 	conditions = appendTransformsConstantsNamesUniqueCondition(sets.Set[string]{}, conditions)
 	conditions = appendTransformsExpressionsValidCondition([]string{}, conditions)
+	conditions = appendTransformsExamplesPassedCondition([]string{}, conditions)
 
 	return federationDomainIssuer, conditions, nil
 }
 
+//nolint:funlen
 func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplicitIDPs(
 	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
@@ -490,7 +494,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluat
 		return nil, false, nil, err
 	}
 
-	allExamplesPassed, conditions := c.evaluateExamples(ctx, idp, pipeline, conditions)
+	allExamplesPassed, conditions := c.evaluateExamples(ctx, idp, idpIndex, pipeline, conditions)
 
 	return pipeline, allExamplesPassed, conditions, nil
 }
@@ -580,82 +584,75 @@ func (c *federationDomainWatcherController) makeTransformationPipeline(
 func (c *federationDomainWatcherController) evaluateExamples(
 	ctx context.Context,
 	idp configv1alpha1.FederationDomainIdentityProvider,
+	idpIndex int,
 	pipeline *idtransform.TransformationPipeline,
 	conditions []*configv1alpha1.Condition,
 ) (bool, []*configv1alpha1.Condition) {
+	const errorFmt = ".spec.identityProviders[%d].transforms.examples[%d] example failed:\nexpected: %s\nactual:   %s"
+	examplesErrors := []string{}
+
 	if pipeline == nil {
-		// TODO cannot evaluate examples, but still need to write a condition for it
+		// Unable to evaluate the conditions where the pipeline of expressions was invalid.
+		conditions = appendTransformsExamplesPassedCondition(nil, conditions)
 		return false, conditions
 	}
 
 	// Run all the provided transform examples. If any fail, put errors on the FederationDomain status.
-	examplesErrors := []string{}
-	for examplesIndex, e := range idp.Transforms.Examples {
-		result, _ := pipeline.Evaluate(ctx, e.Username, e.Groups)
-		// TODO: handle err
+	for exIndex, e := range idp.Transforms.Examples {
+		result, err := pipeline.Evaluate(ctx, e.Username, e.Groups)
+		if err != nil {
+			examplesErrors = append(examplesErrors, fmt.Sprintf(errorFmt, idpIndex, exIndex,
+				"no transformation errors",
+				fmt.Sprintf("transformations resulted in an unexpected error %q", err.Error())))
+			continue
+		}
 		resultWasAuthRejected := !result.AuthenticationAllowed
-		if e.Expects.Rejected && !resultWasAuthRejected { //nolint:gocritic,nestif
-			// TODO: handle this failed example
-			examplesErrors = append(examplesErrors, "TODO")
-			plog.Warning("FederationDomain identity provider transformations example failed: expected authentication to be rejected but it was not",
-				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", examplesIndex,
-				"expectedRejected", e.Expects.Rejected,
-				"actualRejectedResult", resultWasAuthRejected,
-				"expectedMessage", e.Expects.Message,
-				"actualMessageResult", result.RejectedAuthenticationMessage,
-			)
-		} else if !e.Expects.Rejected && resultWasAuthRejected {
-			// TODO: handle this failed example
-			examplesErrors = append(examplesErrors, "TODO")
-			plog.Warning("FederationDomain identity provider transformations example failed: expected authentication not to be rejected but it was rejected",
-				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", examplesIndex,
-				"expectedRejected", e.Expects.Rejected,
-				"actualRejectedResult", resultWasAuthRejected,
-				"expectedMessage", e.Expects.Message,
-				"actualMessageResult", result.RejectedAuthenticationMessage,
-			)
-		} else if e.Expects.Rejected && resultWasAuthRejected && e.Expects.Message != result.RejectedAuthenticationMessage {
-			// TODO: when expected message is blank, then treat it like it expects the default message
-			// TODO: handle this failed example
-			examplesErrors = append(examplesErrors, "TODO")
-			plog.Warning("FederationDomain identity provider transformations example failed: expected a different authentication rejection message",
-				"idpDisplayName", idp.DisplayName,
-				"exampleIndex", examplesIndex,
-				"expectedRejected", e.Expects.Rejected,
-				"actualRejectedResult", resultWasAuthRejected,
-				"expectedMessage", e.Expects.Message,
-				"actualMessageResult", result.RejectedAuthenticationMessage,
-			)
-		} else if result.AuthenticationAllowed {
+
+		if e.Expects.Rejected && !resultWasAuthRejected {
+			examplesErrors = append(examplesErrors,
+				fmt.Sprintf(errorFmt, idpIndex, exIndex, "authentication to be rejected", "authentication was not rejected"))
+			continue
+		}
+
+		if !e.Expects.Rejected && resultWasAuthRejected {
+			examplesErrors = append(examplesErrors, fmt.Sprintf(errorFmt, idpIndex, exIndex,
+				"authentication not to be rejected",
+				fmt.Sprintf("authentication was rejected with message %q", result.RejectedAuthenticationMessage)))
+			continue
+		}
+
+		expectedRejectionMessage := e.Expects.Message
+		if len(expectedRejectionMessage) == 0 {
+			expectedRejectionMessage = celtransformer.DefaultPolicyRejectedAuthMessage
+		}
+		if e.Expects.Rejected && resultWasAuthRejected && expectedRejectionMessage != result.RejectedAuthenticationMessage {
+			examplesErrors = append(examplesErrors, fmt.Sprintf(errorFmt, idpIndex, exIndex,
+				fmt.Sprintf("authentication rejection message %q", expectedRejectionMessage),
+				fmt.Sprintf("authentication rejection message %q", result.RejectedAuthenticationMessage)))
+			continue
+		}
+
+		if result.AuthenticationAllowed {
 			// In the case where the user expected the auth to be allowed and it was allowed, then compare
 			// the expected username and group names to the actual username and group names.
-			// TODO: when both of these fail, put both errors onto the status (not just the first one)
 			if e.Expects.Username != result.Username {
-				// TODO: handle this failed example
-				examplesErrors = append(examplesErrors, "TODO")
-				plog.Warning("FederationDomain identity provider transformations example failed: expected a different transformed username",
-					"idpDisplayName", idp.DisplayName,
-					"exampleIndex", examplesIndex,
-					"expectedUsername", e.Expects.Username,
-					"actualUsernameResult", result.Username,
-				)
+				examplesErrors = append(examplesErrors, fmt.Sprintf(errorFmt, idpIndex, exIndex,
+					fmt.Sprintf("username %q", e.Expects.Username),
+					fmt.Sprintf("username %q", result.Username)))
 			}
-			if !stringSlicesEqual(e.Expects.Groups, result.Groups) {
-				// TODO: Do we need to make this insensitive to ordering, or should the transformations evaluator be changed to always return sorted group names at the end of the pipeline?
-				// TODO: What happens if the user did not write any group expectation? Treat it like expecting an empty list of groups?
-				// TODO: handle this failed example
-				examplesErrors = append(examplesErrors, "TODO")
-				plog.Warning("FederationDomain identity provider transformations example failed: expected a different transformed groups list",
-					"idpDisplayName", idp.DisplayName,
-					"exampleIndex", examplesIndex,
-					"expectedGroups", e.Expects.Groups,
-					"actualGroupsResult", result.Groups,
-				)
+			expectedGroups := e.Expects.Groups
+			if expectedGroups == nil {
+				expectedGroups = []string{}
+			}
+			if !stringSetsEqual(expectedGroups, result.Groups) {
+				examplesErrors = append(examplesErrors, fmt.Sprintf(errorFmt, idpIndex, exIndex,
+					fmt.Sprintf("groups [%s]", strings.Join(sortAndQuote(expectedGroups), ", ")),
+					fmt.Sprintf("groups [%s]", strings.Join(sortAndQuote(result.Groups), ", "))))
 			}
 		}
 	}
+
+	conditions = appendTransformsExamplesPassedCondition(examplesErrors, conditions)
 
 	return len(examplesErrors) == 0, conditions
 }
@@ -719,6 +716,34 @@ func appendTransformsExpressionsValidCondition(errors []string, conditions []*co
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
+		})
+	}
+	return conditions
+}
+
+func appendTransformsExamplesPassedCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	switch {
+	case errors == nil:
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsExamplesPassed,
+			Status:  configv1alpha1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: "unable to check if the examples specified by .spec.identityProviders[].transforms.examples[] had errors because an expression was invalid",
+		})
+	case len(errors) > 0:
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeTransformsExamplesPassed,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonTransformsExamplesFailed,
+			Message: fmt.Sprintf("the examples specified by .spec.identityProviders[].transforms.examples[] had errors:\n\n%s",
+				strings.Join(errors, "\n\n")),
+		})
+	default:
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsExamplesPassed,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
 		})
 	}
 	return conditions
@@ -948,14 +973,8 @@ func hadErrorCondition(conditions []*configv1alpha1.Condition) bool {
 	return false
 }
 
-func stringSlicesEqual(a []string, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, itemFromA := range a {
-		if b[i] != itemFromA {
-			return false
-		}
-	}
-	return true
+func stringSetsEqual(a []string, b []string) bool {
+	aSet := sets.New(a...)
+	bSet := sets.New(b...)
+	return aSet.Equal(bSet)
 }

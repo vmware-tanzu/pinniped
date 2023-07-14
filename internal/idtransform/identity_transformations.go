@@ -8,7 +8,10 @@ package idtransform
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // TransformationResult is the result of evaluating a transformation against some inputs.
@@ -50,11 +53,13 @@ func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, 
 	if groups == nil {
 		groups = []string{}
 	}
+
 	accumulatedResult := &TransformationResult{
 		Username:              username,
 		Groups:                groups,
 		AuthenticationAllowed: true,
 	}
+
 	for i, transform := range p.transforms {
 		var err error
 		accumulatedResult, err = transform.Evaluate(ctx, accumulatedResult.Username, accumulatedResult.Groups)
@@ -73,6 +78,15 @@ func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, 
 			return nil, fmt.Errorf("identity transformation returned a null list of groups, which is not allowed")
 		}
 	}
+
+	accumulatedResult.Groups = sortAndUniq(accumulatedResult.Groups)
+
 	// There were no unexpected errors and no policy which rejected auth.
 	return accumulatedResult, nil
+}
+
+func sortAndUniq(s []string) []string {
+	unique := sets.New(s...).UnsortedList()
+	sort.Strings(unique)
+	return unique
 }

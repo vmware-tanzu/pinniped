@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type FakeNoopTransformer struct{}
+type fakeNoopTransformer struct{}
 
-func (a FakeNoopTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeNoopTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      username,
 		Groups:                        groups,
@@ -22,9 +22,13 @@ func (a FakeNoopTransformer) Evaluate(ctx context.Context, username string, grou
 	}, nil
 }
 
-type FakeNilGroupTransformer struct{}
+func (a fakeNoopTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
 
-func (a FakeNilGroupTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+type fakeNilGroupTransformer struct{}
+
+func (a fakeNilGroupTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      username,
 		Groups:                        nil,
@@ -33,9 +37,13 @@ func (a FakeNilGroupTransformer) Evaluate(ctx context.Context, username string, 
 	}, nil
 }
 
-type FakeAppendStringTransformer struct{}
+func (a fakeNilGroupTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
 
-func (a FakeAppendStringTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+type fakeAppendStringTransformer struct{}
+
+func (a fakeAppendStringTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	newGroups := []string{}
 	for _, group := range groups {
 		newGroups = append(newGroups, group+":transformed")
@@ -48,9 +56,13 @@ func (a FakeAppendStringTransformer) Evaluate(ctx context.Context, username stri
 	}, nil
 }
 
-type FakeDeleteUsernameAndGroupsTransformer struct{}
+func (a fakeAppendStringTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
 
-func (d FakeDeleteUsernameAndGroupsTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+type fakeDeleteUsernameAndGroupsTransformer struct{}
+
+func (a fakeDeleteUsernameAndGroupsTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      "",
 		Groups:                        []string{},
@@ -59,9 +71,13 @@ func (d FakeDeleteUsernameAndGroupsTransformer) Evaluate(ctx context.Context, us
 	}, nil
 }
 
-type FakeAuthenticationDisallowedTransformer struct{}
+func (a fakeDeleteUsernameAndGroupsTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
 
-func (d FakeAuthenticationDisallowedTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+type fakeAuthenticationDisallowedTransformer struct{}
+
+func (a fakeAuthenticationDisallowedTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	newGroups := []string{}
 	for _, group := range groups {
 		newGroups = append(newGroups, group+":disallowed")
@@ -74,13 +90,33 @@ func (d FakeAuthenticationDisallowedTransformer) Evaluate(ctx context.Context, u
 	}, nil
 }
 
-type FakeErrorTransformer struct{}
+func (a fakeAuthenticationDisallowedTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
 
-func (d FakeErrorTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+type fakeErrorTransformer struct{}
+
+func (a fakeErrorTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	return &TransformationResult{}, errors.New("unexpected catastrophic error")
 }
 
-func TestTransformationPipeline(t *testing.T) {
+func (a fakeErrorTransformer) Source() interface{} {
+	return nil // not needed for this test
+}
+
+type fakeTransformerWithSource struct {
+	source string
+}
+
+func (a fakeTransformerWithSource) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+	return nil, nil // not needed for this test
+}
+
+func (a fakeTransformerWithSource) Source() interface{} {
+	return a.source
+}
+
+func TestTransformationPipelineEvaluation(t *testing.T) {
 	tests := []struct {
 		name                               string
 		username                           string
@@ -95,7 +131,7 @@ func TestTransformationPipeline(t *testing.T) {
 		{
 			name: "single transformation applied successfully",
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			username: "foo",
 			groups: []string{
@@ -113,7 +149,7 @@ func TestTransformationPipeline(t *testing.T) {
 		{
 			name: "group results are sorted and made unique",
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			username: "foo",
 			groups: []string{
@@ -141,8 +177,8 @@ func TestTransformationPipeline(t *testing.T) {
 				"foobaz",
 			},
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			wantUsername: "foo:transformed:transformed",
 			wantGroups: []string{
@@ -159,7 +195,7 @@ func TestTransformationPipeline(t *testing.T) {
 				"foobar",
 			},
 			transforms: []IdentityTransformation{
-				FakeAuthenticationDisallowedTransformer{},
+				fakeAuthenticationDisallowedTransformer{},
 			},
 			wantUsername:                       "foo:disallowed",
 			wantGroups:                         []string{"foobar:disallowed"},
@@ -173,10 +209,10 @@ func TestTransformationPipeline(t *testing.T) {
 				"foobar",
 			},
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
-				FakeAuthenticationDisallowedTransformer{},
+				fakeAppendStringTransformer{},
+				fakeAuthenticationDisallowedTransformer{},
 				// this transformation will not be run because the previous exits the pipeline
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			wantUsername:                       "foo:transformed:disallowed",
 			wantGroups:                         []string{"foobar:transformed:disallowed"},
@@ -190,9 +226,9 @@ func TestTransformationPipeline(t *testing.T) {
 				"foobar",
 			},
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
-				FakeErrorTransformer{},
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
+				fakeErrorTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			wantError: "identity transformation at index 1: unexpected catastrophic error",
 		},
@@ -200,7 +236,7 @@ func TestTransformationPipeline(t *testing.T) {
 			name:     "empty username not allowed",
 			username: "foo",
 			transforms: []IdentityTransformation{
-				FakeDeleteUsernameAndGroupsTransformer{},
+				fakeDeleteUsernameAndGroupsTransformer{},
 			},
 			wantError: "identity transformation returned an empty username, which is not allowed",
 		},
@@ -208,7 +244,7 @@ func TestTransformationPipeline(t *testing.T) {
 			name:     "whitespace username not allowed",
 			username: "    \t\n\r   ",
 			transforms: []IdentityTransformation{
-				FakeNoopTransformer{},
+				fakeNoopTransformer{},
 			},
 			wantError: "identity transformation returned an empty username, which is not allowed",
 		},
@@ -217,7 +253,7 @@ func TestTransformationPipeline(t *testing.T) {
 			username: "foo",
 			groups:   []string{},
 			transforms: []IdentityTransformation{
-				FakeAppendStringTransformer{},
+				fakeAppendStringTransformer{},
 			},
 			wantUsername:                       "foo:transformed",
 			wantGroups:                         []string{},
@@ -229,7 +265,7 @@ func TestTransformationPipeline(t *testing.T) {
 			username: "foo",
 			groups:   nil,
 			transforms: []IdentityTransformation{
-				FakeNoopTransformer{},
+				fakeNoopTransformer{},
 			},
 			wantUsername:                       "foo",
 			wantGroups:                         []string{},
@@ -243,7 +279,7 @@ func TestTransformationPipeline(t *testing.T) {
 				"these.will.be.converted.to.nil",
 			},
 			transforms: []IdentityTransformation{
-				FakeNilGroupTransformer{},
+				fakeNilGroupTransformer{},
 			},
 			wantError: "identity transformation returned a null list of groups, which is not allowed",
 		},
@@ -286,4 +322,19 @@ func TestTransformationPipeline(t *testing.T) {
 			require.Equal(t, tt.wantRejectionAuthenticationMessage, result.RejectedAuthenticationMessage)
 		})
 	}
+}
+
+func TestTransformationSource(t *testing.T) {
+	pipeline := NewTransformationPipeline()
+
+	for _, transform := range []IdentityTransformation{
+		&fakeTransformerWithSource{source: "foo"},
+		&fakeTransformerWithSource{source: "bar"},
+		&fakeTransformerWithSource{source: "baz"},
+	} {
+		pipeline.AppendTransformation(transform)
+	}
+
+	require.Equal(t, []interface{}{"foo", "bar", "baz"}, pipeline.Source())
+	require.NotEqual(t, []interface{}{"foo", "something-else", "baz"}, pipeline.Source())
 }

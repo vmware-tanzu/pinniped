@@ -25,6 +25,10 @@ type TransformationResult struct {
 // IdentityTransformation is an individual identity transformation which can be evaluated.
 type IdentityTransformation interface {
 	Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error)
+
+	// Source returns some representation of the original source code of the transformation, which is
+	// useful for tests to be able to check that a compiled transformation came from the right source.
+	Source() interface{}
 }
 
 // TransformationPipeline is a list of identity transforms, which can be evaluated in order against some given input
@@ -83,6 +87,14 @@ func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, 
 
 	// There were no unexpected errors and no policy which rejected auth.
 	return accumulatedResult, nil
+}
+
+func (p *TransformationPipeline) Source() []interface{} {
+	result := []interface{}{}
+	for _, transform := range p.transforms {
+		result = append(result, transform.Source())
+	}
+	return result
 }
 
 func sortAndUniq(s []string) []string {

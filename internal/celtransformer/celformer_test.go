@@ -765,6 +765,7 @@ func TestTransformer(t *testing.T) {
 			require.NoError(t, err)
 
 			pipeline := idtransform.NewTransformationPipeline()
+			expectedPipelineSource := []interface{}{}
 
 			for _, transform := range tt.transforms {
 				compiledTransform, err := transformer.CompileTransformation(transform, tt.consts)
@@ -774,6 +775,15 @@ func TestTransformer(t *testing.T) {
 				}
 				require.NoError(t, err, "got an unexpected compile error")
 				pipeline.AppendTransformation(compiledTransform)
+
+				expectedTransformSource := &CELTransformationSource{
+					Expr:   transform,
+					Consts: tt.consts,
+				}
+				if expectedTransformSource.Consts == nil {
+					expectedTransformSource.Consts = &TransformationConstants{}
+				}
+				expectedPipelineSource = append(expectedPipelineSource, expectedTransformSource)
 			}
 
 			ctx := context.Background()
@@ -792,6 +802,8 @@ func TestTransformer(t *testing.T) {
 			require.Equal(t, tt.wantGroups, result.Groups)
 			require.Equal(t, !tt.wantAuthRejected, result.AuthenticationAllowed, "AuthenticationAllowed had unexpected value")
 			require.Equal(t, tt.wantAuthRejectedMessage, result.RejectedAuthenticationMessage)
+
+			require.Equal(t, expectedPipelineSource, pipeline.Source())
 		})
 	}
 }

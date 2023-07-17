@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/pointer"
@@ -25,6 +26,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/here"
@@ -1282,7 +1284,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 								Transforms: configv1alpha1.FederationDomainTransforms{
 									Constants: []configv1alpha1.FederationDomainTransformsConstant{
 										{Name: "duplicate1", Type: "string", StringValue: "abc"},
-										{Name: "duplicate1", Type: "string", StringValue: "def"},
+										{Name: "duplicate1", Type: "stringList", StringListValue: []string{"def"}},
 										{Name: "duplicate1", Type: "string", StringValue: "efg"},
 										{Name: "duplicate2", Type: "string", StringValue: "123"},
 										{Name: "duplicate2", Type: "string", StringValue: "456"},
@@ -1613,6 +1615,133 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			},
 		},
 		{
+			name: "the federation domain has valid IDPs and transformations and examples",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
+										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
+										{Type: "username/v1", Expression: `"pre:" + username`},
+										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
+									},
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "str", Type: "string", StringValue: "abc"},
+										{Name: "strL", Type: "stringList", StringListValue: []string{"def"}},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"pre:b", "pre:a"},
+												Rejected: false,
+											},
+										},
+										{
+											Username: "other",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "only ryan allowed",
+											},
+										},
+										{
+											Username: "rejectMeWithDefaultMessage",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												// Not specifying message is the same as expecting the default message.
+											},
+										},
+										{
+											Username: "rejectMeWithDefaultMessage",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "Authentication was rejected by a configured policy", // this is the default message
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "name2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `"pre:" + username`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"b", "a"},
+												Rejected: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithIDPs(t, "https://issuer1.com", []*federationdomainproviders.FederationDomainIdentityProvider{
+					{
+						DisplayName: "name1",
+						UID:         oidcIdentityProvider.UID,
+						Transforms: newTransformationPipeline(t, &celtransformer.TransformationConstants{
+							StringConstants:     map[string]string{"str": "abc"},
+							StringListConstants: map[string][]string{"strL": {"def"}},
+						},
+							&celtransformer.AllowAuthenticationPolicy{
+								Expression:                    `username == "ryan" || username == "rejectMeWithDefaultMessage"`,
+								RejectedAuthenticationMessage: "only ryan allowed",
+							},
+							&celtransformer.AllowAuthenticationPolicy{Expression: `username != "rejectMeWithDefaultMessage"`},
+							&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
+							&celtransformer.GroupsTransformation{Expression: `groups.map(g, "pre:" + g)`},
+						),
+					},
+					{
+						DisplayName: "name2",
+						UID:         ldapIdentityProvider.UID,
+						Transforms: newTransformationPipeline(t, &celtransformer.TransformationConstants{},
+							&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
+						),
+					},
+				}),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
 			name: "the federation domain specifies illegal const type, which shouldn't really happen since the CRD validates it",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
@@ -1719,7 +1848,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 
 			if tt.wantFDIssuers != nil {
 				require.True(t, federationDomainsSetter.SetFederationDomainsWasCalled)
-				require.ElementsMatch(t, tt.wantFDIssuers, federationDomainsSetter.FederationDomainsReceived)
+				// This is ugly, but we cannot test equality on compiled identity transformations because cel.Program
+				// cannot be compared for equality. This converts them to a type which can be tested for equality,
+				// which should be good enough for the purposes of this test.
+				require.ElementsMatch(t,
+					convertToComparableType(tt.wantFDIssuers),
+					convertToComparableType(federationDomainsSetter.FederationDomainsReceived))
 			} else {
 				require.False(t, federationDomainsSetter.SetFederationDomainsWasCalled)
 			}
@@ -1741,6 +1875,46 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			}
 		})
 	}
+}
+
+type comparableFederationDomainIssuer struct {
+	issuer                  string
+	identityProviders       []*comparableFederationDomainIdentityProvider
+	defaultIdentityProvider *comparableFederationDomainIdentityProvider
+}
+
+type comparableFederationDomainIdentityProvider struct {
+	DisplayName      string
+	UID              types.UID
+	TransformsSource []interface{}
+}
+
+func makeFederationDomainIdentityProviderComparable(fdi *federationdomainproviders.FederationDomainIdentityProvider) *comparableFederationDomainIdentityProvider {
+	if fdi == nil {
+		return nil
+	}
+	return &comparableFederationDomainIdentityProvider{
+		DisplayName:      fdi.DisplayName,
+		UID:              fdi.UID,
+		TransformsSource: fdi.Transforms.Source(),
+	}
+}
+
+func convertToComparableType(fdis []*federationdomainproviders.FederationDomainIssuer) []*comparableFederationDomainIssuer {
+	result := []*comparableFederationDomainIssuer{}
+	for _, fdi := range fdis {
+		comparableFDIs := make([]*comparableFederationDomainIdentityProvider, len(fdi.IdentityProviders()))
+		for _, idp := range fdi.IdentityProviders() {
+			comparableFDIs = append(comparableFDIs, makeFederationDomainIdentityProviderComparable(idp))
+		}
+		converted := &comparableFederationDomainIssuer{
+			issuer:                  fdi.Issuer(),
+			identityProviders:       comparableFDIs,
+			defaultIdentityProvider: makeFederationDomainIdentityProviderComparable(fdi.DefaultIdentityProvider()),
+		}
+		result = append(result, converted)
+	}
+	return result
 }
 
 func expectedFederationDomainStatusUpdate(
@@ -1788,4 +1962,117 @@ func sortFederationDomainsByName(federationDomains []*configv1alpha1.FederationD
 	sort.SliceStable(federationDomains, func(a, b int) bool {
 		return federationDomains[a].GetName() < federationDomains[b].GetName()
 	})
+}
+
+func newTransformationPipeline(
+	t *testing.T,
+	consts *celtransformer.TransformationConstants,
+	transformations ...celtransformer.CELTransformation,
+) *idtransform.TransformationPipeline {
+	pipeline := idtransform.NewTransformationPipeline()
+
+	compiler, err := celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime)
+	require.NoError(t, err)
+
+	if consts.StringConstants == nil {
+		consts.StringConstants = map[string]string{}
+	}
+	if consts.StringListConstants == nil {
+		consts.StringListConstants = map[string][]string{}
+	}
+
+	for _, transform := range transformations {
+		compiledTransform, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		pipeline.AppendTransformation(compiledTransform)
+	}
+
+	return pipeline
+}
+
+func TestTransformationPipelinesCanBeTestedForEqualityUsingSourceToMakeTestingEasier(t *testing.T) {
+	compiler, err := celtransformer.NewCELTransformer(5 * time.Second)
+	require.NoError(t, err)
+
+	transforms := []celtransformer.CELTransformation{
+		&celtransformer.AllowAuthenticationPolicy{
+			Expression:                    `username == "ryan" || username == "rejectMeWithDefaultMessage"`,
+			RejectedAuthenticationMessage: "only ryan allowed",
+		},
+		&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
+		&celtransformer.GroupsTransformation{Expression: `groups.map(g, "pre:" + g)`},
+	}
+
+	differentTransforms := []celtransformer.CELTransformation{
+		&celtransformer.AllowAuthenticationPolicy{
+			Expression:                    `username == "ryan" || username == "different"`,
+			RejectedAuthenticationMessage: "different",
+		},
+		&celtransformer.UsernameTransformation{Expression: `"different:" + username`},
+		&celtransformer.GroupsTransformation{Expression: `groups.map(g, "different:" + g)`},
+	}
+
+	consts := &celtransformer.TransformationConstants{
+		StringConstants: map[string]string{
+			"foo": "bar",
+			"baz": "bat",
+		},
+		StringListConstants: map[string][]string{
+			"foo": {"a", "b"},
+			"bar": {"c", "d"},
+		},
+	}
+
+	differentConsts := &celtransformer.TransformationConstants{
+		StringConstants: map[string]string{
+			"foo": "barDifferent",
+			"baz": "bat",
+		},
+		StringListConstants: map[string][]string{
+			"foo": {"aDifferent", "b"},
+			"bar": {"c", "d"},
+		},
+	}
+
+	pipeline := idtransform.NewTransformationPipeline()
+	equalPipeline := idtransform.NewTransformationPipeline()
+	differentPipeline1 := idtransform.NewTransformationPipeline()
+	differentPipeline2 := idtransform.NewTransformationPipeline()
+	expectedSourceList := []interface{}{}
+
+	for i, transform := range transforms {
+		// Compile and append to a pipeline.
+		compiledTransform1, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		pipeline.AppendTransformation(compiledTransform1)
+
+		// Recompile the same thing and append it to another pipeline.
+		// This pipeline should end up being equal to the first one.
+		compiledTransform2, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		equalPipeline.AppendTransformation(compiledTransform2)
+
+		// Build up a test expectation value.
+		expectedSourceList = append(expectedSourceList, &celtransformer.CELTransformationSource{Expr: transform, Consts: consts})
+
+		// Compile a different expression using the same constants and append it to a different pipeline.
+		// This should not be equal to the other pipelines.
+		compiledDifferentExpressionSameConsts, err := compiler.CompileTransformation(differentTransforms[i], consts)
+		require.NoError(t, err)
+		differentPipeline1.AppendTransformation(compiledDifferentExpressionSameConsts)
+
+		// Compile the same expression using the different constants and append it to a different pipeline.
+		// This should not be equal to the other pipelines.
+		compiledSameExpressionDifferentConsts, err := compiler.CompileTransformation(transform, differentConsts)
+		require.NoError(t, err)
+		differentPipeline2.AppendTransformation(compiledSameExpressionDifferentConsts)
+	}
+
+	require.Equal(t, expectedSourceList, pipeline.Source())
+	require.Equal(t, expectedSourceList, equalPipeline.Source())
+
+	// The source of compiled pipelines can be compared to each other in this way for testing purposes.
+	require.Equal(t, pipeline.Source(), equalPipeline.Source())
+	require.NotEqual(t, pipeline.Source(), differentPipeline1.Source())
+	require.NotEqual(t, pipeline.Source(), differentPipeline2.Source())
 }

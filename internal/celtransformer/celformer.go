@@ -160,6 +160,7 @@ func (t *UsernameTransformation) compile(transformer *CELTransformer, consts *Tr
 		baseCompiledTransformation: &baseCompiledTransformation{
 			program:              program,
 			consts:               consts,
+			sourceExpr:           t,
 			maxExpressionRuntime: transformer.maxExpressionRuntime,
 		},
 	}, nil
@@ -174,6 +175,7 @@ func (t *GroupsTransformation) compile(transformer *CELTransformer, consts *Tran
 		baseCompiledTransformation: &baseCompiledTransformation{
 			program:              program,
 			consts:               consts,
+			sourceExpr:           t,
 			maxExpressionRuntime: transformer.maxExpressionRuntime,
 		},
 	}, nil
@@ -188,6 +190,7 @@ func (t *AllowAuthenticationPolicy) compile(transformer *CELTransformer, consts 
 		baseCompiledTransformation: &baseCompiledTransformation{
 			program:              program,
 			consts:               consts,
+			sourceExpr:           t,
 			maxExpressionRuntime: transformer.maxExpressionRuntime,
 		},
 		rejectedAuthenticationMessage: t.RejectedAuthenticationMessage,
@@ -198,6 +201,7 @@ func (t *AllowAuthenticationPolicy) compile(transformer *CELTransformer, consts 
 type baseCompiledTransformation struct {
 	program              cel.Program
 	consts               *TransformationConstants
+	sourceExpr           CELTransformation
 	maxExpressionRuntime time.Duration
 }
 
@@ -300,6 +304,23 @@ func (c *compiledAllowAuthenticationPolicy) Evaluate(ctx context.Context, userna
 		}
 	}
 	return result, nil
+}
+
+type CELTransformationSource struct {
+	Expr   CELTransformation
+	Consts *TransformationConstants
+}
+
+func (c *compiledUsernameTransformation) Source() interface{} {
+	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
+}
+
+func (c *compiledGroupsTransformation) Source() interface{} {
+	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
+}
+
+func (c *compiledAllowAuthenticationPolicy) Source() interface{} {
+	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
 }
 
 func newEnv() (*cel.Env, error) {

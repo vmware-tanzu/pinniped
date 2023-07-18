@@ -328,7 +328,7 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, []string{}, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
-	conditions = appendTransformsConstantsNamesUniqueCondition(sets.Set[string]{}, conditions)
+	conditions = appendTransformsConstantsNamesUniqueCondition([]string{}, conditions)
 	conditions = appendTransformsExpressionsValidCondition([]string{}, conditions)
 	conditions = appendTransformsExamplesPassedCondition([]string{}, conditions)
 
@@ -347,6 +347,7 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	duplicateDisplayNames := sets.Set[string]{}
 	badAPIGroupNames := []string{}
 	badKinds := []string{}
+	validationErrorMessages := &transformsValidationErrorMessages{}
 
 	for index, idp := range federationDomain.Spec.IdentityProviders {
 		idpIsValid := true
@@ -397,7 +398,8 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 		var err error
 		var pipeline *idtransform.TransformationPipeline
 		var allExamplesPassed bool
-		pipeline, allExamplesPassed, conditions, err = c.makeTransformationPipelineAndEvaluateExamplesForIdentityProvider(ctx, idp, index, conditions)
+		pipeline, allExamplesPassed, err = c.makeTransformationPipelineAndEvaluateExamplesForIdentityProvider(
+			ctx, idp, index, validationErrorMessages)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -448,6 +450,10 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, badAPIGroupNames, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), badKinds, conditions)
 
+	conditions = appendTransformsConstantsNamesUniqueCondition(validationErrorMessages.errorsForConstants, conditions)
+	conditions = appendTransformsExpressionsValidCondition(validationErrorMessages.errorsForExpressions, conditions)
+	conditions = appendTransformsExamplesPassedCondition(validationErrorMessages.errorsForExamples, conditions)
+
 	return federationDomainIssuer, conditions, nil
 }
 func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef corev1.TypedLocalObjectReference, namespace string) (types.UID, bool, error) {
@@ -482,27 +488,36 @@ func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluat
 	ctx context.Context,
 	idp configv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
-	conditions []*configv1alpha1.Condition,
-) (*idtransform.TransformationPipeline, bool, []*configv1alpha1.Condition, error) {
-	consts, conditions, err := c.makeTransformsConstants(idp, conditions)
+	validationErrorMessages *transformsValidationErrorMessages,
+) (*idtransform.TransformationPipeline, bool, error) {
+	consts, errorsForConstants, err := c.makeTransformsConstantsForIdentityProvider(idp, idpIndex)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
+	}
+	if len(errorsForConstants) > 0 {
+		validationErrorMessages.errorsForConstants = append(validationErrorMessages.errorsForConstants, errorsForConstants)
 	}
 
-	pipeline, conditions, err := c.makeTransformationPipeline(idp, idpIndex, consts, conditions)
+	pipeline, errorsForExpressions, err := c.makeTransformationPipelineForIdentityProvider(idp, idpIndex, consts)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
+	}
+	if len(errorsForExpressions) > 0 {
+		validationErrorMessages.errorsForExpressions = append(validationErrorMessages.errorsForExpressions, errorsForExpressions)
 	}
 
-	allExamplesPassed, conditions := c.evaluateExamples(ctx, idp, idpIndex, pipeline, conditions)
+	allExamplesPassed, errorsForExamples := c.evaluateExamplesForIdentityProvider(ctx, idp, idpIndex, pipeline)
+	if len(errorsForExamples) > 0 {
+		validationErrorMessages.errorsForExamples = append(validationErrorMessages.errorsForExamples, errorsForExamples)
+	}
 
-	return pipeline, allExamplesPassed, conditions, nil
+	return pipeline, allExamplesPassed, nil
 }
 
-func (c *federationDomainWatcherController) makeTransformsConstants(
+func (c *federationDomainWatcherController) makeTransformsConstantsForIdentityProvider(
 	idp configv1alpha1.FederationDomainIdentityProvider,
-	conditions []*configv1alpha1.Condition,
-) (*celtransformer.TransformationConstants, []*configv1alpha1.Condition, error) {
+	idpIndex int,
+) (*celtransformer.TransformationConstants, string, error) {
 	consts := &celtransformer.TransformationConstants{
 		StringConstants:     map[string]string{},
 		StringListConstants: map[string][]string{},
@@ -525,21 +540,24 @@ func (c *federationDomainWatcherController) makeTransformsConstants(
 			consts.StringListConstants[constant.Name] = constant.StringListValue
 		default:
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
-			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
+			return nil, "", fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
 		}
 	}
 
-	conditions = appendTransformsConstantsNamesUniqueCondition(duplicateConstNames, conditions)
+	if duplicateConstNames.Len() > 0 {
+		return consts, fmt.Sprintf(
+			"the names specified by .spec.identityProviders[%d].transforms.constants[].name contain duplicates: %s",
+			idpIndex, strings.Join(sortAndQuote(duplicateConstNames.UnsortedList()), ", ")), nil
+	}
 
-	return consts, conditions, nil
+	return consts, "", nil
 }
 
-func (c *federationDomainWatcherController) makeTransformationPipeline(
+func (c *federationDomainWatcherController) makeTransformationPipelineForIdentityProvider(
 	idp configv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
 	consts *celtransformer.TransformationConstants,
-	conditions []*configv1alpha1.Condition,
-) (*idtransform.TransformationPipeline, []*configv1alpha1.Condition, error) {
+) (*idtransform.TransformationPipeline, string, error) {
 	pipeline := idtransform.NewTransformationPipeline()
 	expressionsCompileErrors := []string{}
 
@@ -558,7 +576,7 @@ func (c *federationDomainWatcherController) makeTransformationPipeline(
 			}
 		default:
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
-			return nil, nil, fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
+			return nil, "", fmt.Errorf("one of spec.identityProvider[].transforms.expressions[].type is invalid: %q", expr.Type)
 		}
 
 		compiledTransform, err := c.celTransformer.CompileTransformation(rawTransform, consts)
@@ -571,30 +589,29 @@ func (c *federationDomainWatcherController) makeTransformationPipeline(
 		pipeline.AppendTransformation(compiledTransform)
 	}
 
-	conditions = appendTransformsExpressionsValidCondition(expressionsCompileErrors, conditions)
-
 	if len(expressionsCompileErrors) > 0 {
 		// One or more of the expressions did not compile, so we don't have a useful pipeline to return.
-		return nil, conditions, nil
+		// Return the validation messages.
+		return nil, strings.Join(expressionsCompileErrors, "\n\n"), nil
 	}
 
-	return pipeline, conditions, nil
+	return pipeline, "", nil
 }
 
-func (c *federationDomainWatcherController) evaluateExamples(
+func (c *federationDomainWatcherController) evaluateExamplesForIdentityProvider(
 	ctx context.Context,
 	idp configv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
 	pipeline *idtransform.TransformationPipeline,
-	conditions []*configv1alpha1.Condition,
-) (bool, []*configv1alpha1.Condition) {
+) (bool, string) {
 	const errorFmt = ".spec.identityProviders[%d].transforms.examples[%d] example failed:\nexpected: %s\nactual:   %s"
 	examplesErrors := []string{}
 
 	if pipeline == nil {
 		// Unable to evaluate the conditions where the pipeline of expressions was invalid.
-		conditions = appendTransformsExamplesPassedCondition(nil, conditions)
-		return false, conditions
+		return false, fmt.Sprintf(
+			"unable to check if the examples specified by .spec.identityProviders[%d].transforms.examples[] had errors because an expression was invalid",
+			idpIndex)
 	}
 
 	// Run all the provided transform examples. If any fail, put errors on the FederationDomain status.
@@ -652,13 +669,11 @@ func (c *federationDomainWatcherController) evaluateExamples(
 		}
 	}
 
-	conditions = appendTransformsExamplesPassedCondition(examplesErrors, conditions)
+	if len(examplesErrors) > 0 {
+		return false, strings.Join(examplesErrors, "\n\n")
+	}
 
-	return len(examplesErrors) == 0, conditions
-}
-
-func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
-	return sortAndQuote(c.allowedKinds.UnsortedList())
+	return true, ""
 }
 
 func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuffixNames []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
@@ -704,11 +719,10 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 func appendTransformsExpressionsValidCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
 	if len(errors) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeTransformsExpressionsValid,
-			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonInvalidTransformsExpressions,
-			Message: fmt.Sprintf("the expressions specified by .spec.identityProviders[].transforms.expressions[] were invalid:\n\n%s",
-				strings.Join(errors, "\n\n")),
+			Type:    typeTransformsExpressionsValid,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonInvalidTransformsExpressions,
+			Message: strings.Join(errors, "\n\n"),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
@@ -722,28 +736,38 @@ func appendTransformsExpressionsValidCondition(errors []string, conditions []*co
 }
 
 func appendTransformsExamplesPassedCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	switch {
-	case errors == nil:
+	if len(errors) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
 			Type:    typeTransformsExamplesPassed,
-			Status:  configv1alpha1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
-			Message: "unable to check if the examples specified by .spec.identityProviders[].transforms.examples[] had errors because an expression was invalid",
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonTransformsExamplesFailed,
+			Message: strings.Join(errors, "\n\n"),
 		})
-	case len(errors) > 0:
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeTransformsExamplesPassed,
-			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonTransformsExamplesFailed,
-			Message: fmt.Sprintf("the examples specified by .spec.identityProviders[].transforms.examples[] had errors:\n\n%s",
-				strings.Join(errors, "\n\n")),
-		})
-	default:
+	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
 			Type:    typeTransformsExamplesPassed,
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
+		})
+	}
+	return conditions
+}
+
+func appendTransformsConstantsNamesUniqueCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(errors) > 0 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsConstantsNamesUnique,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonDuplicateConstantsNames,
+			Message: strings.Join(errors, "\n\n"),
+		})
+	} else {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeTransformsConstantsNamesUnique,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
 		})
 	}
 	return conditions
@@ -769,26 +793,6 @@ func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames 
 	return conditions
 }
 
-func appendTransformsConstantsNamesUniqueCondition(duplicateConstNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if duplicateConstNames.Len() > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeTransformsConstantsNamesUnique,
-			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonDuplicateConstantsNames,
-			Message: fmt.Sprintf("the names specified by .spec.identityProviders[].transforms.constants[].name contain duplicates: %s",
-				strings.Join(sortAndQuote(duplicateConstNames.UnsortedList()), ", ")),
-		})
-	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeTransformsConstantsNamesUnique,
-			Status:  configv1alpha1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
-		})
-	}
-	return conditions
-}
-
 func appendIssuerURLValidCondition(err error, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
 	if err != nil {
 		// Note that the FederationDomainIssuer constructors only validate the Issuer URL,
@@ -808,15 +812,6 @@ func appendIssuerURLValidCondition(err error, conditions []*configv1alpha1.Condi
 		})
 	}
 	return conditions
-}
-
-func sortAndQuote(strs []string) []string {
-	quoted := make([]string, 0, len(strs))
-	for _, s := range strs {
-		quoted = append(quoted, fmt.Sprintf("%q", s))
-	}
-	sort.Strings(quoted)
-	return quoted
 }
 
 func (c *federationDomainWatcherController) updateStatus(
@@ -857,6 +852,25 @@ func (c *federationDomainWatcherController) updateStatus(
 		FederationDomains(federationDomain.Namespace).
 		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	return err
+}
+
+func sortAndQuote(strs []string) []string {
+	quoted := make([]string, 0, len(strs))
+	for _, s := range strs {
+		quoted = append(quoted, fmt.Sprintf("%q", s))
+	}
+	sort.Strings(quoted)
+	return quoted
+}
+
+func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
+	return sortAndQuote(c.allowedKinds.UnsortedList())
+}
+
+type transformsValidationErrorMessages struct {
+	errorsForConstants   []string
+	errorsForExpressions []string
+	errorsForExamples    []string
 }
 
 type crossFederationDomainConfigValidator struct {

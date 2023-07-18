@@ -411,14 +411,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadConstNamesUniqueCondition := func(duplicateNames string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+	sadConstNamesUniqueCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "TransformsConstantsNamesUnique",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "DuplicateConstantsNames",
-			Message:            fmt.Sprintf("the names specified by .spec.identityProviders[].transforms.constants[].name contain duplicates: %s", duplicateNames),
+			Message:            errorMessages,
 		}
 	}
 
@@ -440,7 +440,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "InvalidTransformsExpressions",
-			Message:            fmt.Sprintf("the expressions specified by .spec.identityProviders[].transforms.expressions[] were invalid:\n\n%s", errorMessages),
+			Message:            errorMessages,
 		}
 	}
 
@@ -462,18 +462,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "TransformsExamplesFailed",
-			Message:            fmt.Sprintf("the examples specified by .spec.identityProviders[].transforms.examples[] had errors:\n\n%s", errorMessages),
-		}
-	}
-
-	unknownTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
-			Type:               "TransformsExamplesPassed",
-			Status:             "Unknown",
-			ObservedGeneration: observedGeneration,
-			LastTransitionTime: time,
-			Reason:             "UnableToValidate",
-			Message:            "unable to check if the examples specified by .spec.identityProviders[].transforms.examples[] had errors because an expression was invalid",
+			Message:            errorMessages,
 		}
 	}
 
@@ -587,7 +576,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
 		},
 		{
-			name: "legacy config: when no identity provider is specified on federation domains, but exactly one identity " +
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one OIDC identity " +
 				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
 				"matching the only identity provider found",
 			inputObjects: []runtime.Object{
@@ -607,6 +596,54 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain2,
 					configv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one LDAP identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				ldapIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one AD identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				adIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, adIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, adIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
 		},
@@ -634,6 +671,40 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain2,
 					configv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when the status of the FederationDomains is based on an old generation, it is updated",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: configv1alpha1.FederationDomainStatus{
+						Phase: configv1alpha1.FederationDomainPhaseReady,
+						Conditions: allHappyConditionsLegacyConfigurationSuccess(
+							federationDomain1.Spec.Issuer,
+							oidcIdentityProvider.Name,
+							frozenMetav1Now,
+							2, // this is an older generation
+						),
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				// only one update, because the other FederationDomain already had the right status
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(
+						federationDomain1.Spec.Issuer,
+						oidcIdentityProvider.Name,
+						frozenMetav1Now,
+						123, // all conditions are updated to the new observed generation
+					),
 				),
 			},
 		},
@@ -1306,7 +1377,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadConstNamesUniqueCondition(`"duplicate1", "duplicate2"`, frozenMetav1Now, 123),
+							sadConstNamesUniqueCondition(
+								`the names specified by .spec.identityProviders[0].transforms.constants[].name contain duplicates: "duplicate1", "duplicate2"`,
+								frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1351,25 +1424,25 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadTransformationExpressionsCondition(
-								here.Doc(
-									`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
-										CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
-										 | this is not a valid cel expression
-										 | .....^
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+									 | this is not a valid cel expression
+									 | .....^
 
-										spec.identityProvider[0].transforms.expressions[1].expression was invalid:
-										CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
-										 | this is also not a valid cel expression
-										 | .....^
+									spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+									 | this is also not a valid cel expression
+									 | .....^
 
-										spec.identityProvider[0].transforms.expressions[3].expression was invalid:
-										CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
-										 | still not a valid cel expression
-										 | ......^`,
-								),
+									spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
+									 | still not a valid cel expression
+									 | ......^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(
+								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",
 								frozenMetav1Now, 123),
-							unknownTransformationExamplesCondition(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1497,45 +1570,43 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadTransformationExamplesCondition(
-								here.Doc(
-									`.spec.identityProviders[0].transforms.examples[2] example failed:
-										expected: authentication to be rejected
-										actual:   authentication was not rejected
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[2] example failed:
+									expected: authentication to be rejected
+									actual:   authentication was not rejected
 
-										.spec.identityProviders[0].transforms.examples[3] example failed:
-										expected: authentication not to be rejected
-										actual:   authentication was rejected with message "only ryan allowed"
+									.spec.identityProviders[0].transforms.examples[3] example failed:
+									expected: authentication not to be rejected
+									actual:   authentication was rejected with message "only ryan allowed"
 
-										.spec.identityProviders[0].transforms.examples[4] example failed:
-										expected: authentication rejection message "wrong message"
-										actual:   authentication rejection message "only ryan allowed"
+									.spec.identityProviders[0].transforms.examples[4] example failed:
+									expected: authentication rejection message "wrong message"
+									actual:   authentication rejection message "only ryan allowed"
 
-										.spec.identityProviders[0].transforms.examples[6] example failed:
-										expected: username "wrong"
-										actual:   username "pre:ryan"
+									.spec.identityProviders[0].transforms.examples[6] example failed:
+									expected: username "wrong"
+									actual:   username "pre:ryan"
 
-										.spec.identityProviders[0].transforms.examples[6] example failed:
-										expected: groups []
-										actual:   groups ["pre:a", "pre:b"]
+									.spec.identityProviders[0].transforms.examples[6] example failed:
+									expected: groups []
+									actual:   groups ["pre:a", "pre:b"]
 
-										.spec.identityProviders[0].transforms.examples[7] example failed:
-										expected: username "wrong"
-										actual:   username "pre:ryan"
+									.spec.identityProviders[0].transforms.examples[7] example failed:
+									expected: username "wrong"
+									actual:   username "pre:ryan"
 
-										.spec.identityProviders[0].transforms.examples[8] example failed:
-										expected: groups ["wrong1", "wrong2"]
-										actual:   groups ["pre:a", "pre:b"]
+									.spec.identityProviders[0].transforms.examples[8] example failed:
+									expected: groups ["wrong1", "wrong2"]
+									actual:   groups ["pre:a", "pre:b"]
 
-										.spec.identityProviders[0].transforms.examples[9] example failed:
-										expected: username ""
-										actual:   username "pre:ryan"
+									.spec.identityProviders[0].transforms.examples[9] example failed:
+									expected: username ""
+									actual:   username "pre:ryan"
 
-										.spec.identityProviders[0].transforms.examples[9] example failed:
-										expected: groups []
-										actual:   groups ["pre:a", "pre:b"]`,
-								),
-								frozenMetav1Now, 123),
+									.spec.identityProviders[0].transforms.examples[9] example failed:
+									expected: groups []
+									actual:   groups ["pre:a", "pre:b"]`,
+							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1598,16 +1669,228 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadTransformationExamplesCondition(
-								here.Doc(
-									`.spec.identityProviders[0].transforms.examples[0] example failed:
-										expected: no transformation errors
-										actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[0] example failed:
+									expected: no transformation errors
+									actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
 
-										.spec.identityProviders[0].transforms.examples[1] example failed:
-										expected: no transformation errors
-										actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
-								),
+									.spec.identityProviders[0].transforms.examples[1] example failed:
+									expected: no transformation errors
+									actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has lots of errors including errors from multiple IDPs, which are all shown in the status conditions using IDP indices in the messages",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://not-unique.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "not unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "this will not be found",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "foo", Type: "string", StringValue: "bar"},
+										{Name: "foo", Type: "string", StringValue: "baz"},
+									},
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username + ":suffix"`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is wrong string",
+												Groups:   []string{"this is wrong string list"},
+											},
+										},
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is also wrong string",
+												Groups:   []string{"this is also wrong string list"},
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "not unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "this is wrong",
+									Name:     "foo",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "foo", Type: "string", StringValue: "bar"},
+										{Name: "foo", Type: "string", StringValue: "baz"},
+									},
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username + ":suffix"`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this should pass
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "ryan:suffix",
+												Groups:   []string{"a", "b"},
+											},
+										},
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is still wrong string",
+												Groups:   []string{"this is still wrong string list"},
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String("this is wrong"),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "foo",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this does not compile`},
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this also does not compile`},
+									},
+								},
+							},
+						},
+					},
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://not-unique.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: pointer.String(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this still does not compile`},
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this really does not compile`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
+						[]configv1alpha1.Condition{
+							sadConstNamesUniqueCondition(here.Doc(
+								`the names specified by .spec.identityProviders[0].transforms.constants[].name contain duplicates: "foo"
+
+									the names specified by .spec.identityProviders[1].transforms.constants[].name contain duplicates: "foo"`,
+							), frozenMetav1Now, 123),
+							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
+							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
+								`.spec.identityProviders[0] with displayName "not unique", .spec.identityProviders[1] with displayName "not unique", .spec.identityProviders[2] with displayName "name1"`,
+								frozenMetav1Now, 123),
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadKindCondition(`"this is wrong"`, frozenMetav1Now, 123),
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[2].transforms.expressions[1].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'does' expecting <EOF>
+									 | this does not compile
+									 | .....^
+
+									spec.identityProvider[2].transforms.expressions[3].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'also' expecting <EOF>
+									 | this also does not compile
+									 | .....^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[0] example failed:
+									expected: username "this is wrong string"
+									actual:   username "ryan:suffix"
+
+									.spec.identityProviders[0].transforms.examples[0] example failed:
+									expected: groups ["this is wrong string list"]
+									actual:   groups ["a", "b"]
+
+									.spec.identityProviders[0].transforms.examples[1] example failed:
+									expected: username "this is also wrong string"
+									actual:   username "ryan:suffix"
+
+									.spec.identityProviders[0].transforms.examples[1] example failed:
+									expected: groups ["this is also wrong string list"]
+									actual:   groups ["a", "b"]
+
+									.spec.identityProviders[1].transforms.examples[1] example failed:
+									expected: username "this is still wrong string"
+									actual:   username "ryan:suffix"
+
+									.spec.identityProviders[1].transforms.examples[1] example failed:
+									expected: groups ["this is still wrong string list"]
+									actual:   groups ["a", "b"]
+
+									unable to check if the examples specified by .spec.identityProviders[2].transforms.examples[] had errors because an expression was invalid`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
+						[]configv1alpha1.Condition{
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'still' expecting <EOF>
+									 | this still does not compile
+									 | .....^
+
+									spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'really' expecting <EOF>
+									 | this really does not compile
+									 | .....^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(
+								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",
 								frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),

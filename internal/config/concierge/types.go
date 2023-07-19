@@ -1,11 +1,11 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
 
 import "go.pinniped.dev/internal/plog"
 
-// Config contains knobs to setup an instance of the Pinniped Concierge.
+// Config contains knobs to set up an instance of the Pinniped Concierge.
 type Config struct {
 	DiscoveryInfo                DiscoveryInfoSpec `json:"discovery"`
 	APIConfig                    APIConfigSpec     `json:"api"`
@@ -21,7 +21,7 @@ type Config struct {
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to
-// pinniped's publishing of discovery information. These values can be
+// Pinniped's publishing of discovery information. These values can be
 // viewed as overrides, i.e., if these are set, then Pinniped will
 // publish these values in its discovery document instead of the ones it finds.
 type DiscoveryInfoSpec struct {

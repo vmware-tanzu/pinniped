@@ -59,7 +59,7 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 1. Customize configuration parameters:
 
     - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/supervisor/values.yaml) for documentation about individual configuration parameters.
-      For example, you can change the number of Concierge pods by setting `replicas` or apply custom annotations to the impersonation proxy service using `impersonation_proxy_spec`.
+      For example, you can change the number of Supervisor pods by setting `replicas` or install into a non-default namespace using `into_namespace`.
 
     - In a different directory, create a new YAML file to contain your site-specific configuration. For example, you might call this file `site/dev-env.yaml`.
 

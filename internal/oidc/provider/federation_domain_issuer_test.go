@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package provider
@@ -19,6 +19,16 @@ func TestFederationDomainIssuerValidations(t *testing.T) {
 			name:      "must have an issuer",
 			issuer:    "",
 			wantError: "federation domain must have an issuer",
+		},
+		{
+			name:      "returns url.Parse errors",
+			issuer:    "https://example.com" + string(byte(0x7f)),
+			wantError: "could not parse issuer as URL: parse \"https://example.com\\x7f\": net/url: invalid control character in URL",
+		},
+		{
+			name:      "no hostname",
+			issuer:    "https://",
+			wantError: `issuer must have a hostname`,
 		},
 		{
 			name:      "no scheme",

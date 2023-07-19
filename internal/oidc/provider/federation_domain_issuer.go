@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package provider
@@ -11,7 +11,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-// FederationDomainIssuer represents all of the settings and state for a downstream OIDC provider
+// FederationDomainIssuer represents all the settings and state for a downstream OIDC provider
 // as defined by a FederationDomain.
 type FederationDomainIssuer struct {
 	issuer     string
@@ -19,6 +19,8 @@ type FederationDomainIssuer struct {
 	issuerPath string
 }
 
+// NewFederationDomainIssuer returns a FederationDomainIssuer.
+// Performs validation, and returns any error from validation.
 func NewFederationDomainIssuer(issuer string) (*FederationDomainIssuer, error) {
 	p := FederationDomainIssuer{issuer: issuer}
 	err := p.validate()
@@ -40,6 +42,10 @@ func (p *FederationDomainIssuer) validate() error {
 
 	if issuerURL.Scheme != "https" {
 		return constable.Error(`issuer must have "https" scheme`)
+	}
+
+	if issuerURL.Hostname() == "" {
+		return constable.Error(`issuer must have a hostname`)
 	}
 
 	if issuerURL.User != nil {
@@ -64,14 +70,17 @@ func (p *FederationDomainIssuer) validate() error {
 	return nil
 }
 
+// Issuer returns the issuer.
 func (p *FederationDomainIssuer) Issuer() string {
 	return p.issuer
 }
 
+// IssuerHost returns the issuerHost.
 func (p *FederationDomainIssuer) IssuerHost() string {
 	return p.issuerHost
 }
 
+// IssuerPath returns the issuerPath.
 func (p *FederationDomainIssuer) IssuerPath() string {
 	return p.issuerPath
 }

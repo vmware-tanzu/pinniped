@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonatorconfig
@@ -285,12 +285,10 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 		return nil, err
 	}
 
-	var impersonationCA *certauthority.CA
+	var impersonationCABundle []byte
 	if c.shouldHaveImpersonator(impersonationSpec) {
-		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
-			return nil, err
-		}
-		if err = c.ensureTLSSecret(ctx, nameInfo, impersonationCA); err != nil {
+		impersonationCABundle, err = c.ensureCAAndTLSSecrets(ctx, nameInfo)
+		if err != nil {
 			return nil, err
 		}
 	} else {
@@ -300,7 +298,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 		c.clearTLSSecret()
 	}
 
-	credentialIssuerStrategyResult := c.doSyncResult(nameInfo, impersonationSpec, impersonationCA)
+	credentialIssuerStrategyResult := c.doSyncResult(nameInfo, impersonationSpec, impersonationCABundle)
 
 	if c.shouldHaveImpersonator(impersonationSpec) {
 		if err = c.loadSignerCA(); err != nil {
@@ -311,6 +309,25 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 	}
 
 	return credentialIssuerStrategyResult, nil
+}
+
+func (c *impersonatorConfigController) ensureCAAndTLSSecrets(ctx context.Context, nameInfo *certNameInfo) ([]byte, error) {
+	var (
+		impersonationCA *certauthority.CA
+		err             error
+	)
+	if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
+		return nil, err
+	}
+	if err = c.ensureTLSSecret(ctx, nameInfo, impersonationCA); err != nil {
+		return nil, err
+	}
+
+	if impersonationCA != nil {
+		return impersonationCA.Bundle(), nil
+	}
+
+	return nil, nil
 }
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credIssuer *v1alpha1.CredentialIssuer) (*v1alpha1.ImpersonationProxySpec, error) {
@@ -707,7 +724,7 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	}
 
 	if !nameInfo.ready {
-		// We currently have a secret but we are waiting for a load balancer to be assigned an ingress, so
+		// We currently have a secret, but we are waiting for a load balancer to be assigned an ingress, so
 		// our current secret must be old/unwanted.
 		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
 			return false, err
@@ -1018,7 +1035,7 @@ func (c *impersonatorConfigController) clearSignerCA() {
 	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 
-func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *v1alpha1.ImpersonationProxySpec, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
+func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *v1alpha1.ImpersonationProxySpec, caBundle []byte) *v1alpha1.CredentialIssuerStrategy {
 	switch {
 	case c.disabledExplicitly(config):
 		return &v1alpha1.CredentialIssuerStrategy{
@@ -1055,7 +1072,7 @@ func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, conf
 				Type: v1alpha1.ImpersonationProxyFrontendType,
 				ImpersonationProxyInfo: &v1alpha1.ImpersonationProxyInfo{
 					Endpoint:                 "https://" + nameInfo.clientEndpoint,
-					CertificateAuthorityData: base64.StdEncoding.EncodeToString(ca.Bundle()),
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString(caBundle),
 				},
 			},
 		}

@@ -7,10 +7,10 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	_ "embed"
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -20,60 +20,65 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-func loadFromFiles(t *testing.T, certPath string, keyPath string) (*CA, error) {
-	t.Helper()
-
-	certPEM, err := os.ReadFile(certPath)
-	require.NoError(t, err)
-
-	keyPEM, err := os.ReadFile(keyPath)
-	require.NoError(t, err)
-
-	ca, err := Load(string(certPEM), string(keyPEM))
-	return ca, err
-}
+var (
+	//go:embed testdata/empty
+	empty string
+	//go:embed testdata/invalid
+	invalid string
+	//go:embed testdata/multiple.crt
+	multiple string
+	//go:embed testdata/test.crt
+	testCert string
+	//go:embed testdata/test.key
+	testKey string
+	//go:embed testdata/test2.key
+	testKey2 string
+)
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
-		name     string
-		certPath string
-		keyPath  string
-		wantErr  string
+		name    string
+		cert    string
+		key     string
+		wantErr string
+		test    []byte
 	}{
 		{
-			name:     "empty key",
-			certPath: "./testdata/test.crt",
-			keyPath:  "./testdata/empty",
-			wantErr:  "could not load CA: tls: failed to find any PEM data in key input",
+			name:    "empty key",
+			cert:    testCert,
+			key:     empty,
+			wantErr: "could not load CA: tls: failed to find any PEM data in key input",
 		},
 		{
-			name:     "invalid key",
-			certPath: "./testdata/test.crt",
-			keyPath:  "./testdata/invalid",
-			wantErr:  "could not load CA: tls: failed to find any PEM data in key input",
+			name:    "invalid key",
+			cert:    testCert,
+			key:     invalid,
+			wantErr: "could not load CA: tls: failed to find any PEM data in key input",
 		},
 		{
-			name:     "mismatched cert and key",
-			certPath: "./testdata/test.crt",
-			keyPath:  "./testdata/test2.key",
-			wantErr:  "could not load CA: tls: private key does not match public key",
+			name:    "mismatched cert and key",
+			cert:    testCert,
+			key:     testKey2,
+			wantErr: "could not load CA: tls: private key does not match public key",
 		},
 		{
-			name:     "multiple certs",
-			certPath: "./testdata/multiple.crt",
-			keyPath:  "./testdata/test.key",
-			wantErr:  "invalid CA certificate: expected a single certificate, found 2 certificates",
+			name:    "multiple certs",
+			cert:    multiple,
+			key:     testKey,
+			wantErr: "invalid CA certificate: expected a single certificate, found 2 certificates",
 		},
 		{
-			name:     "success",
-			certPath: "./testdata/test.crt",
-			keyPath:  "./testdata/test.key",
+			name: "success",
+			cert: testCert,
+			key:  testKey,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ca, err := loadFromFiles(t, tt.certPath, tt.keyPath)
+			t.Parallel()
+
+			ca, err := Load(tt.cert, tt.key)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
@@ -226,7 +231,7 @@ func TestIssue(t *testing.T) {
 
 	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
 
-	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
+	realCA, err := Load(testCert, testKey)
 	require.NoError(t, err)
 
 	tests := []struct {

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package issuer
@@ -38,15 +38,14 @@ func (c ClientCertIssuers) Name() string {
 }
 
 func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
-	var errs []error
+	errs := make([]error, 0, len(c))
 
 	for _, issuer := range c {
 		certPEM, keyPEM, err := issuer.IssueClientCertPEM(username, groups, ttl)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s failed to issue client cert: %w", issuer.Name(), err))
-			continue
+		if err == nil {
+			return certPEM, keyPEM, nil
 		}
-		return certPEM, keyPEM, nil
+		errs = append(errs, fmt.Errorf("%s failed to issue client cert: %w", issuer.Name(), err))
 	}
 
 	if err := errors.NewAggregate(errs); err != nil {

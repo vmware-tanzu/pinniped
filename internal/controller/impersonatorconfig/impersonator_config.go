@@ -312,8 +312,11 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 	return credentialIssuerStrategyResult, nil
 }
 
-func (c *impersonatorConfigController) ensureCAAndTLSSecrets(ctx context.Context, nameInfo *certNameInfo) (impersonationCABundle []byte, err error) {
-	var impersonationCA *certauthority.CA
+func (c *impersonatorConfigController) ensureCAAndTLSSecrets(ctx context.Context, nameInfo *certNameInfo) ([]byte, error) {
+	var (
+		impersonationCA *certauthority.CA
+		err             error
+	)
 	if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
 		return nil, err
 	}

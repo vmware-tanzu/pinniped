@@ -4,6 +4,7 @@
 package federationdomainproviders
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,4 +105,35 @@ func TestFederationDomainIssuerValidations(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFederationDomainGetters(t *testing.T) {
+	const issuerHost = "some-issuer.com"
+	const issuerPath = "/some/path"
+	issuerURLString := fmt.Sprintf("https://%s%s", issuerHost, issuerPath)
+
+	provider1 := &FederationDomainIdentityProvider{
+		DisplayName: "test-name-1",
+		UID:         "test-uid-1",
+	}
+	provider2 := &FederationDomainIdentityProvider{
+		DisplayName: "test-name-2",
+		UID:         "test-uid-2",
+	}
+
+	fdi, err := NewFederationDomainIssuer(issuerURLString, []*FederationDomainIdentityProvider{provider1, provider2})
+	require.NoError(t, err)
+	require.Equal(t, issuerURLString, fdi.Issuer())
+	require.Equal(t, issuerHost, fdi.IssuerHost())
+	require.Equal(t, issuerPath, fdi.IssuerPath())
+	require.Equal(t, []*FederationDomainIdentityProvider{provider1, provider2}, fdi.IdentityProviders())
+	require.Nil(t, fdi.DefaultIdentityProvider())
+
+	fdi, err = NewFederationDomainIssuerWithDefaultIDP(issuerURLString, provider1)
+	require.NoError(t, err)
+	require.Equal(t, issuerURLString, fdi.Issuer())
+	require.Equal(t, issuerHost, fdi.IssuerHost())
+	require.Equal(t, issuerPath, fdi.IssuerPath())
+	require.Equal(t, []*FederationDomainIdentityProvider{provider1}, fdi.IdentityProviders())
+	require.Equal(t, provider1, fdi.DefaultIdentityProvider())
 }

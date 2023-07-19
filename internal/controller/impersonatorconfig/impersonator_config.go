@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -161,7 +162,16 @@ func NewImpersonatorConfigController(
 		withInformer(
 			secretsInformer,
 			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-				return obj.GetNamespace() == namespace && secretNames.Has(obj.GetName())
+				secret, ok := obj.(*corev1.Secret)
+				if !ok {
+					return false
+				}
+
+				if secret.GetNamespace() != namespace {
+					return false
+				}
+
+				return secretNames.Has(secret.GetName()) || secret.Type == corev1.SecretTypeTLS
 			}),
 			controllerlib.InformerOption{},
 		),

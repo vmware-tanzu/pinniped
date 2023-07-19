@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonatorconfig
@@ -184,7 +184,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 
 		when("watching Secret objects", func() {
 			var subject controllerlib.Filter
-			var target1, target2, target3, wrongNamespace1, wrongNamespace2, wrongName, unrelated *corev1.Secret
+			var target1, target2, target3, wrongNamespace1, wrongNamespace2, wrongName, unrelated, typeTLS, typeTLSWrongNamespace *corev1.Secret
 
 			it.Before(func() {
 				subject = secretsInformerFilter
@@ -195,6 +195,8 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				wrongNamespace2 = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: "wrong-namespace"}}
 				wrongName = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
 				unrelated = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
+				typeTLS = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: installedInNamespace}, Type: corev1.SecretTypeTLS}
+				typeTLSWrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "wrong-namespace"}, Type: corev1.SecretTypeTLS}
 			})
 
 			when("one of the target Secrets changes", func() {
@@ -211,6 +213,10 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 					r.True(subject.Update(target3, unrelated))
 					r.True(subject.Update(unrelated, target3))
 					r.True(subject.Delete(target3))
+					r.True(subject.Add(typeTLS))
+					r.True(subject.Update(typeTLS, unrelated))
+					r.True(subject.Update(unrelated, typeTLS))
+					r.True(subject.Delete(typeTLS))
 				})
 			})
 
@@ -224,6 +230,10 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 					r.False(subject.Update(wrongNamespace2, unrelated))
 					r.False(subject.Update(unrelated, wrongNamespace2))
 					r.False(subject.Delete(wrongNamespace2))
+					r.False(subject.Add(typeTLSWrongNamespace))
+					r.False(subject.Update(typeTLSWrongNamespace, unrelated))
+					r.False(subject.Update(unrelated, typeTLSWrongNamespace))
+					r.False(subject.Delete(typeTLSWrongNamespace))
 				})
 			})
 

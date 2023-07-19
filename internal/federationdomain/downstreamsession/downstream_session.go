@@ -41,7 +41,6 @@ const (
 	emailVerifiedClaimInvalidFormatErr = constable.Error("email_verified claim in upstream ID token has invalid format")
 	emailVerifiedClaimFalseErr         = constable.Error("email_verified claim in upstream ID token has false value")
 	idTransformUnexpectedErr           = constable.Error("configured identity transformation or policy resulted in unexpected error")
-	idTransformPolicyErr               = constable.Error("configured identity policy rejected this authentication")
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
@@ -262,7 +261,7 @@ func ApplyIdentityTransformations(
 	}
 	if !transformationResult.AuthenticationAllowed {
 		plog.Debug("authentication rejected by configured policy", "inputUsername", username, "inputGroups", groups)
-		return "", nil, idTransformPolicyErr
+		return "", nil, fmt.Errorf("configured identity policy rejected this authentication: %s", transformationResult.RejectedAuthenticationMessage)
 	}
 	plog.Debug("identity transformation successfully applied during authentication",
 		"originalUsername", username,

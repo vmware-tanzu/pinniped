@@ -1953,7 +1953,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 											Username: "rejectMeWithDefaultMessage",
 											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
-												Message:  "Authentication was rejected by a configured policy", // this is the default message
+												Message:  "authentication was rejected by a configured policy", // this is the default message
 											},
 										},
 									},

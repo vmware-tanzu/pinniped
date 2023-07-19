@@ -29,7 +29,7 @@ const (
 	constStringVariableName     = "strConst"
 	constStringListVariableName = "strListConst"
 
-	DefaultPolicyRejectedAuthMessage = "Authentication was rejected by a configured policy"
+	DefaultPolicyRejectedAuthMessage = "authentication was rejected by a configured policy"
 )
 
 // CELTransformer can compile any number of transformation expression pipelines.

@@ -101,7 +101,7 @@ func TestTransformer(t *testing.T) {
 			wantUsername:            "ryan",
 			wantGroups:              []string{"admins", "developers", "other"},
 			wantAuthRejected:        true,
-			wantAuthRejectedMessage: `Authentication was rejected by a configured policy`,
+			wantAuthRejectedMessage: `authentication was rejected by a configured policy`,
 		},
 		{
 			name:     "any transformations can use the username and group variables",

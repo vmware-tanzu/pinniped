@@ -420,32 +420,11 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 		})
 	}
 
-	if len(idpNotFoundIndices) != 0 {
-		msgs := []string{}
-		for _, idpNotFoundIndex := range idpNotFoundIndices {
-			msgs = append(msgs, fmt.Sprintf(".spec.identityProviders[%d] with displayName %q", idpNotFoundIndex,
-				federationDomain.Spec.IdentityProviders[idpNotFoundIndex].DisplayName))
-		}
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeIdentityProvidersFound,
-			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonIdentityProvidersObjectRefsNotFound,
-			Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s",
-				strings.Join(msgs, ", ")),
-		})
-	} else if len(federationDomain.Spec.IdentityProviders) != 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeIdentityProvidersFound,
-			Status:  configv1alpha1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: "the resources specified by .spec.identityProviders[].objectRef were found",
-		})
-	}
-
 	// This is the constructor for any case other than the legacy case, including when there is an empty list of IDPs.
 	federationDomainIssuer, err := federationdomainproviders.NewFederationDomainIssuer(federationDomain.Spec.Issuer, federationDomainIdentityProviders)
 	conditions = appendIssuerURLValidCondition(err, conditions)
 
+	conditions = appendIdentityProvidersFoundCondition(idpNotFoundIndices, federationDomain.Spec.IdentityProviders, conditions)
 	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames, conditions)
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, badAPIGroupNames, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), badKinds, conditions)
@@ -456,6 +435,7 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 
 	return federationDomainIssuer, conditions, nil
 }
+
 func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef corev1.TypedLocalObjectReference, namespace string) (types.UID, bool, error) {
 	var idpResourceUID types.UID
 	var foundIDP metav1.Object
@@ -691,6 +671,35 @@ func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuf
 			Status:  configv1alpha1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the kinds specified by .spec.identityProviders[].objectRef.kind are recognized",
+		})
+	}
+	return conditions
+}
+
+func appendIdentityProvidersFoundCondition(
+	idpNotFoundIndices []int,
+	federationDomainIdentityProviders []configv1alpha1.FederationDomainIdentityProvider,
+	conditions []*configv1alpha1.Condition,
+) []*configv1alpha1.Condition {
+	if len(idpNotFoundIndices) != 0 {
+		msgs := []string{}
+		for _, idpNotFoundIndex := range idpNotFoundIndices {
+			msgs = append(msgs, fmt.Sprintf(".spec.identityProviders[%d] with displayName %q", idpNotFoundIndex,
+				federationDomainIdentityProviders[idpNotFoundIndex].DisplayName))
+		}
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:   typeIdentityProvidersFound,
+			Status: configv1alpha1.ConditionFalse,
+			Reason: reasonIdentityProvidersObjectRefsNotFound,
+			Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s",
+				strings.Join(msgs, ", ")),
+		})
+	} else if len(federationDomainIdentityProviders) != 0 {
+		conditions = append(conditions, &configv1alpha1.Condition{
+			Type:    typeIdentityProvidersFound,
+			Status:  configv1alpha1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the resources specified by .spec.identityProviders[].objectRef were found",
 		})
 	}
 	return conditions

@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -132,38 +133,14 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuer6}, v1alpha1.FederationDomainPhaseError)
-			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                                v1alpha1.ConditionFalse,
-				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
-				"IssuerURLValid":                                v1alpha1.ConditionTrue,
-				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
-				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
-				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
-				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
-				"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
-				"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
-			})
-			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                                v1alpha1.ConditionFalse,
-				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
-				"IssuerURLValid":                                v1alpha1.ConditionTrue,
-				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
-				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
-				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
-				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
-				"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
-				"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
-			})
+			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
+			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
 			// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
 			requireDelete(t, client, ns, config6Duplicate1.Name)
 			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
-			requireFullySuccessfulStatus(t, client, ns, config6Duplicate2.Name)
+			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 			// When we finally delete all issuers, the endpoint should be down.
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
@@ -175,19 +152,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 
 			// When we create a provider with an invalid issuer, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: badIssuer}, v1alpha1.FederationDomainPhaseError)
-			requireStatus(t, client, ns, badConfig.Name, v1alpha1.FederationDomainPhaseError, map[string]v1alpha1.ConditionStatus{
-				"Ready":                                         v1alpha1.ConditionFalse,
-				"IssuerIsUnique":                                v1alpha1.ConditionTrue,
-				"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
-				"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
-				"IssuerURLValid":                                v1alpha1.ConditionFalse,
-				"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
-				"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
-				"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
-				"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
-				"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
-				"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
-			})
+			requireStatus(t, client, ns, badConfig.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerURLValid"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
 		})
@@ -225,7 +190,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 			Issuer: issuer1,
 			TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName1},
 		}, v1alpha1.FederationDomainPhaseReady)
-	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name)
+	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
@@ -269,7 +234,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 			Issuer: issuer2,
 			TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName2},
 		}, v1alpha1.FederationDomainPhaseReady)
-	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name)
+	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
 	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
@@ -319,7 +284,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 
 	// Create an FederationDomain without a spec.tls.secretName.
 	federationDomain1 := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuerUsingIPAddress}, v1alpha1.FederationDomainPhaseReady)
-	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name)
+	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
@@ -337,7 +302,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 			Issuer: issuerUsingHostname,
 			TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName},
 		}, v1alpha1.FederationDomainPhaseReady)
-	requireFullySuccessfulStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name)
+	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
 	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
@@ -525,7 +490,7 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	t.Helper()
 	newFederationDomain := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuerName}, v1alpha1.FederationDomainPhaseReady)
 	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
-	requireFullySuccessfulStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name)
+	requireStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 	return newFederationDomain, jwksResult
 }
 
@@ -693,8 +658,8 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	require.NoError(t, err)
 }
 
-func requireFullySuccessfulStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
-	requireStatus(t, client, ns, name, v1alpha1.FederationDomainPhaseReady, map[string]v1alpha1.ConditionStatus{
+func withAllSuccessfulConditions() map[string]v1alpha1.ConditionStatus {
+	return map[string]v1alpha1.ConditionStatus{
 		"Ready":                                         v1alpha1.ConditionTrue,
 		"IssuerIsUnique":                                v1alpha1.ConditionTrue,
 		"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
@@ -706,7 +671,19 @@ func requireFullySuccessfulStatus(t *testing.T, client pinnipedclientset.Interfa
 		"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 		"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
 		"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
-	})
+	}
+}
+
+func withFalseConditions(falseConditionTypes []string) map[string]v1alpha1.ConditionStatus {
+	c := map[string]v1alpha1.ConditionStatus{}
+	for k, v := range withAllSuccessfulConditions() {
+		if slices.Contains(falseConditionTypes, k) {
+			c[k] = v1alpha1.ConditionFalse
+		} else {
+			c[k] = v
+		}
+	}
+	return c
 }
 
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, wantPhase v1alpha1.FederationDomainPhase, wantConditionTypeToStatus map[string]v1alpha1.ConditionStatus) {

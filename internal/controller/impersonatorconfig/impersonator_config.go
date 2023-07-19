@@ -256,7 +256,6 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 		}
 	} else {
 		if err = c.ensureImpersonatorIsStopped(true); err != nil {
-			// untested
 			return nil, err
 		}
 	}
@@ -328,7 +327,6 @@ func (c *impersonatorConfigController) ensureCAAndTLSSecrets(ctx context.Context
 		return impersonationCA.Bundle(), nil
 	}
 
-	// untested
 	return nil, nil
 }
 
@@ -382,7 +380,6 @@ func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, 
 		return false, nil, nil
 	}
 	if err != nil {
-		// untested
 		return false, nil, err
 	}
 	return true, service, nil
@@ -395,7 +392,6 @@ func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, erro
 		return false, nil, nil
 	}
 	if err != nil {
-		// untested
 		return false, nil, err
 	}
 	return true, secret, nil
@@ -502,7 +498,6 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
 	running, service, err := c.serviceExists(c.generatedLoadBalancerServiceName)
 	if err != nil {
-		// untested
 		return err
 	}
 	if !running {
@@ -548,7 +543,6 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx context.Context) error {
 	running, service, err := c.serviceExists(c.generatedClusterIPServiceName)
 	if err != nil {
-		// untested
 		return err
 	}
 	if !running {
@@ -584,7 +578,6 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 		sort.Strings(desiredAnnotationKeys)
 		keysJSONArray, err := json.Marshal(desiredAnnotationKeys)
 		if err != nil {
-			// untested
 			return err // This shouldn't really happen. We should always be able to marshal an array of strings.
 		}
 		// Save the desired annotations to a bookkeeping annotation.
@@ -599,7 +592,6 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 		return err
 	}
 	if err != nil {
-		// untested
 		return err
 	}
 
@@ -663,7 +655,6 @@ func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, name
 	secretFromInformer, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
 	if !notFound && err != nil {
-		// untested
 		return err
 	}
 
@@ -736,7 +727,6 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 		// We currently have a secret, but we are waiting for a load balancer to be assigned an ingress, so
 		// our current secret must be old/unwanted.
 		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
-			// untested
 			return false, err
 		}
 		return true, nil
@@ -782,7 +772,6 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 	if secret != nil {
 		err := c.loadTLSCertFromSecret(secret)
 		if err != nil {
-			// untested
 			return err
 		}
 		return nil
@@ -799,7 +788,6 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 
 	err = c.loadTLSCertFromSecret(newTLSSecret)
 	if err != nil {
-		// untested
 		return err
 	}
 
@@ -809,7 +797,6 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Context) (*certauthority.CA, error) {
 	caSecret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.caSecretName)
 	if err != nil && !k8serrors.IsNotFound(err) {
-		// untested
 		return nil, err
 	}
 
@@ -831,13 +818,11 @@ func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Conte
 func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*certauthority.CA, error) {
 	impersonationCA, err := certauthority.New(caCommonName, approximatelyOneHundredYears)
 	if err != nil {
-		// untested
 		return nil, fmt.Errorf("could not create impersonation CA: %w", err)
 	}
 
 	caPrivateKeyPEM, err := impersonationCA.PrivateKeyToPEM()
 	if err != nil {
-		// untested
 		return nil, err
 	}
 
@@ -891,7 +876,6 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 		return &certNameInfo{ready: false}, nil
 	}
 	if err != nil {
-		// untested
 		return nil, err
 	}
 	ingresses := lb.Status.LoadBalancer.Ingress
@@ -926,7 +910,6 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPServic
 		return &certNameInfo{ready: false}, nil
 	}
 	if err != nil {
-		// untested
 		return nil, err
 	}
 	ip := clusterIP.Spec.ClusterIP
@@ -943,7 +926,6 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPServic
 		}
 		return &certNameInfo{ready: true, selectedIPs: parsedIPs, clientEndpoint: ip}, nil
 	}
-	// untested
 	return &certNameInfo{ready: false}, nil
 }
 
@@ -955,13 +937,11 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 
 	impersonationCert, err := ca.IssueServerCert(hostnames, ips, approximatelyOneHundredYears)
 	if err != nil {
-		// untested
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}
 
 	certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
 	if err != nil {
-		// untested
 		return nil, err
 	}
 
@@ -991,7 +971,6 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 	keyPEM := tlsSecret.Data[v1.TLSPrivateKeyKey]
 
 	if err := c.tlsServingCertDynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
-		// untested
 		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
 	}
 
@@ -1006,7 +985,6 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Context) error {
 	tlsSecretExists, secret, err := c.tlsSecretExists()
 	if err != nil {
-		// untested
 		return err
 	}
 	if !tlsSecretExists {

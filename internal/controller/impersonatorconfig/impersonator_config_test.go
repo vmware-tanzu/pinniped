@@ -271,6 +271,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const localhostIP = "127.0.0.1"
 		const httpsPort = ":443"
 		const fakeServerResponseBody = "hello, world!"
+		const externallyProvidedTLSSecretName = "external-tls-secret" //nolint:gosec // this is not a credential
 		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions
@@ -300,6 +301,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var testHTTPServerInterruptCh chan struct{}
 		var queue *testQueue
 		var validClientCert *tls.Certificate
+		var externalCA *certauthority.CA
+		var externalTLSSecret *corev1.Secret
 
 		var impersonatorFunc = func(
 			port int,
@@ -336,7 +339,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					// and that the second parameter will always be nil in that case.
 					// rawCerts will be raw ASN.1 certificates provided by the peer.
 					if len(rawCerts) != 1 {
-						return fmt.Errorf("expected to get one client cert on incoming request to test server")
+						return fmt.Errorf("expected to get one client cert on incoming request to test server, found %d", len(rawCerts))
 					}
 					clientCert := rawCerts[0]
 					currentClientCertCA := impersonationProxySignerCAProvider.CurrentCABundleContent()
@@ -464,8 +467,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			var tr *http.Transport
 			if caCrt == nil {
 				tr = &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-					DialContext:     overrideDialContext,
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true, //nolint:gosec // this is used to test when the impersonation proxy does not advertise a CA bundle
+						// Client cert which is supposed to work against the server's dynamic CAContentProvider
+						Certificates: []tls.Certificate{*validClientCert},
+					},
+					DialContext: overrideDialContext,
 				}
 			} else {
 				rootCAs := x509.NewCertPool()
@@ -1122,14 +1129,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			frozenNow = time.Date(2021, time.March, 2, 7, 42, 0, 0, time.Local)
 			signingCertProvider = dynamiccert.NewCA(name)
 
-			ca := newCA()
-			signingCACertPEM = ca.Bundle()
+			signingCA := newCA()
+			signingCACertPEM = signingCA.Bundle()
 			var err error
-			signingCAKeyPEM, err = ca.PrivateKeyToPEM()
+			signingCAKeyPEM, err = signingCA.PrivateKeyToPEM()
 			r.NoError(err)
 			signingCASecret = newSigningKeySecret(caSignerName, signingCACertPEM, signingCAKeyPEM)
-			validClientCert, err = ca.IssueClientCert("username", nil, time.Hour)
+			validClientCert, err = signingCA.IssueClientCert("username", nil, time.Hour)
 			r.NoError(err)
+
+			externalCA = newCA()
+			externalTLSSecret = newActualTLSSecret(externalCA, externallyProvidedTLSSecretName, localhostIP)
 		})
 
 		it.After(func() {
@@ -1159,7 +1169,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
-		when("the configuration is auto mode with an endpoint and service type none", func() {
+		when("the configuration is auto mode with an endpoint and service type none, using generated TLS secrets", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
 				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
@@ -1207,6 +1217,133 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerIsRunning(ca, testServerAddr(), nil)
 					requireCredentialIssuer(newSuccessStrategy(localhostIP, ca))
 					requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+				})
+			})
+		})
+
+		when("using external TLS secrets", func() {
+			when("the configuration is auto mode with an endpoint and service type none", func() {
+				it.Before(func() {
+					addSecretToTrackers(signingCASecret, kubeInformerClient)
+					addSecretToTrackers(externalTLSSecret, kubeInformerClient)
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeAuto,
+								ExternalEndpoint: localhostIP,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
+								TLS: &v1alpha1.ImpersonationProxyTLSSpec{
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(externalCA.Bundle()),
+									SecretName:               externallyProvidedTLSSecretName,
+								},
+							},
+						},
+					}, pinnipedInformerClient, pinnipedAPIClient)
+				})
+
+				when("there are not visible control plane nodes", func() {
+					it.Before(func() {
+						addNodeWithRoleToTracker("worker", kubeAPIClient)
+					})
+
+					it("starts the impersonator according to the settings in the CredentialIssuer", func() {
+						startInformersAndController()
+						r.NoError(runControllerSync())
+						r.Len(kubeAPIClient.Actions(), 1)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						requireTLSServerIsRunning(externalCA.Bundle(), testServerAddr(), nil)
+						requireCredentialIssuer(newSuccessStrategy(localhostIP, externalCA.Bundle()))
+						requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+					})
+
+					when("there is an existing generated TLS secret", func() {
+						it.Before(func() {
+							addSecretToTrackers(newEmptySecret(tlsSecretName), kubeInformerClient)
+						})
+
+						it("removes the existing generated TLS secret", func() {
+							startInformersAndController()
+							r.NoError(runControllerSync())
+							r.Len(kubeAPIClient.Actions(), 2)
+							requireNodesListed(kubeAPIClient.Actions()[0])
+							requireTLSSecretWasDeleted(kubeAPIClient.Actions()[1])
+							requireTLSServerIsRunning(externalCA.Bundle(), testServerAddr(), nil)
+							requireCredentialIssuer(newSuccessStrategy(localhostIP, externalCA.Bundle()))
+							requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+						})
+					})
+				})
+			})
+
+			when("the CertificateAuthorityData is not configured", func() {
+				when("the externally provided TLS secret has a ca.crt field", func() {
+					it.Before(func() {
+						addSecretToTrackers(signingCASecret, kubeInformerClient)
+						externalTLSSecret.Data["ca.crt"] = externalCA.Bundle()
+						addSecretToTrackers(externalTLSSecret, kubeInformerClient)
+						addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+							ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+							Spec: v1alpha1.CredentialIssuerSpec{
+								ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+									Mode:             v1alpha1.ImpersonationProxyModeAuto,
+									ExternalEndpoint: localhostIP,
+									Service: v1alpha1.ImpersonationProxyServiceSpec{
+										Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+									},
+									TLS: &v1alpha1.ImpersonationProxyTLSSpec{
+										SecretName: externallyProvidedTLSSecretName,
+									},
+								},
+							},
+						}, pinnipedInformerClient, pinnipedAPIClient)
+						addNodeWithRoleToTracker("worker", kubeAPIClient)
+					})
+
+					it("will advertise ca.crt from the externally provided secret", func() {
+						startInformersAndController()
+						r.NoError(runControllerSync())
+						r.Len(kubeAPIClient.Actions(), 1)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						requireTLSServerIsRunning(externalTLSSecret.Data["ca.crt"], testServerAddr(), nil)
+						requireCredentialIssuer(newSuccessStrategy(localhostIP, externalTLSSecret.Data["ca.crt"]))
+						requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+					})
+				})
+
+				when("the externally provided TLS secret does not have a ca.crt field", func() {
+					it.Before(func() {
+						addSecretToTrackers(signingCASecret, kubeInformerClient)
+						addSecretToTrackers(externalTLSSecret, kubeInformerClient)
+						addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+							ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+							Spec: v1alpha1.CredentialIssuerSpec{
+								ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+									Mode:             v1alpha1.ImpersonationProxyModeAuto,
+									ExternalEndpoint: localhostIP,
+									Service: v1alpha1.ImpersonationProxyServiceSpec{
+										Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+									},
+									TLS: &v1alpha1.ImpersonationProxyTLSSpec{
+										SecretName: externallyProvidedTLSSecretName,
+									},
+								},
+							},
+						}, pinnipedInformerClient, pinnipedAPIClient)
+						addNodeWithRoleToTracker("worker", kubeAPIClient)
+					})
+
+					it("will advertise an empty CA bundle", func() {
+						startInformersAndController()
+						r.NoError(runControllerSync())
+						r.Len(kubeAPIClient.Actions(), 1)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						requireTLSServerIsRunning(nil, testServerAddr(), nil)
+						requireCredentialIssuer(newSuccessStrategy(localhostIP, nil))
+						requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+					})
 				})
 			})
 		})

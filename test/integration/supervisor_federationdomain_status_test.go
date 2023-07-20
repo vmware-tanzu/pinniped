@@ -6,7 +6,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"go.pinniped.dev/internal/here"
 	"testing"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
 )
 

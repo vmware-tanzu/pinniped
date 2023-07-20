@@ -1431,19 +1431,19 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						[]configv1alpha1.Condition{
 							sadTransformationExpressionsCondition(here.Doc(
 								`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
-									 | this is not a valid cel expression
-									 | .....^
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is not a valid cel expression
+								  | .....^
 
-									spec.identityProvider[0].transforms.expressions[1].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
-									 | this is also not a valid cel expression
-									 | .....^
+								 spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is also not a valid cel expression
+								  | .....^
 
-									spec.identityProvider[0].transforms.expressions[3].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
-									 | still not a valid cel expression
-									 | ......^`,
+								 spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
+								  | still not a valid cel expression
+								  | ......^`,
 							), frozenMetav1Now, 123),
 							sadTransformationExamplesCondition(
 								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",
@@ -1577,40 +1577,40 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						[]configv1alpha1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
 								`.spec.identityProviders[0].transforms.examples[2] example failed:
-									expected: authentication to be rejected
-									actual:   authentication was not rejected
+								 expected: authentication to be rejected
+								 actual:   authentication was not rejected
 
-									.spec.identityProviders[0].transforms.examples[3] example failed:
-									expected: authentication not to be rejected
-									actual:   authentication was rejected with message "only ryan allowed"
+								 .spec.identityProviders[0].transforms.examples[3] example failed:
+								 expected: authentication not to be rejected
+								 actual:   authentication was rejected with message "only ryan allowed"
 
-									.spec.identityProviders[0].transforms.examples[4] example failed:
-									expected: authentication rejection message "wrong message"
-									actual:   authentication rejection message "only ryan allowed"
+								 .spec.identityProviders[0].transforms.examples[4] example failed:
+								 expected: authentication rejection message "wrong message"
+								 actual:   authentication rejection message "only ryan allowed"
 
-									.spec.identityProviders[0].transforms.examples[6] example failed:
-									expected: username "wrong"
-									actual:   username "pre:ryan"
+								 .spec.identityProviders[0].transforms.examples[6] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
 
-									.spec.identityProviders[0].transforms.examples[6] example failed:
-									expected: groups []
-									actual:   groups ["pre:a", "pre:b"]
+								 .spec.identityProviders[0].transforms.examples[6] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]
 
-									.spec.identityProviders[0].transforms.examples[7] example failed:
-									expected: username "wrong"
-									actual:   username "pre:ryan"
+								 .spec.identityProviders[0].transforms.examples[7] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
 
-									.spec.identityProviders[0].transforms.examples[8] example failed:
-									expected: groups ["wrong1", "wrong2"]
-									actual:   groups ["pre:a", "pre:b"]
+								 .spec.identityProviders[0].transforms.examples[8] example failed:
+								 expected: groups ["wrong1", "wrong2"]
+								 actual:   groups ["pre:a", "pre:b"]
 
-									.spec.identityProviders[0].transforms.examples[9] example failed:
-									expected: username ""
-									actual:   username "pre:ryan"
+								 .spec.identityProviders[0].transforms.examples[9] example failed:
+								 expected: username ""
+								 actual:   username "pre:ryan"
 
-									.spec.identityProviders[0].transforms.examples[9] example failed:
-									expected: groups []
-									actual:   groups ["pre:a", "pre:b"]`,
+								 .spec.identityProviders[0].transforms.examples[9] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]`,
 							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1676,12 +1676,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						[]configv1alpha1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
 								`.spec.identityProviders[0].transforms.examples[0] example failed:
-									expected: no transformation errors
-									actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
+								 expected: no transformation errors
+								 actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
 
-									.spec.identityProviders[0].transforms.examples[1] example failed:
-									expected: no transformation errors
-									actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: no transformation errors
+								 actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
 							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1824,7 +1824,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							sadConstNamesUniqueCondition(here.Doc(
 								`the names specified by .spec.identityProviders[0].transforms.constants[].name contain duplicates: "foo"
 
-									the names specified by .spec.identityProviders[1].transforms.constants[].name contain duplicates: "foo"`,
+								 the names specified by .spec.identityProviders[1].transforms.constants[].name contain duplicates: "foo"`,
 							), frozenMetav1Now, 123),
 							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
@@ -1839,41 +1839,41 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							sadKindCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadTransformationExpressionsCondition(here.Doc(
 								`spec.identityProvider[2].transforms.expressions[1].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'does' expecting <EOF>
-									 | this does not compile
-									 | .....^
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'does' expecting <EOF>
+								  | this does not compile
+								  | .....^
 
-									spec.identityProvider[2].transforms.expressions[3].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'also' expecting <EOF>
-									 | this also does not compile
-									 | .....^`,
+								 spec.identityProvider[2].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'also' expecting <EOF>
+								  | this also does not compile
+								  | .....^`,
 							), frozenMetav1Now, 123),
 							sadTransformationExamplesCondition(here.Doc(
 								`.spec.identityProviders[0].transforms.examples[0] example failed:
-									expected: username "this is wrong string"
-									actual:   username "ryan:suffix"
+								 expected: username "this is wrong string"
+								 actual:   username "ryan:suffix"
 
-									.spec.identityProviders[0].transforms.examples[0] example failed:
-									expected: groups ["this is wrong string list"]
-									actual:   groups ["a", "b"]
+								 .spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: groups ["this is wrong string list"]
+								 actual:   groups ["a", "b"]
 
-									.spec.identityProviders[0].transforms.examples[1] example failed:
-									expected: username "this is also wrong string"
-									actual:   username "ryan:suffix"
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: username "this is also wrong string"
+								 actual:   username "ryan:suffix"
 
-									.spec.identityProviders[0].transforms.examples[1] example failed:
-									expected: groups ["this is also wrong string list"]
-									actual:   groups ["a", "b"]
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: groups ["this is also wrong string list"]
+								 actual:   groups ["a", "b"]
 
-									.spec.identityProviders[1].transforms.examples[1] example failed:
-									expected: username "this is still wrong string"
-									actual:   username "ryan:suffix"
+								 .spec.identityProviders[1].transforms.examples[1] example failed:
+								 expected: username "this is still wrong string"
+								 actual:   username "ryan:suffix"
 
-									.spec.identityProviders[1].transforms.examples[1] example failed:
-									expected: groups ["this is still wrong string list"]
-									actual:   groups ["a", "b"]
+								 .spec.identityProviders[1].transforms.examples[1] example failed:
+								 expected: groups ["this is still wrong string list"]
+								 actual:   groups ["a", "b"]
 
-									unable to check if the examples specified by .spec.identityProviders[2].transforms.examples[] had errors because an expression was invalid`,
+								 unable to check if the examples specified by .spec.identityProviders[2].transforms.examples[] had errors because an expression was invalid`,
 							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1889,14 +1889,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadTransformationExpressionsCondition(here.Doc(
 								`spec.identityProvider[0].transforms.expressions[1].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'still' expecting <EOF>
-									 | this still does not compile
-									 | .....^
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'still' expecting <EOF>
+								  | this still does not compile
+								  | .....^
 
-									spec.identityProvider[0].transforms.expressions[3].expression was invalid:
-									CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'really' expecting <EOF>
-									 | this really does not compile
-									 | .....^`,
+								 spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'really' expecting <EOF>
+								  | this really does not compile
+								  | .....^`,
 							), frozenMetav1Now, 123),
 							sadTransformationExamplesCondition(
 								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",

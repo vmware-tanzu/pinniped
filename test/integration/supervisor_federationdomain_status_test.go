@@ -6,6 +6,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"go.pinniped.dev/internal/here"
 	"testing"
 	"time"
 
@@ -120,7 +121,11 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					[]v1alpha1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
-							Message: `.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: .spec.identityProviders[0] with displayName "idp1", .spec.identityProviders[1] with displayName "idp2"`,
+							Message: here.Docf(`
+								cannot find resource specified by .spec.identityProviders[0].objectRef (with name "%s")
+
+								cannot find resource specified by .spec.identityProviders[1].objectRef (with name "%s")`,
+								oidcIDP1Meta.Name, oidcIDP2Meta.Name),
 						},
 						{
 							Type: "Ready", Status: "False", Reason: "NotReady",
@@ -140,7 +145,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					[]v1alpha1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
-							Message: `.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: .spec.identityProviders[1] with displayName "idp2"`,
+							Message: fmt.Sprintf(`cannot find resource specified by .spec.identityProviders[1].objectRef (with name "%s")`, oidcIDP2Meta.Name),
 						},
 						{
 							Type: "Ready", Status: "False", Reason: "NotReady",
@@ -168,7 +173,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					[]v1alpha1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
-							Message: `.spec.identityProviders[].objectRef identifies resource(s) that cannot be found: .spec.identityProviders[0] with displayName "idp1"`,
+							Message: fmt.Sprintf(`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "%s")`, oidcIDP1Meta.Name),
 						},
 						{
 							Type: "Ready", Status: "False", Reason: "NotReady",

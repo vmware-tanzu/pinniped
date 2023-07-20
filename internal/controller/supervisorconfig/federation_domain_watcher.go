@@ -664,7 +664,7 @@ func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuf
 			Type:   typeIdentityProvidersObjectRefKindValid,
 			Status: configv1alpha1.ConditionFalse,
 			Reason: reasonKindUnrecognized,
-			Message: fmt.Sprintf("the kinds specified by .spec.identityProviders[].objectRef.kind are not recognized (should be one of %s): %s",
+			Message: fmt.Sprintf("some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized (should be one of %s): %s",
 				strings.Join(expectedKinds, ", "), strings.Join(sortAndQuote(badSuffixNames), ", ")),
 		})
 	} else {
@@ -684,17 +684,16 @@ func appendIdentityProvidersFoundCondition(
 	conditions []*configv1alpha1.Condition,
 ) []*configv1alpha1.Condition {
 	if len(idpNotFoundIndices) != 0 {
-		msgs := []string{}
+		messages := []string{}
 		for _, idpNotFoundIndex := range idpNotFoundIndices {
-			msgs = append(msgs, fmt.Sprintf(".spec.identityProviders[%d] with displayName %q", idpNotFoundIndex,
-				federationDomainIdentityProviders[idpNotFoundIndex].DisplayName))
+			messages = append(messages, fmt.Sprintf("cannot find resource specified by .spec.identityProviders[%d].objectRef (with name %q)",
+				idpNotFoundIndex, federationDomainIdentityProviders[idpNotFoundIndex].ObjectRef.Name))
 		}
 		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:   typeIdentityProvidersFound,
-			Status: configv1alpha1.ConditionFalse,
-			Reason: reasonIdentityProvidersObjectRefsNotFound,
-			Message: fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s",
-				strings.Join(msgs, ", ")),
+			Type:    typeIdentityProvidersFound,
+			Status:  configv1alpha1.ConditionFalse,
+			Reason:  reasonIdentityProvidersObjectRefsNotFound,
+			Message: strings.Join(messages, "\n\n"),
 		})
 	} else if len(federationDomainIdentityProviders) != 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
@@ -713,7 +712,7 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 			Type:   typeIdentityProvidersAPIGroupSuffixValid,
 			Status: configv1alpha1.ConditionFalse,
 			Reason: reasonAPIGroupNameUnrecognized,
-			Message: fmt.Sprintf("the API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized (should be %q): %s",
+			Message: fmt.Sprintf("some API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized (should be %q): %s",
 				expectedSuffixName, strings.Join(sortAndQuote(badSuffixNames), ", ")),
 		})
 	} else {
@@ -727,13 +726,13 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 	return conditions
 }
 
-func appendTransformsExpressionsValidCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if len(errors) > 0 {
+func appendTransformsExpressionsValidCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(messages) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
 			Type:    typeTransformsExpressionsValid,
 			Status:  configv1alpha1.ConditionFalse,
 			Reason:  reasonInvalidTransformsExpressions,
-			Message: strings.Join(errors, "\n\n"),
+			Message: strings.Join(messages, "\n\n"),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
@@ -746,13 +745,13 @@ func appendTransformsExpressionsValidCondition(errors []string, conditions []*co
 	return conditions
 }
 
-func appendTransformsExamplesPassedCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if len(errors) > 0 {
+func appendTransformsExamplesPassedCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(messages) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
 			Type:    typeTransformsExamplesPassed,
 			Status:  configv1alpha1.ConditionFalse,
 			Reason:  reasonTransformsExamplesFailed,
-			Message: strings.Join(errors, "\n\n"),
+			Message: strings.Join(messages, "\n\n"),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{
@@ -765,13 +764,13 @@ func appendTransformsExamplesPassedCondition(errors []string, conditions []*conf
 	return conditions
 }
 
-func appendTransformsConstantsNamesUniqueCondition(errors []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if len(errors) > 0 {
+func appendTransformsConstantsNamesUniqueCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+	if len(messages) > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
 			Type:    typeTransformsConstantsNamesUnique,
 			Status:  configv1alpha1.ConditionFalse,
 			Reason:  reasonDuplicateConstantsNames,
-			Message: strings.Join(errors, "\n\n"),
+			Message: strings.Join(messages, "\n\n"),
 		})
 	} else {
 		conditions = append(conditions, &configv1alpha1.Condition{

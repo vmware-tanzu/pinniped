@@ -367,14 +367,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound := func(idpsNotFound string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
+	sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "IdentityProvidersObjectRefsNotFound",
-			Message:            fmt.Sprintf(".spec.identityProviders[].objectRef identifies resource(s) that cannot be found: %s", idpsNotFound),
+			Message:            errorMessages,
 		}
 	}
 
@@ -484,7 +484,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "APIGroupUnrecognized",
-			Message: fmt.Sprintf("the API groups specified by .spec.identityProviders[].objectRef.apiGroup "+
+			Message: fmt.Sprintf("some API groups specified by .spec.identityProviders[].objectRef.apiGroup "+
 				"are not recognized (should be \"idp.supervisor.%s\"): %s", apiGroupSuffix, badApiGroups),
 		}
 	}
@@ -507,7 +507,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "KindUnrecognized",
-			Message: fmt.Sprintf(`the kinds specified by .spec.identityProviders[].objectRef.kind are `+
+			Message: fmt.Sprintf(`some kinds specified by .spec.identityProviders[].objectRef.kind are `+
 				`not recognized (should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): %s`, badKinds),
 		}
 	}
@@ -1051,11 +1051,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
-								`.spec.identityProviders[0] with displayName "cant-find-me", `+
-									`.spec.identityProviders[1] with displayName "cant-find-me-either", `+
-									`.spec.identityProviders[2] with displayName "cant-find-me-still"`,
-								frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "cant-find-me-name")
+
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "cant-find-me-either-name")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "cant-find-me-still-name")`,
+							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1267,11 +1269,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
 							sadAPIGroupSuffixCondition(`"", "", "wrong.example.com"`, frozenMetav1Now, 123),
-							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
-								`.spec.identityProviders[0] with displayName "name1", `+
-									`.spec.identityProviders[1] with displayName "name2", `+
-									`.spec.identityProviders[2] with displayName "name3"`,
-								frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "some-oidc-idp")
+
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "some-ldap-idp")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "some-ldap-idp")`,
+							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1327,10 +1331,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
 							sadKindCondition(`"", "wrong"`, frozenMetav1Now, 123),
-							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
-								`.spec.identityProviders[1] with displayName "name2", `+
-									`.spec.identityProviders[2] with displayName "name3"`,
-								frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[1].objectRef (with name "some-ldap-idp")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "some-ldap-idp")`,
+							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -1823,9 +1828,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							), frozenMetav1Now, 123),
 							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
-							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(
-								`.spec.identityProviders[0] with displayName "not unique", .spec.identityProviders[1] with displayName "not unique", .spec.identityProviders[2] with displayName "name1"`,
-								frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "this will not be found")
+
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "foo")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "foo")`,
+							), frozenMetav1Now, 123),
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadKindCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadTransformationExpressionsCondition(here.Doc(

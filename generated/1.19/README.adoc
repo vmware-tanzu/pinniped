@@ -568,6 +568,25 @@ ImpersonationProxySpec describes the intended configuration of the Concierge imp
 | *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will be served using the external name of the LoadBalancer service or the cluster service DNS name. 
  This field must be non-empty when spec.impersonationProxy.service.type is "None".
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxytlsspec"]
+==== ImpersonationProxyTLSSpec 
+
+ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should serve TLS.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). Used to advertise the CA bundle for the impersonation proxy endpoint.
+| *`secretName`* __string__ | SecretName is the name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the Concierge impersonation proxy endpoint.
 |===
 
 

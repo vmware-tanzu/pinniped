@@ -361,7 +361,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			LastTransitionTime: time,
 			Reason:             "IdentityProviderNotSpecified",
 			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef "+
-				"and %q identity provider resources have been found: "+
+				"and %d identity provider resources have been found: "+
 				"please update .spec.identityProviders to specify which identity providers "+
 				"this federation domain should use", idpCRsCount),
 		}

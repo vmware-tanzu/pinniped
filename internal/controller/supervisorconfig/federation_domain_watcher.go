@@ -35,6 +35,8 @@ import (
 )
 
 const (
+	controllerName = "FederationDomainWatcherController"
+
 	typeReady                                = "Ready"
 	typeIssuerURLValid                       = "IssuerURLValid"
 	typeOneTLSSecretPerIssuerHostname        = "OneTLSSecretPerIssuerHostname"
@@ -109,7 +111,7 @@ func NewFederationDomainWatcherController(
 	allowedKinds := sets.New(kindActiveDirectoryIdentityProvider, kindLDAPIdentityProvider, kindOIDCIdentityProvider)
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "FederationDomainWatcherController",
+			Name: controllerName,
 			Syncer: &federationDomainWatcherController{
 				federationDomainsSetter:                 federationDomainsSetter,
 				apiGroup:                                fmt.Sprintf("idp.supervisor.%s", apiGroupSuffix),
@@ -305,7 +307,7 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 			Status: configv1alpha1.ConditionFalse,
 			Reason: reasonIdentityProviderNotSpecified, // vs LegacyConfigurationIdentityProviderNotFound as this is more specific
 			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef "+
-				"and %q identity provider resources have been found: "+
+				"and %d identity provider resources have been found: "+
 				"please update .spec.identityProviders to specify which identity providers "+
 				"this federation domain should use", idpCRsCount),
 		})
@@ -850,7 +852,7 @@ func (c *federationDomainWatcherController) updateStatus(
 	}
 
 	_ = conditionsutil.MergeConfigConditions(conditions,
-		federationDomain.Generation, &updated.Status.Conditions, plog.New(), metav1.NewTime(c.clock.Now()))
+		federationDomain.Generation, &updated.Status.Conditions, plog.New().WithName(controllerName), metav1.NewTime(c.clock.Now()))
 
 	if equality.Semantic.DeepEqual(federationDomain, updated) {
 		return nil

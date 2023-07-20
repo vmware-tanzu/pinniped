@@ -2091,7 +2091,7 @@ func testSupervisorLogin(
 	idpName := createIDP(t)
 
 	// Now that both the FederationDomain and the IDP are created, the FederationDomain should be ready.
-	testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+	testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
 	// the `/jwks.json` endpoint to succeed, because there is no point in proceeding and eventually

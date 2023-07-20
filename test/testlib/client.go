@@ -304,31 +304,57 @@ func CreateTestFederationDomain(
 	})
 
 	// Wait for the FederationDomain to enter the expected phase (or time out).
-	WaitForTestFederationDomainStatus(ctx, t, federationDomain.Name, expectStatus)
+	WaitForFederationDomainStatusPhase(ctx, t, federationDomain.Name, expectStatus)
 
 	return federationDomain
 }
 
-func WaitForTestFederationDomainStatus(ctx context.Context, t *testing.T, federationDomainName string, expectStatus configv1alpha1.FederationDomainPhase) {
+func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase configv1alpha1.FederationDomainPhase) {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
 
-	var result *configv1alpha1.FederationDomain
 	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
-		var err error
-		result, err = federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
+		fd, err := federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
 		requireEventually.NoError(err)
-		requireEventually.Equal(expectStatus, result.Status.Phase)
+		requireEventually.Equalf(expectPhase, fd.Status.Phase, "actual status conditions were: %#v", fd.Status.Conditions)
 
 		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-		if expectStatus == configv1alpha1.FederationDomainPhaseReady {
-			requireEventually.NotEmpty(result.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
+		if expectPhase == configv1alpha1.FederationDomainPhaseReady {
+			requireEventually.NotEmpty(fd.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
 		}
-	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
+	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectPhase)
+}
+
+func WaitForFederationDomainStatusConditions(ctx context.Context, t *testing.T, federationDomainName string, expectConditions []configv1alpha1.Condition) {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		fd, err := federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+
+		requireEventually.Lenf(fd.Status.Conditions, len(expectConditions),
+			"wanted status conditions: %#v", expectConditions)
+
+		for i, wantCond := range expectConditions {
+			actualCond := fd.Status.Conditions[i]
+
+			// This is a cheat to avoid needing to make equality assertions on these fields.
+			requireEventually.NotZero(actualCond.LastTransitionTime)
+			wantCond.LastTransitionTime = actualCond.LastTransitionTime
+			requireEventually.NotZero(actualCond.ObservedGeneration)
+			wantCond.ObservedGeneration = actualCond.ObservedGeneration
+
+			requireEventually.Equalf(wantCond, actualCond,
+				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
+				expectConditions, fd.Status.Conditions, i)
+		}
+	}, 60*time.Second, 1*time.Second, "wanted FederationDomain conditions")
 }
 
 func RandBytes(t *testing.T, numBytes int) []byte {
@@ -476,6 +502,11 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
+	return CreateTestOIDCIdentityProviderWithObjectMeta(t, spec, testObjectMeta(t, "upstream-oidc-idp"), expectedPhase)
+}
+
+func CreateTestOIDCIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, objectMeta metav1.ObjectMeta, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
+	t.Helper()
 	env := IntegrationEnv(t)
 	client := NewSupervisorClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -485,7 +516,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 
 	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
+		ObjectMeta: objectMeta,
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -494,7 +525,11 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	t.Cleanup(func() {
 		t.Logf("cleaning up test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		notFound := k8serrors.IsNotFound(err)
+		// It's okay if it is not found, because it might have been deleted by another part of this test.
+		if !notFound {
+			require.NoErrorf(t, err, "could not cleanup test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
+		}
 	})
 	t.Logf("created test OIDCIdentityProvider %s", created.Name)
 
@@ -722,5 +757,13 @@ func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {
 		GenerateName: fmt.Sprintf("test-%s-", baseName),
 		Labels:       map[string]string{"pinniped.dev/test": ""},
 		Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+	}
+}
+
+func ObjectMetaWithRandomName(t *testing.T, baseName string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		Name:        fmt.Sprintf("test-%s-%s", baseName, RandHex(t, 8)),
+		Labels:      map[string]string{"pinniped.dev/test": ""},
+		Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
 	}
 }

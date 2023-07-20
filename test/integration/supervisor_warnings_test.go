@@ -109,7 +109,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -254,7 +254,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
-		testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -394,7 +394,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForTestFederationDomainStatus(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"

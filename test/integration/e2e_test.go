@@ -30,6 +30,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/pointer"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -1173,6 +1174,250 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
+
+	t.Run("with multiple IDPs: one OIDC and one LDAP", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
+		downstreamPrefix := "pre:"
+
+		expectedUpstreamLDAPUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedDownstreamLDAPUsername := downstreamPrefix + expectedUpstreamLDAPUsername
+		expectedUpstreamLDAPGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+		expectedDownstreamLDAPGroups := make([]string, 0, len(expectedUpstreamLDAPGroups))
+		for _, g := range expectedUpstreamLDAPGroups {
+			expectedDownstreamLDAPGroups = append(expectedDownstreamLDAPGroups, downstreamPrefix+g)
+		}
+
+		expectedUpstreamOIDCUsername := env.SupervisorUpstreamOIDC.Username
+		expectedDownstreamOIDCUsername := downstreamPrefix + expectedUpstreamOIDCUsername
+		expectedUpstreamOIDCGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+		expectedDownstreamOIDCGroups := make([]string, 0, len(expectedUpstreamOIDCGroups))
+		for _, g := range expectedUpstreamOIDCGroups {
+			expectedDownstreamOIDCGroups = append(expectedDownstreamOIDCGroups, downstreamPrefix+g)
+		}
+
+		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
+
+		// Having one IDP should put the FederationDomain into a ready state.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedDownstreamOIDCUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedDownstreamOIDCUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream OIDC provider and wait for it to become ready.
+		createdOIDCProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseError)
+
+		// Update the FederationDomain to use the two IDPs.
+		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+		gotFederationDomain, err := federationDomainsClient.Get(testCtx, downstream.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		ldapIDPDisplayName := "My LDAP IDP 💾"
+		oidcIDPDisplayName := "My OIDC IDP 🚀"
+
+		gotFederationDomain.Spec.IdentityProviders = []configv1alpha1.FederationDomainIdentityProvider{
+			{
+				DisplayName: ldapIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "LDAPIdentityProvider",
+					Name:     createdLDAPProvider.Name,
+				},
+				Transforms: configv1alpha1.FederationDomainTransforms{
+					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamLDAPUsername},
+						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamLDAPUsername, "someone else"}},
+					},
+					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
+						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
+						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
+					},
+					Examples: []configv1alpha1.FederationDomainTransformsExample{
+						{
+							Username: expectedUpstreamLDAPUsername,
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Username: expectedDownstreamLDAPUsername,
+								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
+							},
+						},
+						{
+							Username: "someone other user",
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Rejected: true,
+								Message:  "only special users allowed",
+							},
+						},
+					},
+				},
+			},
+			{
+				DisplayName: oidcIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "OIDCIdentityProvider",
+					Name:     createdOIDCProvider.Name,
+				},
+				Transforms: configv1alpha1.FederationDomainTransforms{
+					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamOIDCUsername},
+						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamOIDCUsername, "someone else"}},
+					},
+					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
+						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
+						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
+					},
+					Examples: []configv1alpha1.FederationDomainTransformsExample{
+						{
+							Username: expectedUpstreamOIDCUsername,
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Username: expectedDownstreamOIDCUsername,
+								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
+							},
+						},
+						{
+							Username: "someone other user",
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Rejected: true,
+								Message:  "only special users allowed",
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err = federationDomainsClient.Update(testCtx, gotFederationDomain, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// The FederationDomain should be valid after the above update.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+
+		ldapKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+			"--upstream-identity-provider-name", ldapIDPDisplayName,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		oidcKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-session-cache", sessionCachePath,
+			"--upstream-identity-provider-name", oidcIDPDisplayName,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
+		t.Log("starting LDAP auth via kubectl")
+		timeoutCtx, cleanupTimeoutCtx := context.WithTimeout(testCtx, 10*time.Second)
+		t.Cleanup(cleanupTimeoutCtx)
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUpstreamLDAPUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
+		t.Log("starting OIDC auth via kubectl")
+		timeoutCtx, cleanupTimeoutCtx = context.WithTimeout(testCtx, 10*time.Second)
+		t.Cleanup(cleanupTimeoutCtx)
+		kubectlCmd = exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+
+		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
+		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, page)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		// The user is now logged in to the cluster as two different identities simultaneously, and can switch
+		// back and forth by switching kubeconfigs, without needing to auth again.
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+	})
 }
 
 func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, b *browsertest.Browser) chan string {
@@ -1527,7 +1772,7 @@ func runPinnipedGetKubeconfig(t *testing.T, env *testlib.TestEnv, pinnipedExe st
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
 
-	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
+	kubeconfigPath := filepath.Join(tempDir, fmt.Sprintf("kubeconfig-%s.yaml", testlib.RandHex(t, 8)))
 	require.NoError(t, os.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
 	return kubeconfigPath

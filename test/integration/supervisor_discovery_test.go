@@ -668,7 +668,6 @@ func withAllSuccessfulConditions() map[string]v1alpha1.ConditionStatus {
 		"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
 		"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
 		"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
-		"TransformsConstantsNamesUnique":                v1alpha1.ConditionTrue,
 		"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
 		"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
 	}

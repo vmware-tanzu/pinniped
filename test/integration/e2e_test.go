@@ -101,7 +101,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := testlib.CreateTestFederationDomain(topSetupCtx, t,
+	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		configv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
 			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
@@ -112,7 +112,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authv1alpha.JWTAuthenticatorSpec{
-		Issuer:   downstream.Spec.Issuer,
+		Issuer:   federationDomain.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
 	})
@@ -159,7 +159,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -186,8 +186,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
@@ -195,7 +195,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -242,7 +242,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -269,8 +269,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
@@ -282,7 +282,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
 		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
 		// assert that the expected username and groups claims/values are in the downstream ID token.
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
@@ -327,7 +327,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -375,8 +375,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
 		authCode := formpostExpectManualState(t, browser)
@@ -395,7 +395,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -448,7 +448,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -502,8 +502,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
 		authCode := formpostExpectManualState(t, browser)
@@ -533,7 +533,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -576,7 +576,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -618,7 +618,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -646,7 +646,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -719,7 +719,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -757,7 +757,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -775,7 +775,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -817,7 +817,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
 		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
 		// assert that the expected username and groups claims/values are in the downstream ID token.
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
@@ -835,7 +835,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -885,7 +885,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -903,7 +903,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -941,7 +941,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -959,7 +959,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1009,7 +1009,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -1029,7 +1029,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1054,14 +1054,14 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -1081,7 +1081,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1106,14 +1106,14 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamActiveDirectory.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -1133,7 +1133,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1164,14 +1164,14 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, createdProvider.Name, kubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
@@ -1184,7 +1184,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		downstreamPrefix := "pre:"
 
@@ -1207,7 +1207,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 
 		// Having one IDP should put the FederationDomain into a ready state.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		testlib.CreateTestClusterRoleBinding(t,
@@ -1240,11 +1240,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		}, idpv1alpha1.PhaseReady)
 
 		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseError)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
 
 		// Update the FederationDomain to use the two IDPs.
 		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
-		gotFederationDomain, err := federationDomainsClient.Get(testCtx, downstream.Name, metav1.GetOptions{})
+		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		ldapIDPDisplayName := "My LDAP IDP 💾"
@@ -1330,7 +1330,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, err)
 
 		// The FederationDomain should be valid after the above update.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1383,7 +1383,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, ldapIDPDisplayName, ldapKubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
@@ -1394,28 +1394,28 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
 		// The user is now logged in to the cluster as two different identities simultaneously, and can switch
 		// back and forth by switching kubeconfigs, without needing to auth again.
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, oidcIDPDisplayName, oidcKubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, ldapIDPDisplayName, ldapKubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, oidcIDPDisplayName, oidcKubeconfigPath,
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
 	})
 }

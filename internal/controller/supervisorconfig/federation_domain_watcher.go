@@ -45,7 +45,6 @@ const (
 	typeIdentityProvidersDisplayNamesUnique  = "IdentityProvidersDisplayNamesUnique"
 	typeIdentityProvidersAPIGroupSuffixValid = "IdentityProvidersObjectRefAPIGroupSuffixValid"
 	typeIdentityProvidersObjectRefKindValid  = "IdentityProvidersObjectRefKindValid"
-	typeTransformsConstantsNamesUnique       = "TransformsConstantsNamesUnique"
 	typeTransformsExpressionsValid           = "TransformsExpressionsValid"
 	typeTransformsExamplesPassed             = "TransformsExamplesPassed"
 
@@ -62,7 +61,6 @@ const (
 	reasonDuplicateDisplayNames                       = "DuplicateDisplayNames"
 	reasonAPIGroupNameUnrecognized                    = "APIGroupUnrecognized"
 	reasonKindUnrecognized                            = "KindUnrecognized"
-	reasonDuplicateConstantsNames                     = "DuplicateConstantsNames"
 	reasonInvalidTransformsExpressions                = "InvalidTransformsExpressions"
 	reasonTransformsExamplesFailed                    = "TransformsExamplesFailed"
 
@@ -330,7 +328,6 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	conditions = appendIdentityProviderDuplicateDisplayNamesCondition(sets.Set[string]{}, conditions)
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, []string{}, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), []string{}, conditions)
-	conditions = appendTransformsConstantsNamesUniqueCondition([]string{}, conditions)
 	conditions = appendTransformsExpressionsValidCondition([]string{}, conditions)
 	conditions = appendTransformsExamplesPassedCondition([]string{}, conditions)
 
@@ -431,7 +428,6 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplic
 	conditions = appendIdentityProviderObjectRefAPIGroupSuffixCondition(c.apiGroup, badAPIGroupNames, conditions)
 	conditions = appendIdentityProviderObjectRefKindCondition(c.sortedAllowedKinds(), badKinds, conditions)
 
-	conditions = appendTransformsConstantsNamesUniqueCondition(validationErrorMessages.errorsForConstants, conditions)
 	conditions = appendTransformsExpressionsValidCondition(validationErrorMessages.errorsForExpressions, conditions)
 	conditions = appendTransformsExamplesPassedCondition(validationErrorMessages.errorsForExamples, conditions)
 
@@ -472,12 +468,9 @@ func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluat
 	idpIndex int,
 	validationErrorMessages *transformsValidationErrorMessages,
 ) (*idtransform.TransformationPipeline, bool, error) {
-	consts, errorsForConstants, err := c.makeTransformsConstantsForIdentityProvider(idp, idpIndex)
+	consts, err := c.makeTransformsConstantsForIdentityProvider(idp)
 	if err != nil {
 		return nil, false, err
-	}
-	if len(errorsForConstants) > 0 {
-		validationErrorMessages.errorsForConstants = append(validationErrorMessages.errorsForConstants, errorsForConstants)
 	}
 
 	pipeline, errorsForExpressions, err := c.makeTransformationPipelineForIdentityProvider(idp, idpIndex, consts)
@@ -498,22 +491,17 @@ func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluat
 
 func (c *federationDomainWatcherController) makeTransformsConstantsForIdentityProvider(
 	idp configv1alpha1.FederationDomainIdentityProvider,
-	idpIndex int,
-) (*celtransformer.TransformationConstants, string, error) {
+) (*celtransformer.TransformationConstants, error) {
 	consts := &celtransformer.TransformationConstants{
 		StringConstants:     map[string]string{},
 		StringListConstants: map[string][]string{},
 	}
 	constNames := sets.Set[string]{}
-	duplicateConstNames := sets.Set[string]{}
 
 	// Read all the declared constants.
 	for _, constant := range idp.Transforms.Constants {
 		// The CRD requires the name field, and validates that it has at least one character,
-		// so here we only need to validate that they are unique.
-		if constNames.Has(constant.Name) {
-			duplicateConstNames.Insert(constant.Name)
-		}
+		// and validates that the names are unique within the list.
 		constNames.Insert(constant.Name)
 		switch constant.Type {
 		case "string":
@@ -522,17 +510,11 @@ func (c *federationDomainWatcherController) makeTransformsConstantsForIdentityPr
 			consts.StringListConstants[constant.Name] = constant.StringListValue
 		default:
 			// This shouldn't really happen since the CRD validates it, but handle it as an error.
-			return nil, "", fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
+			return nil, fmt.Errorf("one of spec.identityProvider[].transforms.constants[].type is invalid: %q", constant.Type)
 		}
 	}
 
-	if duplicateConstNames.Len() > 0 {
-		return consts, fmt.Sprintf(
-			"the names specified by .spec.identityProviders[%d].transforms.constants[].name contain duplicates: %s",
-			idpIndex, strings.Join(sortAndQuote(duplicateConstNames.UnsortedList()), ", ")), nil
-	}
-
-	return consts, "", nil
+	return consts, nil
 }
 
 func (c *federationDomainWatcherController) makeTransformationPipelineForIdentityProvider(
@@ -764,25 +746,6 @@ func appendTransformsExamplesPassedCondition(messages []string, conditions []*co
 	return conditions
 }
 
-func appendTransformsConstantsNamesUniqueCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
-	if len(messages) > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeTransformsConstantsNamesUnique,
-			Status:  configv1alpha1.ConditionFalse,
-			Reason:  reasonDuplicateConstantsNames,
-			Message: strings.Join(messages, "\n\n"),
-		})
-	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
-			Type:    typeTransformsConstantsNamesUnique,
-			Status:  configv1alpha1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
-		})
-	}
-	return conditions
-}
-
 func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
 	if duplicateDisplayNames.Len() > 0 {
 		conditions = append(conditions, &configv1alpha1.Condition{
@@ -878,7 +841,6 @@ func (c *federationDomainWatcherController) sortedAllowedKinds() []string {
 }
 
 type transformsValidationErrorMessages struct {
-	errorsForConstants   []string
 	errorsForExpressions []string
 	errorsForExamples    []string
 }

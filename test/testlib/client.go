@@ -354,7 +354,7 @@ func WaitForFederationDomainStatusConditions(ctx context.Context, t *testing.T, 
 				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
 				expectConditions, fd.Status.Conditions, i)
 		}
-	}, 5*time.Second, 1*time.Second, "wanted FederationDomain conditions")
+	}, 60*time.Second, 1*time.Second, "wanted FederationDomain conditions")
 }
 
 func RandBytes(t *testing.T, numBytes int) []byte {

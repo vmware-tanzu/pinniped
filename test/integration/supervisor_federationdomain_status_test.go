@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
@@ -23,12 +24,13 @@ import (
 // Never run this test in parallel since deleting all federation domains is disruptive, see main_test.go.
 func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
-	client := testlib.NewSupervisorClientset(t)
+	supervisorClient := testlib.NewSupervisorClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel)
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, env.SupervisorNamespace, defaultTLSCertSecretName(env), client, testlib.NewKubernetesClientset(t))
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t,
+		env.SupervisorNamespace, defaultTLSCertSecretName(env), supervisorClient, testlib.NewKubernetesClientset(t))
 
 	tests := []struct {
 		name string
@@ -164,7 +166,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					allSuccessfulFederationDomainConditions(fd.Spec))
 
 				// Removing one IDP should put the FederationDomain back into an error status again.
-				oidcIDPClient := testlib.NewSupervisorClientset(t).IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
+				oidcIDPClient := supervisorClient.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 				err := oidcIDPClient.Delete(ctx, oidcIdentityProvider1.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
@@ -183,12 +185,662 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				))
 			},
 		},
+		{
+			name: "spec with explicit identity providers and lots of validation errors",
+			run: func(t *testing.T) {
+				oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
+					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
+				}, idpv1alpha1.PhaseError)
+
+				fd := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com/fake",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "not unique",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("this is the wrong api group"),
+								Kind:     "OIDCIdentityProvider",
+								Name:     "will not be found",
+							},
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "foo", Type: "string", StringValue: "bar"},
+								},
+								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+									{Type: "username/v1", Expression: "this is not a valid cel expression"},
+									{Type: "groups/v1", Expression: "this is also not a valid cel expression"},
+									{Type: "username/v1", Expression: "username"}, // valid
+									{Type: "policy/v1", Expression: "still not a valid cel expression"},
+								},
+								Examples: []v1alpha1.FederationDomainTransformsExample{
+									{
+										Username: "does not matter because expressions did not compile",
+									},
+								},
+							},
+						},
+						{ // this identity provider should be valid
+							DisplayName: "unique",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+								Kind:     "OIDCIdentityProvider",
+								Name:     oidcIdentityProvider.Name,
+							},
+						},
+						{
+							DisplayName: "not unique",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+								Kind:     "this is the wrong kind",
+								Name:     "also will not be found",
+							},
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "ryan", Type: "string", StringValue: "ryan"},
+									{Name: "unused", Type: "stringList", StringListValue: []string{"foo", "bar"}},
+									{Name: "rejectMe", Type: "string", StringValue: "rejectMeWithDefaultMessage"},
+								},
+								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+									{Type: "policy/v1", Expression: `username == strConst.ryan || username == strConst.rejectMe`, Message: "only special users allowed"},
+									{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
+									{Type: "username/v1", Expression: `"pre:" + username`},
+									{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
+								},
+								Examples: []v1alpha1.FederationDomainTransformsExample{
+									{ // this example should pass
+										Username: "ryan",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Username: "pre:ryan",
+											Groups:   []string{"pre:b", "pre:a", "pre:b", "pre:a"}, // order and repeats don't matter, treated like a set
+											Rejected: false,
+										},
+									},
+									{ // this example should pass
+										Username: "other",
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Rejected: true,
+											Message:  "only special users allowed",
+										},
+									},
+									{ // this example should fail because it expects the user to be rejected but the user was actually not rejected
+										Username: "ryan",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Rejected: true,
+											Message:  "this input is ignored in this case",
+										},
+									},
+									{ // this example should fail because it expects the user not to be rejected but they were actually rejected
+										Username: "other",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Username: "pre:other",
+											Groups:   []string{"pre:a", "pre:b"},
+											Rejected: false,
+										},
+									},
+									{ // this example should fail because it expects the wrong rejection message
+										Username: "other",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Rejected: true,
+											Message:  "wrong message",
+										},
+									},
+									{ // this example should pass even though it does not make any assertion about the rejection message
+										// because the message assertions defaults to asserting the default rejection message
+										Username: "rejectMeWithDefaultMessage",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Rejected: true,
+										},
+									},
+									{ // this example should fail because it expects both the wrong username and groups
+										Username: "ryan",
+										Groups:   []string{"b", "a"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Username: "wrong",
+											Groups:   []string{},
+											Rejected: false,
+										},
+									},
+									{ // this example should fail because it expects the wrong username only
+										Username: "ryan",
+										Groups:   []string{"a", "b"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Username: "wrong",
+											Groups:   []string{"pre:b", "pre:a"},
+											Rejected: false,
+										},
+									},
+									{ // this example should fail because it expects the wrong groups only
+										Username: "ryan",
+										Groups:   []string{"b", "a"},
+										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+											Username: "pre:ryan",
+											Groups:   []string{"wrong2", "wrong1"},
+											Rejected: false,
+										},
+									},
+									{ // this example should fail because it does not expect anything but the auth actually was successful
+										Username: "ryan",
+										Groups:   []string{"b", "a"},
+										Expects:  v1alpha1.FederationDomainTransformsExampleExpects{},
+									},
+								},
+							},
+						},
+					},
+				}, v1alpha1.FederationDomainPhaseError)
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+					allSuccessfulFederationDomainConditions(fd.Spec),
+					[]v1alpha1.Condition{
+						{
+							Type: "IdentityProvidersDisplayNamesUnique", Status: "False", Reason: "DuplicateDisplayNames",
+							Message: `the names specified by .spec.identityProviders[].displayName contain duplicates: "not unique"`,
+						},
+						{
+							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
+							Message: here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "will not be found")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "also will not be found")`,
+							)},
+						{
+							Type: "IdentityProvidersObjectRefAPIGroupSuffixValid", Status: "False", Reason: "APIGroupUnrecognized",
+							Message: `some API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized ` +
+								`(should be "idp.supervisor.pinniped.dev"): "this is the wrong api group"`,
+						},
+						{
+							Type: "IdentityProvidersObjectRefKindValid", Status: "False", Reason: "KindUnrecognized",
+							Message: `some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized ` +
+								`(should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
+						},
+						{
+							Type: "Ready", Status: "False", Reason: "NotReady",
+							Message: "the FederationDomain is not ready: see other conditions for details",
+						},
+						{
+							Type: "TransformsExamplesPassed", Status: "False", Reason: "TransformsExamplesFailed",
+							Message: here.Doc(
+								`unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid
+
+								 .spec.identityProviders[2].transforms.examples[2] example failed:
+								 expected: authentication to be rejected
+								 actual:   authentication was not rejected
+
+								 .spec.identityProviders[2].transforms.examples[3] example failed:
+								 expected: authentication not to be rejected
+								 actual:   authentication was rejected with message "only special users allowed"
+
+								 .spec.identityProviders[2].transforms.examples[4] example failed:
+								 expected: authentication rejection message "wrong message"
+								 actual:   authentication rejection message "only special users allowed"
+
+								 .spec.identityProviders[2].transforms.examples[6] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[2].transforms.examples[6] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]
+
+								 .spec.identityProviders[2].transforms.examples[7] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[2].transforms.examples[8] example failed:
+								 expected: groups ["wrong1", "wrong2"]
+								 actual:   groups ["pre:a", "pre:b"]
+
+								 .spec.identityProviders[2].transforms.examples[9] example failed:
+								 expected: username ""
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[2].transforms.examples[9] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]`,
+							),
+						},
+						{
+							Type: "TransformsExpressionsValid", Status: "False", Reason: "InvalidTransformsExpressions",
+							Message: here.Doc(
+								`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is not a valid cel expression
+								  | .....^
+
+								 spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is also not a valid cel expression
+								  | .....^
+
+								 spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
+								  | still not a valid cel expression
+								  | ......^`,
+							),
+						},
+					},
+				))
+
+				// Updating the FederationDomain to fix some of the problems should make some of the errors go away.
+				federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+				fd, err := federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				fd.Spec.IdentityProviders[0] = v1alpha1.FederationDomainIdentityProvider{
+					// Fix the display name.
+					DisplayName: "now made unique",
+					// Fix the objectRef.
+					ObjectRef: corev1.TypedLocalObjectReference{
+						APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+						Kind:     "OIDCIdentityProvider",
+						Name:     oidcIdentityProvider.Name,
+					},
+					Transforms: v1alpha1.FederationDomainTransforms{
+						Constants: []v1alpha1.FederationDomainTransformsConstant{
+							{Name: "foo", Type: "string", StringValue: "bar"},
+						},
+						Expressions: []v1alpha1.FederationDomainTransformsExpression{
+							// Fix the compile errors.
+							{Type: "username/v1", Expression: `"pre:" + username`},
+						},
+						Examples: []v1alpha1.FederationDomainTransformsExample{
+							{ // this example should fail because it expects both the wrong username and groups
+								Username: "ryan",
+								Groups:   []string{"b", "a"},
+								Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+									Username: "wrong",
+									Groups:   []string{},
+									Rejected: false,
+								},
+							},
+						},
+					},
+				}
+				fd.Spec.IdentityProviders[2].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+					{ // this example should pass
+						Username: "other",
+						Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+							Rejected: true,
+							Message:  "only special users allowed",
+						},
+					},
+				}
+				fd, err = federationDomainsClient.Update(ctx, fd, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+					allSuccessfulFederationDomainConditions(fd.Spec),
+					[]v1alpha1.Condition{
+						{
+							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
+							Message: `cannot find resource specified by .spec.identityProviders[2].objectRef (with name "also will not be found")`,
+						},
+						{
+							Type: "IdentityProvidersObjectRefKindValid", Status: "False", Reason: "KindUnrecognized",
+							Message: `some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized ` +
+								`(should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
+						},
+						{
+							Type: "Ready", Status: "False", Reason: "NotReady",
+							Message: "the FederationDomain is not ready: see other conditions for details",
+						},
+						{
+							Type: "TransformsExamplesPassed", Status: "False", Reason: "TransformsExamplesFailed",
+							Message: here.Doc(
+								`.spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: groups []
+								 actual:   groups ["a", "b"]`,
+							),
+						},
+					},
+				))
+
+				// Updating the FederationDomain to fix the rest of the problems should make all the errors go away.
+				fd, err = federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				fd.Spec.IdentityProviders[2].ObjectRef = corev1.TypedLocalObjectReference{
+					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "OIDCIdentityProvider",
+					Name:     oidcIdentityProvider.Name,
+				}
+				fd.Spec.IdentityProviders[0].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+					{ // this example should pass
+						Username: "ryan",
+						Groups:   []string{"b", "a"},
+						Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+							Username: "pre:ryan",
+							Groups:   []string{"a", "b"},
+						},
+					},
+				}
+				fd, err = federationDomainsClient.Update(ctx, fd, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseReady)
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, allSuccessfulFederationDomainConditions(fd.Spec))
+			},
+		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			tt.run(t)
+		})
+	}
+}
+
+func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	fdClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
+
+	tests := []struct {
+		name    string
+		fd      *v1alpha1.FederationDomain
+		wantErr string
+	}{
+		{
+			name: "issuer cannot be empty",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "",
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP display names cannot be empty",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer:            "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{{DisplayName: ""}},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].displayName: Invalid value: "": `+
+				"spec.identityProviders[0].displayName in body should be at least 1 chars long",
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform constants must have unique names",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "notUnique", Type: "string", StringValue: "foo"},
+									{Name: "notUnique", Type: "string", StringValue: "bar"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform constant names cannot be empty",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "", Type: "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[0].name: Invalid value: "": `+
+				`spec.identityProviders[0].transforms.constants[0].name in body should be at least 1 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform constant names cannot be more than 64 characters",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "12345678901234567890123456789012345678901234567890123456789012345", Type: "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform constant names must be a legal CEL variable name",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "cannot have spaces", Type: "string"},
+									{Name: "1mustStartWithLetter", Type: "string"},
+									{Name: "_mustStartWithLetter", Type: "string"},
+									{Name: "canOnlyIncludeLettersAndNumbersAnd_", Type: "string"},
+									{Name: "CanStart1_withUpperCase", Type: "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`[spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": `+
+				`spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', `+
+				`spec.identityProviders[0].transforms.constants[1].name: Invalid value: "1mustStartWithLetter": `+
+				`spec.identityProviders[0].transforms.constants[1].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', `+
+				`spec.identityProviders[0].transforms.constants[2].name: Invalid value: "_mustStartWithLetter": `+
+				`spec.identityProviders[0].transforms.constants[2].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$']`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform constant types must be one of the allowed enum strings",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "a", Type: "this is invalid"},
+									{Name: "b", Type: "string"},
+									{Name: "c", Type: "stringList"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": `+
+				`supported values: "string", "stringList"`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform expression types must be one of the allowed enum strings",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+									{Type: "this is invalid", Expression: "foo"},
+									{Type: "policy/v1", Expression: "foo"},
+									{Type: "username/v1", Expression: "foo"},
+									{Type: "groups/v1", Expression: "foo"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": `+
+				`supported values: "policy/v1", "username/v1", "groups/v1"`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform expressions cannot be empty",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+									{Type: "username/v1", Expression: ""},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.expressions[0].expression: Invalid value: "": `+
+				`spec.identityProviders[0].transforms.expressions[0].expression in body should be at least 1 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "IDP transform example usernames cannot be empty",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Examples: []v1alpha1.FederationDomainTransformsExample{
+									{Username: ""},
+									{Username: "non-empty"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.examples[0].username: Invalid value: "": `+
+				`spec.identityProviders[0].transforms.examples[0].username in body should be at least 1 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
+		},
+		{
+			name: "minimum valid",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+				},
+			},
+		},
+		{
+			name: "minimum valid when IDPs are included",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{DisplayName: "foo"},
+					},
+				},
+			},
+		},
+		{
+			name: "minimum valid when IDP has transform constants, expressions, and examples",
+			fd: &v1alpha1.FederationDomain{
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
+				Spec: v1alpha1.FederationDomainSpec{
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "foo",
+							Transforms: v1alpha1.FederationDomainTransforms{
+								Constants: []v1alpha1.FederationDomainTransformsConstant{
+									{Name: "foo", Type: "string"},
+								},
+								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+									{Type: "username/v1", Expression: "foo"},
+								},
+								Examples: []v1alpha1.FederationDomainTransformsExample{
+									{Username: "foo"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, createErr := fdClient.Create(ctx, tt.fd, metav1.CreateOptions{})
+
+			t.Cleanup(func() {
+				// Delete it if it exists.
+				delErr := fdClient.Delete(ctx, tt.fd.Name, metav1.DeleteOptions{})
+				if !k8serrors.IsNotFound(delErr) {
+					require.NoError(t, delErr)
+				}
+			})
+
+			if tt.wantErr == "" {
+				require.NoError(t, createErr)
+			} else {
+				require.EqualError(t, createErr, tt.wantErr)
+			}
 		})
 	}
 }
@@ -256,10 +908,6 @@ func allSuccessfulFederationDomainConditions(federationDomainSpec v1alpha1.Feder
 			Type: "Ready", Status: "True", Reason: "Success",
 			Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
 				"the discovery endpoint is %s/.well-known/openid-configuration", federationDomainSpec.Issuer),
-		},
-		{
-			Type: "TransformsConstantsNamesUnique", Status: "True", Reason: "Success",
-			Message: "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
 		},
 		{
 			Type: "TransformsExamplesPassed", Status: "True", Reason: "Success",

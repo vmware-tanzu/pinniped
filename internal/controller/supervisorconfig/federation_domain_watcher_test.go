@@ -400,28 +400,6 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyConstNamesUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
-			Type:               "TransformsConstantsNamesUnique",
-			Status:             "True",
-			ObservedGeneration: observedGeneration,
-			LastTransitionTime: time,
-			Reason:             "Success",
-			Message:            "the names specified by .spec.identityProviders[].transforms.constants[].name are unique",
-		}
-	}
-
-	sadConstNamesUniqueCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
-			Type:               "TransformsConstantsNamesUnique",
-			Status:             "False",
-			ObservedGeneration: observedGeneration,
-			LastTransitionTime: time,
-			Reason:             "DuplicateConstantsNames",
-			Message:            errorMessages,
-		}
-	}
-
 	happyTransformationExpressionsCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
 		return configv1alpha1.Condition{
 			Type:               "TransformsExpressionsValid",
@@ -537,7 +515,6 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		return sortConditionsByType([]configv1alpha1.Condition{
 			happyTransformationExamplesCondition(frozenMetav1Now, 123),
 			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
-			happyConstNamesUniqueCondition(frozenMetav1Now, 123),
 			happyKindCondition(frozenMetav1Now, 123),
 			happyAPIGroupSuffixCondition(frozenMetav1Now, 123),
 			happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
@@ -1342,55 +1319,6 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			},
 		},
 		{
-			name: "the federation domain has duplicate transformation const names",
-			inputObjects: []runtime.Object{
-				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
-						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
-							{
-								DisplayName: "name1",
-								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
-									Kind:     "OIDCIdentityProvider",
-									Name:     oidcIdentityProvider.Name,
-								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Constants: []configv1alpha1.FederationDomainTransformsConstant{
-										{Name: "duplicate1", Type: "string", StringValue: "abc"},
-										{Name: "duplicate1", Type: "stringList", StringListValue: []string{"def"}},
-										{Name: "duplicate1", Type: "string", StringValue: "efg"},
-										{Name: "duplicate2", Type: "string", StringValue: "123"},
-										{Name: "duplicate2", Type: "string", StringValue: "456"},
-										{Name: "uniqueName", Type: "string", StringValue: "hij"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
-				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
-						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					},
-					configv1alpha1.FederationDomainPhaseError,
-					replaceConditions(
-						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
-							sadConstNamesUniqueCondition(
-								`the names specified by .spec.identityProviders[0].transforms.constants[].name contain duplicates: "duplicate1", "duplicate2"`,
-								frozenMetav1Now, 123),
-							sadReadyCondition(frozenMetav1Now, 123),
-						}),
-				),
-			},
-		},
-		{
 			name: "the federation domain has transformation expressions which don't compile",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
@@ -1707,7 +1635,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 								Transforms: configv1alpha1.FederationDomainTransforms{
 									Constants: []configv1alpha1.FederationDomainTransformsConstant{
 										{Name: "foo", Type: "string", StringValue: "bar"},
-										{Name: "foo", Type: "string", StringValue: "baz"},
+										{Name: "bar", Type: "string", StringValue: "baz"},
 									},
 									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username + ":suffix"`},
@@ -1742,7 +1670,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 								Transforms: configv1alpha1.FederationDomainTransforms{
 									Constants: []configv1alpha1.FederationDomainTransformsConstant{
 										{Name: "foo", Type: "string", StringValue: "bar"},
-										{Name: "foo", Type: "string", StringValue: "baz"},
+										{Name: "bar", Type: "string", StringValue: "baz"},
 									},
 									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username + ":suffix"`},
@@ -1821,11 +1749,6 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					replaceConditions(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
 						[]configv1alpha1.Condition{
-							sadConstNamesUniqueCondition(here.Doc(
-								`the names specified by .spec.identityProviders[0].transforms.constants[].name contain duplicates: "foo"
-
-								 the names specified by .spec.identityProviders[1].transforms.constants[].name contain duplicates: "foo"`,
-							), frozenMetav1Now, 123),
 							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(

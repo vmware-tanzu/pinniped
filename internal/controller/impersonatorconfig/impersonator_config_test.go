@@ -267,7 +267,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const clusterIPServiceName = "some-cluster-ip-resource-name"
 		const internallyGeneratedTLSServingCertSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
 		const internallyGeneratedTLSServingCASecretName = "some-ca-secret-name"
-		const mTLSClientCertCASecretName = "some-ca-signer-name"
+		const mTLSClientCertCASecretName = "some-ca-signer-name" //nolint:gosec // this is not a credential
 		const localhostIP = "127.0.0.1"
 		const httpsPort = ":443"
 		const fakeServerResponseBody = "hello, world!"
@@ -1346,7 +1346,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 			})
-
 		})
 
 		when("the configuration is auto mode", func() {

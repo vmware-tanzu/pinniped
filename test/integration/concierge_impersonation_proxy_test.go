@@ -37,6 +37,7 @@ import (
 	certificatesv1 "k8s.io/api/certificates/v1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,6 +66,7 @@ import (
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
@@ -1774,6 +1776,84 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			"access as user",
 			testlib.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, client),
 		)
+	})
+
+	t.Run("using externally provided TLS serving cert", func(t *testing.T) {
+		var externallyProvidedCA *certauthority.CA
+		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
+		require.NoError(t, err)
+
+		var externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM []byte
+		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
+		require.NoError(t, err)
+
+		externallyProvidedTLSServingCertSecretName := "external-tls-cert-secret-name" //nolint:gosec // this is not a credential
+		externallyProvidedTLSServingCertSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      externallyProvidedTLSServingCertSecretName,
+				Namespace: env.ConciergeNamespace,
+			},
+			Type: corev1.SecretTypeTLS,
+			Data: map[string][]byte{
+				v1.TLSCertKey:       externallyProvidedTLSServingCertPEM,
+				v1.TLSPrivateKeyKey: externallyProvidedTLSServingKeyPEM,
+			},
+		}
+
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Create(ctx, externallyProvidedTLSServingCertSecret, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Delete(ctx, externallyProvidedTLSServingCertSecretName, metav1.DeleteOptions{})
+			require.NoError(t, err)
+		})
+
+		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+				ExternalEndpoint: proxyServiceEndpoint,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				},
+				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
+					SecretName:               externallyProvidedTLSServingCertSecretName,
+				},
+			},
+		})
+
+		// Wait for the CredentialIssuer's impersonation proxy frontend strategy to be updated with the right CA bundle
+		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, impersonationProxyCACertPEM = performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+			return bytes.Equal(impersonationProxyCACertPEM, externallyProvidedCA.Bundle()), nil
+		}, 2*time.Minute, 500*time.Millisecond)
+
+		// Do a login via performImpersonatorDiscovery
+		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
+			return bytes.Equal(newImpersonationProxyCACertPEM, externallyProvidedCA.Bundle()), err
+		}, 2*time.Minute, 500*time.Millisecond)
+
+		// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
+		// internally generated TLS serving cert derived from the original CA.
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+				ExternalEndpoint: proxyServiceEndpoint,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				},
+			},
+		})
+
+		// Wait for the CredentialIssuer's impersonation proxy frontend strategy to be updated to the original CA bundle
+		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, impersonationProxyCACertPEM = performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+			return bytes.Equal(impersonationProxyCACertPEM, originalInternallyGeneratedCAPEM), nil
+		}, 2*time.Minute, 500*time.Millisecond)
 	})
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {

@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/pointer"
 
@@ -163,6 +164,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -172,6 +174,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -246,6 +249,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -255,6 +259,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
 		})
 
@@ -331,6 +336,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -341,6 +347,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -452,6 +459,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -462,6 +470,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -580,6 +589,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -591,6 +601,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -650,6 +661,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -667,6 +679,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -723,6 +736,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -730,6 +744,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -779,6 +794,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -786,6 +802,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
 		})
 
@@ -839,6 +856,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -846,6 +864,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -907,6 +926,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -914,6 +934,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -963,6 +984,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -970,6 +992,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1033,6 +1056,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1043,6 +1067,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1085,6 +1110,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1095,6 +1121,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1137,6 +1164,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1147,6 +1175,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1334,6 +1363,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		ldapKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1341,6 +1371,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--upstream-identity-provider-name", ldapIDPDisplayName,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
@@ -1352,6 +1383,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--upstream-identity-provider-name", oidcIDPDisplayName,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
@@ -1417,6 +1449,88 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+
+		// Update the policies of both IDPs on the FederationDomain to reject the expected upstream usernames during authentication.
+		// Remove the examples since we are changing the transforms.
+		_, err = federationDomainsClient.Patch(testCtx, gotFederationDomain.Name, types.JSONPatchType,
+			[]byte(here.Doc(
+				`[
+					{
+					  "op": "replace",
+					  "path": "/spec/identityProviders/0/transforms/expressions/0",
+					  "value": {
+						"type": "policy/v1",
+						"expression": "username != strConst.allowedUser",
+						"message": "only special LDAP users allowed"
+					  }
+					},
+					{
+					  "op": "replace",
+					  "path": "/spec/identityProviders/1/transforms/expressions/0",
+					  "value": {
+						"type": "policy/v1",
+						"expression": "username != strConst.allowedUser",
+						"message": "only special OIDC users allowed"
+					  }
+					},
+					{
+					  "op": "remove",
+					  "path": "/spec/identityProviders/0/transforms/examples"
+					},
+					{
+					  "op": "remove",
+					  "path": "/spec/identityProviders/1/transforms/examples"
+					}
+				 ]`,
+			)),
+			metav1.PatchOptions{},
+		)
+		require.NoError(t, err)
+
+		// Wait for the status conditions to have observed the current spec generation so we can be sure that the
+		// controller has observed our latest update.
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			fd, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			t.Log("saw FederationDomain", fd)
+			requireEventually.Equal(fd.Generation, fd.Status.Conditions[0].ObservedGeneration)
+		}, 20*time.Second, 250*time.Millisecond)
+		// The FederationDomain should be valid after the above update.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Log out so we can try fresh logins again.
+		require.NoError(t, os.Remove(credentialCachePath))
+		require.NoError(t, os.Remove(sessionCachePath))
+
+		// Policies don't impact the kubeconfig files, so we can reuse the existing kubeconfig files.
+		// Try to log again, and this time expect to be rejected by the configured policies.
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
+		t.Log("starting second LDAP auth via kubectl")
+		kubectlCmd = exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err = pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUpstreamLDAPUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ = io.ReadAll(ptyFile)
+		t.Log("kubectl command output:\n", string(kubectlOutputBytes))
+		require.Contains(t, string(kubectlOutputBytes),
+			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
+				`The resource owner or authorization server denied the request. `+
+				`Reason: configured identity policy rejected this authentication: only special LDAP users allowed.`)
+		require.Contains(t, string(kubectlOutputBytes), "pinniped failed with exit code 1")
 	})
 }
 

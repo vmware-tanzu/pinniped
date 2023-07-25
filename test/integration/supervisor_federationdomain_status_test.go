@@ -567,8 +567,15 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 			fd: &v1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
 				Spec: v1alpha1.FederationDomainSpec{
-					Issuer:            "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{{DisplayName: ""}},
+					Issuer: "https://example.com",
+					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: "",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
+						},
+					},
 				},
 			},
 			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
@@ -585,6 +592,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "notUnique", Type: "string", StringValue: "foo"},
@@ -608,6 +618,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "", Type: "string"},
@@ -631,6 +644,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "12345678901234567890123456789012345678901234567890123456789012345", Type: "string"},
@@ -653,6 +669,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "cannot have spaces", Type: "string"},
@@ -684,6 +703,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "a", Type: "this is invalid"},
@@ -709,6 +731,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Expressions: []v1alpha1.FederationDomainTransformsExpression{
 									{Type: "this is invalid", Expression: "foo"},
@@ -735,6 +760,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Expressions: []v1alpha1.FederationDomainTransformsExpression{
 									{Type: "username/v1", Expression: ""},
@@ -758,6 +786,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Examples: []v1alpha1.FederationDomainTransformsExample{
 									{Username: ""},
@@ -789,7 +820,12 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 				Spec: v1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
-						{DisplayName: "foo"},
+						{
+							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
+						},
 					},
 				},
 			},
@@ -803,6 +839,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: pointer.String("required in older versions of Kubernetes for each item in the identityProviders slice"),
+							},
 							Transforms: v1alpha1.FederationDomainTransforms{
 								Constants: []v1alpha1.FederationDomainTransformsConstant{
 									{Name: "foo", Type: "string"},

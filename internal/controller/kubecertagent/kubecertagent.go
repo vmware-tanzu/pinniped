@@ -548,7 +548,8 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 								},
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("32Mi"),
-									corev1.ResourceCPU:    resource.MustParse("20m"),
+									// Must be explicitly 0 (not unset) to avoid problem described in https://github.com/vmware-tanzu/pinniped/issues/1507.
+									corev1.ResourceCPU: resource.MustParse("0"),
 								},
 							},
 						},

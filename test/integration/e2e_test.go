@@ -1507,6 +1507,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
 		t.Log("starting second LDAP auth via kubectl")
+		timeoutCtx, cleanupTimeoutCtx = context.WithTimeout(testCtx, 10*time.Second)
+		t.Cleanup(cleanupTimeoutCtx)
 		kubectlCmd = exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err = pty.Start(kubectlCmd)

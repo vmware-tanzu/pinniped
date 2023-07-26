@@ -6,6 +6,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,11 +14,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -188,6 +191,8 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 		{
 			name: "spec with explicit identity providers and lots of validation errors",
 			run: func(t *testing.T) {
+				federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+
 				oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
@@ -334,6 +339,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						},
 					},
 				}, v1alpha1.FederationDomainPhaseError)
+
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]v1alpha1.Condition{
@@ -350,8 +356,8 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 							)},
 						{
 							Type: "IdentityProvidersObjectRefAPIGroupSuffixValid", Status: "False", Reason: "APIGroupUnrecognized",
-							Message: `some API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized ` +
-								`(should be "idp.supervisor.pinniped.dev"): "this is the wrong api group"`,
+							Message: fmt.Sprintf(`some API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized `+
+								`(should be "idp.supervisor.%s"): "this is the wrong api group"`, env.APIGroupSuffix),
 						},
 						{
 							Type: "IdentityProvidersObjectRefKindValid", Status: "False", Reason: "KindUnrecognized",
@@ -427,50 +433,56 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				))
 
 				// Updating the FederationDomain to fix some of the problems should make some of the errors go away.
-				federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
-				fd, err := federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				fd.Spec.IdentityProviders[0] = v1alpha1.FederationDomainIdentityProvider{
-					// Fix the display name.
-					DisplayName: "now made unique",
-					// Fix the objectRef.
-					ObjectRef: corev1.TypedLocalObjectReference{
-						APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
-						Kind:     "OIDCIdentityProvider",
-						Name:     oidcIdentityProvider.Name,
-					},
-					Transforms: v1alpha1.FederationDomainTransforms{
-						Constants: []v1alpha1.FederationDomainTransformsConstant{
-							{Name: "foo", Type: "string", StringValue: "bar"},
+				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					gotFD, err := federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
+					require.NoError(t, err)
+
+					gotFD.Spec.IdentityProviders[0] = v1alpha1.FederationDomainIdentityProvider{
+						// Fix the display name.
+						DisplayName: "now made unique",
+						// Fix the objectRef.
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "OIDCIdentityProvider",
+							Name:     oidcIdentityProvider.Name,
 						},
-						Expressions: []v1alpha1.FederationDomainTransformsExpression{
-							// Fix the compile errors.
-							{Type: "username/v1", Expression: `"pre:" + username`},
-						},
-						Examples: []v1alpha1.FederationDomainTransformsExample{
-							{ // this example should fail because it expects both the wrong username and groups
-								Username: "ryan",
-								Groups:   []string{"b", "a"},
-								Expects: v1alpha1.FederationDomainTransformsExampleExpects{
-									Username: "wrong",
-									Groups:   []string{},
-									Rejected: false,
+						Transforms: v1alpha1.FederationDomainTransforms{
+							Constants: []v1alpha1.FederationDomainTransformsConstant{
+								{Name: "foo", Type: "string", StringValue: "bar"},
+							},
+							Expressions: []v1alpha1.FederationDomainTransformsExpression{
+								// Fix the compile errors.
+								{Type: "username/v1", Expression: `"pre:" + username`},
+							},
+							Examples: []v1alpha1.FederationDomainTransformsExample{
+								{ // this example should fail because it expects both the wrong username and groups
+									Username: "ryan",
+									Groups:   []string{"b", "a"},
+									Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Username: "wrong",
+										Groups:   []string{},
+										Rejected: false,
+									},
 								},
 							},
 						},
-					},
-				}
-				fd.Spec.IdentityProviders[2].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
-					{ // this example should pass
-						Username: "other",
-						Expects: v1alpha1.FederationDomainTransformsExampleExpects{
-							Rejected: true,
-							Message:  "only special users allowed",
+					}
+
+					gotFD.Spec.IdentityProviders[2].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+						{ // this example should pass
+							Username: "other",
+							Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+								Rejected: true,
+								Message:  "only special users allowed",
+							},
 						},
-					},
-				}
-				fd, err = federationDomainsClient.Update(ctx, fd, metav1.UpdateOptions{})
+					}
+
+					_, updateErr := federationDomainsClient.Update(ctx, gotFD, metav1.UpdateOptions{})
+					return updateErr
+				})
 				require.NoError(t, err)
+
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]v1alpha1.Condition{
@@ -503,25 +515,32 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				))
 
 				// Updating the FederationDomain to fix the rest of the problems should make all the errors go away.
-				fd, err = federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				fd.Spec.IdentityProviders[2].ObjectRef = corev1.TypedLocalObjectReference{
-					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
-					Kind:     "OIDCIdentityProvider",
-					Name:     oidcIdentityProvider.Name,
-				}
-				fd.Spec.IdentityProviders[0].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
-					{ // this example should pass
-						Username: "ryan",
-						Groups:   []string{"b", "a"},
-						Expects: v1alpha1.FederationDomainTransformsExampleExpects{
-							Username: "pre:ryan",
-							Groups:   []string{"a", "b"},
+				err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					gotFD, err := federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
+					require.NoError(t, err)
+
+					gotFD.Spec.IdentityProviders[2].ObjectRef = corev1.TypedLocalObjectReference{
+						APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+						Kind:     "OIDCIdentityProvider",
+						Name:     oidcIdentityProvider.Name,
+					}
+
+					gotFD.Spec.IdentityProviders[0].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+						{ // this example should pass
+							Username: "ryan",
+							Groups:   []string{"b", "a"},
+							Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+								Username: "pre:ryan",
+								Groups:   []string{"a", "b"},
+							},
 						},
-					},
-				}
-				fd, err = federationDomainsClient.Update(ctx, fd, metav1.UpdateOptions{})
+					}
+
+					_, updateErr := federationDomainsClient.Update(ctx, gotFD, metav1.UpdateOptions{})
+					return updateErr
+				})
 				require.NoError(t, err)
+
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseReady)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, allSuccessfulFederationDomainConditions(fd.Spec))
 			},
@@ -543,12 +562,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
+	adminClient := testlib.NewKubernetesClientset(t)
+	usingOldKubeVersionInCluster := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 23)
+	usingReallyOldKubeVersionInCluster := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 19)
+
 	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
 
 	tests := []struct {
-		name    string
-		fd      *v1alpha1.FederationDomain
-		wantErr string
+		name                 string
+		fd                   *v1alpha1.FederationDomain
+		wantErr              string
+		wantOldKubeErr       string
+		wantReallyOldKubeErr string
 	}{
 		{
 			name: "issuer cannot be empty",
@@ -605,6 +630,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
+			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
+				env.APIGroupSuffix, objectMeta.Name),
 			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
 				env.APIGroupSuffix, objectMeta.Name),
@@ -656,6 +684,14 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
+			wantReallyOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders.transforms.constants.name: Invalid value: "": `+
+				`spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
+			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": `+
+				`spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
+				env.APIGroupSuffix, objectMeta.Name),
 			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
 				env.APIGroupSuffix, objectMeta.Name),
@@ -685,6 +721,14 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
+			wantReallyOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders.transforms.constants.name: Invalid value: "": `+
+				`spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
+				env.APIGroupSuffix, objectMeta.Name),
+			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": `+
+				`spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
+				env.APIGroupSuffix, objectMeta.Name),
 			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`[spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": `+
 				`spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', `+
@@ -875,10 +919,32 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 				}
 			})
 
-			if tt.wantErr == "" {
+			if tt.wantErr == "" && tt.wantOldKubeErr == "" && tt.wantReallyOldKubeErr == "" {
 				require.NoError(t, createErr)
 			} else {
-				require.EqualError(t, createErr, tt.wantErr)
+				wantErr := tt.wantErr
+				if usingOldKubeVersionInCluster || usingReallyOldKubeVersionInCluster {
+					// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
+					// so remove the indices from the expected messages when running against an old version of Kube.
+					// For the above tests, it should be enough to assume that there will only be indices up to 10.
+					// This is useful when the only difference in the message between old and new is the missing indices.
+					// Otherwise, use wantOldKubeErr to say what the expected message should be for old versions.
+					for i := 0; i < 10; i++ {
+						wantErr = strings.ReplaceAll(wantErr, fmt.Sprintf("[%d]", i), "")
+					}
+				}
+				if usingOldKubeVersionInCluster && tt.wantOldKubeErr != "" {
+					// Sometimes there are other difference in older Kubernetes messages, so also allow exact
+					// expectation strings for those cases in wantOldKubeErr. When provided, use it on old Kube clusters.
+					wantErr = tt.wantOldKubeErr
+				}
+				if usingReallyOldKubeVersionInCluster && tt.wantReallyOldKubeErr != "" {
+					// Sometimes there are other difference in really old Kubernetes messages, so also allow exact
+					// expectation strings for those cases in wantOldKubeErr. When provided, use it on
+					// really old Kube clusters.
+					wantErr = tt.wantReallyOldKubeErr
+				}
+				require.EqualError(t, createErr, wantErr)
 			}
 		})
 	}

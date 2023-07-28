@@ -26,6 +26,7 @@ import (
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -58,6 +59,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	skipActiveDirectoryTests := func(t *testing.T) {
 		t.Helper()
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
+	}
+
+	addPrefixToEach := func(prefix string, addToEach []string) []string {
+		result := make([]string, len(addToEach))
+		for i, s := range addToEach {
+			result[i] = fmt.Sprintf("%s%s", prefix, s)
+		}
+		return result
 	}
 
 	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {
@@ -166,8 +175,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	// OIDC provider in ways that the CLI might not use. Similar tests exist using the CLI in e2e_test.go.
 	//
 	// Each of these tests perform the following flow:
-	// 1. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
-	// 2. Configure an IDP CR.
+	// 1. Configure an IDP CR.
+	// 2. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
 	// 3. Call the authorization endpoint and log in as a specific user.
 	//    Note that these tests do not use form_post response type (which is tested by e2e_test.go).
 	// 4. Listen on a local callback server for the authorization redirect, and assert that it was success or failure.
@@ -189,6 +198,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// This required function should configure an IDP CR. It should also wait for it to be ready and schedule
 		// its cleanup. Return the name of the IDP CR.
 		createIDP func(t *testing.T) string
+
+		// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
+		// Also return the displayName of the IDP that should be used during authentication.
+		// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
+		federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
 
 		// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
 		// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
@@ -297,8 +311,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// Even if we update this group to the some names that did not come from the OIDC server,
-				// we expect that it will return to the real groups from the OIDC server after we refresh.
+				// Even if we update the groups to some names that did not come from the OIDC server,
+				// we expect that it will revert to the real groups from the OIDC server after we refresh.
 				// However if there are no expected groups then they will not update, so we should skip this.
 				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
 					initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
@@ -1836,6 +1850,138 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			requestAuthorization:      requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
 			wantAuthcodeExchangeError: `oauth2: "invalid_client" "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."`,
 		},
+		{
+			name:      "oidc with custom username and groups claim settings with identity transformations",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my oidc idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "OIDCIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamOIDC.Username),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamOIDC.Username) + "$"
+			},
+			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups),
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update the groups to some names that did not come from the OIDC server,
+				// we expect that it will revert to the real groups from the OIDC server after we refresh.
+				// However if there are no expected groups then they will not update, so we should skip this.
+				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
+					initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+					sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+					sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				}
+				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+		},
+		{
+			name:      "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS with identity transformations",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my ldap idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "LDAPIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
+				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
+					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
+					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
+			) + "$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute and then transformed
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
+		},
 	}
 
 	for _, test := range tests {
@@ -1846,6 +1992,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			testSupervisorLogin(
 				t,
 				tt.createIDP,
+				tt.federationDomainIDPs,
 				tt.requestAuthorization,
 				tt.editRefreshSessionDataWithoutBreaking,
 				tt.breakRefreshSessionData,
@@ -2000,6 +2147,7 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
+	federationDomainIDPs func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string),
 	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
 	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
@@ -2076,22 +2224,27 @@ func testSupervisorLogin(
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 
-	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		configv1alpha1.FederationDomainSpec{
-			Issuer: issuerURL.String(),
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
-		},
-		// This is a legacy FederationDomain (does not explicitly list any IDPs) and there is no IDP yet,
-		// so it should not be ready yet.
-		configv1alpha1.FederationDomainPhaseError,
-	)
-
 	// Create upstream IDP and wait for it to become ready.
 	idpName := createIDP(t)
 
-	// Now that both the FederationDomain and the IDP are created, the FederationDomain should be ready.
-	testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+	// Determine if and how we should set spec.identityProviders for the FederationDomain.
+	var fdIDPSpec []configv1alpha1.FederationDomainIdentityProvider
+	useIDPDisplayName := ""
+	if federationDomainIDPs != nil {
+		fdIDPSpec, useIDPDisplayName = federationDomainIDPs(t, idpName)
+	}
+
+	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
+	downstream := testlib.CreateTestFederationDomain(ctx, t,
+		configv1alpha1.FederationDomainSpec{
+			Issuer:            issuerURL.String(),
+			TLS:               &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			IdentityProviders: fdIDPSpec,
+		},
+		// The IDP CR already exists, so even for legacy FederationDomains which do not explicitly list
+		// the IDPs in the spec, the FederationDomain should be ready.
+		configv1alpha1.FederationDomainPhaseReady,
+	)
 
 	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
 	// the `/jwks.json` endpoint to succeed, because there is no point in proceeding and eventually
@@ -2171,12 +2324,15 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 	pkceParam, err := pkce.Generate()
 	require.NoError(t, err)
-	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(
-		stateParam.String(),
+	authorizeRequestParams := []oauth2.AuthCodeOption{
 		nonceParam.Param(),
 		pkceParam.Challenge(),
 		pkceParam.Method(),
-	)
+	}
+	if useIDPDisplayName != "" {
+		authorizeRequestParams = append(authorizeRequestParams, oauth2.SetAuthURLParam("pinniped_idp_name", useIDPDisplayName))
+	}
+	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(stateParam.String(), authorizeRequestParams...)
 
 	// Perform parameterized auth code acquisition.
 	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)

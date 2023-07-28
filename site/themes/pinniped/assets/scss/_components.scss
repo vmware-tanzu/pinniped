@@ -81,7 +81,7 @@
 }
 
 .use-cases {
-    .grid { 
+    .grid {
         grid-template-columns: 220px 1fr;
         margin-bottom: 30px;
         grid-template-areas:
@@ -155,7 +155,7 @@
         margin: 40px 0px;
     }
     .bio {
-        display: grid;  
+        display: grid;
         grid-template-columns: 120px 1fr;
         column-gap: 20px;
         .info {
@@ -431,6 +431,10 @@
                 align-items: center;
                 justify-content: center;
                 min-height: 140px;
+                img {
+                    max-width: 100%;
+                    height: auto;
+                }
             }
             .content {
                 padding: 0px 20px 20px 20px;

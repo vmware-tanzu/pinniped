@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package supervisor contains functionality to load/store Config's from/to
@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
@@ -109,7 +109,7 @@ func maybeSetEndpointDefault(endpoint **Endpoint, defaultEndpoint Endpoint) {
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = pointer.String(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = ptr.To(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
@@ -119,7 +119,7 @@ func validateAPIGroupSuffix(apiGroupSuffix string) error {
 
 func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64(aggregatedAPIServerPortDefault)
+		*port = ptr.To[int64](aggregatedAPIServerPortDefault)
 	}
 }
 

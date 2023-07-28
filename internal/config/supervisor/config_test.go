@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
@@ -45,7 +45,7 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("some.suffix.com"),
+				APIGroupSuffix: ptr.To("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -68,7 +68,7 @@ func TestFromPath(t *testing.T) {
 				Log: plog.LogSpec{
 					Level: plog.LevelTrace,
 				},
-				AggregatedAPIServerPort: pointer.Int64(12345),
+				AggregatedAPIServerPort: ptr.To[int64](12345),
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("some.suffix.com"),
+				APIGroupSuffix: ptr.To("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -118,7 +118,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelInfo,
 					Format: plog.FormatText,
 				},
-				AggregatedAPIServerPort: pointer.Int64(12345),
+				AggregatedAPIServerPort: ptr.To[int64](12345),
 			},
 		},
 		{
@@ -145,7 +145,7 @@ func TestFromPath(t *testing.T) {
 				  format: text
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("some.suffix.com"),
+				APIGroupSuffix: ptr.To("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -169,7 +169,7 @@ func TestFromPath(t *testing.T) {
 					Level:  plog.LevelTrace,
 					Format: plog.FormatText,
 				},
-				AggregatedAPIServerPort: pointer.Int64(10250),
+				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
 		{
@@ -192,7 +192,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("pinniped.dev"),
+				APIGroupSuffix: ptr.To("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -207,7 +207,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       false,
-				AggregatedAPIServerPort: pointer.Int64(10250),
+				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
 		{
@@ -322,7 +322,7 @@ func TestFromPath(t *testing.T) {
 				insecureAcceptExternalUnencryptedHttpRequests: true
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("pinniped.dev"),
+				APIGroupSuffix: ptr.To("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -338,7 +338,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: pointer.Int64(10250),
+				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
 		{
@@ -354,7 +354,7 @@ func TestFromPath(t *testing.T) {
 				insecureAcceptExternalUnencryptedHttpRequests: "true"
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: pointer.String("pinniped.dev"),
+				APIGroupSuffix: ptr.To("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
@@ -370,7 +370,7 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: pointer.Int64(10250),
+				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
 		{

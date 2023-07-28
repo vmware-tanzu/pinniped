@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/kubeclient"
@@ -205,7 +205,7 @@ func waitForIdentity(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 		}
 		out = lease
 		t.Logf("lease %s/%s - current leader identity: %s, valid leader identities: %s",
-			namespace.Name, leaseName, pointer.StringDeref(lease.Spec.HolderIdentity, "<nil>"), identities.List())
+			namespace.Name, leaseName, ptr.Deref(lease.Spec.HolderIdentity, "<nil>"), identities.List())
 		return lease.Spec.HolderIdentity != nil && identities.Has(*lease.Spec.HolderIdentity), nil
 	}, 10*time.Minute, 10*time.Second)
 
@@ -276,7 +276,7 @@ func forceTransition(ctx context.Context, t *testing.T, namespace *corev1.Namesp
 		startTime = *startLease.Spec.AcquireTime
 
 		startLease = startLease.DeepCopy()
-		startLease.Spec.HolderIdentity = pointer.String("some-other-client-" + rand.String(5))
+		startLease.Spec.HolderIdentity = ptr.To("some-other-client-" + rand.String(5))
 
 		_, err := pickCurrentLeaderClient(ctx, t, namespace, leaseName, clients).
 			Kubernetes.CoordinationV1().Leases(namespace.Name).Update(ctx, startLease, metav1.UpdateOptions{})

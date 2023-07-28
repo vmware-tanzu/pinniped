@@ -22,7 +22,7 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/issuer"
@@ -387,7 +387,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	require.Equal(t, response, &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: nil,
-			Message:    pointer.String("authentication failed"),
+			Message:    ptr.To("authentication failed"),
 		},
 	})
 }

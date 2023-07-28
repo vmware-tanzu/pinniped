@@ -16,7 +16,7 @@ import (
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // see test/integration/leaderelection_test.go for the bulk of the testing related to this code
@@ -31,7 +31,7 @@ func Test_releaseLock_Update(t *testing.T) {
 			f: func(t *testing.T, internalClient *kubefake.Clientset, isLeader *isLeaderTracker, cancel context.CancelFunc) {
 				internalClient.PrependReactor("update", "*", func(action kubetesting.Action) (handled bool, ret runtime.Object, err error) {
 					lease := action.(kubetesting.UpdateAction).GetObject().(*coordinationv1.Lease)
-					if len(pointer.StringDeref(lease.Spec.HolderIdentity, "")) == 0 {
+					if len(ptr.Deref(lease.Spec.HolderIdentity, "")) == 0 {
 						require.False(t, isLeader.canWrite(), "client must release in-memory leader status before Kube API call")
 					}
 					return true, nil, errors.New("cannot renew")

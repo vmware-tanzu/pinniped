@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	configv1alpha1informers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/config/v1alpha1"
@@ -521,14 +521,14 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 			Labels:    c.cfg.Labels,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32(1),
+			Replicas: ptr.To[int32](1),
 			Selector: metav1.SetAsLabelSelector(c.cfg.agentPodSelectorLabels()),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: c.cfg.agentPodLabels(),
 				},
 				Spec: corev1.PodSpec{
-					TerminationGracePeriodSeconds: pointer.Int64(0),
+					TerminationGracePeriodSeconds: ptr.To[int64](0),
 					ImagePullSecrets:              imagePullSecrets,
 					Containers: []corev1.Container{
 						{
@@ -557,15 +557,15 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 					Volumes:                      controllerManagerPod.Spec.Volumes,
 					RestartPolicy:                corev1.RestartPolicyAlways,
 					NodeSelector:                 controllerManagerPod.Spec.NodeSelector,
-					AutomountServiceAccountToken: pointer.Bool(false),
+					AutomountServiceAccountToken: ptr.To(false),
 					ServiceAccountName:           c.cfg.ServiceAccountName,
 					NodeName:                     controllerManagerPod.Spec.NodeName,
 					Tolerations:                  controllerManagerPod.Spec.Tolerations,
 					// We need to run the agent pod as root since the file permissions
 					// on the cluster keypair usually restricts access to only root.
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsUser:  pointer.Int64(0),
-						RunAsGroup: pointer.Int64(0),
+						RunAsUser:  ptr.To[int64](0),
+						RunAsGroup: ptr.To[int64](0),
 					},
 					HostNetwork: controllerManagerPod.Spec.HostNetwork,
 				},

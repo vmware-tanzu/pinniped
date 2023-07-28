@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -1283,7 +1283,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			{
 				DisplayName: ldapIDPDisplayName,
 				ObjectRef: corev1.TypedLocalObjectReference{
-					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 					Kind:     "LDAPIdentityProvider",
 					Name:     createdLDAPProvider.Name,
 				},
@@ -1320,7 +1320,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			{
 				DisplayName: oidcIDPDisplayName,
 				ObjectRef: corev1.TypedLocalObjectReference{
-					APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 					Kind:     "OIDCIdentityProvider",
 					Name:     createdOIDCProvider.Name,
 				},

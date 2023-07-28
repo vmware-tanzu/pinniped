@@ -26,7 +26,7 @@ import (
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -1870,7 +1870,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					{
 						DisplayName: displayName,
 						ObjectRef: v1.TypedLocalObjectReference{
-							APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "OIDCIdentityProvider",
 							Name:     idpName,
 						},
@@ -1927,7 +1927,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					{
 						DisplayName: displayName,
 						ObjectRef: v1.TypedLocalObjectReference{
-							APIGroup: pointer.String("idp.supervisor." + env.APIGroupSuffix),
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "LDAPIdentityProvider",
 							Name:     idpName,
 						},

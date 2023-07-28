@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -993,7 +993,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "cant-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     "cant-find-me-name",
 								},
@@ -1001,7 +1001,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "cant-find-me-either",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     "cant-find-me-either-name",
 								},
@@ -1009,7 +1009,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "cant-find-me-still",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "ActiveDirectoryIdentityProvider",
 									Name:     "cant-find-me-still-name",
 								},
@@ -1054,7 +1054,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1062,7 +1062,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "can-find-me-too",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1070,7 +1070,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "can-find-me-three",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "ActiveDirectoryIdentityProvider",
 									Name:     adIdentityProvider.Name,
 								},
@@ -1123,7 +1123,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "duplicate1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1131,7 +1131,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "duplicate1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1139,7 +1139,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "duplicate1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1147,7 +1147,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "unique",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "ActiveDirectoryIdentityProvider",
 									Name:     adIdentityProvider.Name,
 								},
@@ -1155,7 +1155,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "duplicate2",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1163,7 +1163,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "duplicate2",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "ActiveDirectoryIdentityProvider",
 									Name:     adIdentityProvider.Name,
 								},
@@ -1202,7 +1202,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String("wrong.example.com"),
+									APIGroup: ptr.To("wrong.example.com"),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1210,7 +1210,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name2",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(""), // empty string is wrong
+									APIGroup: ptr.To(""), // empty string is wrong
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1226,7 +1226,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name4",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor), // correct
+									APIGroup: ptr.To(apiGroupSupervisor), // correct
 									Kind:     "ActiveDirectoryIdentityProvider",
 									Name:     adIdentityProvider.Name,
 								},
@@ -1272,7 +1272,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider", // correct
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1280,7 +1280,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name2",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "wrong",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1288,7 +1288,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name3",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "", // empty is also wrong
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1330,7 +1330,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1393,7 +1393,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1557,7 +1557,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1628,7 +1628,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "not unique",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     "this will not be found",
 								},
@@ -1663,7 +1663,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "not unique",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "this is wrong",
 									Name:     "foo",
 								},
@@ -1698,7 +1698,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String("this is wrong"),
+									APIGroup: ptr.To("this is wrong"),
 									Kind:     "OIDCIdentityProvider",
 									Name:     "foo",
 								},
@@ -1722,7 +1722,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1842,7 +1842,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1894,7 +1894,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "name2",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
@@ -1968,7 +1968,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
@@ -1998,7 +1998,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
-									APIGroup: pointer.String(apiGroupSupervisor),
+									APIGroup: ptr.To(apiGroupSupervisor),
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},

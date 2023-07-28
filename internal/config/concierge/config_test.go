@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
@@ -59,17 +59,17 @@ func TestFromPath(t *testing.T) {
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
-					URL: pointer.String("https://some.discovery/url"),
+					URL: ptr.To("https://some.discovery/url"),
 				},
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    pointer.Int64(3600),
-						RenewBeforeSeconds: pointer.Int64(2400),
+						DurationSeconds:    ptr.To[int64](3600),
+						RenewBeforeSeconds: ptr.To[int64](2400),
 					},
 				},
-				APIGroupSuffix:               pointer.String("some.suffix.com"),
-				AggregatedAPIServerPort:      pointer.Int64(12345),
-				ImpersonationProxyServerPort: pointer.Int64(4242),
+				APIGroupSuffix:               ptr.To("some.suffix.com"),
+				AggregatedAPIServerPort:      ptr.To[int64](12345),
+				ImpersonationProxyServerPort: ptr.To[int64](4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
@@ -86,8 +86,8 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       pointer.String("kube-cert-agent-name-prefix-"),
-					Image:            pointer.String("kube-cert-agent-image"),
+					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
+					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
 				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
@@ -135,17 +135,17 @@ func TestFromPath(t *testing.T) {
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
-					URL: pointer.String("https://some.discovery/url"),
+					URL: ptr.To("https://some.discovery/url"),
 				},
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    pointer.Int64(3600),
-						RenewBeforeSeconds: pointer.Int64(2400),
+						DurationSeconds:    ptr.To[int64](3600),
+						RenewBeforeSeconds: ptr.To[int64](2400),
 					},
 				},
-				APIGroupSuffix:               pointer.String("some.suffix.com"),
-				AggregatedAPIServerPort:      pointer.Int64(12345),
-				ImpersonationProxyServerPort: pointer.Int64(4242),
+				APIGroupSuffix:               ptr.To("some.suffix.com"),
+				AggregatedAPIServerPort:      ptr.To[int64](12345),
+				ImpersonationProxyServerPort: ptr.To[int64](4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
@@ -162,8 +162,8 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       pointer.String("kube-cert-agent-name-prefix-"),
-					Image:            pointer.String("kube-cert-agent-image"),
+					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
+					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
 				Log: plog.LogSpec{
@@ -212,17 +212,17 @@ func TestFromPath(t *testing.T) {
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
-					URL: pointer.String("https://some.discovery/url"),
+					URL: ptr.To("https://some.discovery/url"),
 				},
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    pointer.Int64(3600),
-						RenewBeforeSeconds: pointer.Int64(2400),
+						DurationSeconds:    ptr.To[int64](3600),
+						RenewBeforeSeconds: ptr.To[int64](2400),
 					},
 				},
-				APIGroupSuffix:               pointer.String("some.suffix.com"),
-				AggregatedAPIServerPort:      pointer.Int64(12345),
-				ImpersonationProxyServerPort: pointer.Int64(4242),
+				APIGroupSuffix:               ptr.To("some.suffix.com"),
+				AggregatedAPIServerPort:      ptr.To[int64](12345),
+				ImpersonationProxyServerPort: ptr.To[int64](4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
@@ -239,8 +239,8 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       pointer.String("kube-cert-agent-name-prefix-"),
-					Image:            pointer.String("kube-cert-agent-image"),
+					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
+					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
 				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
@@ -289,13 +289,13 @@ func TestFromPath(t *testing.T) {
 				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: nil,
 				},
-				APIGroupSuffix:               pointer.String("pinniped.dev"),
-				AggregatedAPIServerPort:      pointer.Int64(10250),
-				ImpersonationProxyServerPort: pointer.Int64(8444),
+				APIGroupSuffix:               ptr.To("pinniped.dev"),
+				AggregatedAPIServerPort:      ptr.To[int64](10250),
+				ImpersonationProxyServerPort: ptr.To[int64](8444),
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    pointer.Int64(60 * 60 * 24 * 365),    // about a year
-						RenewBeforeSeconds: pointer.Int64(60 * 60 * 24 * 30 * 9), // about 9 months
+						DurationSeconds:    ptr.To[int64](60 * 60 * 24 * 365),    // about a year
+						RenewBeforeSeconds: ptr.To[int64](60 * 60 * 24 * 30 * 9), // about 9 months
 					},
 				},
 				NamesConfig: NamesConfigSpec{
@@ -311,8 +311,8 @@ func TestFromPath(t *testing.T) {
 				},
 				Labels: map[string]string{},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix: pointer.String("pinniped-kube-cert-agent-"),
-					Image:      pointer.String("debian:latest"),
+					NamePrefix: ptr.To("pinniped-kube-cert-agent-"),
+					Image:      ptr.To("debian:latest"),
 				},
 			},
 		},

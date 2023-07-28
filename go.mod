@@ -50,7 +50,7 @@ require (
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kube-aggregator v0.27.4
 	k8s.io/kube-openapi v0.0.0-20230718181711-3c0fae5ee9fd
-	k8s.io/utils v0.0.0-20230711102312-30195339c3c7
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/yaml v1.3.0
 )
 

@@ -43,7 +43,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
@@ -988,7 +988,7 @@ func TestImpersonator(t *testing.T) {
 				&loginv1alpha1.TokenCredentialRequest{
 					Spec: loginv1alpha1.TokenCredentialRequestSpec{
 						Authenticator: corev1.TypedLocalObjectReference{
-							APIGroup: pointer.String("anything.pinniped.dev"),
+							APIGroup: ptr.To("anything.pinniped.dev"),
 						},
 					},
 				}, metav1.CreateOptions{})

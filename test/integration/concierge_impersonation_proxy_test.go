@@ -59,7 +59,7 @@ import (
 	"k8s.io/client-go/util/certificate/csr"
 	"k8s.io/client-go/util/keyutil"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
@@ -1370,7 +1370,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					tkr, err := impersonationProxyAnonymousClient.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().
 						Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 							Spec: loginv1alpha1.TokenCredentialRequestSpec{
-								Authenticator: corev1.TypedLocalObjectReference{APIGroup: pointer.String("anything.pinniped.dev")},
+								Authenticator: corev1.TypedLocalObjectReference{APIGroup: ptr.To("anything.pinniped.dev")},
 							},
 						}, metav1.CreateOptions{})
 					require.True(t, k8serrors.IsInvalid(err), testlib.Sdump(err))

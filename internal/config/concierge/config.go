@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
@@ -93,39 +93,39 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 
 func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 	if apiConfig.ServingCertificateConfig.DurationSeconds == nil {
-		apiConfig.ServingCertificateConfig.DurationSeconds = pointer.Int64(aboutAYear)
+		apiConfig.ServingCertificateConfig.DurationSeconds = ptr.To[int64](aboutAYear)
 	}
 
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
-		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = pointer.Int64(about9Months)
+		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = ptr.To[int64](about9Months)
 	}
 }
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = pointer.String(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = ptr.To(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
 func maybeSetAggregatedAPIServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64(aggregatedAPIServerPortDefault)
+		*port = ptr.To[int64](aggregatedAPIServerPortDefault)
 	}
 }
 
 func maybeSetImpersonationProxyServerPortDefaults(port **int64) {
 	if *port == nil {
-		*port = pointer.Int64(impersonationProxyPortDefault)
+		*port = ptr.To[int64](impersonationProxyPortDefault)
 	}
 }
 
 func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 	if cfg.NamePrefix == nil {
-		cfg.NamePrefix = pointer.String("pinniped-kube-cert-agent-")
+		cfg.NamePrefix = ptr.To("pinniped-kube-cert-agent-")
 	}
 
 	if cfg.Image == nil {
-		cfg.Image = pointer.String("debian:latest")
+		cfg.Image = ptr.To("debian:latest")
 	}
 }
 

@@ -27,7 +27,7 @@ import (
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
@@ -95,7 +95,7 @@ func TestAgentController(t *testing.T) {
 			Labels:    map[string]string{"extralabel": "labelvalue", "app": "anything"},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: pointer.Int32(1),
+			Replicas: ptr.To[int32](1),
 			Selector: metav1.SetAsLabelSelector(map[string]string{
 				"kube-cert-agent.pinniped.dev": "v3",
 			}),
@@ -133,12 +133,12 @@ func TestAgentController(t *testing.T) {
 						ImagePullPolicy: corev1.PullIfNotPresent,
 					}},
 					RestartPolicy:                 corev1.RestartPolicyAlways,
-					TerminationGracePeriodSeconds: pointer.Int64(0),
+					TerminationGracePeriodSeconds: ptr.To[int64](0),
 					ServiceAccountName:            "test-service-account-name",
-					AutomountServiceAccountToken:  pointer.Bool(false),
+					AutomountServiceAccountToken:  ptr.To(false),
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsUser:  pointer.Int64(0),
-						RunAsGroup: pointer.Int64(0),
+						RunAsUser:  ptr.To[int64](0),
+						RunAsGroup: ptr.To[int64](0),
 					},
 					ImagePullSecrets: []corev1.LocalObjectReference{{
 						Name: "pinniped-image-pull-secret",
@@ -992,7 +992,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentPod,
 				validClusterInfoConfigMap,
 			},
-			discoveryURLOverride:      pointer.String("https://overridden-server.example.com/some/path"),
+			discoveryURLOverride:      ptr.To("https://overridden-server.example.com/some/path"),
 			mocks:                     mockExecSucceeds,
 			wantDistinctErrors:        []string{""},
 			wantAgentDeployment:       healthyAgentDeployment,

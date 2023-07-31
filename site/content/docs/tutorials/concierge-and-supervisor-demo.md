@@ -408,7 +408,7 @@ The general steps required to create and configure a client in Okta are:
 3. Create a test user with an email and a password. It does not need to be a real email address for the purposes of this tutorial.
 4. Create an app in the Okta UI.
    1. For more information about creating an app in the Okta UI, see the
-      [Configure Supervisor With Okta OIDC howto doc]({{< ref "../howto/configure-supervisor-with-okta" >}}).
+      [Configure Supervisor With Okta OIDC howto doc]({{< ref "../howto/idps/configure-supervisor-with-okta" >}}).
    2. Make sure that the test user is assigned to the app in the app's "Assignments" tab.
    3. Add the FederationDomain's callback endpoint to the "Sign-in redirect URIs" list on the app in the UI.
       The callback endpoint is the FederationDomain's issuer URL plus `/callback`,

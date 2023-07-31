@@ -1,0 +1,14 @@
+---
+title: How-to Guides for Configuring IDPs
+cascade:
+  layout: docs
+menu:
+  docs:
+    name: How-to Configure IDPs
+    identifier: howto-configure-idps
+    weight: 60
+---
+
+These how-to guides show you how to install and configure Pinniped with specific identity providers:
+
+{{< docsmenu "howto-configure-idps" >}}

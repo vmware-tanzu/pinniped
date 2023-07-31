@@ -61,7 +61,7 @@ spec:
     allowPasswordGrant: false
 ```
 
-Refer to a more complete example for configuring Okta at [how to configure Okta as IDP with Supervisor]({{< ref "docs/howto/configure-supervisor-with-okta.md" >}}).
+Refer to a more complete example for configuring Okta at [how to configure Okta as IDP with Supervisor]({{< ref "docs/howto/idps/configure-supervisor-with-okta.md" >}}).
 
 Inside Okta, when you create the Application, make sure to select refresh tokens as the Grant type along with Authorization code. See below:
 

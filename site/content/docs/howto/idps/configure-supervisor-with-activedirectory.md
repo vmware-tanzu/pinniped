@@ -7,7 +7,7 @@ menu:
   docs:
     name: Configure Supervisor With Active Directory
     weight: 110
-    parent: howtos
+    parent: howto-configure-idps
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
 "upstream" identity provider to many "downstream" cluster clients.
@@ -28,7 +28,7 @@ Create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinn
 
 This ActiveDirectoryIdentityProvider uses all the default configuration options.
 The default configuration options are documented in the
-[Active Directory configuration reference]({{< ref "../reference/active-directory-configuration">}}).
+[Active Directory configuration reference]({{< ref "../../reference/active-directory-configuration">}}).
 
 ```yaml
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
@@ -160,7 +160,7 @@ spec:
 ```
 
 More information about the defaults for these configuration options can be found in
-the [Active Directory configuration reference]({{< ref "../reference/active-directory-configuration">}}).
+the [Active Directory configuration reference]({{< ref "../../reference/active-directory-configuration">}}).
 
 ## Next steps
 

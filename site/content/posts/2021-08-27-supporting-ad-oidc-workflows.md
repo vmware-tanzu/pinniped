@@ -60,7 +60,7 @@ Here’s what an example configuration looks like
    password: "YOUR_PASSWORD"
  ```
 
-You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here]({{< ref "docs/howto/configure-supervisor-with-activedirectory.md" >}})
+You can also customize the userSearch and groupSearch as shown in the examples in our reference documentation [here]({{< ref "docs/howto/idps/configure-supervisor-with-activedirectory.md" >}})
 
 In the above example, users will be able to login with either their sAMAccountName (i.e. pinny), userPrincipalName (i.e. pinny@example.com) or mail attribute.  This reduces the need to tell users what specific value from AD must be provided in the username field.  Regardless of what value the user provides in the username field, the userPrincipalName will be used as the identity in Kubernetes clusters.  UPN is used as the username attribute by default as it is unique within an AD forest.  Similarly, a UPN is generated for each group using its sAMAccountName attribute and the AD domain hostname.  The default AD configuration finds both direct and nested groups.
 

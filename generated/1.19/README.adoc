@@ -568,14 +568,17 @@ ImpersonationProxySpec describes the intended configuration of the Concierge imp
 | *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will be served using the external name of the LoadBalancer service or the cluster service DNS name. 
  This field must be non-empty when spec.impersonationProxy.service.type is "None".
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS. 
+ If this field is empty, the impersonation proxy will generate its own TLS certificate.
 |===
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxytlsspec"]
 ==== ImpersonationProxyTLSSpec 
 
-ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should serve TLS.
+ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should serve TLS. 
+ If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check the secret for a field called "ca.crt", which will be used as the CertificateAuthorityData. 
+ If neither CertificateAuthorityData nor ca.crt is provided, no CA bundle will be advertised for the impersonation proxy endpoint.
 
 .Appears In:
 ****

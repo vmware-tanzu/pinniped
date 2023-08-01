@@ -82,6 +82,12 @@ const (
 
 // ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should
 // serve TLS.
+//
+// If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check the secret
+// for a field called "ca.crt", which will be used as the CertificateAuthorityData.
+//
+// If neither CertificateAuthorityData nor ca.crt is provided, no CA bundle will be advertised for
+// the impersonation proxy endpoint.
 type ImpersonationProxyTLSSpec struct {
 	// X.509 Certificate Authority (base64-encoded PEM bundle).
 	// Used to advertise the CA bundle for the impersonation proxy endpoint.
@@ -118,6 +124,8 @@ type ImpersonationProxySpec struct {
 	ExternalEndpoint string `json:"externalEndpoint,omitempty"`
 
 	// TLS contains information about how the Concierge impersonation proxy should serve TLS.
+	//
+	// If this field is empty, the impersonation proxy will generate its own TLS certificate.
 	//
 	// +optional
 	TLS *ImpersonationProxyTLSSpec `json:"tls,omitempty"`

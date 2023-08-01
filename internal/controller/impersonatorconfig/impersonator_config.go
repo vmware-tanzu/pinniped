@@ -328,7 +328,8 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 
 func (c *impersonatorConfigController) ensureCAAndTLSSecrets(
 	ctx context.Context,
-	nameInfo *certNameInfo) ([]byte, error) {
+	nameInfo *certNameInfo,
+) ([]byte, error) {
 	var (
 		impersonationCA *certauthority.CA
 		err             error
@@ -349,7 +350,8 @@ func (c *impersonatorConfigController) ensureCAAndTLSSecrets(
 
 func (c *impersonatorConfigController) evaluateExternallyProvidedTLSSecret(
 	ctx context.Context,
-	tlsSpec *v1alpha1.ImpersonationProxyTLSSpec) ([]byte, error) {
+	tlsSpec *v1alpha1.ImpersonationProxyTLSSpec,
+) ([]byte, error) {
 	if tlsSpec.SecretName == "" {
 		return nil, fmt.Errorf("must provide impersonationSpec.TLS.secretName if impersonationSpec.TLS is provided")
 	}
@@ -376,6 +378,11 @@ func (c *impersonatorConfigController) evaluateExternallyProvidedTLSSecret(
 		caBundle, err = base64.StdEncoding.DecodeString(tlsSpec.CertificateAuthorityData)
 		if err != nil {
 			return nil, fmt.Errorf("could not decode impersonationSpec.TLS.certificateAuthorityData: %w", err)
+		}
+
+		block, _ := pem.Decode(caBundle)
+		if block == nil {
+			return nil, fmt.Errorf("could not decode impersonationSpec.TLS.certificateAuthorityData: data is not a certificate")
 		}
 
 		c.infoLog.Info("the impersonation proxy will advertise its CA Bundle from impersonationSpec.TLS.CertificateAuthorityData",
@@ -723,7 +730,27 @@ func (c *impersonatorConfigController) readExternalTLSSecret(externalTLSSecretNa
 		return nil, err
 	}
 
-	return secretFromInformer.Data[caCrtKey], nil
+	base64EncodedCaCert := secretFromInformer.Data[caCrtKey]
+
+	if len(base64EncodedCaCert) > 0 {
+		var decodedCaCert []byte
+		decodedCaCert, err = base64.StdEncoding.DecodeString(string(secretFromInformer.Data[caCrtKey]))
+		if err != nil {
+			err = fmt.Errorf("unable to read provided ca.crt: %w", err)
+			plog.Error("error loading cert from externally provided TLS secret for the impersonation proxy", err)
+			return nil, err
+		}
+
+		block, _ := pem.Decode(decodedCaCert)
+		if block == nil {
+			plog.Warning("error loading cert from externally provided TLS secret for the impersonation proxy: data is not a certificate")
+			return nil, fmt.Errorf("unable to read provided ca.crt: data is not a certificate")
+		}
+
+		return decodedCaCert, nil
+	}
+
+	return nil, nil
 }
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {

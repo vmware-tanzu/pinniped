@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/creack/pty"
-	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -123,7 +122,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
@@ -177,18 +176,18 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
@@ -204,7 +203,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
@@ -258,18 +257,18 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
@@ -288,7 +287,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
@@ -363,20 +362,20 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NotEmptyf(t, loginURL, "didn't find login URL in output: %s", output)
 
 		t.Logf("navigating to login page")
-		require.NoError(t, page.Navigate(loginURL))
+		browser.Navigate(t, loginURL)
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
-		authCode := formpostExpectManualState(t, page)
+		authCode := formpostExpectManualState(t, browser)
 
 		// Enter the auth code in the waiting prompt, followed by a newline.
-		t.Logf("'manually' pasting authorization code %q to waiting prompt", authCode)
+		t.Logf("'manually' pasting authorization code with length %d to waiting prompt", len(authCode))
 		_, err = ptyFile.WriteString(authCode + "\n")
 		require.NoError(t, err)
 
@@ -399,7 +398,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
@@ -488,20 +487,20 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NotEmptyf(t, loginURL, "didn't find login URL in output: %s", output)
 
 		t.Logf("navigating to login page")
-		require.NoError(t, page.Navigate(loginURL))
+		browser.Navigate(t, loginURL)
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
-		authCode := formpostExpectManualState(t, page)
+		authCode := formpostExpectManualState(t, browser)
 
 		// Enter the auth code in the waiting prompt, followed by a newline.
-		t.Logf("'manually' pasting authorization code %q to waiting prompt", authCode)
+		t.Logf("'manually' pasting authorization code with length %d to waiting prompt", len(authCode))
 		_, err = ptyFile.WriteString(authCode + "\n")
 		require.NoError(t, err)
 
@@ -1002,7 +1001,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -1029,13 +1028,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
@@ -1052,7 +1051,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -1079,13 +1078,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamActiveDirectory.TestUserPassword)
 
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
@@ -1102,7 +1101,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -1135,13 +1134,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, page)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, page, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
@@ -1149,7 +1148,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	})
 }
 
-func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, page *agouti.Page) chan string {
+func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, b *browsertest.Browser) chan string {
 	// Wrap the stdout and stderr pipes with TeeReaders which will copy each incremental read to an
 	// in-memory buffer, so we can have the full output available to us at the end.
 	originalStderrPipe, err := kubectlCmd.StderrPipe()
@@ -1226,7 +1225,7 @@ func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *te
 	case loginURL = <-loginURLChan:
 	}
 	t.Logf("navigating to login page: %q", loginURL)
-	require.NoError(t, page.Navigate(loginURL))
+	b.Navigate(t, loginURL)
 
 	return kubectlOutputChan
 }

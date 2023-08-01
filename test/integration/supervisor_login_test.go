@@ -2429,15 +2429,15 @@ func requestAuthorizationAndExpectImmediateRedirectToCallback(t *testing.T, _, d
 	t.Helper()
 
 	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+	browser.Navigate(t, downstreamAuthorizeURL)
 
 	// Expect that it immediately redirects back to the callback, which is what happens for certain types of errors
 	// where it is not worth redirecting to the login UI page.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
-	browsertest.WaitForURL(t, page, callbackURLPattern)
+	browser.WaitForURL(t, callbackURLPattern)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
@@ -2451,17 +2451,17 @@ func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstrea
 	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
 
 	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+	browser.Navigate(t, downstreamAuthorizeURL)
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
-	browsertest.WaitForURL(t, page, callbackURLPattern)
+	browser.WaitForURL(t, callbackURLPattern)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client) {
@@ -2474,51 +2474,51 @@ func requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t *testing.T, downstreamIs
 	makeAuthorizationRequestAndRequireSecurityHeaders(ctx, t, downstreamAuthorizeURL, httpClient)
 
 	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+	browser.Navigate(t, downstreamAuthorizeURL)
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, password)
+	browsertest.LoginToUpstreamLDAP(t, browser, downstreamIssuer, username, password)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
-	browsertest.WaitForURL(t, page, callbackURLPattern)
+	browser.WaitForURL(t, callbackURLPattern)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentials(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, _, username, password string, _ *http.Client) {
 	t.Helper()
 
 	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+	browser.Navigate(t, downstreamAuthorizeURL)
 
 	// This functions assumes that it has been passed either a bad username or a bad password, and submits the
 	// provided credentials. Expect to be redirected to the upstream provider and attempt to log in.
-	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, password)
+	browsertest.LoginToUpstreamLDAP(t, browser, downstreamIssuer, username, password)
 
 	// After failing login expect to land back on the login page again with an error message.
-	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, page, downstreamIssuer)
+	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, browser, downstreamIssuer)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentialsAndThenGoodCredentials(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, _, username, password string, _ *http.Client) {
 	t.Helper()
 
 	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+	browser.Navigate(t, downstreamAuthorizeURL)
 
 	// Expect to be redirected to the upstream provider and attempt to log in.
-	browsertest.LoginToUpstreamLDAP(t, page, downstreamIssuer, username, "this is the wrong password!")
+	browsertest.LoginToUpstreamLDAP(t, browser, downstreamIssuer, username, "this is the wrong password!")
 
 	// After failing login expect to land back on the login page again with an error message.
-	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, page, downstreamIssuer)
+	browsertest.WaitForUpstreamLDAPLoginPageWithError(t, browser, downstreamIssuer)
 
 	// Already at the login page, so this time can directly submit it using the provided username and password.
-	browsertest.SubmitUpstreamLDAPLoginForm(t, page, username, password)
+	browsertest.SubmitUpstreamLDAPLoginForm(t, browser, username, password)
 }
 
 func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *testing.T, downstreamAuthorizeURL string, httpClient *http.Client) {

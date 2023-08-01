@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -280,7 +280,7 @@ func runPinnipedLoginOIDC(
 	sessionCachePath := testutil.TempDir(t) + "/sessions.yaml"
 
 	// Start the browser driver.
-	page := browsertest.Open(t)
+	browser := browsertest.OpenBrowser(t)
 
 	// Start the CLI running the "login oidc [...]" command with stdout/stderr connected to pipes.
 	cmd := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
@@ -334,22 +334,21 @@ func runPinnipedLoginOIDC(
 	case loginURL = <-loginURLChan:
 	}
 	t.Logf("navigating to login page")
-	require.NoError(t, page.Navigate(loginURL))
+	browser.Navigate(t, loginURL)
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstreamOIDC(t, page, env.CLIUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, browser, env.CLIUpstreamOIDC)
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `(\?.+)?\z`)
-	browsertest.WaitForURL(t, page, callbackURLPattern)
+	browser.WaitForURL(t, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and
 	// assert that it contains the success message.
 	t.Logf("verifying success page")
-	browsertest.WaitForVisibleElements(t, page, "pre")
-	msg, err := page.First("pre").Text()
-	require.NoError(t, err)
+	browser.WaitForVisibleElements(t, "pre")
+	msg := browser.TextOfFirstMatch(t, "pre")
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
 
 	// Expect the CLI to output an ExecCredential in JSON format.

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -16,7 +16,6 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/token/hmac"
-	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,24 +32,25 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 	// Run a mock callback handler, simulating the one running in the CLI.
 	callbackURL, expectCallback := formpostCallbackServer(t)
 
-	// Open a single browser for all subtests to use (in sequence).
-	page := browsertest.Open(t)
-
 	t.Run("success", func(t *testing.T) {
+		browser := browsertest.OpenBrowser(t)
+
 		// Serve the form_post template with successful parameters.
 		responseParams := formpostRandomParams(t)
-		formpostInitiate(t, page, formpostTemplateServer(t, callbackURL, responseParams))
+		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL, responseParams))
 
 		// Now we handle the callback and assert that we got what we expected. This should transition
 		// the UI into the success state.
 		expectCallback(t, responseParams)
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 	})
 
 	t.Run("callback server error", func(t *testing.T) {
+		browser := browsertest.OpenBrowser(t)
+
 		// Serve the form_post template with a redirect URI that will return an HTTP 500 response.
 		responseParams := formpostRandomParams(t)
-		formpostInitiate(t, page, formpostTemplateServer(t, callbackURL+"?fail=500", responseParams))
+		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL+"?fail=500", responseParams))
 
 		// Now we handle the callback and assert that we got what we expected.
 		expectCallback(t, responseParams)
@@ -66,13 +66,15 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 		// In the future, we could change the Javascript code to use mode 'cors'
 		// because we have upgraded our CLI callback endpoint to handle CORS,
 		// and then we could change this to formpostExpectManualState().
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 	})
 
 	t.Run("network failure", func(t *testing.T) {
+		browser := browsertest.OpenBrowser(t)
+
 		// Serve the form_post template with a redirect URI that will return a network error.
 		responseParams := formpostRandomParams(t)
-		formpostInitiate(t, page, formpostTemplateServer(t, callbackURL+"?fail=close", responseParams))
+		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL+"?fail=close", responseParams))
 
 		// Now we handle the callback and assert that we got what we expected.
 		// This will trigger the callback server to close the client connection abruptly because
@@ -80,28 +82,30 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 		expectCallback(t, responseParams)
 
 		// This failure should cause the UI to enter the "manual" state.
-		actualCode := formpostExpectManualState(t, page)
+		actualCode := formpostExpectManualState(t, browser)
 		require.Equal(t, responseParams.Get("code"), actualCode)
 	})
 
 	t.Run("timeout", func(t *testing.T) {
+		browser := browsertest.OpenBrowser(t)
+
 		// Serve the form_post template with successful parameters.
 		responseParams := formpostRandomParams(t)
-		formpostInitiate(t, page, formpostTemplateServer(t, callbackURL, responseParams))
+		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL, responseParams))
 
 		// Sleep for longer than the two second timeout.
 		// During this sleep we are blocking the callback from returning.
 		time.Sleep(3 * time.Second)
 
 		// Assert that the timeout fires and we see the manual instructions.
-		actualCode := formpostExpectManualState(t, page)
+		actualCode := formpostExpectManualState(t, browser)
 		require.Equal(t, responseParams.Get("code"), actualCode)
 
 		// Now simulate the callback finally succeeding, in which case
 		// the manual instructions should disappear and we should see the success
 		// div instead.
 		expectCallback(t, responseParams)
-		formpostExpectSuccessState(t, page)
+		formpostExpectSuccessState(t, browser)
 	})
 }
 
@@ -228,88 +232,66 @@ func formpostRandomParams(t *testing.T) url.Values {
 	}
 }
 
-// formpostExpectTitle asserts that the page has the expected title.
-func formpostExpectTitle(t *testing.T, page *agouti.Page, expected string) {
+// formpostExpectFavicon asserts that the page has the expected SVG/emoji favicon.
+func formpostExpectFavicon(t *testing.T, b *browsertest.Browser, expected string) {
 	t.Helper()
-	actual, err := page.Title()
-	require.NoError(t, err)
-	require.Equal(t, expected, actual)
-}
-
-// formpostExpectTitle asserts that the page has the expected SVG/emoji favicon.
-func formpostExpectFavicon(t *testing.T, page *agouti.Page, expected string) {
-	t.Helper()
-	iconURL, err := page.First("#favicon").Attribute("href")
-	require.NoError(t, err)
+	iconURL := b.AttrValueOfFirstMatch(t, "#favicon", "href")
 	require.True(t, strings.HasPrefix(iconURL, "data:image/svg+xml,<svg"))
-
-	// For some reason chromedriver on Linux returns this attribute urlencoded, but on macOS it contains the
-	// original emoji bytes (unescaped). To check correctly in both cases we allow either version here.
-	expectedEscaped := url.QueryEscape(expected)
-	require.Truef(t,
-		strings.Contains(iconURL, expected) || strings.Contains(iconURL, expectedEscaped),
-		"expected %q to contain %q or %q", iconURL, expected, expectedEscaped,
-	)
+	require.Contains(t, iconURL, expected)
 }
 
 // formpostInitiate navigates to the template server endpoint and expects the
 // loading animation to be shown.
-func formpostInitiate(t *testing.T, page *agouti.Page, url string) {
+func formpostInitiate(t *testing.T, b *browsertest.Browser, url string) {
 	t.Helper()
-	require.NoError(t, page.Reset())
 	t.Logf("navigating to mock form_post template URL %s...", url)
-	require.NoError(t, page.Navigate(url))
+	b.Navigate(t, url)
 
 	t.Logf("expecting to see loading animation...")
-	browsertest.WaitForVisibleElements(t, page, "#loading")
-	formpostExpectTitle(t, page, "Logging in...")
-	formpostExpectFavicon(t, page, "⏳")
+	b.WaitForVisibleElements(t, "div#loading")
+	require.Equal(t, "Logging in...", b.Title(t))
+	formpostExpectFavicon(t, b, "⏳")
 }
 
 // formpostExpectSuccessState asserts that the page is in the "success" state.
-func formpostExpectSuccessState(t *testing.T, page *agouti.Page) {
+func formpostExpectSuccessState(t *testing.T, b *browsertest.Browser) {
 	t.Helper()
 	t.Logf("expecting to see success message become visible...")
-	browsertest.WaitForVisibleElements(t, page, "#success")
-	successDivText, err := page.First("#success").Text()
-	require.NoError(t, err)
+	b.WaitForVisibleElements(t, "div#success")
+	successDivText := b.TextOfFirstMatch(t, "div#success")
 	require.Contains(t, successDivText, "Login succeeded")
 	require.Contains(t, successDivText, "You have successfully logged in. You may now close this tab.")
-	formpostExpectTitle(t, page, "Login succeeded")
-	formpostExpectFavicon(t, page, "✅")
+	require.Equal(t, "Login succeeded", b.Title(t))
+	formpostExpectFavicon(t, b, "✅")
 }
 
 // formpostExpectManualState asserts that the page is in the "manual" state and returns the auth code.
-func formpostExpectManualState(t *testing.T, page *agouti.Page) string {
+func formpostExpectManualState(t *testing.T, b *browsertest.Browser) string {
 	t.Helper()
 	t.Logf("expecting to see manual message become visible...")
-	browsertest.WaitForVisibleElements(t, page, "#manual")
-	manualDivText, err := page.First("#manual").Text()
-	require.NoError(t, err)
+	b.WaitForVisibleElements(t, "div#manual")
+	manualDivText := b.TextOfFirstMatch(t, "div#manual")
 	require.Contains(t, manualDivText, "Finish your login")
 	require.Contains(t, manualDivText, "To finish logging in, paste this authorization code into your command-line session:")
-	formpostExpectTitle(t, page, "Finish your login")
-	formpostExpectFavicon(t, page, "⌛")
+	require.Equal(t, "Finish your login", b.Title(t))
+	formpostExpectFavicon(t, b, "⌛")
 
 	// Click the copy button and expect that the code is copied to the clipboard. Unfortunately,
 	// headless Chrome does not have a real clipboard we can check, so we rely on  checking a
 	// console.log() statement that happens at the same time.
 	t.Logf("clicking the 'copy' button and expecting the clipboard event to fire...")
-	require.NoError(t, page.First("#manual-copy-button").Click())
+	b.ClickFirstMatch(t, "#manual-copy-button")
 
 	var authCode string
 	consoleLogPattern := regexp.MustCompile(`code (.+) to clipboard`)
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-		logs, err := page.ReadNewLogs("browser")
-		requireEventually.NoError(err)
-
-		for _, log := range logs {
-			if match := consoleLogPattern.FindStringSubmatch(log.Message); match != nil {
-				authCode = match[1]
-				return
-			}
+		matchingText, found := b.FindConsoleEventWithTextMatching("info", consoleLogPattern)
+		requireEventually.True(found)
+		if captureMatches := consoleLogPattern.FindStringSubmatch(matchingText); captureMatches != nil {
+			authCode = captureMatches[1]
+			return
 		}
 		requireEventually.FailNow("expected console log was not found")
-	}, 3*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 	return authCode
 }

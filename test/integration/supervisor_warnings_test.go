@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -355,7 +355,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		}
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
-		page := browsertest.Open(t)
+		browser := browsertest.OpenBrowser(t)
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 
@@ -436,17 +436,17 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		require.NotEmptyf(t, loginURL, "didn't find login URL in output: %s", output)
 
 		t.Logf("navigating to login page")
-		require.NoError(t, page.Navigate(loginURL))
+		browser.Navigate(t, loginURL)
 
 		// Expect to be redirected to the upstream provider and log in.
-		browsertest.LoginToUpstreamOIDC(t, page, env.SupervisorUpstreamOIDC)
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
 		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
-		authCode := formpostExpectManualState(t, page)
+		authCode := formpostExpectManualState(t, browser)
 
 		// Enter the auth code in the waiting prompt, followed by a newline.
 		t.Logf("'manually' pasting authorization code %q to waiting prompt", authCode)

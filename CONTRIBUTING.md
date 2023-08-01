@@ -114,7 +114,6 @@ go build -o pinniped ./cmd/pinniped
 
 1. Install dependencies:
 
-   - [`chromedriver`](https://chromedriver.chromium.org/) (and [Chrome](https://www.google.com/chrome/))
    - [`docker`](https://www.docker.com/)
    - `htpasswd` (installed by default on MacOS, usually found in `apache2-utils` package for linux)
    - [`kapp`](https://carvel.dev/#getting-started)
@@ -122,11 +121,13 @@ go build -o pinniped ./cmd/pinniped
    - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
    - [`ytt`](https://carvel.dev/#getting-started)
    - [`nmap`](https://nmap.org/download.html)
+   - [`openssl`](https://www.openssl.org) (installed by default on MacOS)
+   - [Chrome](https://www.google.com/chrome/)
 
    On macOS, these tools can be installed with [Homebrew](https://brew.sh/) (assuming you have Chrome installed already):
 
    ```bash
-   brew install kind vmware-tanzu/carvel/ytt vmware-tanzu/carvel/kapp kubectl chromedriver nmap && brew cask install docker
+   brew install kind vmware-tanzu/carvel/ytt vmware-tanzu/carvel/kapp kubectl nmap && brew cask install docker
    ```
 
 1. Create a kind cluster, compile, create container images, and install Pinniped and supporting test dependencies using:

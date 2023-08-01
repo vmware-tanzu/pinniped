@@ -50,7 +50,6 @@ skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 dockerfile_path=""
-skip_chromedriver_check=no
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
 alternate_deploy="undefined"
 
@@ -76,10 +75,6 @@ while (("$#")); do
       exit 1
     fi
     api_group_suffix=$1
-    shift
-    ;;
-  --live-dangerously)
-    skip_chromedriver_check=yes
     shift
     ;;
   --get-active-directory-vars)
@@ -153,27 +148,7 @@ check_dependency kapp "Please install kapp. e.g. 'brew tap vmware-tanzu/carvel &
 check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
 check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."
-check_dependency chromedriver "Please install chromedriver. e.g. 'brew install chromedriver' for MacOS"
 check_dependency nmap "Please install nmap. e.g. 'brew install nmap' for MacOS"
-
-# Check that Chrome and chromedriver versions match. If chromedriver falls a couple versions behind
-# then usually tests start to fail with strange error messages.
-if [[ "$skip_chromedriver_check" == "no" ]]; then
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    chrome_version=$(/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-  else
-    chrome_version=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-  fi
-  chromedriver_version=$(chromedriver --version | cut -d ' ' -f2 | cut -d '.' -f1)
-  if [[ "$chrome_version" != "$chromedriver_version" ]]; then
-    log_error "It appears that you are using Chrome $chrome_version with chromedriver $chromedriver_version."
-    log_error "Please use the same version of chromedriver as Chrome."
-    log_error "If you are using the latest version of Chrome, then you can upgrade"
-    log_error "to the latest chromedriver, e.g. 'brew upgrade chromedriver' on MacOS."
-    log_error "Feeling lucky? Add --live-dangerously to skip this check."
-    exit 1
-  fi
-fi
 
 # Require kubectl >= 1.18.x.
 if [ "$(kubectl version --client=true -o=json | grep gitVersion | cut -d '.' -f 2)" -lt 18 ]; then

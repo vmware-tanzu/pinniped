@@ -41,7 +41,7 @@ For more information on this feature refer to [#981](https://github.com/vmware-t
 
 We continue to gather feedback from the community around the need to integrate with different Identity Providers. With this in mind, we have documented our support for configuring [VMware Workspace ONE Access](https://www.vmware.com/products/workspace-one/access.html) (formerly VMware Identity Manager) as an Identity provider. Workspace ONE access also acts as a broker to other identity stores and providers—including Active Directory (AD), Active Directory Federation Services (ADFS), Azure AD, Okta and Ping Identity to enable authentication across on-premises, software-as-a-service (SaaS), web and native applications. Available as a cloud-hosted service, Workspace ONE Access is an integral part of the Workspace ONE platform.
 
-Refer to our detailed guide  on [how to configure supervisor with Workspace ONE Access]({{< ref "docs/howto/idps/configure-supervisor-with-workspace_one_access.md" >}}).  
+Refer to our detailed guide  on [how to configure supervisor with Workspace ONE Access]({{< ref "docs/howto/supervisor/configure-supervisor-with-workspace_one_access.md" >}}).  
 
 ## What else is in this release?
 

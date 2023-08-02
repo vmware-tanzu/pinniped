@@ -7,7 +7,7 @@ menu:
   docs:
     name: With Active Directory
     weight: 150
-    parent: howto-configure-idps
+    parent: howto-configure-supervisor
 aliases:
   - /docs/howto/configure-supervisor-with-activedirectory/
 ---

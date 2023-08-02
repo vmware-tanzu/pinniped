@@ -7,7 +7,7 @@ menu:
   docs:
     name: With Okta OIDC
     weight: 80
-    parent: howto-configure-idps
+    parent: howto-configure-supervisor
 aliases:
    - /docs/howto/configure-supervisor-with-okta/
 ---

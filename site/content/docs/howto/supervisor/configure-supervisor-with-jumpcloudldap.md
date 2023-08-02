@@ -7,7 +7,7 @@ menu:
   docs:
     name: With JumpCloud LDAP
     weight: 110
-    parent: howto-configure-idps
+    parent: howto-configure-supervisor
 aliases:
    - /docs/howto/configure-supervisor-with-jumpcloudldap/
 ---

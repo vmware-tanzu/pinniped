@@ -7,7 +7,7 @@ menu:
   docs:
     name: As an OIDC Issuer
     weight: 10
-    parent: howto-configure-idps
+    parent: howto-configure-supervisor
 aliases:
   - /docs/howto/configure-supervisor/
 ---

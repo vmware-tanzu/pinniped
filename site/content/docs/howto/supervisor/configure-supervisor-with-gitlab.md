@@ -7,7 +7,7 @@ menu:
   docs:
     name: With GitLab OIDC
     weight: 90
-    parent: howto-configure-idps
+    parent: howto-configure-supervisor
 aliases:
    - /docs/howto/configure-supervisor-with-gitlab/
 ---

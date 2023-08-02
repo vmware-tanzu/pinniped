@@ -111,7 +111,7 @@ And it is important that your users are using authentic kubeconfig files handed 
 ### How to use LDAP with your Pinniped Supervisor
 
 Once you have [installed]({{< ref "docs/howto/install-supervisor.md" >}})
-and [configured]({{< ref "docs/howto/idps/configure-supervisor.md" >}}) the Supervisor, adding an LDAP provider is as easy as creating
+and [configured]({{< ref "docs/howto/supervisor/configure-supervisor.md" >}}) the Supervisor, adding an LDAP provider is as easy as creating
 an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#ldapidentityprovider) resource.
 
 We've provided examples of using [OpenLDAP]({{< ref "docs/howto/install-supervisor.md" >}})

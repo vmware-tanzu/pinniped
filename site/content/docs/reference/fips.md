@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: FIPS-compatible builds of Pinniped binaries
+    name: FIPS-compatible builds
     weight: 30
     parent: reference
 ---
@@ -31,4 +31,3 @@ $ docker build -f hack/Dockerfile_fips .
 
 Now you can deploy [the concierge]({{< ref "install-concierge" >}}) and [the supervisor]({{< ref "install-supervisor" >}}) 
 by specifying this image instead of the standard Pinniped image in your `values.yaml` or `deployment.yaml` file.
-

@@ -9,6 +9,6 @@ menu:
     weight: 60
 ---
 
-These how-to guides show how to configure the Pinniped Supervisor after it is installed:
+These how-to guides show how to configure the Pinniped Concierge after it has been installed:
 
 {{< docsmenu "howto-configure-concierge" >}}

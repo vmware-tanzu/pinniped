@@ -1,6 +1,19 @@
 @import 'variables';
 @import 'mixins';
 
+/* Global */
+code {
+    background: #efefef;
+    padding: 2px 4px;
+    font-size: 85%;
+}
+pre code {
+    background: none;
+}
+.highlight pre codesite/sidebar/reorganize {
+    font-size: 100%;
+}
+
 /* Homepage Hero */
 .hero {
     background-color: $mainblue;
@@ -291,9 +304,6 @@
             }
         }
         code {
-            background: #efefef;
-            padding: 2px 4px;
-            font-size: 85%;
             .c1 {
                 color: $blue;
                 font-style: italic;
@@ -308,11 +318,6 @@
             white-space: -pre-wrap;
             white-space: -o-pre-wrap;
             word-wrap: break-word;
-            code {
-                background: #efefef;
-                padding: 2px 4px;
-                font-size: 85%;
-            }
         }
         img {
             max-width: 100%;
@@ -457,7 +462,6 @@
             float: none;
         }
         position: relative;
-        // border-right: 1px solid $lightgrey;
         a.active {
             background: $lightgrey;
             padding: 5px 7px;
@@ -480,8 +484,8 @@
             list-style-type: none;
             li {
                 padding-right: 0px;
+                display: list-item;
                 a {
-                    display: block;
                     font-size: 14px;
                     font-weight: 300;
                 }
@@ -531,9 +535,6 @@
             }
         }
         code {
-            background: #efefef;
-            padding: 2px 4px;
-            font-size: 85%;
             .c1 {
                 color: $blue;
                 font-style: italic;
@@ -548,11 +549,6 @@
             white-space: -pre-wrap;
             white-space: -o-pre-wrap;
             word-wrap: break-word;
-            code {
-                background: #efefef;
-                padding: 2px 4px;
-                font-size: 85%;
-            }
         }
         img {
             max-width: 100%;

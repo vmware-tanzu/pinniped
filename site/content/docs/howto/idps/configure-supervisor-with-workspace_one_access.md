@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Workspace ONE Access
+    name: With Workspace ONE Access
     weight: 80
     parent: howto-configure-idps
 ---

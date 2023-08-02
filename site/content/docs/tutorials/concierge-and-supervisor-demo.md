@@ -101,7 +101,7 @@ had to make some choices. The choices made for this tutorial were:
 - For web-based login flows as used by OIDC identity providers, the Pinniped Supervisor needs TLS certificates
   that are trusted by the end users' web browsers. There are many ways to create TLS certificates.
   There are also several ways to configure the TLS certificates on the Supervisor, as described in the
-  [docs for configuring the Supervisor]({{< ref "../howto/configure-supervisor" >}}).
+  [docs for configuring the Supervisor]({{< ref "../howto/idps/configure-supervisor" >}}).
   For this tutorial we will use [Let's Encrypt](https://letsencrypt.org) with [cert-manager](https://cert-manager.io/docs/),
   because any reader could use these services if they would like to try these steps themselves.
 - The Pinniped Concierge can be installed in many types of Kubernetes clusters, as described in
@@ -198,7 +198,7 @@ kubectl apply \
 ### Create a LoadBalancer Service for the Supervisor
 
 There are several options for exposing the Supervisor's endpoints outside the cluster, which are described in the
-[howto guide for configuring the Supervisor]({{< ref "../howto/configure-supervisor" >}}). For this tutorial,
+[howto guide for configuring the Supervisor]({{< ref "../howto/idps/configure-supervisor" >}}). For this tutorial,
 we will use a public LoadBalancer.
 
 Create a LoadBalancer to expose the Supervisor's endpoints to the public, being careful to only

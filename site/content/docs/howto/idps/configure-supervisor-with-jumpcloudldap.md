@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With JumpCloud LDAP
+    name: With JumpCloud LDAP
     weight: 110
     parent: howto-configure-idps
 ---

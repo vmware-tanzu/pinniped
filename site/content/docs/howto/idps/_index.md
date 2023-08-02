@@ -4,7 +4,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: How-to Configure IDPs
+    name: Supervisor Configuration
     identifier: howto-configure-idps
     weight: 60
 ---

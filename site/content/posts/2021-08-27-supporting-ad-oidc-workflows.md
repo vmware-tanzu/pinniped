@@ -23,7 +23,7 @@ Our initial LDAP implementation released with v.10.0 can be used to work with an
 
 Pinniped Supervisor authenticates your users with the AD provider via the LDAP protocol, and then issues unique, short-lived, per-cluster tokens. Our previous blog post on [LDAP configuration]({{< ref "2021-06-02-first-ldap-release.md">}}), elaborates on the security considerations to support integration at the Pinniped Supervisor level instead of at the Concierge.
 
-To setup the AD configuration, once you have Supervisor configured with ingress [installed the Pinniped Supervisor]({{< ref "docs/howto/install-supervisor.md" >}}) and you have [configured a FederationDomain]({{< ref "docs/howto/configure-supervisor" >}}) to issue tokens for your downstream clusters, you can create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#activedirectoryidentityprovider) in the same namespace as the Supervisor.
+To setup the AD configuration, once you have Supervisor configured with ingress [installed the Pinniped Supervisor]({{< ref "docs/howto/install-supervisor.md" >}}) and you have [configured a FederationDomain]({{< ref "docs/howto/idps/configure-supervisor" >}}) to issue tokens for your downstream clusters, you can create an [ActiveDirectoryIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#activedirectoryidentityprovider) in the same namespace as the Supervisor.
 Here’s what an example configuration looks like
 
 ```yaml

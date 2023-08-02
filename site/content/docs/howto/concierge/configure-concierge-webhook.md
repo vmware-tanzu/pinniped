@@ -5,9 +5,9 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Concierge Webhook Authentication
-    weight: 40
-    parent: howtos
+    name: Webhook Authentication
+    weight: 50
+    parent: howto-configure-concierge
 ---
 
 The Concierge can validate arbitrary tokens via an external webhook endpoint using the [same validation process as Kubernetes itself](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).

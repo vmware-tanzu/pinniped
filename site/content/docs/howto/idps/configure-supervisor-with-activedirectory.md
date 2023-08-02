@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Active Directory
+    name: With Active Directory
     weight: 110
     parent: howto-configure-idps
 ---

@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With OpenLDAP
+    name: With OpenLDAP
     weight: 100
     parent: howto-configure-idps
 ---

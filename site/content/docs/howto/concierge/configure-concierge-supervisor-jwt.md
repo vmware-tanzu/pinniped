@@ -5,9 +5,9 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Concierge JWT Authentication with the Supervisor
-    weight: 50
-    parent: howtos
+    name: JWT Authentication with Supervisor
+    weight: 40
+    parent: howto-configure-concierge
 ---
 The Concierge can validate [JSON Web Tokens (JWTs)](https://tools.ietf.org/html/rfc7519), which are commonly issued by [OpenID Connect (OIDC)](https://openid.net/connect/) identity providers.
 

@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Auth0 OIDC
+    name: With Auth0 OIDC
     weight: 80
     parent: howto-configure-idps
 ---

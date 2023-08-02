@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With GitLab OIDC
+    name: With GitLab OIDC
     weight: 90
     parent: howto-configure-idps
 ---

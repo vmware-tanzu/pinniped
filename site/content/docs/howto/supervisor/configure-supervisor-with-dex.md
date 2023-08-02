@@ -5,9 +5,11 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Dex OIDC
+    name: With Dex OIDC
     weight: 80
-    parent: howtos
+    parent: howto-configure-supervisor
+aliases:
+  - /docs/howto/configure-supervisor-with-dex/
 ---
 
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single

@@ -24,8 +24,8 @@ for a more specific example of installing onto a local kind cluster, including t
 1. [Install the Concierge]({{< ref "../howto/install-concierge" >}}).
 1. [Install the Pinniped command-line tool]({{< ref "../howto/install-cli" >}}).
 1. Configure the Concierge with a
-   [JWT]({{< ref "../howto/configure-concierge-jwt" >}}) or
-   [webhook]({{< ref "../howto/configure-concierge-webhook" >}}) authenticator.
+   [JWT]({{< ref "../howto/concierge/configure-concierge-jwt" >}}) or
+   [webhook]({{< ref "../howto/concierge/configure-concierge-webhook" >}}) authenticator.
 1. Generate a kubeconfig using the Pinniped command-line tool (run `pinniped get kubeconfig --help` for more information).
 1. Run `kubectl` commands using the generated kubeconfig. The Pinniped Concierge will automatically be used for authentication during those commands.
 

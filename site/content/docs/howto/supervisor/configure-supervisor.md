@@ -5,9 +5,11 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor as an OIDC Issuer
-    weight: 70
-    parent: howtos
+    name: As an OIDC Issuer
+    weight: 10
+    parent: howto-configure-supervisor
+aliases:
+  - /docs/howto/configure-supervisor/
 ---
 
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single

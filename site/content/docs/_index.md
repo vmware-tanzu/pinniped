@@ -33,6 +33,16 @@ or [join the Pinniped community]({{< ref "/community" >}}).
 
 {{< docsmenu "howtos" >}}
 
+
+## Concierge Configuration
+
+{{< docsmenu "howto-configure-concierge" >}}
+
+
+## Supervisor Configuration
+
+{{< docsmenu "howto-configure-supervisor" >}}
+
 ## Reference
 
 {{< docsmenu "reference" >}}

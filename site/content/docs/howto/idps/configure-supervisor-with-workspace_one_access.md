@@ -8,6 +8,8 @@ menu:
     name: With Workspace ONE Access
     weight: 80
     parent: howto-configure-idps
+aliases:
+   - /docs/howto/configure-supervisor-with-workspace_one_access/
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
 "upstream" identity provider to many "downstream" cluster clients.

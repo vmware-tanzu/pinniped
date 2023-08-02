@@ -8,6 +8,8 @@ menu:
     name: As an OIDC Issuer
     weight: 10
     parent: howto-configure-idps
+aliases:
+  - /docs/howto/configure-supervisor/
 ---
 
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single

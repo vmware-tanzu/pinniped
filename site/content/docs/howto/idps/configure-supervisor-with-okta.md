@@ -8,6 +8,8 @@ menu:
     name: With Okta OIDC
     weight: 80
     parent: howto-configure-idps
+aliases:
+   - /docs/howto/configure-supervisor-with-okta/
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
 "upstream" identity provider to many "downstream" cluster clients.

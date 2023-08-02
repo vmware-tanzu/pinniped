@@ -6,8 +6,10 @@ cascade:
 menu:
   docs:
     name: With Active Directory
-    weight: 110
+    weight: 150
     parent: howto-configure-idps
+aliases:
+  - /docs/howto/configure-supervisor-with-activedirectory/
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
 "upstream" identity provider to many "downstream" cluster clients.

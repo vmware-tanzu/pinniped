@@ -8,6 +8,8 @@ menu:
     name: JWT Authentication
     weight: 30
     parent: howto-configure-concierge
+aliases:
+  - /docs/howto/configure-concierge-jwt/
 ---
 The Concierge can validate [JSON Web Tokens (JWTs)](https://tools.ietf.org/html/rfc7519), which are commonly issued by [OpenID Connect (OIDC)](https://openid.net/connect/) identity providers.
 

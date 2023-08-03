@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -80,6 +80,28 @@ const (
 	ImpersonationProxyServiceTypeNone = ImpersonationProxyServiceType("None")
 )
 
+// ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should
+// serve TLS.
+//
+// If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check the secret
+// for a field called "ca.crt", which will be used as the CertificateAuthorityData.
+//
+// If neither CertificateAuthorityData nor ca.crt is provided, no CA bundle will be advertised for
+// the impersonation proxy endpoint.
+type ImpersonationProxyTLSSpec struct {
+	// X.509 Certificate Authority (base64-encoded PEM bundle).
+	// Used to advertise the CA bundle for the impersonation proxy endpoint.
+	//
+	// +optional
+	CertificateAuthorityData string `json:"certificateAuthorityData,omitempty"`
+
+	// SecretName is the name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains
+	// the TLS serving certificate for the Concierge impersonation proxy endpoint.
+	//
+	// +kubebuilder:validation:MinLength=1
+	SecretName string `json:"secretName,omitempty"`
+}
+
 // ImpersonationProxySpec describes the intended configuration of the Concierge impersonation proxy.
 type ImpersonationProxySpec struct {
 	// Mode configures whether the impersonation proxy should be started:
@@ -100,6 +122,13 @@ type ImpersonationProxySpec struct {
 	//
 	// +optional
 	ExternalEndpoint string `json:"externalEndpoint,omitempty"`
+
+	// TLS contains information about how the Concierge impersonation proxy should serve TLS.
+	//
+	// If this field is empty, the impersonation proxy will generate its own TLS certificate.
+	//
+	// +optional
+	TLS *ImpersonationProxyTLSSpec `json:"tls,omitempty"`
 }
 
 // ImpersonationProxyServiceSpec describes how the Concierge should provision a Service to expose the impersonation proxy.

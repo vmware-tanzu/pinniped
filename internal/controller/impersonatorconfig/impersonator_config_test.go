@@ -1356,7 +1356,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("the externally provided TLS secret has a ca.crt field", func() {
 					it.Before(func() {
 						addSecretToTrackers(mTLSClientCertCASecret, kubeInformerClient)
-						externalTLSSecret.Data["ca.crt"] = []byte(base64.StdEncoding.EncodeToString(externalCA.Bundle()))
+						externalTLSSecret.Data["ca.crt"] = externalCA.Bundle()
 						addSecretToTrackers(externalTLSSecret, kubeInformerClient)
 						addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
 							ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
@@ -1386,42 +1386,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("the externally provided TLS secret has a ca.crt field that is not base64-encoded", func() {
-					it.Before(func() {
-						addSecretToTrackers(mTLSClientCertCASecret, kubeInformerClient)
-						externalTLSSecret.Data["ca.crt"] = []byte("hello")
-						addSecretToTrackers(externalTLSSecret, kubeInformerClient)
-						addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
-							ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
-							Spec: v1alpha1.CredentialIssuerSpec{
-								ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-									Mode:             v1alpha1.ImpersonationProxyModeAuto,
-									ExternalEndpoint: localhostIP,
-									Service: v1alpha1.ImpersonationProxyServiceSpec{
-										Type: v1alpha1.ImpersonationProxyServiceTypeNone,
-									},
-									TLS: &v1alpha1.ImpersonationProxyTLSSpec{
-										SecretName: externallyProvidedTLSSecretName,
-									},
-								},
-							},
-						}, pinnipedInformerClient, pinnipedAPIClient)
-					})
-
-					it("returns an error", func() {
-						startInformersAndController()
-						r.Error(runControllerSync(), "could not load the externally provided TLS secret for the impersonation proxy: unable to read provided ca.crt: illegal base64 data at input byte 4")
-						r.Len(kubeAPIClient.Actions(), 1)
-						requireNodesListed(kubeAPIClient.Actions()[0])
-						requireCredentialIssuer(newErrorStrategy("could not load the externally provided TLS secret for the impersonation proxy: unable to read provided ca.crt: illegal base64 data at input byte 4"))
-						requireMTLSClientCertProviderHasLoadedCerts([]byte{}, []byte{})
-					})
-				})
-
 				when("the externally provided TLS secret has a ca.crt field that is not a valid cert", func() {
 					it.Before(func() {
 						addSecretToTrackers(mTLSClientCertCASecret, kubeInformerClient)
-						externalTLSSecret.Data["ca.crt"] = []byte(base64.StdEncoding.EncodeToString([]byte("hello")))
+						externalTLSSecret.Data["ca.crt"] = []byte("hello")
 						addSecretToTrackers(externalTLSSecret, kubeInformerClient)
 						addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
 							ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},

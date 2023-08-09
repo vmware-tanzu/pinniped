@@ -730,24 +730,18 @@ func (c *impersonatorConfigController) readExternalTLSSecret(externalTLSSecretNa
 		return nil, err
 	}
 
-	base64EncodedCaCert := secretFromInformer.Data[caCrtKey]
+	if caCertPEM, ok := secretFromInformer.Data[caCrtKey]; ok && len(caCertPEM) > 0 {
+		plog.Info(fmt.Sprintf("found a %s field in the externally provided TLS secret for the impersonation proxy", caCrtKey),
+			"secretName", externalTLSSecretName,
+			"caCertPEM", caCertPEM)
 
-	if len(base64EncodedCaCert) > 0 {
-		var decodedCaCert []byte
-		decodedCaCert, err = base64.StdEncoding.DecodeString(string(secretFromInformer.Data[caCrtKey]))
-		if err != nil {
-			err = fmt.Errorf("unable to read provided ca.crt: %w", err)
-			plog.Error("error loading cert from externally provided TLS secret for the impersonation proxy", err)
-			return nil, err
-		}
-
-		block, _ := pem.Decode(decodedCaCert)
+		block, _ := pem.Decode(caCertPEM)
 		if block == nil {
 			plog.Warning("error loading cert from externally provided TLS secret for the impersonation proxy: data is not a certificate")
 			return nil, fmt.Errorf("unable to read provided ca.crt: data is not a certificate")
 		}
 
-		return decodedCaCert, nil
+		return caCertPEM, nil
 	}
 
 	return nil, nil

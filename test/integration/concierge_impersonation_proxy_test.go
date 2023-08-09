@@ -1778,7 +1778,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		)
 	})
 
-	t.Run("using externally provided TLS serving cert", func(t *testing.T) {
+	t.Run("using externally provided TLS serving cert with stringData", func(t *testing.T) {
 		var externallyProvidedCA *certauthority.CA
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
@@ -1787,13 +1787,15 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
 		require.NoError(t, err)
 
+		// Specifically use corev1.Secret.StringData
+		// https://kubernetes.io/docs/tasks/configmap-secret/managing-secret-using-config-file/#create-the-config-file
 		externallyProvidedTLSServingCertSecret := testlib.CreateTestSecret(
 			t,
 			env.ConciergeNamespace,
 			"external-tls-cert-secret-name",
 			corev1.SecretTypeTLS,
 			map[string]string{
-				"ca.crt":            string(externallyProvidedTLSServingCertPEM),
+				"ca.crt":            string(externallyProvidedCA.Bundle()),
 				v1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM),
 				v1.TLSPrivateKeyKey: string(externallyProvidedTLSServingKeyPEM),
 			})
@@ -1848,7 +1850,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}, 2*time.Minute, 500*time.Millisecond)
 	})
 
-	t.Run("using externally provided TLS serving cert with byte arrays", func(t *testing.T) {
+	t.Run("using externally provided TLS serving cert with data []byte arrays", func(t *testing.T) {
 		var externallyProvidedCA *certauthority.CA
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
@@ -1857,6 +1859,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
 		require.NoError(t, err)
 
+		// Specifically use corev1.Secret.Data
+		// https://kubernetes.io/docs/tasks/configmap-secret/managing-secret-using-config-file/#create-the-config-file
 		externallyProvidedTLSServingCertSecret := testlib.CreateTestSecretBytes(
 			t,
 			env.ConciergeNamespace,

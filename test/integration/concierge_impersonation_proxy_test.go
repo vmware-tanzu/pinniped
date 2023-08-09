@@ -1778,7 +1778,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		)
 	})
 
-	t.Run("using externally provided TLS serving cert", func(t *testing.T) {
+	t.Run("using externally provided TLS serving cert with stringData", func(t *testing.T) {
 		var externallyProvidedCA *certauthority.CA
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
@@ -1787,14 +1787,89 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
 		require.NoError(t, err)
 
+		// Specifically use corev1.Secret.StringData
+		// https://kubernetes.io/docs/tasks/configmap-secret/managing-secret-using-config-file/#create-the-config-file
 		externallyProvidedTLSServingCertSecret := testlib.CreateTestSecret(
 			t,
 			env.ConciergeNamespace,
 			"external-tls-cert-secret-name",
 			corev1.SecretTypeTLS,
 			map[string]string{
+				"ca.crt":            string(externallyProvidedCA.Bundle()),
 				v1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM),
 				v1.TLSPrivateKeyKey: string(externallyProvidedTLSServingKeyPEM),
+			})
+
+		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+		t.Cleanup(func() {
+			// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
+			// internally generated TLS serving cert derived from the original CA.
+			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+					Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+					ExternalEndpoint: proxyServiceEndpoint,
+					Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+						Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+					},
+				},
+			})
+
+			// Wait for the CredentialIssuer's impersonation proxy frontend strategy to be updated to the original CA bundle
+			testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+				_, impersonationProxyCACertPEM = performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+				return bytes.Equal(impersonationProxyCACertPEM, originalInternallyGeneratedCAPEM), nil
+			}, 2*time.Minute, 500*time.Millisecond)
+		})
+
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+				ExternalEndpoint: proxyServiceEndpoint,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				},
+				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
+					SecretName:               externallyProvidedTLSServingCertSecret.Name,
+				},
+			},
+		})
+
+		// Wait for the CredentialIssuer's impersonation proxy frontend strategy to be updated with the right CA bundle
+		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, impersonationProxyCACertPEM = performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+			return bytes.Equal(impersonationProxyCACertPEM, externallyProvidedCA.Bundle()), nil
+		}, 2*time.Minute, 500*time.Millisecond)
+
+		// Do a login via performImpersonatorDiscovery
+		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
+			return bytes.Equal(newImpersonationProxyCACertPEM, externallyProvidedCA.Bundle()), err
+		}, 2*time.Minute, 500*time.Millisecond)
+	})
+
+	t.Run("using externally provided TLS serving cert with data []byte arrays", func(t *testing.T) {
+		var externallyProvidedCA *certauthority.CA
+		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
+		require.NoError(t, err)
+
+		var externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM []byte
+		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
+		require.NoError(t, err)
+
+		// Specifically use corev1.Secret.Data
+		// https://kubernetes.io/docs/tasks/configmap-secret/managing-secret-using-config-file/#create-the-config-file
+		externallyProvidedTLSServingCertSecret := testlib.CreateTestSecretBytes(
+			t,
+			env.ConciergeNamespace,
+			"external-tls-cert-secret-name-integration-tests",
+			corev1.SecretTypeTLS,
+			map[string][]byte{
+				"ca.crt":            externallyProvidedCA.Bundle(),
+				v1.TLSCertKey:       externallyProvidedTLSServingCertPEM,
+				v1.TLSPrivateKeyKey: externallyProvidedTLSServingKeyPEM,
 			})
 
 		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)

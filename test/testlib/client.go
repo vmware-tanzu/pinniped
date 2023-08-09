@@ -364,6 +364,28 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	return created
 }
 
+func CreateTestSecretBytes(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, data map[string][]byte) *corev1.Secret {
+	t.Helper()
+	client := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
+		ObjectMeta: testObjectMeta(t, baseName),
+		Type:       secretType,
+		Data:       data,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
+		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test Secret %s", created.Name)
+	return created
+}
+
 func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
 	t.Helper()
 	env := IntegrationEnv(t)

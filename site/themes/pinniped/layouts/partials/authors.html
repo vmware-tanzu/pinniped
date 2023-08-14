@@ -1,0 +1,11 @@
+<p class="author">
+    {{ if (isset .Params "authors") }}
+        {{ $authsCount := .Params.authors | len }}
+        {{ $commaCount := sub $authsCount 2 }}
+        {{ range $i, $author := .Params.authors -}}
+            <a href="/tags/{{ $author | urlize }}">{{ $author }}</a>{{ if le $i $commaCount }},{{ end }}
+        {{ end }}
+    {{ else }}
+        <a href="/tags/{{ .Params.author | urlize }}">{{ .Params.author }}</a>
+    {{ end }}
+</p>

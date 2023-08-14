@@ -326,6 +326,12 @@ pre code {
             font-family: $metropolis-medium;
         }
     }
+    .blog-post-card {
+        p.no-margin {
+            margin-block-start: 0;
+            margin-block-end: 0;
+        }
+    }
 }
 
 .getting-started {

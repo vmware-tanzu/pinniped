@@ -11,6 +11,7 @@
 					<h2>{{ .Title }}</h2>
 					{{ partial "authors" .}}
 					<p class="date">{{ dateFormat "Jan 2, 2006" .Date }}</p>
+					{{ partial "tags-list" . }}
 					{{ .Content }}
 				</div>
 				{{ $related := (where (.Site.RegularPages.Related .) "Type" "posts") | first 3 }}

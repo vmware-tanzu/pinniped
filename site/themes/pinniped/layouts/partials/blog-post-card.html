@@ -6,5 +6,6 @@
         <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
         <time>{{ .Date.Format "January 2, 2006" }}</time>
         <p>{{ .Params.Excerpt }}</p>
+        {{ partial "tags-list" . }}
     </div>
 </div>

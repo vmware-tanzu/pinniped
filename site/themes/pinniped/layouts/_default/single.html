@@ -9,9 +9,7 @@
 			<div class="wrapper blog">
 				<div class="blog-post">
 					<h2>{{ .Title }}</h2>
-					<p class="author">
-						<a href="/tags/{{ .Params.author | urlize }}">{{ .Params.author }}</a>
-					</p>
+					{{ partial "authors" .}}
 					<p class="date">{{ dateFormat "Jan 2, 2006" .Date }}</p>
 					{{ .Content }}
 				</div>
@@ -29,6 +27,3 @@
 	</main>
 	{{ partial "getting-started" . }}
 {{ end }}
-
-
-

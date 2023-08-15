@@ -118,7 +118,7 @@ We've provided examples of using [OpenLDAP]({{< ref "docs/howto/install-supervis
 and [JumpCloud]({{< ref "docs/howto/install-supervisor.md" >}}) as LDAP providers.
 Stay tuned for examples of using Active Directory.
 
-The `pinniped` CLI has also been enhanced to support LDAP authentication. Now when `pinnped get kubectl` sees
+The `pinniped` CLI has also been enhanced to support LDAP authentication. Now when `pinniped get kubectl` sees
 that your cluster's Concierge is configured to use a Supervisor which has an LDAPIdentityProvider, then it
 will emit the appropriate kubeconfig to enable LDAP logins. When that kubeconfig is used with `kubectl`,
 the Pinniped plugin will directly prompt the user on the CLI for their LDAP username and password and

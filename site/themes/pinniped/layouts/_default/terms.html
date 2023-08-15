@@ -1,0 +1,28 @@
+{{ define "main" }}
+	<main>
+		<div class="hero subpage">
+			<div class="wrapper">
+				{{ if or .Title .Content }}
+				<div>
+					{{ with .Title }}<h1>{{ . }}</h1>{{ end }}
+					{{ with .Content }}<div>{{ . }}</div>{{ end }}
+				</div>
+				{{ end }}
+			</div>
+		</div>
+
+		<div class="wrapper terms">
+			<p>Blog posts have been tagged with the following set of tags (including authors):</p>
+			<ul>
+			{{range $name, $taxonomy := .Site.Taxonomies.tags}} {{ $cnt := .Count }}
+				{{ with $.Site.GetPage (printf "/tags/%s" $name) }}
+				<li>
+					<a href={{ .RelPermalink }} title="All pages with tag <i>{{$name}}</i>">{{ .Title }}</a>
+					<sup>{{$cnt}}</sup>
+				</li>
+				{{end}}
+			{{end}}
+			</ul>
+		</div>
+	</main>
+{{ end }}

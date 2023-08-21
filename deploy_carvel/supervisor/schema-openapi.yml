@@ -140,6 +140,7 @@ components:
           default: null
         no_proxy:
           type: string
+          description: NO_PROXY environment variable. do not proxy Kubernetes endpoints
           default: $(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local
         endpoints:
           type: object

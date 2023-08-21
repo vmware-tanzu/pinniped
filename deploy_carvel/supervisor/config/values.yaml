@@ -83,6 +83,7 @@ log_level: info #! By default, when this value is left unset, only warnings and 
 #@schema/desc "Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs). By default, when this value is left unset, logs are formatted in json. This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
 #@schema/nullable
 deprecated_log_format: json
+
 #@schema/desc "run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice"
 run_as_user: 65532
 #@schema/desc "run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice"
@@ -94,8 +95,9 @@ api_group_suffix: pinniped.dev
 #! Optional.
 #@schema/desc "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS, e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider. The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY."
 #@schema/nullable
-https_proxy: http://proxy.example.com #! e.g. http://proxy.example.com
-no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
+https_proxy: http://proxy.example.com
+#@schema/desc "NO_PROXY environment variable. do not proxy Kubernetes endpoints"
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local"
 
 #! Control the HTTP and HTTPS listeners of the Supervisor.
 #!

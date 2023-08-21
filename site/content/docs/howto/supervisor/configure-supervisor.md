@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: As an OIDC Issuer
+    name: Required Configuration
     weight: 10
     parent: howto-configure-supervisor
 aliases:
@@ -21,6 +21,36 @@ This guide explains how to expose the Supervisor's REST endpoints to clients.
 ## Prerequisites
 
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}).
+
+## Summary
+
+When the Pinniped Supervisor is installed using the YAML files which are attached to the
+[GitHub releases](https://github.com/vmware-tanzu/pinniped/releases), then the following additional configuration
+is required before your end users can use the Supervisor:
+
+1. You must create a new Service to expose port 8443 of the Supervisor pods, and you must configure your preferred
+   means of HTTPS ingress to allow the Supervisor to receive traffic from outside the cluster.
+
+   This is not included in the YAML files attached to the GitHub releases because there are many ways to control
+   HTTPS traffic in Kubernetes clusters. By allowing you to configure this yourself, you can take advantage of your
+   preferred solution.
+
+2. You must configure the Supervisor to act as an OIDC provider by creating a FederationDomain resource.
+   You must also create a TLS certificate for the Supervisor to use while serving these requests,
+   and place it in a Secret for the Supervisor to read.
+
+   This is also not included in the YAML files attached to the GitHub releases because there are many ways to
+   create and manage TLS certificates and certificate authorities (CAs).
+
+These steps are explained in detail in this guide.
+
+If you would like to see a full working example of configuring the Supervisor,
+please refer to the sections regarding configuring the Supervisor within other tutorial:
+- [Concierge with Supervisor: a complete example of every step, demonstrated using GKE clusters]({{< ref "concierge-and-supervisor-demo" >}})
+
+If you are using a different way to install Pinniped, such as 3rd party Helm Charts or the Pinniped that is
+integrated into VMware's TKG product, then that method of installation may already include an opinionated
+ingress and TLS configuration. In that case, please refer to the documentation for your method of installation.
 
 ## Exposing the Supervisor app's endpoints outside the cluster
 
@@ -44,15 +74,20 @@ outside the pod may be re-enabled using the
 until that setting is removed in a future release.
 
 Because there are many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
-The most common ways are:
+Some common approaches are:
 
 - Define a [TCP LoadBalancer Service](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer).
 
   In this case, the Service is a layer 4 load balancer which does not terminate TLS, so the Supervisor app needs to be
   configured with TLS certificates and will terminate the TLS connection itself (see the section about FederationDomain
-  below). The LoadBalancer Service should be configured to use the HTTPS port 443 of the Supervisor pods as its `targetPort`.
+  below). The LoadBalancer Service should be configured to use the HTTPS port 8443 of the Supervisor pods as its `targetPort`.
 
-- Or, define an [Ingress resource](https://kubernetes.io/docs/concepts/services-networking/ingress/).
+  This is the simplest way to expose the Supervisor's endpoints outside the cluster. If you are trying out Pinniped
+  for the first time, this is recommended during your trial. Before you move Pinniped into production, you may choose
+  to continue using a LoadBalancer Service, or you may prefer to explore one of the more complex setups described below,
+  depending on your networking requirements.
+
+- Or, define an [Ingress resource](https://kubernetes.io/docs/concepts/services-networking/ingress/) (or use the newer [Gateway API](https://gateway-api.sigs.k8s.io)).
 
    In this case, the [Ingress typically terminates TLS](https://kubernetes.io/docs/concepts/services-networking/ingress/#tls)
    and then talks plain HTTP to its backend.
@@ -115,9 +150,14 @@ create the Service will depend on how you choose to install the Supervisor:
 
 - If you installed using `ytt` then you can use
 the related `service_*` options from [deploy/supervisor/values.yml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml)
-to create a Service.
+to create a Service. This will expose the appropriate port.
 - If you installed using the pre-rendered manifests attached to the Pinniped GitHub releases, then you can create
 the Service separately after installing the Supervisor app.
+
+⚠️ **Note:** Do not expose the Service called `pinniped-supervisor-api` outside the cluster.
+That Service exists for a different purpose internal to the cluster, and it exposes a different port (10250).
+Instead, create another Service to expose port 8443, by using the `ytt` options mentioned above or by manually
+creating a Service as shown below.
 
 There is no Ingress included in either the `ytt` templates or the pre-rendered manifests,
 so if you choose to use an Ingress then you'll need to create the Ingress separately after installing the Supervisor app.
@@ -213,9 +253,13 @@ Each FederationDomain can be used to provide access to a set of Kubernetes clust
 
 ### Configuring TLS for the Supervisor OIDC endpoints
 
-If you have terminated TLS outside the app, for example using service mesh which handles encrypting the traffic for you,
+If you have terminated TLS outside the Supervisor app as described in the section above for using a service mesh,
 then you do not need to configure TLS certificates on the FederationDomain.  Otherwise, you need to configure the
-Supervisor app to terminate TLS.
+Supervisor app with a TLS certificate.
+
+The TLS certificate for the Supervisor should typically be created for the DNS name or IP address that your end users
+will use to make requests to the Supervisor. This should be the same DNS name or IP address that you declared in the
+FederationDomain's `spec.issuer`.
 
 There are two places to optionally configure TLS certificates:
 
@@ -228,11 +272,16 @@ Each incoming request to the endpoints of the Supervisor may use TLS certificate
 of the above ways. The TLS certificate to present to the client is selected dynamically for each request
 using Server Name Indication (SNI):
 - When incoming requests use SNI to specify a hostname, and that hostname matches the hostname
-  of a FederationDomain, and that FederationDomain specifies `spec.tls.secretName`, then the TLS certificate from the
-  `spec.tls.secretName` Secret will be used.
+  of a FederationDomain's `spec.issuer` (case-insensitive hostname matching), and that FederationDomain
+  specifies `spec.tls.secretName`, then the TLS certificate from the `spec.tls.secretName` Secret will be used.
 - Any other request will use the default TLS certificate, if it is specified. This includes any request to a host
   which is an IP address, because SNI does not work for IP addresses. If the default TLS certificate is not specified,
-  then these requests will fail TLS certificate verification.
+  then these requests will fail TLS certificate verification and your end users will see the error message
+  `pinniped supervisor has invalid TLS serving certificate configuration`.
+
+Your ingress software may require special configuration to enable the inclusion of the SNI information from the
+original request into the requests that it makes to the Supervisor. Please refer the documentation for your ingress
+solution for details.
 
 It is recommended that you have a DNS entry for your load balancer or Ingress, and that you configure the
 OIDC provider's `issuer` using that DNS hostname, and that the TLS certificate for that provider also

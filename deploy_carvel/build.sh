@@ -10,4 +10,4 @@
 # schema generation from values.yaml
 # TODO: figure out why this isn't working.
 ytt --file supervisor/config/values.yaml --data-values-schema-inspect --output openapi-v3 > supervisor/schema-openapi.yml
-# ytt --file concierge/config/values.yaml --data-values-schema-inspect --output openapi-v3 > concierge/schema-openapi.yml
+ytt --file concierge/config/values.yaml --data-values-schema-inspect --output openapi-v3 > concierge/schema-openapi.yml

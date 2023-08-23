@@ -38,6 +38,7 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
@@ -4118,7 +4119,7 @@ func TestRefreshGrant(t *testing.T) {
 			)
 
 			if test.refreshRequest.want.wantStatus == http.StatusOK {
-				wantIDToken := contains(test.refreshRequest.want.wantSuccessBodyFields, "id_token")
+				wantIDToken := slices.Contains(test.refreshRequest.want.wantSuccessBodyFields, "id_token")
 
 				var parsedRefreshResponseBody map[string]interface{}
 				require.NoError(t, json.Unmarshal(refreshResponse.Body.Bytes(), &parsedRefreshResponseBody))
@@ -4283,8 +4284,8 @@ func requireTokenEndpointBehavior(
 		require.NoError(t, json.Unmarshal(tokenEndpointResponse.Body.Bytes(), &parsedResponseBody))
 		require.ElementsMatch(t, test.wantSuccessBodyFields, getMapKeys(parsedResponseBody))
 
-		wantIDToken := contains(test.wantSuccessBodyFields, "id_token")
-		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
+		wantIDToken := slices.Contains(test.wantSuccessBodyFields, "id_token")
+		wantRefreshToken := slices.Contains(test.wantSuccessBodyFields, "refresh_token")
 
 		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets, requestTime)
 		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
@@ -4685,7 +4686,7 @@ func requireValidOIDCStorage(
 ) {
 	t.Helper()
 
-	if contains(wantGrantedScopes, "openid") {
+	if slices.Contains(wantGrantedScopes, "openid") {
 		// Make sure the OIDC session is still there. Note that Fosite stores OIDC sessions using the full auth code as a key.
 		storedRequest, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
 		require.NoError(t, err)
@@ -4949,15 +4950,6 @@ func getMapKeys(m map[string]interface{}) []string {
 		keys = append(keys, key)
 	}
 	return keys
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, hay := range haystack {
-		if hay == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func toSliceOfInterface(s []string) []interface{} {

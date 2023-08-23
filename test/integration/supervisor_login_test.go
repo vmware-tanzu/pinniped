@@ -61,14 +61,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 	}
 
-	addPrefixToEach := func(prefix string, addToEach []string) []string {
-		result := make([]string, len(addToEach))
-		for i, s := range addToEach {
-			result[i] = fmt.Sprintf("%s%s", prefix, s)
-		}
-		return result
-	}
-
 	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {
 		return idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -1891,7 +1883,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamOIDC.Username) + "$"
 			},
-			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups),
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups),
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
 				// Even if we update the groups to some names that did not come from the OIDC server,
 				// we expect that it will revert to the real groups from the OIDC server after we refresh.
@@ -1901,7 +1893,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
 					sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				}
-				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups)
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups)
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -1958,7 +1950,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
 				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
 				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
-				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -1976,7 +1968,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
-			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
 		},
 		{
 			name:      "ldap browser flow with email as username and groups names as DNs and using an LDAP provider which supports TLS with identity transformations",
@@ -2023,7 +2015,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
 				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
 				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
-				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -2041,7 +2033,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
 			},
-			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
 		},
 		{
 			name:      "active directory CLI flow with all default options with identity transformations",
@@ -2091,7 +2083,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
 				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
 				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
-				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -2111,7 +2103,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
 			},
-			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
 		},
 		{
 			name:      "active directory browser flow with all default options with identity transformations",
@@ -2158,7 +2150,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
 				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
 				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
-				return addPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -2178,7 +2170,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
 			},
-			wantDownstreamIDTokenGroups: addPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
 		},
 	}
 

@@ -30,12 +30,14 @@ import (
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -43,7 +45,7 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-func TestAuthorizationEndpoint(t *testing.T) {
+func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	const (
 		oidcUpstreamName                     = "some-oidc-idp"
 		oidcUpstreamResourceUID              = "oidc-resource-uid"
@@ -80,6 +82,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		pinnipedCLIClientID = "pinniped-cli"
 		dynamicClientID     = "client.oauth.pinniped.dev-test-name"
 		dynamicClientUID    = "fake-client-uid"
+
+		transformationUsernamePrefix = "username_prefix:"
+		transformationGroupsPrefix   = "groups_prefix:"
 	)
 
 	require.Len(t, happyState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
@@ -221,6 +226,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"state":             happyState,
 		}
 
+		fositeAccessDeniedWithConfiguredPolicyRejectionHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: configured identity policy rejected this authentication: authentication was rejected by a configured policy.",
+			"state":             happyState,
+		}
+
 		fositeLoginRequiredErrorQuery = map[string]string{
 			"error":             "login_required",
 			"error_description": "The Authorization Server requires End-User authentication.",
@@ -324,19 +335,21 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return nil, false, nil
 	}
 
-	upstreamLDAPIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
-		WithName(ldapUpstreamName).
-		WithResourceUID(ldapUpstreamResourceUID).
-		WithURL(parsedUpstreamLDAPURL).
-		WithAuthenticateFunc(ldapAuthenticateFunc).
-		Build()
+	upstreamLDAPIdentityProviderBuilder := func() *oidctestutil.TestUpstreamLDAPIdentityProviderBuilder {
+		return oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			WithName(ldapUpstreamName).
+			WithResourceUID(ldapUpstreamResourceUID).
+			WithURL(parsedUpstreamLDAPURL).
+			WithAuthenticateFunc(ldapAuthenticateFunc)
+	}
 
-	upstreamActiveDirectoryIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
-		WithName(activeDirectoryUpstreamName).
-		WithResourceUID(activeDirectoryUpstreamResourceUID).
-		WithURL(parsedUpstreamLDAPURL).
-		WithAuthenticateFunc(ldapAuthenticateFunc).
-		Build()
+	upstreamActiveDirectoryIdentityProviderBuilder := func() *oidctestutil.TestUpstreamLDAPIdentityProviderBuilder {
+		return oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			WithName(activeDirectoryUpstreamName).
+			WithResourceUID(activeDirectoryUpstreamResourceUID).
+			WithURL(parsedUpstreamLDAPURL).
+			WithAuthenticateFunc(ldapAuthenticateFunc)
+	}
 
 	erroringUpstreamLDAPIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 		WithName(ldapUpstreamName).
@@ -550,16 +563,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 	}
 
-	expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups := func(wantUsername string, wantGroups []string) *psession.CustomSessionData {
-		copyOfCustomSession := *expectedHappyOIDCPasswordGrantCustomSession
-		copyOfOIDC := *(expectedHappyOIDCPasswordGrantCustomSession.OIDC)
-		copyOfCustomSession.OIDC = &copyOfOIDC
-		copyOfCustomSession.Username = wantUsername
-		copyOfCustomSession.UpstreamUsername = wantUsername
-		copyOfCustomSession.UpstreamGroups = wantGroups
-		return &copyOfCustomSession
-	}
-
 	expectedHappyOIDCPasswordGrantCustomSessionWithAccessToken := &psession.CustomSessionData{
 		Username:         oidcUpstreamUsername,
 		UpstreamUsername: oidcUpstreamUsername,
@@ -572,6 +575,26 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			UpstreamSubject:     oidcUpstreamSubject,
 			UpstreamIssuer:      oidcUpstreamIssuer,
 		},
+	}
+
+	withUsernameAndGroupsInCustomSession := func(expectedCustomSessionData *psession.CustomSessionData, wantDownstreamUsername string, wantUpstreamUsername string, wantUpstreamGroups []string) *psession.CustomSessionData {
+		copyOfCustomSession := *expectedCustomSessionData
+		if expectedCustomSessionData.LDAP != nil {
+			copyOfLDAP := *(expectedCustomSessionData.LDAP)
+			copyOfCustomSession.LDAP = &copyOfLDAP
+		}
+		if expectedCustomSessionData.OIDC != nil {
+			copyOfOIDC := *(expectedCustomSessionData.OIDC)
+			copyOfCustomSession.OIDC = &copyOfOIDC
+		}
+		if expectedCustomSessionData.ActiveDirectory != nil {
+			copyOfActiveDirectory := *(expectedCustomSessionData.ActiveDirectory)
+			copyOfCustomSession.ActiveDirectory = &copyOfActiveDirectory
+		}
+		copyOfCustomSession.Username = wantDownstreamUsername
+		copyOfCustomSession.UpstreamUsername = wantUpstreamUsername
+		copyOfCustomSession.UpstreamGroups = wantUpstreamGroups
+		return &copyOfCustomSession
 	}
 
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
@@ -588,6 +611,24 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	incomingCookieCSRFValue := "csrf-value-from-cookie"
 	encodedIncomingCookieCSRFValue, err := happyCookieEncoder.Encode("csrf", incomingCookieCSRFValue)
 	require.NoError(t, err)
+
+	transformer, err := celtransformer.NewCELTransformer(5 * time.Second) // CI workers can be slow, so allow slow transforms
+	require.NoError(t, err)
+
+	prefixUsernameAndGroupsPipeline := idtransform.NewTransformationPipeline()
+	rejectAuthPipeline := idtransform.NewTransformationPipeline()
+
+	var compiledTransform idtransform.IdentityTransformation
+	compiledTransform, err = transformer.CompileTransformation(&celtransformer.UsernameTransformation{Expression: fmt.Sprintf(`"%s" + username`, transformationUsernamePrefix)}, nil)
+	require.NoError(t, err)
+	prefixUsernameAndGroupsPipeline.AppendTransformation(compiledTransform)
+	compiledTransform, err = transformer.CompileTransformation(&celtransformer.GroupsTransformation{Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, transformationGroupsPrefix)}, nil)
+	require.NoError(t, err)
+	prefixUsernameAndGroupsPipeline.AppendTransformation(compiledTransform)
+
+	compiledTransform, err = transformer.CompileTransformation(&celtransformer.AllowAuthenticationPolicy{Expression: `username == "someone-special"`}, nil)
+	require.NoError(t, err)
+	rejectAuthPipeline.AppendTransformation(compiledTransform)
 
 	type testCase struct {
 		name string
@@ -673,7 +714,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "LDAP upstream browser flow happy path using GET without a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -689,8 +730,64 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
+			name: "OIDC upstream browser flow happy path using GET without a CSRF cookie using backwards compatibility mode to have a default IDP (display name does not need to be sent as query param)",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
+				WithDefaultIDPDisplayName(oidcUpstreamName), // specify which IDP is the backwards-compatibility mode IDP
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPath, // does not include IDP display name as query param
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name: "with multiple IDPs available, request chooses to use OIDC browser flow",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPathForOIDCUpstream, // includes IDP display name of OIDC upstream
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name: "with multiple IDPs available, request chooses to use LDAP browser flow",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPathForLDAPUpstream, // includes IDP display name of LDAP upstream
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(nil, "", ldapUpstreamName, "ldap")}),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
 			name:                                   "LDAP upstream browser flow happy path using GET without a CSRF cookie using a dynamic client",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			kubeResources:                          addFullyCapableDynamicClientAndSecretToKubeResources,
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
@@ -708,7 +805,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "Active Directory upstream browser flow happy path using GET without a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -725,7 +822,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "Active Directory upstream browser flow happy path using GET without a CSRF cookie using a dynamic client",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			kubeResources:                          addFullyCapableDynamicClientAndSecretToKubeResources,
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
@@ -762,6 +859,48 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
+		},
+		{
+			name: "OIDC upstream password grant happy path using GET with identity transformations which change username and groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
+			customUsernameHeader:              ptr.To(oidcUpstreamUsername),
+			customPasswordHeader:              ptr.To(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     transformationUsernamePrefix + oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       testutil.AddPrefixToEach(transformationGroupsPrefix, oidcUpstreamGroupMembership),
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				transformationUsernamePrefix+oidcUpstreamUsername,
+				oidcUpstreamUsername,
+				oidcUpstreamGroupMembership,
+			),
+		},
+		{
+			name: "OIDC upstream password grant with identity transformations which rejects auth",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
+			customUsernameHeader:  ptr.To(oidcUpstreamUsername),
+			customPasswordHeader:  ptr.To(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       jsonContentType,
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithConfiguredPolicyRejectionHintErrorQuery),
+			wantBodyString:        "",
 		},
 		{
 			name: "OIDC upstream password grant happy path using GET with additional claim mappings",
@@ -827,7 +966,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "LDAP cli upstream happy path using GET",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
@@ -847,8 +986,48 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 		},
 		{
+			name: "LDAP cli upstream happy path using GET with identity transformations which change username and groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPathForLDAPUpstream,
+			customUsernameHeader:              ptr.To(happyLDAPUsername),
+			customPasswordHeader:              ptr.To(happyLDAPPassword),
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     transformationUsernamePrefix + happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       testutil.AddPrefixToEach(transformationGroupsPrefix, happyLDAPGroups),
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyLDAPUpstreamCustomSession,
+				transformationUsernamePrefix+happyLDAPUsernameFromAuthenticator,
+				happyLDAPUsernameFromAuthenticator,
+				happyLDAPGroups,
+			),
+		},
+		{
+			name: "LDAP cli upstream with identity transformations which reject auth",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			method:               http.MethodGet,
+			path:                 happyGetRequestPathForLDAPUpstream,
+			customUsernameHeader: ptr.To(happyLDAPUsername),
+			customPasswordHeader: ptr.To(happyLDAPPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      jsonContentType,
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithConfiguredPolicyRejectionHintErrorQuery),
+			wantBodyString:       "",
+		},
+		{
 			name:                              "ActiveDirectory cli upstream happy path using GET",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPathForADUpstream,
 			customUsernameHeader:              ptr.To(happyLDAPUsername),
@@ -886,7 +1065,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "LDAP upstream browser flow happy path using GET with a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -903,7 +1082,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "Active Directory upstream browser flow happy path using GET with a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -959,7 +1138,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "LDAP upstream browser flow happy path using POST",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -978,7 +1157,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "LDAP upstream browser flow happy path using POST with a dynamic client",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			kubeResources:                          addFullyCapableDynamicClientAndSecretToKubeResources,
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
@@ -998,7 +1177,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "Active Directory upstream browser flow happy path using POST",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -1017,7 +1196,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                                   "Active Directory upstream browser flow happy path using POST with a dynamic client",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			kubeResources:                          addFullyCapableDynamicClientAndSecretToKubeResources,
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
@@ -1061,7 +1240,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "LDAP cli upstream happy path using POST",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                            http.MethodPost,
 			path:                              "/some/path",
 			contentType:                       formContentType,
@@ -1084,7 +1263,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "Active Directory cli upstream happy path using POST",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:                            http.MethodPost,
 			path:                              "/some/path",
 			contentType:                       formContentType,
@@ -1264,7 +1443,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:   "LDAP upstream happy path when downstream redirect uri matches what is configured for client except for the port number",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
@@ -1430,7 +1609,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "wrong upstream password for LDAP authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1442,7 +1621,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "wrong upstream password for Active Directory authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1454,7 +1633,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "wrong upstream username for LDAP authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To("wrong-username"),
@@ -1466,7 +1645,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "wrong upstream username for Active Directory authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To("wrong-username"),
@@ -1490,7 +1669,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing upstream username but has password on request for LDAP authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: nil, // do not send header
@@ -1502,7 +1681,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing upstream username on request for Active Directory authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: nil, // do not send header
@@ -1514,7 +1693,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing upstream password on request for LDAP authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForLDAPUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1526,7 +1705,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing upstream password on request for Active Directory authentication",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPathForADUpstream,
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1653,7 +1832,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "dynamic clients are not allowed to use LDAP CLI-flow authentication because we don't want them to handle user credentials",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
@@ -1666,7 +1845,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "dynamic clients are not allowed to use Active Directory CLI-flow authentication because we don't want them to handle user credentials",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			kubeResources:        addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
@@ -1727,7 +1906,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:   "downstream redirect uri does not match what is configured for client when using LDAP upstream",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
@@ -1740,7 +1919,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:   "downstream redirect uri does not match what is configured for client when using active directory upstream",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			path: modifiedHappyGetRequestPathForADUpstream(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
@@ -1778,7 +1957,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "downstream client does not exist when using LDAP upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:          http.MethodGet,
 			path:            modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": "invalid-client"}),
 			wantStatus:      http.StatusUnauthorized,
@@ -1787,7 +1966,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "downstream client does not exist when using active directory upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:          http.MethodGet,
 			path:            modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": "invalid-client"}),
 			wantStatus:      http.StatusUnauthorized,
@@ -1843,7 +2022,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "response type is unsupported when using LDAP cli upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": "unsupported"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -1855,7 +2034,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "response type is unsupported when using LDAP browser upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusSeeOther,
@@ -1865,7 +2044,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:          "response type is unsupported when using LDAP browser upstream with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{
@@ -1880,7 +2059,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "response type is unsupported when using active directory cli upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": "unsupported"}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
@@ -1892,7 +2071,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "response type is unsupported when using active directory browser upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusSeeOther,
@@ -1902,7 +2081,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:          "response type is unsupported when using active directory browser upstream with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: modifiedHappyGetRequestPathForADUpstream(map[string]string{
@@ -1989,7 +2168,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "downstream scopes do not match what is configured for client using LDAP upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"scope": "openid tuna"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -2001,7 +2180,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "downstream scopes do not match what is configured for client using Active Directory upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"scope": "openid tuna"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -2056,7 +2235,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing response type in request using LDAP cli upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
@@ -2068,7 +2247,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "missing response type in request using LDAP browser upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
@@ -2078,7 +2257,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "missing response type in request using LDAP browser upstream with dynamic client",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
@@ -2089,7 +2268,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "missing response type in request using Active Directory cli upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": ""}),
 			customUsernameHeader: ptr.To(oidcUpstreamUsername),
@@ -2101,7 +2280,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "missing response type in request using Active Directory browser upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusSeeOther,
@@ -2111,7 +2290,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:               "missing response type in request using Active Directory browser upstream with dynamic client",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProvider),
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder().Build()),
 			kubeResources:      addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPathForADUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep, "response_type": ""}),
@@ -2147,7 +2326,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "missing client id in request using LDAP upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:          http.MethodGet,
 			path:            modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"client_id": ""}),
 			wantStatus:      http.StatusUnauthorized,
@@ -2201,7 +2380,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "missing PKCE code_challenge in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge": ""}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
@@ -2259,7 +2438,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "invalid value for PKCE code_challenge_method in request using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
@@ -2317,7 +2496,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "when PKCE code_challenge_method in request is `plain` using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": "plain"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
@@ -2375,7 +2554,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "missing PKCE code_challenge_method in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"code_challenge_method": ""}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
@@ -2441,7 +2620,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
 			// through that part of the fosite library when using an LDAP upstream.
 			name:                         "prompt param is not allowed to have none and another legal value at the same time using LDAP upstream",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"prompt": "none login"}),
 			customUsernameHeader:         ptr.To(happyLDAPUsername),
@@ -2518,7 +2697,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:   "happy path: downstream OIDC validations are skipped when the openid scope was not requested using LDAP upstream",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
 			path:                              modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"prompt": "none login", "scope": "email"}),
@@ -2560,7 +2739,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped,
 				oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped,
 				nil,
 			),
@@ -2589,7 +2770,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				"joe@whitehouse.gov",
 				"joe@whitehouse.gov",
 				oidcUpstreamGroupMembership,
 			),
@@ -2619,7 +2802,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				"joe@whitehouse.gov",
 				"joe@whitehouse.gov",
 				oidcUpstreamGroupMembership,
 			),
@@ -2650,7 +2835,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				"joe",
 				"joe",
 				oidcUpstreamGroupMembership,
 			),
@@ -2713,7 +2900,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				oidcUpstreamSubject,
 				oidcUpstreamSubject,
 				oidcUpstreamGroupMembership,
 			),
@@ -2741,7 +2930,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				[]string{"notAnArrayGroup1 notAnArrayGroup2"},
 			),
@@ -2769,7 +2960,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				[]string{"group1", "group2"},
 			),
@@ -2811,7 +3004,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData: expectedHappyOIDCPasswordGrantCustomSessionWithUsernameAndGroups(
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyOIDCPasswordGrantCustomSession,
+				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				nil,
 			),
@@ -3026,7 +3221,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:                 "downstream state does not have enough entropy using LDAP upstream",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPathForLDAPUpstream(map[string]string{"state": "short"}),
 			customUsernameHeader: ptr.To(happyLDAPUsername),
@@ -3114,6 +3309,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: plainContentType,
 			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. 'pinniped_idp_name' param error: identity provider not found: this federation domain does not have a default identity provider"}`,
+		},
+		{
+			name:            "could not find requested IDP display name",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			method:          http.MethodGet,
+			path:            happyGetRequestPathForLDAPUpstream, // includes param to request a different IDP display name than what is available
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: plainContentType,
+			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. 'pinniped_idp_name' param error: did not find IDP with name 'some-ldap-idp'"}`,
 		},
 		{
 			name:            "post with invalid form in the body",

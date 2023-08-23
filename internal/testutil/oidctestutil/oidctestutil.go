@@ -467,10 +467,6 @@ type TestFederationDomainIdentityProvidersListerFinder struct {
 	defaultIDPDisplayName                    string
 }
 
-func (t *TestFederationDomainIdentityProvidersListerFinder) SetDefaultIDPDisplayName(displayName string) {
-	t.defaultIDPDisplayName = displayName
-}
-
 func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider {
 	fdIDPs := make([]*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, len(t.upstreamOIDCIdentityProviders))
 	for i, testIDP := range t.upstreamOIDCIdentityProviders {
@@ -570,6 +566,7 @@ type UpstreamIDPListerBuilder struct {
 	upstreamOIDCIdentityProviders            []*TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*TestUpstreamLDAPIdentityProvider
+	defaultIDPDisplayName                    string
 }
 
 func (b *UpstreamIDPListerBuilder) WithOIDC(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) *UpstreamIDPListerBuilder {
@@ -587,11 +584,17 @@ func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryId
 	return b
 }
 
+func (b *UpstreamIDPListerBuilder) WithDefaultIDPDisplayName(defaultIDPDisplayName string) *UpstreamIDPListerBuilder {
+	b.defaultIDPDisplayName = defaultIDPDisplayName
+	return b
+}
+
 func (b *UpstreamIDPListerBuilder) BuildFederationDomainIdentityProvidersListerFinder() *TestFederationDomainIdentityProvidersListerFinder {
 	return &TestFederationDomainIdentityProvidersListerFinder{
 		upstreamOIDCIdentityProviders:            b.upstreamOIDCIdentityProviders,
 		upstreamLDAPIdentityProviders:            b.upstreamLDAPIdentityProviders,
 		upstreamActiveDirectoryIdentityProviders: b.upstreamActiveDirectoryIdentityProviders,
+		defaultIDPDisplayName:                    b.defaultIDPDisplayName,
 	}
 }
 

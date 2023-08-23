@@ -27,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/transformtestutil"
 )
 
 func TestPostLoginEndpoint(t *testing.T) {
@@ -61,6 +62,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 		passParam                = "password"
 		badUserPassErrParamValue = "login_error"
 		internalErrParamValue    = "internal_error"
+
+		transformationUsernamePrefix = "username_prefix:"
+		transformationGroupsPrefix   = "groups_prefix:"
 	)
 
 	var (
@@ -85,6 +89,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 		fositePromptHasNoneAndOtherValueErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed.",
+			"state":             happyDownstreamState,
+		}
+
+		fositeConfiguredPolicyRejectedAuthErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: configured identity policy rejected this authentication: authentication was rejected by a configured policy.",
 			"state":             happyDownstreamState,
 		}
 	)
@@ -172,19 +182,21 @@ func TestPostLoginEndpoint(t *testing.T) {
 		return nil, false, nil
 	}
 
-	upstreamLDAPIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+	upstreamLDAPIdentityProviderBuilder := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 		WithName(ldapUpstreamName).
 		WithResourceUID(ldapUpstreamResourceUID).
 		WithURL(parsedUpstreamLDAPURL).
-		WithAuthenticateFunc(ldapAuthenticateFunc).
-		Build()
+		WithAuthenticateFunc(ldapAuthenticateFunc)
 
-	upstreamActiveDirectoryIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+	upstreamLDAPIdentityProvider := upstreamLDAPIdentityProviderBuilder.Build()
+
+	upstreamActiveDirectoryIdentityProviderBuilder := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 		WithName(activeDirectoryUpstreamName).
 		WithResourceUID(activeDirectoryUpstreamResourceUID).
 		WithURL(parsedUpstreamLDAPURL).
-		WithAuthenticateFunc(ldapAuthenticateFunc).
-		Build()
+		WithAuthenticateFunc(ldapAuthenticateFunc)
+
+	upstreamActiveDirectoryIdentityProvider := upstreamActiveDirectoryIdentityProviderBuilder.Build()
 
 	erroringUpstreamLDAPIdentityProvider := oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 		WithName(ldapUpstreamName).
@@ -224,6 +236,26 @@ func TestPostLoginEndpoint(t *testing.T) {
 		ActiveDirectory: nil,
 	}
 
+	withUsernameAndGroupsInCustomSession := func(expectedCustomSessionData *psession.CustomSessionData, wantDownstreamUsername string, wantUpstreamUsername string, wantUpstreamGroups []string) *psession.CustomSessionData {
+		copyOfCustomSession := *expectedCustomSessionData
+		if expectedCustomSessionData.LDAP != nil {
+			copyOfLDAP := *(expectedCustomSessionData.LDAP)
+			copyOfCustomSession.LDAP = &copyOfLDAP
+		}
+		if expectedCustomSessionData.OIDC != nil {
+			copyOfOIDC := *(expectedCustomSessionData.OIDC)
+			copyOfCustomSession.OIDC = &copyOfOIDC
+		}
+		if expectedCustomSessionData.ActiveDirectory != nil {
+			copyOfActiveDirectory := *(expectedCustomSessionData.ActiveDirectory)
+			copyOfCustomSession.ActiveDirectory = &copyOfActiveDirectory
+		}
+		copyOfCustomSession.Username = wantDownstreamUsername
+		copyOfCustomSession.UpstreamUsername = wantUpstreamUsername
+		copyOfCustomSession.UpstreamGroups = wantUpstreamGroups
+		return &copyOfCustomSession
+	}
+
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
 	happyAuthcodeDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState
 
@@ -251,6 +283,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 		require.NoError(t, kubeClient.Tracker().Add(secret))
 	}
+
+	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
+	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
 	tests := []struct {
 		name          string
@@ -316,6 +351,34 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 		},
 		{
+			name: "happy LDAP login with identity transformations which modify the username and group names",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder.WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()). // should pick this one
+				WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
+			decodedState:                      happyLDAPDecodedState,
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     transformationUsernamePrefix + happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       testutil.AddPrefixToEach(transformationGroupsPrefix, happyLDAPGroups),
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyLDAPUpstreamCustomSession,
+				transformationUsernamePrefix+happyLDAPUsernameFromAuthenticator,
+				happyLDAPUsernameFromAuthenticator,
+				happyLDAPGroups,
+			),
+		},
+		{
 			name: "happy LDAP login with dynamic client",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProvider). // should pick this one
@@ -361,6 +424,34 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
+		},
+		{
+			name: "happy AD login with identity transformations which modify the username and group names",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(erroringUpstreamLDAPIdentityProvider).
+				WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder.WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()), // should pick this one
+			decodedState:                      happyActiveDirectoryDecodedState,
+			formParams:                        happyUsernamePasswordFormParams,
+			wantStatus:                        http.StatusSeeOther,
+			wantContentType:                   htmlContentType,
+			wantBodyString:                    "",
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
+			wantDownstreamIDTokenUsername:     transformationUsernamePrefix + happyLDAPUsernameFromAuthenticator,
+			wantDownstreamIDTokenGroups:       testutil.AddPrefixToEach(transformationGroupsPrefix, happyLDAPGroups),
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClient:              downstreamPinnipedCLIClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: withUsernameAndGroupsInCustomSession(
+				expectedHappyActiveDirectoryUpstreamCustomSession,
+				transformationUsernamePrefix+happyLDAPUsernameFromAuthenticator,
+				happyLDAPUsernameFromAuthenticator,
+				happyLDAPGroups,
+			),
 		},
 		{
 			name: "happy AD login with dynamic client",
@@ -869,6 +960,28 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantBodyString:               "",
 			wantRedirectLocationString:   urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
 			wantUnnecessaryStoredRecords: 1, // fosite already stored the authcode before it noticed the error
+		},
+		{
+			name: "LDAP login using identity transformations which reject the authentication",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder.WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			decodedState:               happyLDAPDecodedState,
+			formParams:                 happyUsernamePasswordFormParams,
+			wantStatus:                 http.StatusSeeOther,
+			wantContentType:            htmlContentType,
+			wantBodyString:             "",
+			wantRedirectLocationString: urlWithQuery(downstreamRedirectURI, fositeConfiguredPolicyRejectedAuthErrorQuery),
+		},
+		{
+			name: "AD login using identity transformations which reject the authentication",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder.WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			decodedState:               happyActiveDirectoryDecodedState,
+			formParams:                 happyUsernamePasswordFormParams,
+			wantStatus:                 http.StatusSeeOther,
+			wantContentType:            htmlContentType,
+			wantBodyString:             "",
+			wantRedirectLocationString: urlWithQuery(downstreamRedirectURI, fositeConfiguredPolicyRejectedAuthErrorQuery),
 		},
 		{
 			name: "downstream state does not have enough entropy",

@@ -30,17 +30,16 @@ import (
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
-	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -612,23 +611,8 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	encodedIncomingCookieCSRFValue, err := happyCookieEncoder.Encode("csrf", incomingCookieCSRFValue)
 	require.NoError(t, err)
 
-	transformer, err := celtransformer.NewCELTransformer(5 * time.Second) // CI workers can be slow, so allow slow transforms
-	require.NoError(t, err)
-
-	prefixUsernameAndGroupsPipeline := idtransform.NewTransformationPipeline()
-	rejectAuthPipeline := idtransform.NewTransformationPipeline()
-
-	var compiledTransform idtransform.IdentityTransformation
-	compiledTransform, err = transformer.CompileTransformation(&celtransformer.UsernameTransformation{Expression: fmt.Sprintf(`"%s" + username`, transformationUsernamePrefix)}, nil)
-	require.NoError(t, err)
-	prefixUsernameAndGroupsPipeline.AppendTransformation(compiledTransform)
-	compiledTransform, err = transformer.CompileTransformation(&celtransformer.GroupsTransformation{Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, transformationGroupsPrefix)}, nil)
-	require.NoError(t, err)
-	prefixUsernameAndGroupsPipeline.AppendTransformation(compiledTransform)
-
-	compiledTransform, err = transformer.CompileTransformation(&celtransformer.AllowAuthenticationPolicy{Expression: `username == "someone-special"`}, nil)
-	require.NoError(t, err)
-	rejectAuthPipeline.AppendTransformation(compiledTransform)
+	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
+	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
 	type testCase struct {
 		name string

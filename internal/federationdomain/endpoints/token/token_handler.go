@@ -186,7 +186,8 @@ func upstreamOIDCRefresh(
 	}
 	mergedClaims := validatedTokens.IDToken.Claims
 
-	// To the extent possible, check that the user's basic identity hasn't changed.
+	// To the extent possible, check that the user's basic identity hasn't changed. We check that their downstream
+	// username has not changed separately below, as part of reapplying the transformations.
 	err = validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, session)
 	if err != nil {
 		return err

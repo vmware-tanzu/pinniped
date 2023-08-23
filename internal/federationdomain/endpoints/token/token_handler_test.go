@@ -61,6 +61,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
@@ -1749,6 +1750,9 @@ func TestRefreshGrant(t *testing.T) {
 		activeDirectoryUpstreamResourceUID = "ad-resource-uid"
 		activeDirectoryUpstreamType        = "activedirectory"
 		activeDirectoryUpstreamDN          = "some-ad-user-dn"
+
+		transformationUsernamePrefix = "username_prefix:"
+		transformationGroupsPrefix   = "groups_prefix:"
 	)
 
 	ldapUpstreamURL, _ := url.Parse("some-url")
@@ -1861,6 +1865,13 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
+	happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownsteamGroups []string) tokenEndpointResponseExpectedValues {
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
+		want.wantUsername = wantDownstreamUsername
+		want.wantGroups = wantDownsteamGroups
+		return want
+	}
+
 	withWantDynamicClientID := func(w tokenEndpointResponseExpectedValues) tokenEndpointResponseExpectedValues {
 		w.wantClientID = dynamicClientID
 		return w
@@ -1891,6 +1902,12 @@ func TestRefreshGrant(t *testing.T) {
 
 	happyRefreshTokenResponseForLDAP := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
+		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
+		return want
+	}
+
+	happyRefreshTokenResponseForLDAPWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownsteamGroups []string) tokenEndpointResponseExpectedValues {
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownsteamGroups)
 		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
 		return want
 	}
@@ -1945,10 +1962,20 @@ func TestRefreshGrant(t *testing.T) {
 		},
 	}
 
+	happyLDAPCustomSessionDataWithUsername := func(wantDownstreamUsername string) *psession.CustomSessionData {
+		copyOfCustomSession := *happyLDAPCustomSessionData
+		copyOfLDAP := *(happyLDAPCustomSessionData.LDAP)
+		copyOfCustomSession.LDAP = &copyOfLDAP
+		copyOfCustomSession.Username = wantDownstreamUsername
+		return &copyOfCustomSession
+	}
+
 	happyAuthcodeExchangeInputsForOIDCUpstream := authcodeExchangeInputs{
-		customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 		modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
-		want:              happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+		customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+		want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+			initialUpstreamOIDCRefreshTokenCustomSessionData(),
+		),
 	}
 
 	happyAuthcodeExchangeInputsForLDAPUpstream := authcodeExchangeInputs{
@@ -1958,6 +1985,8 @@ func TestRefreshGrant(t *testing.T) {
 			happyLDAPCustomSessionData,
 		),
 	}
+
+	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
 
 	tests := []struct {
 		name                      string
@@ -3499,6 +3528,39 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
+			name: "upstream ldap refresh happy path with identity transformations which modify the username and group names",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).
+				Build(),
+			),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: happyLDAPCustomSessionDataWithUsername(transformationUsernamePrefix + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					session.IDTokenClaims().Extra["username"] = transformationUsernamePrefix + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					happyLDAPCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForLDAPWithUsernameAndGroups(
+					happyLDAPCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+		},
+		{
 			name: "upstream ldap refresh happy path using dynamic client",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
@@ -4436,7 +4498,11 @@ func (s *singleUseJWKProvider) GetJWKS(issuerName string) (jwks *jose.JSONWebKey
 	return s.DynamicJWKSProvider.GetJWKS(issuerName)
 }
 
-// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
+// Simulate the results of the auth endpoint (and possibly also the related callback or login endpoints) by getting
+// fosite's code to fill the session store with realistic values. Regardless of the specific flow that the user uses to
+// become authorized, all authorization flows conclude with the user's identity saved into a fosite session and an
+// authorization code being issued to the client. So the goal of this function is to save the user's identity into a
+// session in the same way that the production code for those other endpoints would have done it.
 func simulateAuthEndpointHavingAlreadyRun(
 	t *testing.T,
 	authRequest *http.Request,
@@ -4459,9 +4525,6 @@ func simulateAuthEndpointHavingAlreadyRun(
 		},
 		Custom: initialCustomSessionData,
 	}
-	if modifySession != nil {
-		modifySession(session)
-	}
 
 	authRequester, err := oauthHelper.NewAuthorizeRequest(ctx, authRequest)
 	require.NoError(t, err)
@@ -4475,9 +4538,13 @@ func simulateAuthEndpointHavingAlreadyRun(
 		authRequester.GrantScope("pinniped:request-audience")
 	}
 
+	// Set the downstream username and group names that normally would have been determined by the authorize and related
+	// endpoints. These are stored into the fosite "extra" claims by the other endpoints, and when the token endpoint is
+	// called later, it will be able to find this information inside the "extra" claims in the session.
 	// The authorization endpoint makes a special exception for the pinniped-cli client for backwards compatibility
 	// and grants the username and groups scopes to that client even if it did not ask for them. Simulate that
-	// behavior here too.
+	// behavior here too by always adding these extras when the client_id is the Pinniped CLI client.
+	// Note that these (and anything else in the session) can be overridden by the modifySession param.
 	if strings.Contains(authRequest.Form.Get("scope"), "username") || authRequest.Form.Get("client_id") == pinnipedCLIClientID {
 		authRequester.GrantScope("username")
 		session.Fosite.Claims.Extra["username"] = goodUsername
@@ -4489,6 +4556,11 @@ func simulateAuthEndpointHavingAlreadyRun(
 
 	// The authorization endpoint sets the authorized party to the client ID of the original requester.
 	session.Fosite.Claims.Extra["azp"] = authRequester.GetClient().GetID()
+
+	// Allow some tests to further modify the session before it is stored.
+	if modifySession != nil {
+		modifySession(session)
+	}
 
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)

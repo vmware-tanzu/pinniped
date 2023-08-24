@@ -35,6 +35,17 @@ image_digest: sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
 image_tag: latest
 
+#! TODO: preserve even if this file is revised!
+#@schema/nullable
+package_image_repo: docker.io/benjaminapetersen/some-pinniped-concierge-package
+#@schema/nullable
+package_image_digest: sha256:123456
+#@schema/nullable
+package_image_tag: latest
+#! prob should not be nullable
+#@schema/nullable
+package_version: 1.2.3
+
 #@schema/desc 'Optionally specify a different image for the "kube-cert-agent" pod which is scheduled on the control plane. This image needs only to include `sleep` and `cat` binaries. By default, the same image specified for image_repo/image_digest/image_tag will be re-used.'
 kube_cert_agent_image: projects.registry.vmware.com/pinniped/pinniped-server
 

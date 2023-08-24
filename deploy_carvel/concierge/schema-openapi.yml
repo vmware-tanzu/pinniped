@@ -43,6 +43,22 @@ components:
           type: string
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
           default: latest
+        package_image_repo:
+          type: string
+          nullable: true
+          default: null
+        package_image_digest:
+          type: string
+          nullable: true
+          default: null
+        package_image_tag:
+          type: string
+          nullable: true
+          default: null
+        package_version:
+          type: string
+          nullable: true
+          default: null
         kube_cert_agent_image:
           type: string
           description: Optionally specify a different image for the "kube-cert-agent" pod which is scheduled on the control plane. This image needs only to include `sleep` and `cat` binaries. By default, the same image specified for image_repo/image_digest/image_tag will be re-used.

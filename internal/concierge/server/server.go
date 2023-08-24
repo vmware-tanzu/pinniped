@@ -228,6 +228,8 @@ func getAggregatedAPIServerConfig(
 	// `kubectl explain` to work for the Concierge's aggregated API resources.
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
 		conciergeopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
+	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
+		conciergeopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`

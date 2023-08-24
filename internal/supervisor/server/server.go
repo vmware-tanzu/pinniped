@@ -613,8 +613,10 @@ func getAggregatedAPIServerConfig(
 	// `kubectl explain` to work for the Supervisor's aggregated API resources.
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(
 		supervisoropenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
+	// serverConfig.OpenAPIConfig.Info.InfoProps.Title = "Pinniped Supervisor"
 	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
 		supervisoropenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
+	// serverConfig.OpenAPIV3Config.Info.InfoProps.Title = "Pinniped Supervisor"
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`

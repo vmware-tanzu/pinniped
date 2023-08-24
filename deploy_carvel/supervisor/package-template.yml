@@ -1,0 +1,31 @@
+#@ load("@ytt:data", "data")  # for reading data values (generated via ytt's data-values-schema-inspect mode).
+#@ load("@ytt:yaml", "yaml")  # for dynamically decoding the output of ytt's data-values-schema-inspect
+---
+apiVersion: data.packaging.carvel.dev/v1alpha1
+kind: Package
+metadata:
+  name: #@ "supervisor.pinniped.dev." + data.values.version
+spec:
+  refName: supervisor.pinniped.dev
+  version: #@ data.values.version
+  releaseNotes: |
+        Initial release of the pinniped supervisor package, TODO: AUTOMATE THIS??
+  valuesSchema:
+    openAPIv3: #@ yaml.decode(data.values.openapi)["components"]["schemas"]["dataValues"]
+  template:
+    spec:
+      fetch:
+      - imgpkgBundle:
+#! TODO: we will need a place to host this.
+#! this package image needs to be built and deployed so it can then be installed.
+          image: #@ "${REPO_HOST}/packages/pinniped-supervisor:" + data.values.version
+      template:
+      - ytt:
+          paths:
+          - "config/"
+      - kbld:
+          paths:
+          - ".imgpkg/images.yml"
+          - "-"
+      deploy:
+      - kapp: {}

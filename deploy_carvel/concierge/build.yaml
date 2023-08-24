@@ -1,11 +1,15 @@
+#@ load("@ytt:data", "data")
+---
 apiVersion: kbld.k14s.io/v1alpha1
 kind: Config
-minimumRequiredVersion: 0.31.0 # minimum version of kbld.  We probably don't need to specify.
+minimumRequiredVersion: 0.31.0 #! minimum version of kbld.  We probably don't need to specify.
 overrides:
 #! TODO: in the pinniped yamls, this is provided by values.yaml, not declared in the deployment.
 #!   we should assess if we want to leave it there or move it to this form of configuration.
-- image: projects.registry.vmware.com/pinniped/pinniped-server:latest
-  newImage: ""
+- image: projects.registry.vmware.com/pinniped/pinniped-server
+  newImage: #@ data.values.image_repo
+
+
 
 
 #! I don't think we need any of these (until we need them 😊).  IE, don't use prematurely.

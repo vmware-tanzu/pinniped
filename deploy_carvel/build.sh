@@ -144,9 +144,11 @@ kapp inspect --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --tree
 
 
 # this is just a note to break this up, probably should use a separate ./deploy_stuff.sh file.
-echo_green "CONSUMPTION OF PACKAGE HERE"
-echo_green "CONSUMPTION OF PACKAGE HERE"
-echo_green "CONSUMPTION OF PACKAGE HERE"
+# at this point, we are "consumers".
+# above we are packaging.
+# this would be separated out into another script or potentially
+# be on the user to craft (though we should likely provide something)
+echo_green "Package Installation...."
 
 echo_yellow "deploying RBAC for use with pinniped PackageInstall..."
 
@@ -172,7 +174,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  namespace: default # this is default on purpose so the PackageInstall can find it
+  namespace: "${NAMESPACE}"
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -198,7 +200,12 @@ roleRef:
 EOF
 
 kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_RBAC_FILE}" -y
-# kapp deploy --app pkg-demo --file pkginstall.yml -y
+
+echo_yellow "verifying RBAC resources created (namespace, serviceaccount, clusterrole, clusterrolebinding)..."
+kubectl get ns -A | grep pinniped
+kubectl get sa -A | grep pinniped
+kubectl get ClusterRole -A | grep pinniped
+kubectl get clusterrolebinding -A | grep pinniped
 
 done
 
@@ -223,7 +230,7 @@ apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageInstall
 metadata:
     name: "${resource_name}-package-install"
-    namespace: default # this is default on purpose so the ServiceAccount can be found
+    namespace: "${NAMESPACE}"
 spec:
   serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
   packageRef:
@@ -252,7 +259,11 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 
 done
 
-echo_yellow "listing all package resources.."
+echo_yellow "verifying PackageInstall resources..."
+kubectl get PackageInstall -A | grep pinniped
+kubectl get secret -A | grep pinniped
+
+echo_yellow "listing all package resources (PackageRepository, Package, PackageInstall)..."
 kubectl get pkgi && kubectl get pkgr && kubectl get pkg
 
 echo_yellow "listing all kapp cli apps..."

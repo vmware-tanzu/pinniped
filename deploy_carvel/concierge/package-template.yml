@@ -4,10 +4,10 @@
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
-  name: #@ "concierge.pinniped.dev." + data.values.version
+  name: #@ "concierge.pinniped.dev." + data.values.package_version
 spec:
   refName: concierge.pinniped.dev
-  version: #@ data.values.version
+  version: #@ data.values.package_version
   releaseNotes: |
         Initial release of the pinniped concierge package, TODO: AUTOMATE THIS??
   valuesSchema:
@@ -16,9 +16,8 @@ spec:
     spec:
       fetch:
       - imgpkgBundle:
-#! TODO: we will need a place to host this.
-#! this package image needs to be built and deployed so it can then be installed.
-          image: #@ "${REPO_HOST}/packages/pinniped-concierge:" + data.values.version
+          #! image: #@ data.values.package_image_repo + "/packages/:" + data.values.package_version
+          image: #@ data.values.package_image_repo
       template:
       - ytt:
           paths:

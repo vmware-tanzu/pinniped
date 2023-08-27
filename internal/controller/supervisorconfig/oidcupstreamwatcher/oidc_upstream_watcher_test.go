@@ -123,7 +123,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	require.NoError(t, err)
 	wrongCABase64 := base64.StdEncoding.EncodeToString(wrongCA.Bundle())
 
-	happyAdditionalAuthorizeParametersValidCondition := v1alpha1.Condition{
+	happyAdditionalAuthorizeParametersValidCondition := metav1.Condition{
 		Type:               "AdditionalAuthorizeParametersValid",
 		Status:             "True",
 		Reason:             "Success",
@@ -184,7 +184,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -231,7 +231,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -277,7 +277,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -326,7 +326,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -375,7 +375,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -421,7 +421,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -467,7 +467,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -513,7 +513,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -559,7 +559,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -607,7 +607,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -655,7 +655,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -702,7 +702,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -749,7 +749,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -796,7 +796,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -843,7 +843,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -890,7 +890,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -937,7 +937,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -973,7 +973,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "ClientCredentialsValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
 						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2", Message: "some previous error 2"},
 					},
@@ -1008,7 +1008,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration"},
@@ -1028,7 +1028,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
@@ -1064,7 +1064,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
@@ -1084,7 +1084,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
@@ -1120,7 +1120,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
@@ -1143,7 +1143,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
@@ -1179,7 +1179,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
@@ -1210,7 +1210,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
@@ -1248,7 +1248,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
@@ -1297,7 +1297,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "False", LastTransitionTime: now, Reason: "DisallowedParameterName",
 							Message: "the following additionalAuthorizeParameters are not allowed: " +
 								"response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd", ObservedGeneration: 1234},
@@ -1335,7 +1335,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",
@@ -1384,7 +1384,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
 							Type:               "ClientCredentialsValid",

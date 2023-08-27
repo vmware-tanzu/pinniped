@@ -121,14 +121,14 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.
 	return &activeDirectoryUpstreamGenericLDAPGroupSearch{s.activeDirectoryIdentityProvider.Spec.GroupSearch}
 }
 
-func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition {
 	config.GroupSearch.Base = s.activeDirectoryIdentityProvider.Spec.GroupSearch.Base
 	config.UserSearch.Base = s.activeDirectoryIdentityProvider.Spec.UserSearch.Base
 	if config.GroupSearch.Base != "" && config.UserSearch.Base != "" {
 		// Both were already set in spec so just return; no need to query the RootDSE
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    upstreamwatchers.TypeSearchBaseFound,
-			Status:  v1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  upstreamwatchers.ReasonUsingConfigurationFromSpec,
 			Message: "Using search base from ActiveDirectoryIdentityProvider config.",
 		}
@@ -139,9 +139,9 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 	// https://ldapwiki.com/wiki/DefaultNamingContext
 	defaultNamingContext, err := ldapProvider.SearchForDefaultNamingContext(ctx)
 	if err != nil {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    upstreamwatchers.TypeSearchBaseFound,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonErrorFetchingSearchBase,
 			Message: fmt.Sprintf(`Error finding search base: %s`, err.Error()),
 		}
@@ -152,9 +152,9 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 	if config.GroupSearch.Base == "" {
 		config.GroupSearch.Base = defaultNamingContext
 	}
-	return &v1alpha1.Condition{
+	return &metav1.Condition{
 		Type:    upstreamwatchers.TypeSearchBaseFound,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "Successfully fetched defaultNamingContext to use as default search base from RootDSE.",
 	}
@@ -219,7 +219,7 @@ type activeDirectoryUpstreamGenericLDAPStatus struct {
 	activeDirectoryIdentityProvider v1alpha1.ActiveDirectoryIdentityProvider
 }
 
-func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []v1alpha1.Condition {
+func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
 	return s.activeDirectoryIdentityProvider.Status.Conditions
 }
 
@@ -364,7 +364,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 	return upstreamwatchers.EvaluateConditions(conditions, config)
 }
 
-func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider, conditions []*v1alpha1.Condition) {
+func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider, conditions []*metav1.Condition) {
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 

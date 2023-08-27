@@ -77,7 +77,7 @@ func (s *ldapUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.UpstreamGen
 	return &ldapUpstreamGenericLDAPGroupSearch{s.ldapIdentityProvider.Spec.GroupSearch}
 }
 
-func (s *ldapUpstreamGenericLDAPSpec) DetectAndSetSearchBase(_ context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func (s *ldapUpstreamGenericLDAPSpec) DetectAndSetSearchBase(_ context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition {
 	config.GroupSearch.Base = s.ldapIdentityProvider.Spec.GroupSearch.Base
 	config.UserSearch.Base = s.ldapIdentityProvider.Spec.UserSearch.Base
 	return nil
@@ -127,7 +127,7 @@ type ldapUpstreamGenericLDAPStatus struct {
 	ldapIdentityProvider v1alpha1.LDAPIdentityProvider
 }
 
-func (s *ldapUpstreamGenericLDAPStatus) Conditions() []v1alpha1.Condition {
+func (s *ldapUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
 	return s.ldapIdentityProvider.Status.Conditions
 }
 
@@ -256,7 +256,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 	return upstreamwatchers.EvaluateConditions(conditions, config)
 }
 
-func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) {
+func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*metav1.Condition) {
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 

@@ -36,7 +36,7 @@ echo_yellow "Verify you have a functional kind cluster, otherwise this will fail
 # ./kind-with-registry.sh
 # got kapp-controller bits?
 kubectl get customresourcedefinitions
-kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml # -y
+kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml -y
 kubectl get customresourcedefinitions
 
 # TODO: since I removed the deployments there is not much in the ./imgpkg/images.yaml output
@@ -53,6 +53,11 @@ kubectl get customresourcedefinitions
 # PACKAGE_REPO_HOST="docker.io/benjaminapetersen/pinniped-package-repo"
 PACKAGE_REPO_HOST="benjaminapetersen/pinniped-package-repo"
 PINNIPED_PACKAGE_VERSION="0.25.0"
+
+# TODO: cp ./deploy/supervisor.... into ./deploy_carvel/supervisor/config...
+# TODO: cp ./deploy/concierge.... into ./deploy_carvel/concierge/config...
+# -- we should copy this over, yeah?
+#   NOTE: I did make changes to values.yaml to turn it into a values schema....
 
 echo ""
 echo_yellow "cleaning ./package-repository..."
@@ -97,20 +102,19 @@ do
   echo_yellow "pushing package image: ${package_push_repo_location} ..."
   imgpkg push --bundle "${package_push_repo_location}" --file "./${resource_name}"
 
-
   resource_package_version="${resource_name}.pinniped.dev"
   echo_yellow "generating ./package-repository/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
   ytt \
     --file "${resource_name}/package-template.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
+    --data-value namespace="${resource_name}-ns" \
     --data-value package_image_repo="${package_push_repo_location}" > "package-repository/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
 
   echo_yellow "copying ${resource_name}/metadata.yml to ./package-repository/packages/${resource_name}"
   cp "./${resource_name}/metadata.yml" "./package-repository/packages/${resource_package_version}/metadata.yml"
 
 done
-
 
 echo_yellow "generating ./package-repository/.imgpkg/images.yml"
 kbld --file ./package-repository/packages/ --imgpkg-lock-output package-repository/.imgpkg/images.yml
@@ -122,6 +126,8 @@ echo_yellow "validating imgpkg package bundle contents..."
 imgpkg pull --bundle "${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}" --output "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
 ls -la "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
 
+
+echo_yellow "deploying PackageRepository..."
 PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
 PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
 echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
@@ -139,9 +145,10 @@ EOT
 
 
 # Now, gotta make this work.  It'll be interesting if we can...
-kapp deploy --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --file "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+kapp deploy --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --file "${PINNIPED_PACKGE_REPOSITORY_FILE}" -y
 kapp inspect --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --tree
 
+sleep 2 # TODO: remove
 
 # this is just a note to break this up, probably should use a separate ./deploy_stuff.sh file.
 # at this point, we are "consumers".
@@ -152,7 +159,7 @@ echo_green "Package Installation...."
 
 echo_yellow "deploying RBAC for use with pinniped PackageInstall..."
 
-# TODO: obviously a mega-role that can do everything is not good.
+# TODO: obviously a mega-role that can do everything is not good. we need to scope this down to appropriate things.
 declare -a arr=("supervisor" "concierge")
 for resource_name in "${arr[@]}"
 do
@@ -197,16 +204,10 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-role-superadmin-dangerous"
+
 EOF
 
 kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_RBAC_FILE}" -y
-
-echo_yellow "verifying RBAC resources created (namespace, serviceaccount, clusterrole, clusterrolebinding)..."
-kubectl get ns -A | grep pinniped
-kubectl get sa -A | grep pinniped
-kubectl get ClusterRole -A | grep pinniped
-kubectl get clusterrolebinding -A | grep pinniped
-
 done
 
 #FOOBAR="pinniped-package-rbac"
@@ -229,8 +230,9 @@ cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
 apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageInstall
 metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
     name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"
+    namespace: "${NAMESPACE}"                     # TODO: ---????? is this namespace ok?
 spec:
   serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
   packageRef:
@@ -286,3 +288,15 @@ kubectl get app --all-namespaces
 # docker pull benjaminapetersen/pinniped-package-repo:latest
 # docker pull benjaminapetersen/pinniped-package-repo-package-supervisor:0.25.0
 # docker pull benjaminapetersen/pinniped-package-repo-package-concierge:0.25.0
+
+# echo_yellow "verifying RBAC resources created (namespace, serviceaccount, clusterrole, clusterrolebinding)..."
+# kubectl get ns -A | grep pinniped
+# kubectl get sa -A | grep pinniped
+# kubectl get ClusterRole -A | grep pinniped
+# kubectl get clusterrolebinding -A | grep pinniped
+
+
+# stuff
+kubectl get PackageRepository -A
+kubectl get Package -A
+kubectl get PackageInstall -A

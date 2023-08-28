@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clusterhost
@@ -15,7 +15,10 @@ const (
 	labelNodeRolePrefix  = "node-role.kubernetes.io/"
 	nodeLabelRole        = "kubernetes.io/node-role"
 	controlPlaneNodeRole = "control-plane"
-	// this role was deprecated by kubernetes 1.20.
+	// This role was deprecated by Kubernetes 1.20.
+	// https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.20.md#urgent-upgrade-notes
+	// This role will be removed in Kubernetes 1.24
+	// https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.24.md#urgent-upgrade-notes
 	masterNodeRole = "master"
 )
 

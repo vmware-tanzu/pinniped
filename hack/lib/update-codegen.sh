@@ -47,15 +47,15 @@ ln -s "${ROOT}" "${GOPATH_ROOT}"
 ROOT="${GOPATH_ROOT}"
 cd "${ROOT}"
 
-# KUBE_VERSION is the full version (e.g., '1.19.0-rc.0').
+# KUBE_VERSION is the full version (e.g., '1.28.0-rc.0').
 KUBE_VERSION="${KUBE_VERSIONS[0]}"
 export KUBE_VERSION
 
-# KUBE_MINOR_VERSION is just the major/minor version (e.g., '1.19').
+# KUBE_MINOR_VERSION is just the major/minor version (e.g., '1.28').
 KUBE_MINOR_VERSION="$(echo "${KUBE_VERSION}" | cut -d"." -f1-2)"
 export KUBE_MINOR_VERSION
 
-# KUBE_MODULE_VERSION is just version of client libraries (e.g., 'v0.19.9-rc-0').
+# KUBE_MODULE_VERSION is just version of client libraries (e.g., 'v0.28.9-rc-0').
 KUBE_MODULE_VERSION="v0.$(echo "${KUBE_VERSION}" | cut -d '.' -f 2-)"
 export KUBE_MODULE_VERSION
 

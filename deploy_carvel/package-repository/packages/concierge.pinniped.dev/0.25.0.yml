@@ -2,6 +2,7 @@ apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
   name: concierge.pinniped.dev.0.25.0
+  namespace: concierge-ns
 spec:
   refName: concierge.pinniped.dev
   version: 0.25.0

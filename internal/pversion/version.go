@@ -73,11 +73,15 @@ func Get() apimachineryversion.Info {
 		}
 	}
 
-	if info.GitVersion == "v0.0.0" && info.GitCommit != "" {
+	ensureFakeDevVersion(&info)
+
+	return info
+}
+
+func ensureFakeDevVersion(info *apimachineryversion.Info) {
+	if info != nil && info.GitVersion == "v0.0.0" && info.GitCommit != "" {
 		info.GitVersion += fmt.Sprintf("-%s-%s",
 			k8sstrings.ShortenString(info.GitCommit, 8),
 			info.GitTreeState)
 	}
-
-	return info
 }

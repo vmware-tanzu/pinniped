@@ -19,7 +19,6 @@ import (
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 
 	conciergeopenapi "go.pinniped.dev/generated/latest/client/concierge/openapi"
@@ -37,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
@@ -266,13 +266,13 @@ func main() error {
 
 	// Dump out the time since compile (mostly useful for benchmarking our local development cycle latency).
 	var timeSinceCompile time.Duration
-	if buildDate, err := time.Parse(time.RFC3339, version.Get().BuildDate); err == nil {
+	if buildDate, err := time.Parse(time.RFC3339, pversion.Get().BuildDate); err == nil {
 		timeSinceCompile = time.Since(buildDate).Round(time.Second)
 	}
 
 	plog.Always("Running concierge",
 		"user-agent", rest.DefaultKubernetesUserAgent(),
-		"version", versionInfo(version.Get()),
+		"version", versionInfo(pversion.Get()),
 		"time-since-build", timeSinceCompile,
 	)
 

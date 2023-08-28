@@ -9,6 +9,9 @@ WORKDIR /work
 COPY . .
 ARG GOPROXY
 
+ARG KUBE_GIT_VERSION
+ENV KUBE_GIT_VERSION=$KUBE_GIT_VERSION
+
 # Build the executable binary (CGO_ENABLED=0 means static linking)
 # Pass in GOCACHE (build cache) and GOMODCACHE (module cache) so they
 # can be re-used between image builds.

@@ -33,7 +33,6 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/utils/clock"
@@ -66,6 +65,7 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/supervisor/apiserver"
 	supervisorscheme "go.pinniped.dev/internal/supervisor/scheme"
@@ -681,7 +681,7 @@ func main() error { // return an error instead of plog.Fatal to allow defer stat
 
 	plog.Always("Running supervisor",
 		"user-agent", rest.DefaultKubernetesUserAgent(),
-		"version", versionInfo(version.Get()),
+		"version", versionInfo(pversion.Get()),
 		"arguments", os.Args,
 	)
 

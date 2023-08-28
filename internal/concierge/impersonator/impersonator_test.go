@@ -1141,14 +1141,14 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 		},
 		{
 			name:           "unexpected UID",
-			request:        newRequest(t, map[string][]string{}, &user.DefaultInfo{UID: "007"}, nil, ""),
+			request:        newRequest(t, map[string][]string{}, &user.DefaultInfo{UID: "007"}, &auditinternal.Event{User: authenticationv1.UserInfo{UID: "007"}}, ""),
 			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: unimplemented functionality - unable to act as current user","reason":"InternalError","details":{"causes":[{"message":"unimplemented functionality - unable to act as current user"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "authenticated user but missing audit event",
 			request: func() *http.Request {
-				req := newRequest(t, map[string][]string{
+				return newRequest(t, map[string][]string{
 					"User-Agent":   {"test-user-agent"},
 					"Connection":   {"Upgrade"},
 					"Upgrade":      {"some-upgrade"},
@@ -1158,11 +1158,6 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					Groups: testGroups,
 					Extra:  testExtra,
 				}, nil, "")
-				ctx := audit.WithAuditContext(req.Context())
-				ac := audit.AuditContextFrom(ctx)
-				ac.Event = nil
-				req = req.WithContext(ctx)
-				return req
 			}(),
 			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid audit event","reason":"InternalError","details":{"causes":[{"message":"invalid audit event"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
@@ -1183,7 +1178,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					"valid-key":   {"valid-value"},
 					"Invalid-key": {"still-valid-value"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: testUser}}, ""),
 			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: unimplemented functionality - unable to act as current user","reason":"InternalError","details":{"causes":[{"message":"unimplemented functionality - unable to act as current user"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
@@ -1203,7 +1198,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					"valid-key":               {"valid-value"},
 					"valid-data\nInvalid-key": {"still-valid-value"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: testUser}}, ""),
 			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: unimplemented functionality - unable to act as current user","reason":"InternalError","details":{"causes":[{"message":"unimplemented functionality - unable to act as current user"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
@@ -1223,7 +1218,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					"valid-key": {"valid-value"},
 					"foo.impersonation-proxy.concierge.pinniped.dev": {"still-valid-value"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: testUser}}, ""),
 			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: unimplemented functionality - unable to act as current user","reason":"InternalError","details":{"causes":[{"message":"unimplemented functionality - unable to act as current user"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
@@ -1393,7 +1388,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				Name:   testUser,
 				Groups: testGroups,
 				Extra:  testExtra,
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: testUser}}, ""),
 			wantKubeAPIServerRequestHeaders: map[string][]string{
 				"Authorization":             {"Bearer some-service-account-token"},
 				"Impersonate-Extra-Extra-1": {"some", "extra", "stuff"},
@@ -1482,7 +1477,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					"iam.gke.io/user-assertion":       {"ABC"},
 					"user-assertion.cloud.google.com": {"XYZ"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: "username@company.com"}}, ""),
 			wantKubeAPIServerRequestHeaders: map[string][]string{
 				"Authorization": {"Bearer some-service-account-token"},
 				"Impersonate-Extra-Iam.gke.io%2fuser-Assertion":     {"ABC"},
@@ -1527,7 +1522,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 					"alpha.kubernetes.io/identity/user/domain/id":   {"domain-id"},
 					"alpha.kubernetes.io/identity/user/domain/name": {"domain-name"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: "kube:admin"}}, ""),
 			wantKubeAPIServerRequestHeaders: map[string][]string{
 				"Authorization": {"Bearer some-service-account-token"},
 				"Impersonate-Extra-Scopes.authorization.openshift.io":                     {"user:info", "user:full"},
@@ -1566,7 +1561,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				Extra: map[string][]string{
 					"foo.iimpersonation-proxy.concierge.pinniped.dev": {"still-valid-value"},
 				},
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: "username@company.com"}}, ""),
 			wantKubeAPIServerRequestHeaders: map[string][]string{
 				"Authorization": {"Bearer some-service-account-token"},
 				"Impersonate-Extra-Foo.iimpersonation-Proxy.concierge.pinniped.dev": {"still-valid-value"},
@@ -1787,7 +1782,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				Name:   testUser,
 				Groups: testGroups,
 				Extra:  testExtra,
-			}, nil, ""),
+			}, &auditinternal.Event{User: authenticationv1.UserInfo{Username: testUser}}, ""),
 			kubeAPIServerStatusCode: http.StatusNotFound,
 			wantKubeAPIServerRequestHeaders: map[string][]string{
 				"Accept-Encoding":           {"gzip"}, // because the rest client used in this test does not disable compression
@@ -1932,13 +1927,11 @@ func newRequest(t *testing.T, h http.Header, userInfo user.Info, event *auditint
 		ctx = request.WithUser(ctx, userInfo)
 	}
 
-	ae := &auditinternal.Event{Level: auditinternal.LevelMetadata}
-	if event != nil {
-		ae = event
-	}
 	ctx = audit.WithAuditContext(ctx)
-	ac := audit.AuditContextFrom(ctx)
-	ac.Event = ae
+	if event != nil {
+		ac := audit.AuditContextFrom(ctx)
+		ac.Event = *event
+	}
 
 	reqInfo := &request.RequestInfo{
 		IsResourceRequest: false,

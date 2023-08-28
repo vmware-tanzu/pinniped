@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -513,7 +514,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			}
 
 			ae := audit.AuditEventFrom(r.Context())
-			if ae == nil {
+			if ae == nil || reflect.DeepEqual(*ae, auditinternal.Event{}) {
 				plog.Warning("aggregated API server logic did not set audit event but it is always supposed to do so",
 					"url", r.URL.String(),
 					"method", r.Method,

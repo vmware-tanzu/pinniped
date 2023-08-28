@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -119,6 +119,7 @@ echo "running go mod download in ${OUTPUT_DIR}/client/go.mod to generate a go.su
 
 # Generate API-related code for our public API groups
 echo "generating API-related code for our public API groups..."
+chmod -R +x "${GOPATH}/src/k8s.io/code-generator/"
 (cd apis &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
         "deepcopy" \

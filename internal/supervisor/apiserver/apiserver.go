@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apiserver
@@ -17,11 +17,11 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/pkg/version"
 
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/clientsecretrequest"
 )
 
@@ -61,7 +61,7 @@ func (c *Config) Complete() CompletedConfig {
 		&c.ExtraConfig,
 	}
 
-	versionInfo := version.Get()
+	versionInfo := pversion.Get()
 	completedCfg.GenericConfig.Version = &versionInfo
 
 	return CompletedConfig{completedConfig: &completedCfg}

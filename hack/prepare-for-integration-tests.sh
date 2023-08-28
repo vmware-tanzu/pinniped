@@ -206,12 +206,12 @@ registry_repo_tag="${registry_repo}:${tag}"
 if [[ "$do_build" == "yes" ]]; then
   # Rebuild the code
   if [[ "$dockerfile_path"  != "" ]]; then
-    log_note "Docker building the app with dockerfile $dockerfile_path..."
-    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag" --file "$dockerfile_path"
+    log_note "Docker building the app with dockerfile $dockerfile_path and KUBE_GIT_VERSION=$KUBE_GIT_VERSION"
+    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag" --file "$dockerfile_path" --build-arg "KUBE_GIT_VERSION=$KUBE_GIT_VERSION"
   else
-    log_note "Docker building the app..."
+    log_note "Docker building the app with KUBE_GIT_VERSION=$KUBE_GIT_VERSION"
     # DOCKER_BUILDKIT=1 is optional on MacOS but required on linux.
-    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag"
+    DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag" --build-arg "KUBE_GIT_VERSION=$KUBE_GIT_VERSION"
   fi
 fi
 

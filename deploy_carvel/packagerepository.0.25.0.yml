@@ -1,0 +1,9 @@
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageRepository
+metadata:
+  name: "pinniped-package-repository"
+spec:
+  fetch:
+    imgpkgBundle:
+      image: "benjaminapetersen/pinniped-package-repo:0.25.0"

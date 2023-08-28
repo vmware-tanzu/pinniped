@@ -5,6 +5,7 @@ apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
   name: #@ "supervisor.pinniped.dev." + data.values.package_version
+  namespace: #@ data.values.namespace
 spec:
   refName: supervisor.pinniped.dev
   version: #@ data.values.package_version

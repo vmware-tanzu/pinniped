@@ -33,9 +33,8 @@ components:
           default: 2
         image_repo:
           type: string
-          nullable: true
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-          default: null
+          default: projects.registry.vmware.com/pinniped/pinniped-server
         image_digest:
           type: string
           nullable: true
@@ -43,9 +42,8 @@ components:
           default: null
         image_tag:
           type: string
-          nullable: true
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-          default: null
+          default: latest
         package_image_repo:
           type: string
           nullable: true

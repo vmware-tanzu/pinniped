@@ -39,6 +39,14 @@ kubectl get customresourcedefinitions
 kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml -y
 kubectl get customresourcedefinitions
 
+# this argument is given to kapp-controller by default
+# in the above deployment manfiest:
+#   -packaging-global-namespace=kapp-controller-packaging-global
+# which means, PackageRepos and Packages ought be installed in this
+# namespace to be globally available by default, since
+# PackageRepos and Packages are namespaced resources.
+KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
+
 # TODO: since I removed the deployments there is not much in the ./imgpkg/images.yaml output
 #
 # build images found in these directories.
@@ -61,10 +69,14 @@ PINNIPED_PACKAGE_VERSION="0.25.0"
 
 echo ""
 echo_yellow "cleaning ./package-repository..."
-rm -rf "./package-repository"
-mkdir -p "./package-repository/.imgpkg"
-mkdir -p "./package-repository/packages/concierge.pinniped.dev"
-mkdir -p "./package-repository/packages/supervisor.pinniped.dev"
+PACKAGE_REPOSITORY_DIR="package-repository"
+rm -rf "./${PACKAGE_REPOSITORY_DIR}"
+mkdir -p "./${PACKAGE_REPOSITORY_DIR}/.imgpkg"
+mkdir -p "./${PACKAGE_REPOSITORY_DIR}/packages/concierge.pinniped.dev"
+mkdir -p "./${PACKAGE_REPOSITORY_DIR}/packages/supervisor.pinniped.dev"
+
+PACKAGE_INSTALL_DIR="temp_actual_deploy_resources"
+rm -rf "./${PACKAGE_INSTALL_DIR}"
 
 ## TODO:
 ## "${resource_name}/deployment.yml" vs "${resource_name}/deployment-HACKED.yml"
@@ -103,24 +115,29 @@ do
   imgpkg push --bundle "${package_push_repo_location}" --file "./${resource_name}"
 
   resource_package_version="${resource_name}.pinniped.dev"
-  echo_yellow "generating ./package-repository/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+  echo_yellow "generating ./${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
   ytt \
     --file "${resource_name}/package-template.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
-    --data-value namespace="${resource_name}-ns" \
-    --data-value package_image_repo="${package_push_repo_location}" > "package-repository/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+    --data-value namespace="${KAPP_CONTROLLER_GLOBAL_NAMESPACE}" \
+    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
 
-  echo_yellow "copying ${resource_name}/metadata.yml to ./package-repository/packages/${resource_name}"
-  cp "./${resource_name}/metadata.yml" "./package-repository/packages/${resource_package_version}/metadata.yml"
+  echo_yellow "generating ./${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
+  ytt \
+    --file "${resource_name}/metadata.yml" \
+    --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
+    --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
+    --data-value namespace="${KAPP_CONTROLLER_GLOBAL_NAMESPACE}" \
+    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
 
 done
 
-echo_yellow "generating ./package-repository/.imgpkg/images.yml"
-kbld --file ./package-repository/packages/ --imgpkg-lock-output package-repository/.imgpkg/images.yml
+echo_yellow "generating ./${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
+kbld --file "./${PACKAGE_REPOSITORY_DIR}/packages/" --imgpkg-lock-output "${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
 package_repository_push_repo_location="${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
 echo_yellow "pushing package repository image: ${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}..."
-imgpkg push --bundle "${package_repository_push_repo_location}" --file ./package-repository
+imgpkg push --bundle "${package_repository_push_repo_location}" --file "./${PACKAGE_REPOSITORY_DIR}"
 
 echo_yellow "validating imgpkg package bundle contents..."
 imgpkg pull --bundle "${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}" --output "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
@@ -131,6 +148,7 @@ echo_yellow "deploying PackageRepository..."
 PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
 PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
 echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+# kapp-controller's packaging-global-namespace does not apply to PackageRepository
 cat <<EOT >> "${PINNIPED_PACKGE_REPOSITORY_FILE}"
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
@@ -166,7 +184,7 @@ do
 
 NAMESPACE="${resource_name}-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-PINNIPED_PACKAGE_RBAC_FILE="./temp_actual_deploy_resources/${PINNIPED_PACKAGE_RBAC_PREFIX}-${resource_name}-rbac.yml"
+PINNIPED_PACKAGE_RBAC_FILE="./${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PREFIX}-${resource_name}-rbac.yml"
 
 echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
 cat <<EOF >> "${PINNIPED_PACKAGE_RBAC_FILE}"
@@ -211,7 +229,7 @@ kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_R
 done
 
 #FOOBAR="pinniped-package-rbac"
-#PINNIPED_PACKAGE_RBAC_FILE="./temp_actual_deploy_resources/${PINNIPED_PACKAGE_RBAC_PREFIX}-rbac.yml"
+#PINNIPED_PACKAGE_RBAC_FILE="./${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PREFIX}-rbac.yml"
 ## TODO: obviously a mega-role that can do everything is not good.
 #echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
 #cat <<EOF >> "${PINNIPED_PACKAGE_RBAC_FILE}"
@@ -223,7 +241,7 @@ do
 NAMESPACE="${resource_name}-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="./temp_actual_deploy_resources/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="./${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
 ---

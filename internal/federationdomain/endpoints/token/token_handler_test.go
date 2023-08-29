@@ -1782,6 +1782,12 @@ func TestRefreshGrant(t *testing.T) {
 		}
 	}
 
+	initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername := func(downstreamUsername string) *psession.CustomSessionData {
+		customSessionData := initialUpstreamOIDCRefreshTokenCustomSessionData()
+		customSessionData.Username = downstreamUsername
+		return customSessionData
+	}
+
 	initialUpstreamOIDCAccessTokenCustomSessionData := func() *psession.CustomSessionData {
 		return &psession.CustomSessionData{
 			Username:         goodUsername,
@@ -1800,6 +1806,12 @@ func TestRefreshGrant(t *testing.T) {
 
 	upstreamOIDCCustomSessionDataWithNewRefreshToken := func(newRefreshToken string) *psession.CustomSessionData {
 		sessionData := initialUpstreamOIDCRefreshTokenCustomSessionData()
+		sessionData.OIDC.UpstreamRefreshToken = newRefreshToken
+		return sessionData
+	}
+
+	upstreamOIDCCustomSessionDataWithNewRefreshTokenWithUsername := func(newRefreshToken string, downstreamUsername string) *psession.CustomSessionData {
+		sessionData := initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(downstreamUsername)
 		sessionData.OIDC.UpstreamRefreshToken = newRefreshToken
 		return sessionData
 	}
@@ -1894,6 +1906,18 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
+	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantDownstreamUsername string, wantDownstreamGroups []string) tokenEndpointResponseExpectedValues {
+		// Should always have some custom session data stored. The other expectations happens to be the
+		// same as the same values as the authcode exchange case.
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
+		// Should always try to perform an upstream refresh.
+		want.wantUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
+		if expectToValidateToken != nil {
+			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
+		}
+		return want
+	}
+
 	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantAdditionalClaims map[string]interface{}) tokenEndpointResponseExpectedValues {
 		want := happyRefreshTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored, expectToValidateToken)
 		want.wantAdditionalClaims = wantAdditionalClaims
@@ -1906,8 +1930,8 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
-	happyRefreshTokenResponseForLDAPWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownsteamGroups []string) tokenEndpointResponseExpectedValues {
-		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownsteamGroups)
+	happyRefreshTokenResponseForLDAPWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownstreamGroups []string) tokenEndpointResponseExpectedValues {
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
 		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
 		return want
 	}
@@ -1987,6 +2011,7 @@ func TestRefreshGrant(t *testing.T) {
 	}
 
 	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
+	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
 	tests := []struct {
 		name                      string
@@ -2012,6 +2037,160 @@ func TestRefreshGrant(t *testing.T) {
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 				),
+			},
+		},
+		{
+			name: "happy path refresh grant with OIDC upstream with identity transformations which modify the username and group names",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+					WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					session.IDTokenClaims().Extra["username"] = transformationUsernamePrefix + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					upstreamOIDCCustomSessionDataWithNewRefreshTokenWithUsername(oidcUpstreamRefreshedRefreshToken, transformationUsernamePrefix+goodUsername),
+					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+		},
+		{
+			name: "happy path refresh grant with OIDC upstream with identity transformations which modify the username and group names when the upstream refresh does not return new username or groups then it reruns the transformations on the old upstream username and groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).
+					WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					session.IDTokenClaims().Extra["username"] = transformationUsernamePrefix + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                        http.StatusOK,
+					wantClientID:                      pinnipedCLIClientID,
+					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:               []string{"openid", "offline_access", "username", "groups"},
+					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
+					wantUsername:                      transformationUsernamePrefix + goodUsername,
+					wantGroups:                        testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
+					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshTokenWithUsername(oidcUpstreamRefreshedRefreshToken, transformationUsernamePrefix+goodUsername),
+				},
+			},
+		},
+		{
+			name: "refresh grant with OIDC upstream with identity transformations which modify the username and group names when the downstream username has changed compared to initial login",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+					WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername("some_other_transform_prefix:" + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					session.IDTokenClaims().Extra["username"] = "some_other_transform_prefix:" + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername("some_other_transform_prefix:"+goodUsername),
+					"some_other_transform_prefix:"+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantStatus:                        http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "refresh grant with OIDC upstream with identity transformations which reject the auth",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+					WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					session.IDTokenClaims().Extra["username"] = transformationUsernamePrefix + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamOIDCRefreshTokenCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantStatus:                        http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh rejected by configured identity policy: authentication was rejected by a configured policy."
+						}
+					`),
+				},
 			},
 		},
 		{
@@ -3558,6 +3737,86 @@ func TestRefreshGrant(t *testing.T) {
 					transformationUsernamePrefix+goodUsername,
 					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
 				),
+			},
+		},
+		{
+			name: "upstream ldap refresh with identity transformations which modify the username and group names when the downstream username has changed compared to initial login",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).
+				Build(),
+			),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: happyLDAPCustomSessionDataWithUsername("some_other_transform_prefix:" + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					// In this case we will simulate a successful auth so we can test what happens when the refresh is
+					// rejected by the identity transformations.
+					session.IDTokenClaims().Extra["username"] = "some_other_transform_prefix:" + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					happyLDAPCustomSessionDataWithUsername("some_other_transform_prefix:"+goodUsername),
+					"some_other_transform_prefix:"+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "upstream ldap refresh with identity transformations which reject the auth",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+				WithName(ldapUpstreamName).
+				WithResourceUID(ldapUpstreamResourceUID).
+				WithURL(ldapUpstreamURL).
+				WithPerformRefreshGroups(goodGroups).
+				WithTransformsForFederationDomain(rejectAuthPipeline).
+				Build(),
+			),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: happyLDAPCustomSessionDataWithUsername(transformationUsernamePrefix + goodUsername),
+				modifySession: func(session *psession.PinnipedSession) {
+					// The authorization flow would have run the transformation pipeline and stored the transformed
+					// downstream identity in this part of the session, so simulate that by setting the expected result.
+					// In this case we will simulate a successful auth so we can test what happens when the refresh is
+					// rejected by the identity transformations.
+					session.IDTokenClaims().Extra["username"] = transformationUsernamePrefix + goodUsername
+					session.IDTokenClaims().Extra["groups"] = testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups)
+				},
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					happyLDAPCustomSessionDataWithUsername(transformationUsernamePrefix+goodUsername),
+					transformationUsernamePrefix+goodUsername,
+					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:              http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh rejected by configured identity policy: authentication was rejected by a configured policy."
+						}
+					`),
+				},
 			},
 		},
 		{

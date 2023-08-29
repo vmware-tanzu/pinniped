@@ -150,9 +150,9 @@ check_dependency htpasswd "Please install htpasswd. Should be pre-installed on M
 check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."
 check_dependency nmap "Please install nmap. e.g. 'brew install nmap' for MacOS"
 
-# Require kubectl >= 1.18.x.
-if [ "$(kubectl version --client=true -o=json | grep gitVersion | cut -d '.' -f 2)" -lt 18 ]; then
-  log_error "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
+# Require kubectl >= 1.21.x.
+if [ "$(kubectl version --client=true -o=json | grep gitVersion | cut -d '.' -f 2)" -lt 21 ]; then
+  log_error "kubectl >= 1.21.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
   exit 1
 fi
 

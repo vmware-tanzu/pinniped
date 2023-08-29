@@ -1,0 +1,10 @@
+apiVersion: data.packaging.carvel.dev/v1alpha1
+kind: PackageMetadata
+metadata:
+  name: concierge.pinniped.dev
+spec:
+  displayName: Pinniped Concierge
+  longDescription: Pinniped concierge enables consistent login across Kubernetes clusters on public cloud providers such as AKS, EKS and GKE
+  shortDescription: Pinniped concierge enables consistent login across public clouds
+  categories:
+  - auth

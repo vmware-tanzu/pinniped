@@ -1,7 +1,11 @@
+#@ load("@ytt:data", "data")  # for reading data values (generated via ytt's data-values-schema-inspect mode).
+#@ load("@ytt:yaml", "yaml")  # for dynamically decoding the output of ytt's data-values-schema-inspect
+---
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: PackageMetadata
 metadata:
   name: concierge.pinniped.dev
+  namespace: #@ data.values.namespace
 spec:
   displayName: "Pinniped Concierge"
   longDescription: "Pinniped concierge enables consistent login across Kubernetes clusters on public cloud providers such as AKS, EKS and GKE"

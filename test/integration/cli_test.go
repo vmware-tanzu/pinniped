@@ -28,7 +28,6 @@ import (
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
-	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/testlib"
@@ -48,7 +47,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
-	credCacheDir := testutil.TempDir(t)
+	credCacheDir := t.TempDir()
 	stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, "get", "kubeconfig",
 		"--static-token", env.TestUser.Token,
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
@@ -92,7 +91,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 
 	t.Run("whoami", func(t *testing.T) {
 		// Validate that `pinniped whoami` returns the correct identity.
-		kubeconfigPath := filepath.Join(testutil.TempDir(t), "whoami-kubeconfig")
+		kubeconfigPath := filepath.Join(t.TempDir(), "whoami-kubeconfig")
 		require.NoError(t, os.WriteFile(kubeconfigPath, []byte(stdout), 0600))
 		assertWhoami(
 			ctx,
@@ -277,7 +276,7 @@ func runPinnipedLoginOIDC(
 	env := testlib.IntegrationEnv(t)
 
 	// Make a temp directory to hold the session cache for this test.
-	sessionCachePath := testutil.TempDir(t) + "/sessions.yaml"
+	sessionCachePath := t.TempDir() + "/sessions.yaml"
 
 	// Start the browser driver.
 	browser := browsertest.OpenBrowser(t)
@@ -417,13 +416,13 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 		"--scopes", "offline_access,openid,email,profile",
 		"--listen-port", callbackURL.Port(),
 		"--session-cache", sessionCachePath,
-		"--credential-cache", testutil.TempDir(t)+"/credentials.yaml",
+		"--credential-cache", t.TempDir()+"/credentials.yaml",
 		"--skip-browser",
 	)
 
 	// If there is a custom CA bundle, pass it via --ca-bundle and a temporary file.
 	if env.CLIUpstreamOIDC.CABundle != "" {
-		path := filepath.Join(testutil.TempDir(t), "test-ca.pem")
+		path := filepath.Join(t.TempDir(), "test-ca.pem")
 		require.NoError(t, os.WriteFile(path, []byte(env.CLIUpstreamOIDC.CABundle), 0600))
 		cmd.Args = append(cmd.Args, "--ca-bundle", path)
 	}

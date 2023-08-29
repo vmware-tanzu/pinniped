@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package execcredcache
@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-
-	"go.pinniped.dev/internal/testutil"
 )
 
 var (
@@ -100,7 +98,7 @@ func TestWriteTo(t *testing.T) {
 	t.Parallel()
 	t.Run("io error", func(t *testing.T) {
 		t.Parallel()
-		tmp := testutil.TempDir(t) + "/credentials.yaml"
+		tmp := t.TempDir() + "/credentials.yaml"
 		require.NoError(t, os.Mkdir(tmp, 0700))
 		err := validCache.writeTo(tmp)
 		require.EqualError(t, err, "open "+tmp+": is a directory")
@@ -108,7 +106,7 @@ func TestWriteTo(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, validCache.writeTo(testutil.TempDir(t)+"/credentials.yaml"))
+		require.NoError(t, validCache.writeTo(t.TempDir()+"/credentials.yaml"))
 	})
 }
 

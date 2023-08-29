@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -15,7 +15,6 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/testutil"
 )
 
 func TestConciergeModeFlag(t *testing.T) {
@@ -52,7 +51,7 @@ func TestConciergeModeFlag(t *testing.T) {
 func TestCABundleFlag(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	tmpdir := testutil.TempDir(t)
+	tmpdir := t.TempDir()
 	emptyFilePath := filepath.Join(tmpdir, "empty")
 	require.NoError(t, os.WriteFile(emptyFilePath, []byte{}, 0600))
 

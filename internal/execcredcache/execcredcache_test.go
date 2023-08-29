@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package execcredcache
@@ -14,13 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-
-	"go.pinniped.dev/internal/testutil"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	tmp := testutil.TempDir(t) + "/credentials.yaml"
+	tmp := t.TempDir() + "/credentials.yaml"
 	c := New(tmp)
 	require.NotNil(t, c)
 	require.Equal(t, tmp, c.path)
@@ -167,7 +165,7 @@ func TestGet(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := testutil.TempDir(t) + "/sessions.yaml"
+			tmp := t.TempDir() + "/sessions.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}
@@ -333,7 +331,7 @@ func TestPutToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := testutil.TempDir(t) + "/cachedir/credentials.yaml"
+			tmp := t.TempDir() + "/cachedir/credentials.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}

@@ -79,7 +79,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
-	testCABundlePath := filepath.Join(testutil.TempDir(t), "test-ca.pem")
+	testCABundlePath := filepath.Join(t.TempDir(), "test-ca.pem")
 	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
 	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
@@ -119,7 +119,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -200,7 +200,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -284,7 +284,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -395,7 +395,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -531,7 +531,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
@@ -614,7 +614,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Create upstream OIDC provider and wait for it to become ready.
 		oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -700,7 +700,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -754,7 +754,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -813,7 +813,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
@@ -879,7 +879,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -933,7 +933,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
@@ -998,7 +998,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -1048,7 +1048,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
@@ -1098,7 +1098,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)

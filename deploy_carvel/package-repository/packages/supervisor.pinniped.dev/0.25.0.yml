@@ -2,7 +2,7 @@ apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
   name: supervisor.pinniped.dev.0.25.0
-  namespace: supervisor-ns
+  namespace: kapp-controller-packaging-global
 spec:
   refName: supervisor.pinniped.dev
   version: 0.25.0
@@ -39,9 +39,8 @@ spec:
           default: 2
         image_repo:
           type: string
-          nullable: true
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-          default: null
+          default: projects.registry.vmware.com/pinniped/pinniped-server
         image_digest:
           type: string
           nullable: true
@@ -49,9 +48,8 @@ spec:
           default: null
         image_tag:
           type: string
-          nullable: true
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-          default: null
+          default: latest
         package_image_repo:
           type: string
           nullable: true

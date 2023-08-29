@@ -77,6 +77,7 @@ mkdir -p "./${PACKAGE_REPOSITORY_DIR}/packages/supervisor.pinniped.dev"
 
 PACKAGE_INSTALL_DIR="temp_actual_deploy_resources"
 rm -rf "./${PACKAGE_INSTALL_DIR}"
+mkdir "./${PACKAGE_INSTALL_DIR}"
 
 ## TODO:
 ## "${resource_name}/deployment.yml" vs "${resource_name}/deployment-HACKED.yml"
@@ -188,18 +189,19 @@ PINNIPED_PACKAGE_RBAC_FILE="./${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PRE
 
 echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
 cat <<EOF >> "${PINNIPED_PACKAGE_RBAC_FILE}"
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: "${NAMESPACE}"
+# ---
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#  name: "${NAMESPACE}" <--- "supervisor-ns" will cause other package install errors.
 ---
 # ServiceAccount details from the file linked above
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  namespace: "${NAMESPACE}"
+  # namespace: "${NAMESPACE}"
+  namespace: default # --> sticking to default for everything for now.
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -217,7 +219,8 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  namespace: "${NAMESPACE}"
+  # namespace: "${NAMESPACE}"
+  namespace: default # --> sticking to default for everything for now.
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -228,7 +231,7 @@ EOF
 kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_RBAC_FILE}" -y
 done
 
-#FOOBAR="pinniped-package-rbac"
+
 #PINNIPED_PACKAGE_RBAC_FILE="./${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PREFIX}-rbac.yml"
 ## TODO: obviously a mega-role that can do everything is not good.
 #echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
@@ -250,7 +253,8 @@ kind: PackageInstall
 metadata:
     # name, does not have to be versioned, versionSelection.constraints below will handle
     name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"                     # TODO: ---????? is this namespace ok?
+    # namespace: "${NAMESPACE}"
+    namespace: default # --> sticking to default for everything for now.
 spec:
   serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
   packageRef:

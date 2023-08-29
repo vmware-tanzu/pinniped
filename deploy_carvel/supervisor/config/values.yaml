@@ -27,13 +27,11 @@ custom_labels: {} #! e.g. {myCustomLabelName: myCustomLabelValue, otherCustomLab
 replicas: 2
 
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
-#@schema/nullable
 image_repo: projects.registry.vmware.com/pinniped/pinniped-server
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
 #@schema/nullable
 image_digest: sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
-#@schema/nullable
 image_tag: latest
 
 #! TODO: preserve even if this file is revised!

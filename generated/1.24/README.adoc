@@ -673,6 +673,18 @@ FederationDomainIdentityProvider describes how an identity provider is made avai
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainphase"]
+==== FederationDomainPhase (string)
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
+****
+
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainsecrets"]
 ==== FederationDomainSecrets 
 
@@ -728,22 +740,10 @@ FederationDomainStatus is a struct that describes the actual state of an OIDC Pr
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __FederationDomainPhase__ | Phase summarizes the overall status of the FederationDomain.
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainphase[$$FederationDomainPhase$$]__ | Phase summarizes the overall status of the FederationDomain.
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-condition[$$Condition$$] array__ | Conditions represent the observations of an FederationDomain's current state.
 | *`secrets`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainsecrets[$$FederationDomainSecrets$$]__ | Secrets contains information about this OIDC Provider's secrets.
 |===
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainstatuscondition"]
-==== FederationDomainStatusCondition (string)
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
-****
-
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-24-apis-supervisor-config-v1alpha1-federationdomaintlsspec"]

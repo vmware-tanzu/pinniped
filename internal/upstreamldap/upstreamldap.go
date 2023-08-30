@@ -188,7 +188,7 @@ func closeAndLogError(conn Conn, doingWhat string) {
 	}
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes) ([]string, error) {
+func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes, idpDisplayName string) ([]string, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	userDN := storedRefreshAttributes.DN
@@ -237,7 +237,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes u
 	if err != nil {
 		return nil, err
 	}
-	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL())
+	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL(), idpDisplayName)
 	if newSubject != storedRefreshAttributes.Subject {
 		return nil, fmt.Errorf(`searching for user %q produced a different subject than the previous value. expected: %q, actual: %q`, userDN, storedRefreshAttributes.Subject, newSubject)
 	}

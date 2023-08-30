@@ -36,6 +36,7 @@ const (
 	testHost                                      = "ldap.example.com:8443"
 	testBindUsername                              = "cn=some-bind-username,dc=pinniped,dc=dev"
 	testBindPassword                              = "some-bind-password"
+	testUpstreamName                              = "some-upstream-idp-name"
 	testUpstreamUsername                          = "some-upstream-username"
 	testUpstreamPassword                          = "some-upstream-password"
 	testUserSearchBase                            = "some-upstream-user-base-dn"
@@ -2046,7 +2047,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantErr: "searching for user \"some-upstream-user-dn\" produced a different subject than the previous value. expected: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU\", actual: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=d3JvbmctdWlk\"",
+			wantErr: "searching for user \"some-upstream-user-dn\" produced a different subject than the previous value. expected: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&idpName=some-upstream-idp-name&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU\", actual: \"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&idpName=some-upstream-idp-name&sub=d3JvbmctdWlk\"",
 		},
 		{
 			name:           "search result has wrong username",
@@ -2279,14 +2280,17 @@ func TestUpstreamRefresh(t *testing.T) {
 			}
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*tt.providerConfig)
-			subject := "ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU"
+			subject := fmt.Sprintf(
+				"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&idpName=%s&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU",
+				testUpstreamName,
+			)
 			groups, err := ldapProvider.PerformRefresh(context.Background(), upstreamprovider.RefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,
 				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
 				GrantedScopes:        tt.grantedScopes,
-			})
+			}, testUpstreamName)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

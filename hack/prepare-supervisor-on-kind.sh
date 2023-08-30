@@ -246,7 +246,7 @@ if [[ "$use_oidc_upstream" == "yes" ]]; then
   fd_idps="${fd_idps}$(
     cat <<EOF
 
-    - displayName: "My OIDC IDP"
+    - displayName: "My OIDC IDP 🚀"
       objectRef:
         apiGroup: idp.supervisor.pinniped.dev
         kind: OIDCIdentityProvider
@@ -272,7 +272,7 @@ if [[ "$use_ldap_upstream" == "yes" ]]; then
   fd_idps="${fd_idps}$(
     cat <<EOF
 
-    - displayName: "My LDAP IDP"
+    - displayName: "My LDAP IDP 🚀"
       objectRef:
         apiGroup: idp.supervisor.pinniped.dev
         kind: LDAPIdentityProvider

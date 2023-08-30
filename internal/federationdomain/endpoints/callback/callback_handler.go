@@ -70,19 +70,25 @@ func NewHandler(
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
+		subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(
+			upstreamIDPConfig, token.IDToken.Claims, resolvedOIDCIdentityProvider.DisplayName,
+		)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), resolvedOIDCIdentityProvider.Transforms, upstreamUsername, upstreamGroups)
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(
+			r.Context(), resolvedOIDCIdentityProvider.Transforms, upstreamUsername, upstreamGroups,
+		)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
 		additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 
-		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(upstreamIDPConfig, token, username, upstreamUsername, upstreamGroups)
+		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(
+			upstreamIDPConfig, token, username, upstreamUsername, upstreamGroups,
+		)
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}

@@ -108,6 +108,7 @@ func NewHandler(
 					oauthHelperWithStorage,
 					oidcUpstream.Provider,
 					oidcUpstream.Transforms,
+					oidcUpstream.DisplayName,
 					idpNameQueryParamValue,
 				)
 			}
@@ -130,6 +131,7 @@ func NewHandler(
 				ldapUpstream.Provider,
 				ldapUpstream.SessionProviderType,
 				ldapUpstream.Transforms,
+				ldapUpstream.DisplayName,
 				idpNameQueryParamValue,
 			)
 		}
@@ -158,6 +160,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
 	idpType psession.ProviderType,
 	identityTransforms *idtransform.TransformationPipeline,
+	idpDisplayName string,
 	idpNameQueryParamValue string,
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
@@ -187,7 +190,7 @@ func handleAuthRequestForLDAPUpstreamCLIFlow(
 		return nil
 	}
 
-	subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
+	subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse, idpDisplayName)
 	upstreamUsername := authenticateResponse.User.GetName()
 	upstreamGroups := authenticateResponse.User.GetGroups()
 
@@ -251,6 +254,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	oauthHelper fosite.OAuth2Provider,
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	identityTransforms *idtransform.TransformationPipeline,
+	idpDisplayName string,
 	idpNameQueryParamValue string,
 ) error {
 	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper, true)
@@ -291,7 +295,9 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(
+		oidcUpstream, token.IDToken.Claims, idpDisplayName,
+	)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,

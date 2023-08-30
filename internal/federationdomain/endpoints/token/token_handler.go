@@ -394,7 +394,7 @@ func upstreamLDAPRefresh(
 		Groups:               oldUntransformedGroups,
 		AdditionalAttributes: additionalAttributes,
 		GrantedScopes:        grantedScopes,
-	})
+	}, p.DisplayName)
 	if err != nil {
 		return errUpstreamRefreshError().WithHint(
 			"Upstream refresh failed.").WithTrace(err).

@@ -41,6 +41,8 @@ const (
 	emailVerifiedClaimInvalidFormatErr = constable.Error("email_verified claim in upstream ID token has invalid format")
 	emailVerifiedClaimFalseErr         = constable.Error("email_verified claim in upstream ID token has false value")
 	idTransformUnexpectedErr           = constable.Error("configured identity transformation or policy resulted in unexpected error")
+
+	idpNameSubjectQueryParam = "idpName"
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
@@ -213,8 +215,9 @@ func AutoApproveScopes(authorizeRequester fosite.AuthorizeRequester) {
 func GetDownstreamIdentityFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
+	idpDisplayName string,
 ) (string, string, []string, error) {
-	subject, username, err := getSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+	subject, username, err := getSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims, idpDisplayName)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -275,6 +278,7 @@ func ApplyIdentityTransformations(
 func getSubjectAndUsernameFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
+	idpDisplayName string,
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
@@ -286,11 +290,11 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 	if err != nil {
 		return "", "", err
 	}
-	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuer, upstreamSubject)
+	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuer, upstreamSubject, idpDisplayName)
 
 	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaimName == "" {
-		return subject, subject, nil
+		return subject, downstreamUsernameFromUpstreamOIDCSubject(upstreamIssuer, upstreamSubject), nil
 	}
 
 	// If the upstream username claim is configured to be the special "email" claim and the upstream "email_verified"
@@ -358,20 +362,34 @@ func ExtractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 	return valueAsString, nil
 }
 
-func DownstreamSubjectFromUpstreamLDAP(ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticators.Response) string {
+func DownstreamSubjectFromUpstreamLDAP(
+	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
+	authenticateResponse *authenticators.Response,
+	idpDisplayName string,
+) string {
 	ldapURL := *ldapUpstream.GetURL()
-	return DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL)
+	return DownstreamLDAPSubject(authenticateResponse.User.GetUID(), ldapURL, idpDisplayName)
 }
 
-func DownstreamLDAPSubject(uid string, ldapURL url.URL) string {
+func DownstreamLDAPSubject(uid string, ldapURL url.URL, idpDisplayName string) string {
 	q := ldapURL.Query()
+	q.Set(idpNameSubjectQueryParam, idpDisplayName)
 	q.Set(oidcapi.IDTokenClaimSubject, uid)
 	ldapURL.RawQuery = q.Encode()
 	return ldapURL.String()
 }
 
-func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
-	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidcapi.IDTokenClaimSubject, url.QueryEscape(upstreamSubject))
+func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string, idpDisplayName string) string {
+	return fmt.Sprintf("%s?%s=%s&%s=%s", upstreamIssuerAsString,
+		idpNameSubjectQueryParam, url.QueryEscape(idpDisplayName),
+		oidcapi.IDTokenClaimSubject, url.QueryEscape(upstreamSubject),
+	)
+}
+
+func downstreamUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, upstreamSubject string) string {
+	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString,
+		oidcapi.IDTokenClaimSubject, url.QueryEscape(upstreamSubject),
+	)
 }
 
 // GetGroupsFromUpstreamIDToken returns mapped group names coerced into a slice of strings.

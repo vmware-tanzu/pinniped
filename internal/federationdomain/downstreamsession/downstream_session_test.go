@@ -5,6 +5,7 @@ package downstreamsession
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -153,6 +154,121 @@ func TestApplyIdentityTransformations(t *testing.T) {
 				require.Equal(t, tt.wantUsername, gotUsername)
 				require.Equal(t, tt.wantGroups, gotGroups)
 			}
+		})
+	}
+}
+
+func TestDownstreamLDAPSubject(t *testing.T) {
+	tests := []struct {
+		name           string
+		uid            string
+		ldapURL        string
+		idpDisplayName string
+		wantSubject    string
+	}{
+		{
+			name:           "simple display name",
+			uid:            "some uid",
+			ldapURL:        "ldaps://server.example.com:1234",
+			idpDisplayName: "simpleName",
+			wantSubject:    "ldaps://server.example.com:1234?idpName=simpleName&sub=some+uid",
+		},
+		{
+			name:           "interesting display name",
+			uid:            "some uid",
+			ldapURL:        "ldaps://server.example.com:1234",
+			idpDisplayName: "this is a 👍 display name that 🦭 can handle",
+			wantSubject:    "ldaps://server.example.com:1234?idpName=this+is+a+%F0%9F%91%8D+display+name+that+%F0%9F%A6%AD+can+handle&sub=some+uid",
+		},
+		{
+			name:           "url already has query",
+			uid:            "some uid",
+			ldapURL:        "ldaps://server.example.com:1234?a=1&b=%F0%9F%A6%AD",
+			idpDisplayName: "some name",
+			wantSubject:    "ldaps://server.example.com:1234?a=1&b=%F0%9F%A6%AD&idpName=some+name&sub=some+uid",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			url, err := url.Parse(test.ldapURL)
+			require.NoError(t, err)
+
+			actual := DownstreamLDAPSubject(test.uid, *url, test.idpDisplayName)
+
+			require.Equal(t, test.wantSubject, actual)
+		})
+	}
+}
+
+func TestDownstreamSubjectFromUpstreamOIDC(t *testing.T) {
+	tests := []struct {
+		name                   string
+		upstreamIssuerAsString string
+		upstreamSubject        string
+		idpDisplayName         string
+		wantSubject            string
+	}{
+		{
+			name:                   "simple display name",
+			upstreamIssuerAsString: "https://server.example.com:1234/path",
+			upstreamSubject:        "some subject",
+			idpDisplayName:         "simpleName",
+			wantSubject:            "https://server.example.com:1234/path?idpName=simpleName&sub=some+subject",
+		},
+		{
+			name:                   "interesting display name",
+			upstreamIssuerAsString: "https://server.example.com:1234/path",
+			upstreamSubject:        "some subject",
+			idpDisplayName:         "this is a 👍 display name that 🦭 can handle",
+			wantSubject:            "https://server.example.com:1234/path?idpName=this+is+a+%F0%9F%91%8D+display+name+that+%F0%9F%A6%AD+can+handle&sub=some+subject",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := downstreamSubjectFromUpstreamOIDC(test.upstreamIssuerAsString, test.upstreamSubject, test.idpDisplayName)
+
+			require.Equal(t, test.wantSubject, actual)
+		})
+	}
+}
+
+func TestDownstreamUsernameFromUpstreamOIDCSubject(t *testing.T) {
+	tests := []struct {
+		name                   string
+		upstreamIssuerAsString string
+		upstreamSubject        string
+		wantSubject            string
+	}{
+		{
+			name:                   "simple upstreamSubject",
+			upstreamIssuerAsString: "https://server.example.com:1234/path",
+			upstreamSubject:        "some subject",
+			wantSubject:            "https://server.example.com:1234/path?sub=some+subject",
+		},
+		{
+			name:                   "interesting upstreamSubject",
+			upstreamIssuerAsString: "https://server.example.com:1234/path",
+			upstreamSubject:        "this is a 👍 subject that 🦭 can handle",
+			wantSubject:            "https://server.example.com:1234/path?sub=this+is+a+%F0%9F%91%8D+subject+that+%F0%9F%A6%AD+can+handle",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := downstreamUsernameFromUpstreamOIDCSubject(test.upstreamIssuerAsString, test.upstreamSubject)
+
+			require.Equal(t, test.wantSubject, actual)
 		})
 	}
 }

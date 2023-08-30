@@ -63,7 +63,9 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 		}
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes())
+		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(
+			r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes(),
+		)
 		if err != nil {
 			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.Provider.GetName())
 			// There was some problem during authentication with the upstream, aside from bad username/password.
@@ -80,11 +82,15 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 		// Now the upstream IDP has authenticated the user, so now we're back into the regular OIDC authcode flow steps.
 		// Both success and error responses from this point onwards should look like the usual fosite redirect
 		// responses, and a happy redirect response will include a downstream authcode.
-		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream.Provider, authenticateResponse)
+		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(
+			ldapUpstream.Provider, authenticateResponse, ldapUpstream.DisplayName,
+		)
 		upstreamUsername := authenticateResponse.User.GetName()
 		upstreamGroups := authenticateResponse.User.GetGroups()
 
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), ldapUpstream.Transforms, upstreamUsername, upstreamGroups)
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(
+			r.Context(), ldapUpstream.Transforms, upstreamUsername, upstreamGroups,
+		)
 		if err != nil {
 			oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
 				fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), false,
@@ -92,7 +98,8 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			return nil
 		}
 
-		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream.Provider, ldapUpstream.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
+		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(
+			ldapUpstream.Provider, ldapUpstream.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
 		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
 			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)

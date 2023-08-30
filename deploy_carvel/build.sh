@@ -91,11 +91,6 @@ do
   echo_yellow "handling ${resource_name}..."
 
   # just simple templating
-  # ytt --file "./${resource_name}}/config/"
-  # template, but process with kbld to update the yaml files with image digests such as
-  #    image: index.docker.io/<repo>/<image>@sha256:<hash>
-  # ytt --file "./${resource_name}}/config/" | kbld --file -
-
   echo_yellow "generating ${resource_name}/.imgpkg/images.yaml"
   # there are bits for image substitution in some of the ytt commands
   kbld --file "./${resource_name}/config/" --imgpkg-lock-output "./${resource_name}/.imgpkg/images.yml"
@@ -121,7 +116,6 @@ do
     --file "${resource_name}/package-template.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
-    --data-value namespace="${KAPP_CONTROLLER_GLOBAL_NAMESPACE}" \
     --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
 
   echo_yellow "generating ./${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
@@ -129,7 +123,6 @@ do
     --file "${resource_name}/metadata.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
-    --data-value namespace="${KAPP_CONTROLLER_GLOBAL_NAMESPACE}" \
     --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
 
 done
@@ -149,7 +142,7 @@ echo_yellow "deploying PackageRepository..."
 PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
 PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
 echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
-# kapp-controller's packaging-global-namespace does not apply to PackageRepository
+
 cat <<EOT >> "${PINNIPED_PACKGE_REPOSITORY_FILE}"
 ---
 apiVersion: packaging.carvel.dev/v1alpha1

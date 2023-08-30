@@ -2,7 +2,6 @@ apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: PackageMetadata
 metadata:
   name: supervisor.pinniped.dev
-  namespace: kapp-controller-packaging-global
 spec:
   displayName: Pinniped Supervisor
   longDescription: Pinniped supervisor allows seamless login across one or many Kubernetes clusters including AKS, EKS and GKE

@@ -387,7 +387,8 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	}
 }
 
-func microsoftUUIDFromBinaryAttr(attributeName string) func(entry *ldap.Entry) (string, error) {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var microsoftUUIDFromBinaryAttr = func(attributeName string) func(*ldap.Entry) (string, error) {
 	// validation has already been done so we can just get the attribute...
 	return func(entry *ldap.Entry) (string, error) {
 		binaryUUID := entry.GetRawAttributeValue(attributeName)
@@ -442,7 +443,8 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 	return strings.Join(domainComponents[1:], "."), nil
 }
 
-func validUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var validUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
@@ -455,7 +457,8 @@ func validUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) er
 	return nil
 }
 
-func validComputedUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var validComputedUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err

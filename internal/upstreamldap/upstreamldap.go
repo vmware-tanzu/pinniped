@@ -871,7 +871,8 @@ func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
 	)
 }
 
-func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var AttributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
 	return func(entry *ldap.Entry, storedAttributes provider.RefreshAttributes) error {
 		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
 		newValues := entry.GetRawAttributeValues(attribute)

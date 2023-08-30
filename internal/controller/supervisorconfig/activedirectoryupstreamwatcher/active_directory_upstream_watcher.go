@@ -6,6 +6,7 @@ package activedirectoryupstreamwatcher
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -344,7 +345,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
 		},
 		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
-			pwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+			pwdLastSetAttribute:                 attributeUnchangedSinceLogin(pwdLastSetAttribute),
 			userAccountControlAttribute:         validUserAccountControl,
 			userAccountControlComputedAttribute: validComputedUserAccountControl,
 		},
@@ -469,4 +470,21 @@ var validComputedUserAccountControl = func(entry *ldap.Entry, _ provider.Refresh
 		return fmt.Errorf("user has been locked")
 	}
 	return nil
+}
+
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes provider.RefreshAttributes) error {
+		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
+		newValues := entry.GetRawAttributeValues(attribute)
+
+		if len(newValues) != 1 {
+			return fmt.Errorf(`expected to find 1 value for %q attribute, but found %d`, attribute, len(newValues))
+		}
+		encodedNewValue := base64.RawURLEncoding.EncodeToString(newValues[0])
+		if prevAttributeValue != encodedNewValue {
+			return fmt.Errorf(`value for attribute %q has changed since initial value at login`, attribute)
+		}
+		return nil
+	}
 }

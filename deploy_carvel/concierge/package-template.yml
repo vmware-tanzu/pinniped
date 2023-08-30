@@ -5,7 +5,6 @@ apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
   name: #@ "concierge.pinniped.dev." + data.values.package_version
-  namespace: #@ data.values.namespace
 spec:
   refName: concierge.pinniped.dev
   version: #@ data.values.package_version

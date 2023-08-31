@@ -14,5 +14,5 @@ images:
       - resolved:
           tag: 0.25.0
           url: benjaminapetersen/pinniped-package-repo-package-supervisor:0.25.0
-  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-supervisor@sha256:12577787d82b4f565be28c65c229c87dd8ac9890d0f44a690725fdb4ac7f4082
+  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-supervisor@sha256:53b9a52d499492d372688198e0cf9c9598835047ec67684f908f512f8a28fc96
 kind: ImagesLock

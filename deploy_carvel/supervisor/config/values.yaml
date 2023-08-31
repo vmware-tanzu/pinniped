@@ -40,7 +40,7 @@ package_image_repo: docker.io/benjaminapetersen/some-pinniped-supervisor-package
 #@schema/nullable
 package_image_digest: sha256:123456
 #@schema/nullable
-package_image_tag: latest
+package_image_tag: latest #! TODO; so since we allow the deployment to pass in the image tag, not sure the value in versions of packages?
 #! prob should not be nullable
 #@schema/nullable
 package_version: 1.2.3

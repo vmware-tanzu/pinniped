@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
 set -e # immediately exit
 set -u # error if variables undefined
 set -o pipefail # prevent masking errors in a pipeline
@@ -37,21 +36,19 @@ function check_dependency() {
   fi
 }
 
+app="${1:-undefined}"
+tag="${2:-undefined}"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+log_note "log-args.sh >>> script dir: ${SCRIPT_DIR}"
+log_note "log-args.sh >>> app: ${app} tag: ${tag}"
+exit 1
 
-
-log_note "Deploying kapp-controller on kind cluster..."
-kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml -y
-kubectl get customresourcedefinitions
-# Global kapp-controller-namespace:
-#   -packaging-global-namespace=kapp-controller-packaging-global
-# kapp-controller resources like PackageRepository and Package are namepaced.
-# However, this namespace, provided via flag to kapp-controller in the yaml above,
-# defines a "global" namespace.  That is, resources installed in this namespace
-# can be installed in every namespace as kapp will always pay attention to its
-# pseudo-global namespace.
-KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
-
-
+# Build the PackageRepository and Package resources
+# - container images
+# - yaml files
+# Deploy the container images to a registry
+# No need for a running cluster
+#
 # TODO: final resting place for these images (PackageRepository, Packge) will need to
 # be in the same plate as our regular images:
 # - https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0

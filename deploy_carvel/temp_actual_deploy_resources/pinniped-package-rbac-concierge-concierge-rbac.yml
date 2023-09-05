@@ -1,0 +1,37 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "concierge-install-ns"
+---
+# ServiceAccount details from the file linked above
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: "pinniped-package-rbac-concierge-sa-superadmin-dangerous"
+  namespace: "concierge-install-ns"
+  # namespace: default # --> sticking to default for everything for now.
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "pinniped-package-rbac-concierge-role-superadmin-dangerous"
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "pinniped-package-rbac-concierge-role-binding-superadmin-dangerous"
+subjects:
+- kind: ServiceAccount
+  name: "pinniped-package-rbac-concierge-sa-superadmin-dangerous"
+  namespace: "concierge-install-ns"
+  # namespace: default # --> sticking to default for everything for now.
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "pinniped-package-rbac-concierge-role-superadmin-dangerous"
+

@@ -1,0 +1,28 @@
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: supervisor-install
+    namespace: supervisor-install-ns
+spec:
+  serviceAccountName: "pinniped-package-rbac-supervisor-sa-superadmin-dangerous"
+  packageRef:
+    refName: "supervisor.pinniped.dev"
+    versionSelection:
+      constraints: "0.25.0"
+  values:
+  - secretRef:
+      name: "supervisor-package-install-secret"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "supervisor-package-install-secret"
+  namespace: supervisor-install-ns
+stringData:
+  values.yml: |
+    ---
+    namespace: "supervisor"
+    app_name: "supervisor"    # this affects services and things, needs to be just the resource name to match hack scripts
+    replicas: 1                     # keep logs testing easy

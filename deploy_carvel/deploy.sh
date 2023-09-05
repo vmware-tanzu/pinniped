@@ -44,6 +44,11 @@ function check_dependency() {
     exit 1
   fi
 }
+# TODO: add support for
+#   Read the env vars output by hack/prepare-for-integration-tests.sh
+#   source /tmp/integration-test-env
+#
+#
 # Deploy the PackageRepository and Package resources
 # Requires a running kind cluster
 # Does not configure Pinniped
@@ -212,8 +217,8 @@ stringData:
   values.yml: |
     ---
     namespace: "${RESOURCE_NAMESPACE}"
-    app_name: "${resource_name}-app-installed-via-package"
-    replicas: 3
+    app_name: "${resource_name}"    # this affects services and things, needs to be just the resource name to match hack scripts
+    replicas: 1                     # keep logs testing easy
 EOF
 
   KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
@@ -233,12 +238,31 @@ kubectl get deploy -n supervisor
 kubectl get deploy -n concierge
 
 
+# FLOW:
+#   kind delete cluster --name pinniped
+#   ./hack/prepare-for-integration-tests.sh --alternate-deploy-supervisor $(pwd)/deploy_carvel/deploy.sh --alternate-deploy-concierge $(pwd)/deploy_carvel/deploy.sh
+#   ./hack/prepare-supervisor-on-kind.sh --oidc
+#
 # TODO:
 # - change the namespace to whatever it is in ./hack/prepare-for-integration-tests.sh
 # - make a script that can work for $alternate-deploy
 # - then run ./hack/prepare-supervisor-on-kind.sh and make sure it works
-
-
+#
+#
+# openssl x509 -text -noout -in ./root_ca.crt
+#curl --insecure https://127.0.0.1:61759/live
+#{
+#  "kind": "Status",
+#  "apiVersion": "v1",
+#  "metadata": {},
+#  "status": "Failure",
+#  "message": "forbidden: User \"system:anonymous\" cannot get path \"/live\"",
+#  "reason": "Forbidden",
+#  "details": {},
+#  "code": 403
+#}%
+#curl --insecure https://127.0.0.1:61759/readyz
+#ok%
 
 #
 #

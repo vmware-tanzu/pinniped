@@ -1,0 +1,60 @@
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: OIDCIdentityProvider
+metadata:
+  # namespace: pinniped-supervisor
+  namespace: supervisor-ns # for this install this is the namespace that I've ben using.
+  name: gitlab
+spec:
+
+  # Specify the upstream issuer URL.
+  issuer: https://gitlab.eng.vmware.com
+
+  # Specify how to form authorization requests to GitLab.
+  authorizationConfig:
+
+    # GitLab is unusual among OIDC providers in that it returns an
+    # error if you request the "offline_access" scope during an
+    # authorization flow, so ask Pinniped to avoid requesting that
+    # scope when using GitLab by excluding it from this list.
+    # By specifying only "openid" here then Pinniped will only
+    # request "openid".
+    additionalScopes: [openid,email]
+
+    # If you would also like to allow your end users to authenticate using
+    # a password grant, then change this to true. See
+    # https://docs.gitlab.com/ee/api/oauth2.html#resource-owner-password-credentials-flow
+    # for more information about using the password grant with GitLab.
+    allowPasswordGrant: false
+
+  # Specify how GitLab claims are mapped to Kubernetes identities.
+  claims:
+
+    # Specify the name of the claim in your GitLab token that will be mapped
+    # to the "username" claim in downstream tokens minted by the Supervisor.
+    username: email
+
+    # Specify the name of the claim in GitLab that represents the groups
+    # that the user belongs to. Note that GitLab's "groups" claim comes from
+    # their "/userinfo" endpoint, not the token.
+    groups: groups
+
+  # Specify the name of the Kubernetes Secret that contains your GitLab
+  # application's client credentials (created below).
+  client:
+    secretName: gitlab-client-credentials
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  # namespace: pinniped-supervisor
+  namespace: supervisor-ns # for this install this is the namespace that I've ben using.
+  name: gitlab-client-credentials
+type: secrets.pinniped.dev/oidc-client
+stringData:
+
+  # The "Application ID" that you got from GitLab.
+  clientID: "bbf1c9e13b38642adec54d47a112159549c2de10ae3506086c5af2ff4beb32d6"
+
+  # The "Secret" that you got from GitLab.
+  clientSecret: "16a92c0fdbba5f87a7ea61d6c64a526b5fb838bf436825c98af95459c7c5eeb8"

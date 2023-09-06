@@ -26,6 +26,7 @@ This how-to guide assumes that you have already [installed the Pinniped Supervis
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
 ## Configure Your JumpCloud Account
+
 If you don't already have a JumpCloud account, you can create one for free with up to 10 users in the account.
 
 You will need to create two types of users in your JumpCloud account using the JumpCloud console UI:

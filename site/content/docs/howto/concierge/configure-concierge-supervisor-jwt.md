@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: JWT Authentication with Supervisor
+    name: With Supervisor
     weight: 40
     parent: howto-configure-concierge
 aliases:

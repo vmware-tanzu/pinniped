@@ -7,7 +7,7 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20230828023241-f357fd93b5d6
+	github.com/chromedp/cdproto v0.0.0-20230901104747-bfe71bcbd1c0
 	github.com/chromedp/chromedp v0.9.2
 	github.com/coreos/go-oidc/v3 v3.6.0
 	github.com/coreos/go-semver v0.3.1
@@ -34,14 +34,14 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.12.8
+	github.com/tdewolff/minify/v2 v2.12.9
 	go.uber.org/zap v1.25.0
-	golang.org/x/crypto v0.12.0
-	golang.org/x/net v0.14.0
-	golang.org/x/oauth2 v0.11.0
+	golang.org/x/crypto v0.13.0
+	golang.org/x/net v0.15.0
+	golang.org/x/oauth2 v0.12.0
 	golang.org/x/sync v0.3.0
-	golang.org/x/term v0.11.0
-	golang.org/x/text v0.12.0
+	golang.org/x/term v0.12.0
+	golang.org/x/text v0.13.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.28.1
 	k8s.io/apiextensions-apiserver v0.28.1
@@ -49,10 +49,10 @@ require (
 	k8s.io/apiserver v0.28.1
 	k8s.io/client-go v0.28.1
 	k8s.io/component-base v0.28.1
-	k8s.io/gengo v0.0.0-20230825065918-3239622df7ae
+	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kube-aggregator v0.28.1
-	k8s.io/kube-openapi v0.0.0-20230816210353-14e408962443
+	k8s.io/kube-openapi v0.0.0-20230905202853-d090da108d2f
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/yaml v1.3.0
 )
@@ -129,7 +129,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.6.7 // indirect
+	github.com/tdewolff/parse/v2 v2.6.8 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.9 // indirect
@@ -146,7 +146,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.8.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

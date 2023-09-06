@@ -6,6 +6,7 @@ package plog
 import (
 	"bytes"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -156,17 +157,17 @@ func TestPlog(t *testing.T) {
 				testAllPlogMethods(l.withDepth(2))
 			},
 			want: `
-{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"e","panda":2,"error":"some err"}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"w","warning":true,"panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"we","warning":true,"error":"some err","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"i","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"ie","error":"some err","panda":2}
-{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"d","panda":2}
-{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"de","error":"some err","panda":2}
-{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"t","panda":2}
-{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"te","error":"some err","panda":2}
-{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"all","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func15","message":"always","panda":2}
+{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"e","panda":2,"error":"some err"}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"w","warning":true,"panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"we","warning":true,"error":"some err","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"i","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"ie","error":"some err","panda":2}
+{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"d","panda":2}
+{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"de","error":"some err","panda":2}
+{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"t","panda":2}
+{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"te","error":"some err","panda":2}
+{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"all","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func16","message":"always","panda":2}
 `,
 		},
 		{
@@ -284,19 +285,24 @@ func TestPlog(t *testing.T) {
 					}()
 				}()
 			},
-			want: `
-{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"e","panda":2,"error":"some err"}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"w","warning":true,"panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"we","warning":true,"error":"some err","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"i","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"ie","error":"some err","panda":2}
-{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"d","panda":2}
-{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"de","error":"some err","panda":2}
-{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"t","panda":2}
-{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"te","error":"some err","panda":2}
-{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"all","panda":2}
-{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.func13.1.1","message":"always","panda":2}
-`,
+			want: fmt.Sprintf(`
+{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"e","panda":2,"error":"some err"}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"w","warning":true,"panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"we","warning":true,"error":"some err","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"i","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"ie","error":"some err","panda":2}
+{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"d","panda":2}
+{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"de","error":"some err","panda":2}
+{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"t","panda":2}
+{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"te","error":"some err","panda":2}
+{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"all","panda":2}
+{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"always","panda":2}
+`, func() string {
+				if strings.Contains(runtime.Version(), "1.21") {
+					return "func13.TestPlog.func13.1.func2"
+				}
+				return "func13.1.1"
+			}()),
 		},
 		{
 			name: "closure depth -1",

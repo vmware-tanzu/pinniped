@@ -6,6 +6,7 @@ package activedirectoryupstreamwatcher
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -344,7 +345,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
 		},
 		RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
-			pwdLastSetAttribute:                 upstreamldap.AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+			pwdLastSetAttribute:                 attributeUnchangedSinceLogin(pwdLastSetAttribute),
 			userAccountControlAttribute:         validUserAccountControl,
 			userAccountControlComputedAttribute: validComputedUserAccountControl,
 		},
@@ -387,7 +388,8 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	}
 }
 
-func microsoftUUIDFromBinaryAttr(attributeName string) func(entry *ldap.Entry) (string, error) {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var microsoftUUIDFromBinaryAttr = func(attributeName string) func(*ldap.Entry) (string, error) {
 	// validation has already been done so we can just get the attribute...
 	return func(entry *ldap.Entry) (string, error) {
 		binaryUUID := entry.GetRawAttributeValue(attributeName)
@@ -442,7 +444,8 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 	return strings.Join(domainComponents[1:], "."), nil
 }
 
-func validUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var validUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
@@ -455,7 +458,8 @@ func validUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) er
 	return nil
 }
 
-func validComputedUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttributes) error {
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var validComputedUserAccountControl = func(entry *ldap.Entry, _ provider.RefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err
@@ -466,4 +470,21 @@ func validComputedUserAccountControl(entry *ldap.Entry, _ provider.RefreshAttrib
 		return fmt.Errorf("user has been locked")
 	}
 	return nil
+}
+
+//nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
+var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes provider.RefreshAttributes) error {
+		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
+		newValues := entry.GetRawAttributeValues(attribute)
+
+		if len(newValues) != 1 {
+			return fmt.Errorf(`expected to find 1 value for %q attribute, but found %d`, attribute, len(newValues))
+		}
+		encodedNewValue := base64.RawURLEncoding.EncodeToString(newValues[0])
+		if prevAttributeValue != encodedNewValue {
+			return fmt.Errorf(`value for attribute %q has changed since initial value at login`, attribute)
+		}
+		return nil
+	}
 }

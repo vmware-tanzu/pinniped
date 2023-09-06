@@ -23,7 +23,6 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -34,7 +33,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	tmpdir := testutil.TempDir(t)
+	tmpdir := t.TempDir()
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, os.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
 
@@ -513,7 +512,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 				"--concierge-api-group-suffix", "some.suffix.com",
-				"--credential-cache", testutil.TempDir(t) + "/credentials.yaml", // must specify --credential-cache or else the cache file on disk causes test pollution
+				"--credential-cache", t.TempDir() + "/credentials.yaml", // must specify --credential-cache or else the cache file on disk causes test pollution
 				"--upstream-identity-provider-name", "some-upstream-name",
 				"--upstream-identity-provider-type", "ldap",
 			},

@@ -11,7 +11,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,8 +43,6 @@ func TestFormat(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 
-	const startLogLine = 47 // make this match the current line number
-
 	Info("hello", "happy", "day", "duration", time.Hour+time.Minute)
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
@@ -57,7 +54,7 @@ func TestFormat(t *testing.T) {
   "message": "hello",
   "happy": "day",
   "duration": "1h1m0s"
-}`, wd, startLogLine+2), scanner.Text())
+}`, wd, getLineNumberOfCaller()-11), scanner.Text())
 
 	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b")
 	require.True(t, scanner.Scan())
@@ -71,7 +68,7 @@ func TestFormat(t *testing.T) {
   "a": "b",
   "error": "invalid log level, valid choices are the empty string, info, debug, trace and all",
   "logger": "burrito"
-}`, wd, startLogLine+2+13), scanner.Text())
+}`, wd, getLineNumberOfCaller()-12), scanner.Text())
 
 	Logr().V(klogLevelWarning).Info("hey") // note that this fails to set the custom warning key because it is not via plog
 	require.True(t, scanner.Scan())
@@ -82,7 +79,7 @@ func TestFormat(t *testing.T) {
   "timestamp": "2022-11-21T23:37:26.953313Z",
   "caller": "%s/config_test.go:%d$plog.TestFormat",
   "message": "hey"
-}`, wd, startLogLine+2+13+14), scanner.Text())
+}`, wd, getLineNumberOfCaller()-9), scanner.Text())
 
 	Warning("bad stuff") // note that this sets the custom warning key because it is via plog
 	require.True(t, scanner.Scan())
@@ -94,7 +91,7 @@ func TestFormat(t *testing.T) {
   "caller": "%s/config_test.go:%d$plog.TestFormat",
   "message": "bad stuff",
   "warning": true
-}`, wd, startLogLine+2+13+14+11), scanner.Text())
+}`, wd, getLineNumberOfCaller()-10), scanner.Text())
 
 	func() { DebugErr("something happened", errInvalidLogFormat, "an", "item") }()
 	require.True(t, scanner.Scan())
@@ -107,7 +104,7 @@ func TestFormat(t *testing.T) {
   "message": "something happened",
   "error": "invalid log format, valid choices are the empty string, json and text",
   "an": "item"
-}`, wd, startLogLine+2+13+14+11+12), scanner.Text())
+}`, wd, getLineNumberOfCaller()-11), scanner.Text())
 
 	Trace("should not be logged", "for", "sure")
 	require.Empty(t, buf.String())
@@ -124,11 +121,6 @@ func TestFormat(t *testing.T) {
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 
-	line := "1576"
-	if strings.Contains(runtime.Version(), "1.19") {
-		line = "1446"
-	}
-
 	require.JSONEq(t, fmt.Sprintf(`
 {
   "level": "info",
@@ -137,14 +129,14 @@ func TestFormat(t *testing.T) {
   "message": "has a stack trace!",
   "logger": "stacky.does",
   "stacktrace": %s
-}`, wd, startLogLine+2+13+14+11+12+24,
+}`, wd, getLineNumberOfCaller()-12,
 		strconv.Quote(
 			fmt.Sprintf(
 				`go.pinniped.dev/internal/plog.TestFormat
 	%s/config_test.go:%d
 testing.tRunner
-	%s/src/testing/testing.go:%s`,
-				wd, startLogLine+2+13+14+11+12+24, runtime.GOROOT(), line,
+	%s/src/testing/testing.go:%d`,
+				wd, getLineNumberOfCaller()-19, runtime.GOROOT(), getLineNumberOfCaller(2),
 			),
 		),
 	), scanner.Text())
@@ -158,13 +150,13 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  plog/config_test.go:%d  something happened  {"error": "invalid log format, valid choices are the empty string, json and text", "an": "item"}`,
-		startLogLine+2+13+14+11+12+24+28+6), scanner.Text())
+		getLineNumberOfCaller()-4), scanner.Text())
 
 	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b", "slightly less than a year", 363*24*time.Hour, "slightly more than 2 years", 2*367*24*time.Hour)
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  burrito  plog/config_test.go:%d  wee  {"a": "b", "slightly less than a year": "363d", "slightly more than 2 years": "2y4d", "error": "invalid log level, valid choices are the empty string, info, debug, trace and all"}`,
-		startLogLine+2+13+14+11+12+24+28+6+6), scanner.Text())
+		getLineNumberOfCaller()-4), scanner.Text())
 
 	origTimeNow := textlogger.TimeNow
 	t.Cleanup(func() {
@@ -190,19 +182,19 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what is happening" does klog="work?"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6), scanner.Text())
+		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	Logr().WithName("panda").V(KlogLevelDebug).Info("are the best", "yes?", "yes.")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "panda: are the best" yes?="yes."`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6), scanner.Text())
+		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	New().WithName("hi").WithName("there").WithValues("a", 1, "b", 2).Always("do it")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "hi/there: do it" a=1 b=2`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+6), scanner.Text())
+		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	l := WithValues("x", 33, "z", 22)
 	l.Debug("what to do")
@@ -210,17 +202,17 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what to do" x=33 z=22`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+6), scanner.Text())
+		pid, getLineNumberOfCaller()-5), scanner.Text())
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "and why" x=33 z=22`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+6), scanner.Text())
+		pid, getLineNumberOfCaller()-8), scanner.Text())
 
 	old.Always("should be klog text format", "for", "sure")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: should be klog text format" is="old" for="sure"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+6), scanner.Text())
+		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	// make sure child loggers do not share state
 	old1 := old.WithValues("i am", "old1")
@@ -230,11 +222,11 @@ testing.tRunner
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: warn" is="old" i am="old1" warning=true`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9+6), scanner.Text())
+		pid, getLineNumberOfCaller()-5), scanner.Text())
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change/old2: info" is="old"`,
-		pid, startLogLine+2+13+14+11+12+24+28+6+26+6+6+7+1+10+9+1+6), scanner.Text())
+		pid, getLineNumberOfCaller()-8), scanner.Text())
 
 	Trace("should not be logged", "for", "sure")
 	require.Empty(t, buf.String())
@@ -362,5 +354,20 @@ func getKlogLevel() klog.Level {
 		return i - 1
 	}
 
+	return -1
+}
+
+// getLineNumberOfCaller returns the line number of the source code that invoked this function.
+// If maybeSkip is provided, returns the line number from a different point in the call stack.
+// This is useful to test log output that prints a call stack with line numbers.
+func getLineNumberOfCaller(maybeSkip ...int) int {
+	skip := 1
+	if len(maybeSkip) > 0 {
+		skip = maybeSkip[0]
+	}
+
+	if _, _, line, ok := runtime.Caller(skip); ok {
+		return line
+	}
 	return -1
 }

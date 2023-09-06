@@ -31,7 +31,6 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
 	"go.pinniped.dev/internal/psession"
-	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/testlib"
@@ -46,7 +45,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
-	tempDir := testutil.TempDir(t)
+	tempDir := t.TempDir()
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
 	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)

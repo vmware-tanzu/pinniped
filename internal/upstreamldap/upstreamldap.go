@@ -870,19 +870,3 @@ func (p *Provider) traceRefreshFailure(t *trace.Trace, err error) {
 		trace.Field{Key: "reason", Value: err.Error()},
 	)
 }
-
-func AttributeUnchangedSinceLogin(attribute string) func(*ldap.Entry, provider.RefreshAttributes) error {
-	return func(entry *ldap.Entry, storedAttributes provider.RefreshAttributes) error {
-		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
-		newValues := entry.GetRawAttributeValues(attribute)
-
-		if len(newValues) != 1 {
-			return fmt.Errorf(`expected to find 1 value for %q attribute, but found %d`, attribute, len(newValues))
-		}
-		encodedNewValue := base64.RawURLEncoding.EncodeToString(newValues[0])
-		if prevAttributeValue != encodedNewValue {
-			return fmt.Errorf(`value for attribute %q has changed since initial value at login`, attribute)
-		}
-		return nil
-	}
-}

@@ -5,7 +5,6 @@
 // configs when Pinniped is built in fips-only mode.
 // All of these are the same because FIPs is already so limited.
 //go:build fips_strict
-// +build fips_strict
 
 package ptls
 

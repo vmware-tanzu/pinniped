@@ -32,7 +32,7 @@ import (
 func TestGetKubeconfig(t *testing.T) {
 	testOIDCCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	tmpdir := testutil.TempDir(t)
+	tmpdir := t.TempDir()
 	testOIDCCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, os.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
 

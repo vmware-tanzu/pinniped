@@ -2325,7 +2325,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 	t.Helper()
 
 	pinnipedExe := testlib.PinnipedCLIPath(t)
-	tempDir := testutil.TempDir(t)
+	tempDir := t.TempDir()
 
 	var envVarsWithProxy []string
 	if !env.HasCapability(testlib.HasExternalLoadBalancerProvider) {

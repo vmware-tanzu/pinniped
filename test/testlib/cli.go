@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"go.pinniped.dev/internal/testutil"
 )
 
 //nolint:gochecknoglobals
@@ -34,7 +32,7 @@ func PinnipedCLIPath(t *testing.T) string {
 
 	pinnipedCLIBinaryCache.mutex.Lock()
 	defer pinnipedCLIBinaryCache.mutex.Unlock()
-	path := filepath.Join(testutil.TempDir(t), "pinniped")
+	path := filepath.Join(t.TempDir(), "pinniped")
 	if pinnipedCLIBinaryCache.buf != nil {
 		t.Log("using previously built pinniped CLI binary")
 		//nolint:gosec // this is test code.

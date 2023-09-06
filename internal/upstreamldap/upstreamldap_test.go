@@ -1576,7 +1576,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
 			},
 			RefreshAttributeChecks: map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
-				pwdLastSetAttribute: AttributeUnchangedSinceLogin(pwdLastSetAttribute),
+				pwdLastSetAttribute: func(*ldap.Entry, provider.RefreshAttributes) error { return nil },
 			},
 		}
 		if editFunc != nil {
@@ -2200,8 +2200,14 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantErr: "found 2 values for attribute \"some-upstream-uid-attribute\" while searching for user \"some-upstream-user-dn\", but expected 1 result",
 		},
 		{
-			name:           "search result has a changed pwdLastSet value",
-			providerConfig: providerConfig(nil),
+			name: "search result has a changed pwdLastSet value",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
+					pwdLastSetAttribute: func(*ldap.Entry, provider.RefreshAttributes) error {
+						return errors.New(`value for attribute "pwdLastSet" has changed since initial value at login`)
+					},
+				}
+			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedUserSearch(nil)).Return(&ldap.SearchResult{
@@ -2584,80 +2590,6 @@ func TestRealTLSDialing(t *testing.T) {
 				// since this is always the correct behavior unless/until we want to support StartTLS.
 				err := conn.(*ldap.Conn).StartTLS(ptls.DefaultLDAP(nil))
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)
-			}
-		})
-	}
-}
-
-func TestAttributeUnchangedSinceLogin(t *testing.T) {
-	initialVal := "some-attribute-value"
-	changedVal := "some-different-attribute-value"
-	attributeName := "some-attribute-name"
-	tests := []struct {
-		name       string
-		entry      *ldap.Entry
-		wantResult bool
-		wantErr    string
-	}{
-		{
-			name: "happy path where value has not changed since login",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:       attributeName,
-						Values:     []string{initialVal},
-						ByteValues: [][]byte{[]byte(initialVal)},
-					},
-				},
-			},
-		},
-		{
-			name: "password has been reset since login",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:       attributeName,
-						Values:     []string{changedVal},
-						ByteValues: [][]byte{[]byte(changedVal)},
-					},
-				},
-			},
-			wantErr: "value for attribute \"some-attribute-name\" has changed since initial value at login",
-		},
-		{
-			name: "no value for attribute attribute",
-			entry: &ldap.Entry{
-				DN:         "some-dn",
-				Attributes: []*ldap.EntryAttribute{},
-			},
-			wantErr: "expected to find 1 value for \"some-attribute-name\" attribute, but found 0",
-		},
-		{
-			name: "too many values for attribute",
-			entry: &ldap.Entry{
-				DN: "some-dn",
-				Attributes: []*ldap.EntryAttribute{
-					{
-						Name:       attributeName,
-						ByteValues: [][]byte{[]byte("val1"), []byte("val2")},
-					},
-				},
-			},
-			wantErr: "expected to find 1 value for \"some-attribute-name\" attribute, but found 2",
-		},
-	}
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			initialValRawEncoded := base64.RawURLEncoding.EncodeToString([]byte(initialVal))
-			err := AttributeUnchangedSinceLogin(attributeName)(tt.entry, provider.RefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Equal(t, tt.wantErr, err.Error())
-			} else {
-				require.NoError(t, err)
 			}
 		})
 	}

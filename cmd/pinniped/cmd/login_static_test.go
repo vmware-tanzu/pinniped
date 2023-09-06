@@ -21,7 +21,6 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
 )
 
@@ -30,7 +29,7 @@ func TestLoginStaticCommand(t *testing.T) {
 
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	tmpdir := testutil.TempDir(t)
+	tmpdir := t.TempDir()
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, os.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
 

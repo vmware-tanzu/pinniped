@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package filesession
@@ -14,14 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	tmp := testutil.TempDir(t) + "/sessions.yaml"
+	tmp := t.TempDir() + "/sessions.yaml"
 	c := New(tmp)
 	require.NotNil(t, c)
 	require.Equal(t, tmp, c.path)
@@ -222,7 +221,7 @@ func TestGetToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := testutil.TempDir(t) + "/sessions.yaml"
+			tmp := t.TempDir() + "/sessions.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}
@@ -480,7 +479,7 @@ func TestPutToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := testutil.TempDir(t) + "/sessiondir/sessions.yaml"
+			tmp := t.TempDir() + "/sessiondir/sessions.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}

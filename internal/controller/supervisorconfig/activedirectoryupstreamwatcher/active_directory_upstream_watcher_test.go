@@ -2491,7 +2491,7 @@ func TestAttributeUnchangedSinceLogin(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			initialValRawEncoded := base64.RawURLEncoding.EncodeToString([]byte(initialVal))
-			err := attributeUnchangedSinceLogin(attributeName)(tt.entry, provider.RefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
+			err := attributeUnchangedSinceLogin(attributeName)(tt.entry, upstreamprovider.RefreshAttributes{AdditionalAttributes: map[string]string{attributeName: initialValRawEncoded}})
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, tt.wantErr, err.Error())

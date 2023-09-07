@@ -1210,7 +1210,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
 
-		tempDir := testutil.TempDir(t) // per-test tmp dir to avoid sharing files between tests
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)

@@ -2203,8 +2203,8 @@ func TestUpstreamRefresh(t *testing.T) {
 		{
 			name: "search result has a changed pwdLastSet value",
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(*ldap.Entry, provider.RefreshAttributes) error{
-					pwdLastSetAttribute: func(*ldap.Entry, provider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
+					pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.RefreshAttributes) error {
 						return errors.New(`value for attribute "pwdLastSet" has changed since initial value at login`)
 					},
 				}

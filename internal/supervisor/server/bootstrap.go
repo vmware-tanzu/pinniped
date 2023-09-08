@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/httputil/requestutil"
+	"go.pinniped.dev/internal/plog"
 )
 
 // contextKey type is unexported to prevent collisions.
@@ -41,6 +43,17 @@ func withBootstrapPaths(handler http.Handler, paths ...string) http.Handler {
 		isBootstrap, _ := req.Context().Value(bootstrapKey).(*atomic.Bool)
 
 		if isBootstrap != nil && isBootstrap.Load() && !bootstrapPaths.Has(req.URL.Path) {
+			// When a user-provided cert was not found for a request path which requires it,
+			// then emit a log statement visible at the default log level.
+			plog.Warning("error finding user-provided TLS cert to use for for incoming request",
+				"proto", req.Proto,
+				"method", req.Method,
+				"host", req.Host,
+				"requestSNIServerName", requestutil.SNIServerName(req),
+				"path", req.URL.Path,
+				"remoteAddr", req.RemoteAddr,
+			)
+
 			http.Error(w, "pinniped supervisor has invalid TLS serving certificate configuration", http.StatusInternalServerError)
 			return
 		}

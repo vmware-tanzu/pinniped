@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
@@ -73,19 +74,33 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	issuerHostToTLSCertMap := map[string]*tls.Certificate{}
 
 	for _, provider := range allProviders {
-		secretName := ""
-		if provider.Spec.TLS != nil {
-			secretName = provider.Spec.TLS.SecretName
-		}
 		issuerURL, err := url.Parse(provider.Spec.Issuer)
 		if err != nil {
 			plog.Debug("tlsCertObserverController Sync found an invalid issuer URL", "namespace", ns, "issuer", provider.Spec.Issuer)
 			continue
 		}
-		certFromSecret, err := c.certFromSecret(ns, secretName)
-		if err != nil {
+
+		secretName := ""
+		if provider.Spec.TLS != nil {
+			secretName = provider.Spec.TLS.SecretName
+		}
+		if secretName == "" {
+			// No secret name provided, so no need to try to load any Secret.
 			continue
 		}
+
+		certFromSecret, err := c.certFromSecret(ns, secretName)
+		if err != nil {
+			// The user configured a TLS secret on the FederationDomain but it could not be loaded,
+			// so log a message which is visible at the default log level. Any error here indicates a problem,
+			// including "not found" errors.
+			plog.Error("error loading TLS certificate from Secret for FederationDomain.spec.tls.secretName", err,
+				"FederationDomain.metadata.name", provider.Name,
+				"FederationDomain.spec.tls.secretName", provider.Spec.TLS.SecretName,
+			)
+			continue
+		}
+
 		// Lowercase the host part of the URL because hostnames should be treated as case-insensitive.
 		issuerHostToTLSCertMap[lowercaseHostWithoutPort(issuerURL)] = certFromSecret
 	}
@@ -96,6 +111,13 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	defaultCert, err := c.certFromSecret(ns, c.defaultTLSCertificateSecretName)
 	if err != nil {
 		c.issuerTLSCertSetter.SetDefaultTLSCert(nil)
+		// It's okay if the default TLS cert Secret is not found (it is not required).
+		if !k8serrors.IsNotFound(err) {
+			// For any other error, log a message which is visible at the default log level.
+			plog.Error("error loading TLS certificate from Secret for Supervisor default TLS cert", err,
+				"defaultCertSecretName", c.defaultTLSCertificateSecretName,
+			)
+		}
 	} else {
 		c.issuerTLSCertSetter.SetDefaultTLSCert(defaultCert)
 	}

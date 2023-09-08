@@ -12,6 +12,13 @@ pre code {
     font-size: 14px;
     line-height: 1.6em;
 }
+pre.chroma {
+    padding: 10px;
+    code {
+         padding-left: 0px;
+    }
+}
+
 .highlight pre codesite/sidebar/reorganize {
     font-size: 100%;
 }

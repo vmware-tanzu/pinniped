@@ -106,6 +106,7 @@ authentication. There are several typical combinations of these settings:
    authenticate into Kubernetes clusters and perform actions on behalf of the users (using the user's identity):
 
     ```yaml
+   spec:
       allowedGrantTypes:
         - authorization_code
         - refresh_token
@@ -122,6 +123,7 @@ authentication. There are several typical combinations of these settings:
    Kubernetes clusters.
 
     ```yaml
+   spec:
       allowedGrantTypes:
         - authorization_code
         - refresh_token
@@ -138,6 +140,7 @@ authentication. There are several typical combinations of these settings:
    group memberships of the authenticated users, and cannot perform actions on Kubernetes clusters.
 
     ```yaml
+   spec:
       allowedGrantTypes:
         - authorization_code
         - refresh_token

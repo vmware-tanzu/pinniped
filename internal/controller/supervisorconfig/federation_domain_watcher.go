@@ -191,13 +191,13 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 func (c *federationDomainWatcherController) processAllFederationDomains(
 	ctx context.Context,
 	federationDomains []*configv1alpha1.FederationDomain,
-) ([]*federationdomainproviders.FederationDomainIssuer, map[*configv1alpha1.FederationDomain][]*configv1alpha1.Condition, error) {
+) ([]*federationdomainproviders.FederationDomainIssuer, map[*configv1alpha1.FederationDomain][]*metav1.Condition, error) {
 	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
-	fdToConditionsMap := map[*configv1alpha1.FederationDomain][]*configv1alpha1.Condition{}
+	fdToConditionsMap := map[*configv1alpha1.FederationDomain][]*metav1.Condition{}
 	crossDomainConfigValidator := newCrossFederationDomainConfigValidator(federationDomains)
 
 	for _, federationDomain := range federationDomains {
-		conditions := make([]*configv1alpha1.Condition, 0)
+		conditions := make([]*metav1.Condition, 0)
 
 		conditions = crossDomainConfigValidator.Validate(federationDomain, conditions)
 
@@ -223,8 +223,8 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
-	conditions []*configv1alpha1.Condition,
-) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
+	conditions []*metav1.Condition,
+) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	var err error
 	// Create the list of IDPs for this FederationDomain.
 	// Don't worry if the IDP CRs themselves is phase=Ready because those which are not ready will not be loaded
@@ -247,8 +247,8 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 
 func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	federationDomain *configv1alpha1.FederationDomain,
-	conditions []*configv1alpha1.Condition,
-) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
+	conditions []*metav1.Condition,
+) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	var defaultFederationDomainIdentityProvider *federationdomainproviders.FederationDomainIdentityProvider
 
 	// When the FederationDomain does not list any IDPs, then we might be in backwards compatibility mode.
@@ -290,9 +290,9 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 		// Backwards compatibility mode always uses an empty identity transformation pipeline since no
 		// transformations are defined on the FederationDomain.
 		defaultFederationDomainIdentityProvider.Transforms = idtransform.NewTransformationPipeline()
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersFound,
-			Status: configv1alpha1.ConditionTrue,
+			Status: metav1.ConditionTrue,
 			Reason: reasonLegacyConfigurationSuccess,
 			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef but exactly one "+
 				"identity provider resource has been found: using %q as "+
@@ -300,9 +300,9 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 				"(this legacy configuration mode may be removed in a future version of Pinniped)", foundIDPName),
 		})
 	case idpCRsCount > 1:
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersFound,
-			Status: configv1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonIdentityProviderNotSpecified, // vs LegacyConfigurationIdentityProviderNotFound as this is more specific
 			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef "+
 				"and %d identity provider resources have been found: "+
@@ -310,9 +310,9 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 				"this federation domain should use", idpCRsCount),
 		})
 	default:
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersFound,
-			Status: configv1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonLegacyConfigurationIdentityProviderNotFound,
 			Message: "no resources were specified by .spec.identityProviders[].objectRef and no identity provider " +
 				"resources have been found: please create an identity provider resource",
@@ -338,8 +338,8 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplicitIDPs(
 	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
-	conditions []*configv1alpha1.Condition,
-) (*federationdomainproviders.FederationDomainIssuer, []*configv1alpha1.Condition, error) {
+	conditions []*metav1.Condition,
+) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	federationDomainIdentityProviders := []*federationdomainproviders.FederationDomainIdentityProvider{}
 	idpNotFoundIndices := []int{}
 	displayNames := sets.Set[string]{}
@@ -640,19 +640,19 @@ func (c *federationDomainWatcherController) evaluateExamplesForIdentityProvider(
 	return true, ""
 }
 
-func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuffixNames []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuffixNames []string, conditions []*metav1.Condition) []*metav1.Condition {
 	if len(badSuffixNames) > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersObjectRefKindValid,
-			Status: configv1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonKindUnrecognized,
 			Message: fmt.Sprintf("some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized (should be one of %s): %s",
 				strings.Join(expectedKinds, ", "), strings.Join(sortAndQuote(badSuffixNames), ", ")),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersObjectRefKindValid,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the kinds specified by .spec.identityProviders[].objectRef.kind are recognized",
 		})
@@ -663,24 +663,24 @@ func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuf
 func appendIdentityProvidersFoundCondition(
 	idpNotFoundIndices []int,
 	federationDomainIdentityProviders []configv1alpha1.FederationDomainIdentityProvider,
-	conditions []*configv1alpha1.Condition,
-) []*configv1alpha1.Condition {
+	conditions []*metav1.Condition,
+) []*metav1.Condition {
 	if len(idpNotFoundIndices) != 0 {
 		messages := []string{}
 		for _, idpNotFoundIndex := range idpNotFoundIndices {
 			messages = append(messages, fmt.Sprintf("cannot find resource specified by .spec.identityProviders[%d].objectRef (with name %q)",
 				idpNotFoundIndex, federationDomainIdentityProviders[idpNotFoundIndex].ObjectRef.Name))
 		}
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersFound,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonIdentityProvidersObjectRefsNotFound,
 			Message: strings.Join(messages, "\n\n"),
 		})
 	} else if len(federationDomainIdentityProviders) != 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersFound,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the resources specified by .spec.identityProviders[].objectRef were found",
 		})
@@ -688,19 +688,19 @@ func appendIdentityProvidersFoundCondition(
 	return conditions
 }
 
-func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName string, badSuffixNames []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName string, badSuffixNames []string, conditions []*metav1.Condition) []*metav1.Condition {
 	if len(badSuffixNames) > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersAPIGroupSuffixValid,
-			Status: configv1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonAPIGroupNameUnrecognized,
 			Message: fmt.Sprintf("some API groups specified by .spec.identityProviders[].objectRef.apiGroup are not recognized (should be %q): %s",
 				expectedSuffixName, strings.Join(sortAndQuote(badSuffixNames), ", ")),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersAPIGroupSuffixValid,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the API groups specified by .spec.identityProviders[].objectRef.apiGroup are recognized",
 		})
@@ -708,18 +708,18 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 	return conditions
 }
 
-func appendTransformsExpressionsValidCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendTransformsExpressionsValidCondition(messages []string, conditions []*metav1.Condition) []*metav1.Condition {
 	if len(messages) > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExpressionsValid,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidTransformsExpressions,
 			Message: strings.Join(messages, "\n\n"),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExpressionsValid,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
 		})
@@ -727,18 +727,18 @@ func appendTransformsExpressionsValidCondition(messages []string, conditions []*
 	return conditions
 }
 
-func appendTransformsExamplesPassedCondition(messages []string, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendTransformsExamplesPassedCondition(messages []string, conditions []*metav1.Condition) []*metav1.Condition {
 	if len(messages) > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExamplesPassed,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonTransformsExamplesFailed,
 			Message: strings.Join(messages, "\n\n"),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExamplesPassed,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
 		})
@@ -746,19 +746,19 @@ func appendTransformsExamplesPassedCondition(messages []string, conditions []*co
 	return conditions
 }
 
-func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames sets.Set[string], conditions []*metav1.Condition) []*metav1.Condition {
 	if duplicateDisplayNames.Len() > 0 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeIdentityProvidersDisplayNamesUnique,
-			Status: configv1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonDuplicateDisplayNames,
 			Message: fmt.Sprintf("the names specified by .spec.identityProviders[].displayName contain duplicates: %s",
 				strings.Join(sortAndQuote(duplicateDisplayNames.UnsortedList()), ", ")),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersDisplayNamesUnique,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "the names specified by .spec.identityProviders[].displayName are unique",
 		})
@@ -766,20 +766,20 @@ func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames 
 	return conditions
 }
 
-func appendIssuerURLValidCondition(err error, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func appendIssuerURLValidCondition(err error, conditions []*metav1.Condition) []*metav1.Condition {
 	if err != nil {
 		// Note that the FederationDomainIssuer constructors only validate the Issuer URL,
 		// so these are always issuer URL validation errors.
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerURLValid,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidIssuerURL,
 			Message: err.Error(),
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerURLValid,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "spec.issuer is a valid URL",
 		})
@@ -790,23 +790,23 @@ func appendIssuerURLValidCondition(err error, conditions []*configv1alpha1.Condi
 func (c *federationDomainWatcherController) updateStatus(
 	ctx context.Context,
 	federationDomain *configv1alpha1.FederationDomain,
-	conditions []*configv1alpha1.Condition,
+	conditions []*metav1.Condition,
 ) error {
 	updated := federationDomain.DeepCopy()
 
 	if hadErrorCondition(conditions) {
 		updated.Status.Phase = configv1alpha1.FederationDomainPhaseError
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonNotReady,
 			Message: "the FederationDomain is not ready: see other conditions for details",
 		})
 	} else {
 		updated.Status.Phase = configv1alpha1.FederationDomainPhaseReady
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeReady,
-			Status: configv1alpha1.ConditionTrue,
+			Status: metav1.ConditionTrue,
 			Reason: reasonSuccess,
 			Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
 				"the discovery endpoint is %s/.well-known/openid-configuration", federationDomain.Spec.Issuer),
@@ -858,20 +858,20 @@ func issuerURLToIssuerKey(issuerURL *url.URL) string {
 	return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
 }
 
-func (v *crossFederationDomainConfigValidator) Validate(federationDomain *configv1alpha1.FederationDomain, conditions []*configv1alpha1.Condition) []*configv1alpha1.Condition {
+func (v *crossFederationDomainConfigValidator) Validate(federationDomain *configv1alpha1.FederationDomain, conditions []*metav1.Condition) []*metav1.Condition {
 	issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
 
 	if urlParseErr != nil {
 		// Don't write a condition about the issuer URL being invalid because that is added elsewhere in the controller.
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerIsUnique,
-			Status:  configv1alpha1.ConditionUnknown,
+			Status:  metav1.ConditionUnknown,
 			Reason:  reasonUnableToValidate,
 			Message: "unable to check if spec.issuer is unique among all FederationDomains because URL cannot be parsed",
 		})
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeOneTLSSecretPerIssuerHostname,
-			Status:  configv1alpha1.ConditionUnknown,
+			Status:  metav1.ConditionUnknown,
 			Reason:  reasonUnableToValidate,
 			Message: "unable to check if all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL because URL cannot be parsed",
 		})
@@ -879,32 +879,32 @@ func (v *crossFederationDomainConfigValidator) Validate(federationDomain *config
 	}
 
 	if issuerCount := v.issuerCounts[issuerURLToIssuerKey(issuerURL)]; issuerCount > 1 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerIsUnique,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonDuplicateIssuer,
 			Message: "multiple FederationDomains have the same spec.issuer URL: these URLs must be unique (can use different hosts or paths)",
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerIsUnique,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "spec.issuer is unique among all FederationDomains",
 		})
 	}
 
 	if len(v.uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeOneTLSSecretPerIssuerHostname,
-			Status:  configv1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonDifferentSecretRefsFound,
 			Message: "when different FederationDomains are using the same hostname in the spec.issuer URL then they must also use the same TLS secretRef: different secretRefs found",
 		})
 	} else {
-		conditions = append(conditions, &configv1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeOneTLSSecretPerIssuerHostname,
-			Status:  configv1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: "all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL",
 		})
@@ -950,9 +950,9 @@ func newCrossFederationDomainConfigValidator(federationDomains []*configv1alpha1
 	}
 }
 
-func hadErrorCondition(conditions []*configv1alpha1.Condition) bool {
+func hadErrorCondition(conditions []*metav1.Condition) bool {
 	for _, c := range conditions {
-		if c.Status != configv1alpha1.ConditionTrue {
+		if c.Status != metav1.ConditionTrue {
 			return true
 		}
 	}

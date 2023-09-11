@@ -658,26 +658,26 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	require.NoError(t, err)
 }
 
-func withAllSuccessfulConditions() map[string]v1alpha1.ConditionStatus {
-	return map[string]v1alpha1.ConditionStatus{
-		"Ready":                                         v1alpha1.ConditionTrue,
-		"IssuerIsUnique":                                v1alpha1.ConditionTrue,
-		"IdentityProvidersFound":                        v1alpha1.ConditionTrue,
-		"OneTLSSecretPerIssuerHostname":                 v1alpha1.ConditionTrue,
-		"IssuerURLValid":                                v1alpha1.ConditionTrue,
-		"IdentityProvidersObjectRefKindValid":           v1alpha1.ConditionTrue,
-		"IdentityProvidersObjectRefAPIGroupSuffixValid": v1alpha1.ConditionTrue,
-		"IdentityProvidersDisplayNamesUnique":           v1alpha1.ConditionTrue,
-		"TransformsExpressionsValid":                    v1alpha1.ConditionTrue,
-		"TransformsExamplesPassed":                      v1alpha1.ConditionTrue,
+func withAllSuccessfulConditions() map[string]metav1.ConditionStatus {
+	return map[string]metav1.ConditionStatus{
+		"Ready":                                         metav1.ConditionTrue,
+		"IssuerIsUnique":                                metav1.ConditionTrue,
+		"IdentityProvidersFound":                        metav1.ConditionTrue,
+		"OneTLSSecretPerIssuerHostname":                 metav1.ConditionTrue,
+		"IssuerURLValid":                                metav1.ConditionTrue,
+		"IdentityProvidersObjectRefKindValid":           metav1.ConditionTrue,
+		"IdentityProvidersObjectRefAPIGroupSuffixValid": metav1.ConditionTrue,
+		"IdentityProvidersDisplayNamesUnique":           metav1.ConditionTrue,
+		"TransformsExpressionsValid":                    metav1.ConditionTrue,
+		"TransformsExamplesPassed":                      metav1.ConditionTrue,
 	}
 }
 
-func withFalseConditions(falseConditionTypes []string) map[string]v1alpha1.ConditionStatus {
-	c := map[string]v1alpha1.ConditionStatus{}
+func withFalseConditions(falseConditionTypes []string) map[string]metav1.ConditionStatus {
+	c := map[string]metav1.ConditionStatus{}
 	for k, v := range withAllSuccessfulConditions() {
 		if slices.Contains(falseConditionTypes, k) {
-			c[k] = v1alpha1.ConditionFalse
+			c[k] = metav1.ConditionFalse
 		} else {
 			c[k] = v
 		}
@@ -685,7 +685,7 @@ func withFalseConditions(falseConditionTypes []string) map[string]v1alpha1.Condi
 	return c
 }
 
-func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, wantPhase v1alpha1.FederationDomainPhase, wantConditionTypeToStatus map[string]v1alpha1.ConditionStatus) {
+func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, wantPhase v1alpha1.FederationDomainPhase, wantConditionTypeToStatus map[string]metav1.ConditionStatus) {
 	t.Helper()
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
@@ -699,7 +699,7 @@ func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name st
 		t.Logf("found FederationDomain %s/%s with phase %s, wanted phase %s", ns, name, actualPhase, wantPhase)
 		requireEventually.Equalf(wantPhase, actualPhase, "unexpected phase (conditions = '%#v')", federationDomain.Status.Conditions)
 
-		actualConditionTypeToStatus := map[string]v1alpha1.ConditionStatus{}
+		actualConditionTypeToStatus := map[string]metav1.ConditionStatus{}
 		for _, c := range federationDomain.Status.Conditions {
 			actualConditionTypeToStatus[c.Type] = c.Status
 		}

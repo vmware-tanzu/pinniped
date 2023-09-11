@@ -455,7 +455,7 @@ CredentialIssuerStrategy describes the status of an integration strategy that wa
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-config-v1alpha1-frontendtype"]
-==== FrontendType (string)
+==== FrontendType (string) 
 
 FrontendType enumerates a type of "frontend" used to provide access to users of a cluster.
 
@@ -571,7 +571,7 @@ ImpersonationProxyTLSSpec contains information about how the Concierge impersona
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-config-v1alpha1-strategyreason"]
-==== StrategyReason (string)
+==== StrategyReason (string) 
 
 StrategyReason enumerates the detailed reason why a strategy is in a particular status.
 
@@ -583,7 +583,7 @@ StrategyReason enumerates the detailed reason why a strategy is in a particular 
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-config-v1alpha1-strategystatus"]
-==== StrategyStatus (string)
+==== StrategyStatus (string) 
 
 StrategyStatus enumerates whether a strategy is working on a cluster.
 
@@ -595,7 +595,7 @@ StrategyStatus enumerates whether a strategy is working on a cluster.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-config-v1alpha1-strategytype"]
-==== StrategyType (string)
+==== StrategyType (string) 
 
 StrategyType enumerates a type of "strategy" used to implement credential access on a cluster.
 
@@ -653,7 +653,7 @@ FederationDomain describes the configuration of an OIDC provider.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainidentityprovider"]
-==== FederationDomainIdentityProvider
+==== FederationDomainIdentityProvider 
 
 FederationDomainIdentityProvider describes how an identity provider is made available in this FederationDomain.
 
@@ -674,7 +674,7 @@ FederationDomainIdentityProvider describes how an identity provider is made avai
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainphase"]
-==== FederationDomainPhase (string)
+==== FederationDomainPhase (string) 
 
 
 
@@ -721,8 +721,8 @@ FederationDomainSpec is a struct that describes an OIDC Provider.
 | *`issuer`* __string__ | Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the identifier that it will use for the iss claim in issued JWTs. This field will also be used as the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is https://example.com/foo, then your authorization endpoint will look like https://example.com/foo/some/path/to/auth/endpoint). 
  See https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintlsspec[$$FederationDomainTLSSpec$$]__ | TLS specifies a secret which will contain Transport Layer Security (TLS) configuration for the FederationDomain.
-| *`identityProviders`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$] array__ | IdentityProviders is the list of identity providers available for use by this FederationDomain.
- An identity provider CR (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes how to connect to a server, how to talk in a specific protocol for authentication, and how to use the schema of that server/protocol to extract a normalized user identity. Normalized user identities include a username and a list of group names. In contrast, IdentityProviders describes how to use that normalized identity in those Kubernetes clusters which belong to this FederationDomain. Each entry in IdentityProviders can be configured with arbitrary transformations on that normalized identity. For example, a transformation can add a prefix to all usernames to help avoid accidental conflicts when multiple identity providers have different users with the same username (e.g. "idp1:ryan" versus "idp2:ryan"). Each entry in IdentityProviders can also implement arbitrary authentication rejection policies. Even though a user was able to authenticate with the identity provider, a policy can disallow the authentication to the Kubernetes clusters that belong to this FederationDomain. For example, a policy could disallow the authentication unless the user belongs to a specific group in the identity provider.
+| *`identityProviders`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$] array__ | IdentityProviders is the list of identity providers available for use by this FederationDomain. 
+ An identity provider CR (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes how to connect to a server, how to talk in a specific protocol for authentication, and how to use the schema of that server/protocol to extract a normalized user identity. Normalized user identities include a username and a list of group names. In contrast, IdentityProviders describes how to use that normalized identity in those Kubernetes clusters which belong to this FederationDomain. Each entry in IdentityProviders can be configured with arbitrary transformations on that normalized identity. For example, a transformation can add a prefix to all usernames to help avoid accidental conflicts when multiple identity providers have different users with the same username (e.g. "idp1:ryan" versus "idp2:ryan"). Each entry in IdentityProviders can also implement arbitrary authentication rejection policies. Even though a user was able to authenticate with the identity provider, a policy can disallow the authentication to the Kubernetes clusters that belong to this FederationDomain. For example, a policy could disallow the authentication unless the user belongs to a specific group in the identity provider. 
  For backwards compatibility with versions of Pinniped which predate support for multiple identity providers, an empty IdentityProviders list will cause the FederationDomain to use all available identity providers which exist in the same namespace, but also to reject all authentication requests when there is more than one identity provider currently defined. In this backwards compatibility mode, the name of the identity provider resource (e.g. the Name of an OIDCIdentityProvider resource) will be used as the name of the identity provider in this FederationDomain. This mode is provided to make upgrading from older versions easier. However, instead of relying on this backwards compatibility mode, please consider this mode to be deprecated and please instead explicitly list the identity provider using this IdentityProviders field.
 |===
 
@@ -741,7 +741,7 @@ FederationDomainStatus is a struct that describes the actual state of an OIDC Pr
 |===
 | Field | Description
 | *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainphase[$$FederationDomainPhase$$]__ | Phase summarizes the overall status of the FederationDomain.
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-condition[$$Condition$$] array__ | Conditions represent the observations of an FederationDomain's current state.
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#condition-v1-meta[$$Condition$$] array__ | Conditions represent the observations of an FederationDomain's current state.
 | *`secrets`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomainsecrets[$$FederationDomainSecrets$$]__ | Secrets contains information about this OIDC Provider's secrets.
 |===
 
@@ -768,7 +768,7 @@ FederationDomainTLSSpec is a struct that describes the TLS configuration for an 
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransforms"]
-==== FederationDomainTransforms
+==== FederationDomainTransforms 
 
 FederationDomainTransforms defines identity transformations for an identity provider's usage on a FederationDomain.
 
@@ -781,16 +781,16 @@ FederationDomainTransforms defines identity transformations for an identity prov
 |===
 | Field | Description
 | *`constants`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant[$$FederationDomainTransformsConstant$$] array__ | Constants defines constant variables and their values which will be made available to the transform expressions.
-| *`expressions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression[$$FederationDomainTransformsExpression$$] array__ | Expressions are an optional list of transforms and policies to be executed in the order given during every authentication attempt, including during every session refresh. Each is a CEL expression. It may use the basic CEL language as defined in https://github.com/google/cel-spec/blob/master/doc/langdef.md plus the CEL string extensions defined in https://github.com/google/cel-go/tree/master/ext#strings.
- The username and groups extracted from the identity provider, and the constants defined in this CR, are available as variables in all expressions. The username is provided via a variable called `username` and the list of group names is provided via a variable called `groups` (which may be an empty list). Each user-provided constants is provided via a variable named `strConst.varName` for string constants and `strListConst.varName` for string list constants.
- The only allowed types for expressions are currently policy/v1, username/v1, and groups/v1. Each policy/v1 must return a boolean, and when it returns false, no more expressions from the list are evaluated and the authentication attempt is rejected. Transformations of type policy/v1 do not return usernames or group names, and therefore cannot change the username or group names. Each username/v1 transform must return the new username (a string), which can be the same as the old username. Transformations of type username/v1 do not return group names, and therefore cannot change the group names. Each groups/v1 transform must return the new groups list (list of strings), which can be the same as the old groups list. Transformations of type groups/v1 do not return usernames, and therefore cannot change the usernames. After each expression, the new (potentially changed) username or groups get passed to the following expression.
+| *`expressions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression[$$FederationDomainTransformsExpression$$] array__ | Expressions are an optional list of transforms and policies to be executed in the order given during every authentication attempt, including during every session refresh. Each is a CEL expression. It may use the basic CEL language as defined in https://github.com/google/cel-spec/blob/master/doc/langdef.md plus the CEL string extensions defined in https://github.com/google/cel-go/tree/master/ext#strings. 
+ The username and groups extracted from the identity provider, and the constants defined in this CR, are available as variables in all expressions. The username is provided via a variable called `username` and the list of group names is provided via a variable called `groups` (which may be an empty list). Each user-provided constants is provided via a variable named `strConst.varName` for string constants and `strListConst.varName` for string list constants. 
+ The only allowed types for expressions are currently policy/v1, username/v1, and groups/v1. Each policy/v1 must return a boolean, and when it returns false, no more expressions from the list are evaluated and the authentication attempt is rejected. Transformations of type policy/v1 do not return usernames or group names, and therefore cannot change the username or group names. Each username/v1 transform must return the new username (a string), which can be the same as the old username. Transformations of type username/v1 do not return group names, and therefore cannot change the group names. Each groups/v1 transform must return the new groups list (list of strings), which can be the same as the old groups list. Transformations of type groups/v1 do not return usernames, and therefore cannot change the usernames. After each expression, the new (potentially changed) username or groups get passed to the following expression. 
  Any compilation or static type-checking failure of any expression will cause an error status on the FederationDomain. During an authentication attempt, any unexpected runtime evaluation errors (e.g. division by zero) cause the authentication attempt to fail. When all expressions evaluate successfully, then the (potentially changed) username and group names have been decided for that authentication attempt.
 | *`examples`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexample[$$FederationDomainTransformsExample$$] array__ | Examples can optionally be used to ensure that the sequence of transformation expressions are working as expected. Examples define sample input identities which are then run through the expression list, and the results are compared to the expected results. If any example in this list fails, then this identity provider will not be available for use within this FederationDomain, and the error(s) will be added to the FederationDomain status. This can be used to help guard against programming mistakes in the expressions, and also act as living documentation for other administrators to better understand the expressions.
 |===
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant"]
-==== FederationDomainTransformsConstant
+==== FederationDomainTransformsConstant 
 
 FederationDomainTransformsConstant defines a constant variable and its value which will be made available to the transform expressions. This is a union type, and Type is the discriminator field.
 
@@ -810,7 +810,7 @@ FederationDomainTransformsConstant defines a constant variable and its value whi
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexample"]
-==== FederationDomainTransformsExample
+==== FederationDomainTransformsExample 
 
 FederationDomainTransformsExample defines a transform example.
 
@@ -829,7 +829,7 @@ FederationDomainTransformsExample defines a transform example.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexampleexpects"]
-==== FederationDomainTransformsExampleExpects
+==== FederationDomainTransformsExampleExpects 
 
 FederationDomainTransformsExampleExpects defines the expected result for a transforms example.
 
@@ -849,7 +849,7 @@ FederationDomainTransformsExampleExpects defines the expected result for a trans
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression"]
-==== FederationDomainTransformsExpression
+==== FederationDomainTransformsExpression 
 
 FederationDomainTransformsExpression defines a transform expression.
 
@@ -868,7 +868,7 @@ FederationDomainTransformsExpression defines a transform expression.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-granttype"]
-==== GrantType (string)
+==== GrantType (string) 
 
 
 
@@ -902,7 +902,7 @@ OIDCClient describes the configuration of an OIDC client.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-oidcclientphase"]
-==== OIDCClientPhase (string)
+==== OIDCClientPhase (string) 
 
 
 
@@ -927,9 +927,9 @@ OIDCClientSpec is a struct that describes an OIDCClient.
 |===
 | Field | Description
 | *`allowedRedirectURIs`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-redirecturi[$$RedirectURI$$] array__ | allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this client. Any other uris will be rejected. Must be a URI with the https scheme, unless the hostname is 127.0.0.1 or ::1 which may use the http scheme. Port numbers are not required for 127.0.0.1 or ::1 and are ignored when checking for a matching redirect_uri.
-| *`allowedGrantTypes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-granttype[$$GrantType$$] array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this client.
+| *`allowedGrantTypes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-granttype[$$GrantType$$] array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this client. 
  Must only contain the following values: - authorization_code: allows the client to perform the authorization code grant flow, i.e. allows the webapp to authenticate users. This grant must always be listed. - refresh_token: allows the client to perform refresh grants for the user to extend the user's session. This grant must be listed if allowedScopes lists offline_access. - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange, which is a step in the process to be able to get a cluster credential for the user. This grant must be listed if allowedScopes lists pinniped:request-audience.
-| *`allowedScopes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-scope[$$Scope$$] array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client.
+| *`allowedScopes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-scope[$$Scope$$] array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. 
  Must only contain the following values: - openid: The client is allowed to request ID tokens. ID tokens only include the required claims by default (iss, sub, aud, exp, iat). This scope must always be listed. - offline_access: The client is allowed to request an initial refresh token during the authorization code grant flow. This scope must be listed if allowedGrantTypes lists refresh_token. - pinniped:request-audience: The client is allowed to request a new audience value during a RFC8693 token exchange, which is a step in the process to be able to get a cluster credential for the user. openid, username and groups scopes must be listed when this scope is present. This scope must be listed if allowedGrantTypes lists urn:ietf:params:oauth:grant-type:token-exchange. - username: The client is allowed to request that ID tokens contain the user's username. Without the username scope being requested and allowed, the ID token will not contain the user's username. - groups: The client is allowed to request that ID tokens contain the user's group membership, if their group membership is discoverable by the Supervisor. Without the groups scope being requested and allowed, the ID token will not contain groups.
 |===
 
@@ -954,7 +954,7 @@ OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-redirecturi"]
-==== RedirectURI (string)
+==== RedirectURI (string) 
 
 
 
@@ -966,7 +966,7 @@ OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-config-v1alpha1-scope"]
-==== Scope (string)
+==== Scope (string) 
 
 
 
@@ -1286,7 +1286,7 @@ ActiveDirectoryIdentityProvider describes the configuration of an upstream Micro
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderphase"]
-==== ActiveDirectoryIdentityProviderPhase (string)
+==== ActiveDirectoryIdentityProviderPhase (string) 
 
 
 
@@ -1454,7 +1454,7 @@ LDAPIdentityProvider describes the configuration of an upstream Lightweight Dire
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-idp-v1alpha1-ldapidentityproviderphase"]
-==== LDAPIdentityProviderPhase (string)
+==== LDAPIdentityProviderPhase (string) 
 
 
 
@@ -1619,7 +1619,7 @@ OIDCIdentityProvider describes the configuration of an upstream OpenID Connect i
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-supervisor-idp-v1alpha1-oidcidentityproviderphase"]
-==== OIDCIdentityProviderPhase (string)
+==== OIDCIdentityProviderPhase (string) 
 
 
 

@@ -329,7 +329,7 @@ func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, feder
 	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectPhase)
 }
 
-func WaitForFederationDomainStatusConditions(ctx context.Context, t *testing.T, federationDomainName string, expectConditions []configv1alpha1.Condition) {
+func WaitForFederationDomainStatusConditions(ctx context.Context, t *testing.T, federationDomainName string, expectConditions []metav1.Condition) {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)

@@ -194,8 +194,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		return fdIssuer
 	}
 
-	happyReadyCondition := func(issuer string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyReadyCondition := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "Ready",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -206,8 +206,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadReadyCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadReadyCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "Ready",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -217,8 +217,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerIsUnique",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -228,8 +228,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	unknownIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	unknownIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerIsUnique",
 			Status:             "Unknown",
 			ObservedGeneration: observedGeneration,
@@ -239,8 +239,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerIsUnique",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -250,8 +250,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "OneTLSSecretPerIssuerHostname",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -261,8 +261,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	unknownOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	unknownOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "OneTLSSecretPerIssuerHostname",
 			Status:             "Unknown",
 			ObservedGeneration: observedGeneration,
@@ -272,8 +272,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "OneTLSSecretPerIssuerHostname",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -283,8 +283,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyIssuerURLValidCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyIssuerURLValidCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerURLValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -294,8 +294,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIssuerURLValidConditionCannotHaveQuery := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIssuerURLValidConditionCannotHaveQuery := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerURLValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -305,8 +305,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIssuerURLValidConditionCannotParse := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIssuerURLValidConditionCannotParse := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IssuerURLValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -316,8 +316,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyIdentityProvidersFoundConditionLegacyConfigurationSuccess := func(idpName string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyIdentityProvidersFoundConditionLegacyConfigurationSuccess := func(idpName string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -330,8 +330,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyIdentityProvidersFoundConditionSuccess := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyIdentityProvidersFoundConditionSuccess := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -341,8 +341,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -353,8 +353,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIdentityProvidersFoundConditionIdentityProviderNotSpecified := func(idpCRsCount int, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIdentityProvidersFoundConditionIdentityProviderNotSpecified := func(idpCRsCount int, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -367,8 +367,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersFound",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -378,8 +378,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyDisplayNamesUniqueCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyDisplayNamesUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersDisplayNamesUnique",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -389,8 +389,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadDisplayNamesUniqueCondition := func(duplicateNames string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadDisplayNamesUniqueCondition := func(duplicateNames string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersDisplayNamesUnique",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -400,8 +400,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyTransformationExpressionsCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyTransformationExpressionsCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "TransformsExpressionsValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -411,8 +411,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadTransformationExpressionsCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadTransformationExpressionsCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "TransformsExpressionsValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -422,8 +422,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "TransformsExamplesPassed",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -433,8 +433,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadTransformationExamplesCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadTransformationExamplesCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "TransformsExamplesPassed",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -444,8 +444,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyAPIGroupSuffixCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyAPIGroupSuffixCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -455,8 +455,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadAPIGroupSuffixCondition := func(badApiGroups string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadAPIGroupSuffixCondition := func(badApiGroups string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -467,8 +467,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyKindCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyKindCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersObjectRefKindValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
@@ -478,8 +478,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadKindCondition := func(badKinds string, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadKindCondition := func(badKinds string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "IdentityProvidersObjectRefKindValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
@@ -490,8 +490,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sortConditionsByType := func(c []configv1alpha1.Condition) []configv1alpha1.Condition {
-		cp := make([]configv1alpha1.Condition, len(c))
+	sortConditionsByType := func(c []metav1.Condition) []metav1.Condition {
+		cp := make([]metav1.Condition, len(c))
 		copy(cp, c)
 		sort.SliceStable(cp, func(i, j int) bool {
 			return cp[i].Type < cp[j].Type
@@ -499,7 +499,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		return cp
 	}
 
-	replaceConditions := func(conditions []configv1alpha1.Condition, sadConditions []configv1alpha1.Condition) []configv1alpha1.Condition {
+	replaceConditions := func(conditions []metav1.Condition, sadConditions []metav1.Condition) []metav1.Condition {
 		for _, sadReplaceCondition := range sadConditions {
 			for origIndex, origCondition := range conditions {
 				if origCondition.Type == sadReplaceCondition.Type {
@@ -511,8 +511,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		return conditions
 	}
 
-	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
-		return sortConditionsByType([]configv1alpha1.Condition{
+	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []metav1.Condition {
+		return sortConditionsByType([]metav1.Condition{
 			happyTransformationExamplesCondition(frozenMetav1Now, 123),
 			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
 			happyKindCondition(frozenMetav1Now, 123),
@@ -526,10 +526,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		})
 	}
 
-	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []configv1alpha1.Condition {
+	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []metav1.Condition {
 		return replaceConditions(
 			allHappyConditionsSuccess(issuer, time, observedGeneration),
-			[]configv1alpha1.Condition{
+			[]metav1.Condition{
 				happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
 			},
 		)
@@ -738,7 +738,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -780,7 +780,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -820,7 +820,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte.cOm/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -832,7 +832,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -893,7 +893,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte-adDress.cOm/path1", oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -905,7 +905,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate-address.com:1234/path2", oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -917,7 +917,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(invalidIssuerURL, oidcIdentityProvider.Name, frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
 							unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -945,7 +945,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -954,7 +954,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, "", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -975,7 +975,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(3, frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1027,7 +1027,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
 								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "cant-find-me-name")
 
@@ -1181,7 +1181,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadDisplayNamesUniqueCondition(`"duplicate1", "duplicate2"`, frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1244,7 +1244,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadAPIGroupSuffixCondition(`"", "", "wrong.example.com"`, frozenMetav1Now, 123),
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
 								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "some-oidc-idp")
@@ -1306,7 +1306,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadKindCondition(`"", "wrong"`, frozenMetav1Now, 123),
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
 								`cannot find resource specified by .spec.identityProviders[1].objectRef (with name "some-ldap-idp")
@@ -1356,7 +1356,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadTransformationExpressionsCondition(here.Doc(
 								`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
 								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
@@ -1502,7 +1502,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
 								`.spec.identityProviders[0].transforms.examples[2] example failed:
 								 expected: authentication to be rejected
@@ -1601,7 +1601,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
 								`.spec.identityProviders[0].transforms.examples[0] example failed:
 								 expected: no transformation errors
@@ -1748,7 +1748,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
 							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
@@ -1808,7 +1808,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					configv1alpha1.FederationDomainPhaseError,
 					replaceConditions(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
-						[]configv1alpha1.Condition{
+						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
 							sadTransformationExpressionsCondition(here.Doc(
 								`spec.identityProvider[0].transforms.expressions[1].expression was invalid:
@@ -2135,7 +2135,7 @@ func convertToComparableType(fdis []*federationdomainproviders.FederationDomainI
 func expectedFederationDomainStatusUpdate(
 	fd *configv1alpha1.FederationDomain,
 	phase configv1alpha1.FederationDomainPhase,
-	conditions []configv1alpha1.Condition,
+	conditions []metav1.Condition,
 ) *configv1alpha1.FederationDomain {
 	fdCopy := fd.DeepCopy()
 

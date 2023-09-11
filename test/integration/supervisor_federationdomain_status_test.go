@@ -48,7 +48,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				}, v1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulLegacyFederationDomainConditions("", fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "LegacyConfigurationIdentityProviderNotFound",
 							Message: "no resources were specified by .spec.identityProviders[].objectRef and no identity provider resources have been found: please create an identity provider resource",
@@ -77,7 +77,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulLegacyFederationDomainConditions(oidcIdentityProvider2.Name, fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProviderNotSpecified",
 							Message: "no resources were specified by .spec.identityProviders[].objectRef and 2 identity provider " +
@@ -123,7 +123,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				}, v1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
 							Message: here.Docf(`
@@ -147,7 +147,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
 							Message: fmt.Sprintf(`cannot find resource specified by .spec.identityProviders[1].objectRef (with name "%s")`, oidcIDP2Meta.Name),
@@ -175,7 +175,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
 							Message: fmt.Sprintf(`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "%s")`, oidcIDP1Meta.Name),
@@ -342,7 +342,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersDisplayNamesUnique", Status: "False", Reason: "DuplicateDisplayNames",
 							Message: `the names specified by .spec.identityProviders[].displayName contain duplicates: "not unique"`,
@@ -485,7 +485,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
-					[]v1alpha1.Condition{
+					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProvidersObjectRefsNotFound",
 							Message: `cannot find resource specified by .spec.identityProviders[2].objectRef (with name "also will not be found")`,
@@ -950,8 +950,8 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	}
 }
 
-func replaceSomeConditions(conditions []v1alpha1.Condition, replaceWithTheseConditions []v1alpha1.Condition) []v1alpha1.Condition {
-	cp := make([]v1alpha1.Condition, len(conditions))
+func replaceSomeConditions(conditions []metav1.Condition, replaceWithTheseConditions []metav1.Condition) []metav1.Condition {
+	cp := make([]metav1.Condition, len(conditions))
 	copy(cp, conditions)
 	for _, replacementCond := range replaceWithTheseConditions {
 		for i, cond := range cp {
@@ -964,10 +964,10 @@ func replaceSomeConditions(conditions []v1alpha1.Condition, replaceWithTheseCond
 	return cp
 }
 
-func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDomainSpec v1alpha1.FederationDomainSpec) []v1alpha1.Condition {
+func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDomainSpec v1alpha1.FederationDomainSpec) []metav1.Condition {
 	return replaceSomeConditions(
 		allSuccessfulFederationDomainConditions(federationDomainSpec),
-		[]v1alpha1.Condition{
+		[]metav1.Condition{
 			{
 				Type: "IdentityProvidersFound", Status: "True", Reason: "LegacyConfigurationSuccess",
 				Message: fmt.Sprintf(`no resources were specified by .spec.identityProviders[].objectRef but exactly one `+
@@ -979,8 +979,8 @@ func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDom
 	)
 }
 
-func allSuccessfulFederationDomainConditions(federationDomainSpec v1alpha1.FederationDomainSpec) []v1alpha1.Condition {
-	return []v1alpha1.Condition{
+func allSuccessfulFederationDomainConditions(federationDomainSpec v1alpha1.FederationDomainSpec) []metav1.Condition {
+	return []metav1.Condition{
 		{
 			Type: "IdentityProvidersDisplayNamesUnique", Status: "True", Reason: "Success",
 			Message: "the names specified by .spec.identityProviders[].displayName are unique",

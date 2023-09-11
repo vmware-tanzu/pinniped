@@ -521,29 +521,34 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		c := ptls.Default(nil)
 		c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+			foundServerNameCert := cert != nil
 
 			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
 
-			if plog.Enabled(plog.LevelTrace) { // minor CPU optimization as this is generally just noise
-				host, port, _ := net.SplitHostPort(info.Conn.LocalAddr().String()) // error is safe to ignore here
-
-				plog.Trace("GetCertificate called",
-					"info.ServerName", info.ServerName,
-					"foundSNICert", cert != nil,
-					"foundDefaultCert", defaultCert != nil,
-					"host", host,
-					"port", port,
-				)
-			}
-
-			if cert == nil {
+			if !foundServerNameCert {
 				cert = defaultCert
 			}
 
+			// If we still don't have a cert for the request at this point, then using the bootstrapping cert,
+			// but in that case also set the request to fail unless it is a health check request.
+			usingBootstrapCert := false
 			if cert == nil {
+				usingBootstrapCert = true
 				setIsBootstrapConn(info.Context()) // make this connection only work for bootstrap requests
 				cert = bootstrapCert
 			}
+
+			// Emit logs visible at a higher level of logging than the default. Using Info level so the user
+			// can safely configure a production Supervisor to show this message if they choose.
+			plog.Info("choosing TLS cert for incoming request",
+				"requestSNIServerName", info.ServerName,
+				"foundCertForSNIServerNameFromFederationDomain", foundServerNameCert,
+				"foundDefaultCertFromSecret", defaultCert != nil,
+				"defaultCertSecretName", cfg.NamesConfig.DefaultTLSCertificateSecret,
+				"servingBootstrapHealthzCert", usingBootstrapCert,
+				"requestLocalAddr", info.Conn.LocalAddr().String(),
+				"requestRemoteAddr", info.Conn.RemoteAddr().String(),
+			)
 
 			return cert, nil
 		}

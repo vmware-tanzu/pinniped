@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -11,6 +11,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
+	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
 	"go.pinniped.dev/internal/oidc/callback"
@@ -167,12 +168,15 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 func (m *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	requestHandler := m.findHandler(req)
 
-	plog.Debug(
-		"oidc provider manager examining request",
+	// Using Info level so the user can safely configure a production Supervisor to show this message if they choose.
+	plog.Info("received incoming request",
+		"proto", req.Proto,
 		"method", req.Method,
 		"host", req.Host,
+		"requestSNIServerName", requestutil.SNIServerName(req),
 		"path", req.URL.Path,
-		"foundMatchingIssuer", requestHandler != nil,
+		"remoteAddr", req.RemoteAddr,
+		"foundFederationDomainRequestHandler", requestHandler != nil,
 	)
 
 	if requestHandler == nil {

@@ -61,6 +61,15 @@ log_note "log-args.sh >>> app: ${app} tag: ${tag}   🦄 🦄 🦄 🦄 🦄 �
 
 
 
+# from prepare-for-integration-tests.sh
+api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
+registry="pinniped.local"
+repo="test/build"
+registry_repo="$registry/$repo"
+tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+
+
+
 
 log_note "Deploying kapp-controller on kind cluster..."
 kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml -y
@@ -178,11 +187,19 @@ EOF
 done
 
 
+if [ "${app}" = "pinniped-supervisor" ]; then
+  resource_name="supervisor"
 
-log_note "Deploying PackageInstall resources for pinniped supervisor and concierge packages..."
-for resource_name in "${arr[@]}"
-do
-  RESOURCE_NAMESPACE="${resource_name}" # to match the hack/prepare-for-integration-tests.sh file
+  # matching the hack/prepare-for-integration-tests.sh variables
+  supervisor_app_name="pinniped-supervisor"
+  supervisor_namespace="supervisor"
+  supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
+  log_level="debug"
+  service_https_nodeport_port="443"
+  service_https_nodeport_nodeport="31243"
+  service_https_clusterip_port="443"
+
+  # package install variables
   INSTALL_NAME="${resource_name}-install"
   INSTALL_NAMESPACE="${INSTALL_NAME}-ns"
   PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
@@ -190,6 +207,8 @@ do
   PACKAGE_INSTALL_FILE_NAME="./${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
   PACKAGE_INSTALL_FILE_PATH="${SCRIPT_DIR}/${PACKAGE_INSTALL_FILE_NAME}"
   SECRET_NAME="${resource_name}-package-install-secret"
+  log_note "Deploying PackageInstall resources for ${resource_name}..."
+  # generate an install file to use
   cat > "${PACKAGE_INSTALL_FILE_PATH}" << EOF
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
@@ -216,16 +235,93 @@ metadata:
 stringData:
   values.yml: |
     ---
-    namespace: "${RESOURCE_NAMESPACE}"
-    app_name: "${resource_name}"    # this affects services and things, needs to be just the resource name to match hack scripts
-    replicas: 1                     # keep logs testing easy
+    app_name: $supervisor_app_name
+    namespace: $supervisor_namespace
+    api_group_suffix: $api_group_suffix
+    image_repo: $registry_repo
+    image_tag: $tag
+    log_level: $log_level
+
+    service_https_nodeport_port: $service_https_nodeport_port
+    service_https_nodeport_nodeport: $service_https_nodeport_nodeport
+    service_https_clusterip_port: $service_https_clusterip_port
+EOF
+# removed from above:
+# custom_labels: $supervisor_custom_labels
+
+  KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+  kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "${PACKAGE_INSTALL_FILE_PATH}"
+  kubectl apply --dry-run=client -f "${PACKAGE_INSTALL_FILE_PATH}" # Validate manifest schema.
+fi
+
+if [ "${app}" = "pinniped-concierge" ]; then
+  resource_name="concierge"
+
+  # matching the hack/prepare-for-integration-tests.sh variables
+  concierge_app_name="pinniped-concierge"
+  concierge_namespace="concierge"
+  webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+  webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+  discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
+  concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
+  log_level="debug"
+
+  # package install variables
+  RESOURCE_NAMESPACE="${resource_name}" # to match the hack/prepare-for-integration-tests.sh file
+  INSTALL_NAME="${resource_name}-install"
+  INSTALL_NAMESPACE="${INSTALL_NAME}-ns"
+  PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+  RESOURCE_PACKGE_VERSION="${resource_name}.pinniped.dev"
+  PACKAGE_INSTALL_FILE_NAME="./${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
+  PACKAGE_INSTALL_FILE_PATH="${SCRIPT_DIR}/${PACKAGE_INSTALL_FILE_NAME}"
+  SECRET_NAME="${resource_name}-package-install-secret"
+  log_note "Deploying PackageInstall resources for ${resource_name}..."
+
+  cat > "${PACKAGE_INSTALL_FILE_PATH}" << EOF
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: ${INSTALL_NAME}
+    namespace: ${INSTALL_NAMESPACE}
+spec:
+  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  packageRef:
+    refName: "${RESOURCE_PACKGE_VERSION}"
+    versionSelection:
+      constraints: "${PINNIPED_PACKAGE_VERSION}"
+  values:
+  - secretRef:
+      name: "${SECRET_NAME}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${SECRET_NAME}"
+  namespace: ${INSTALL_NAMESPACE}
+stringData:
+  values.yml: |
+    ---
+    app_name: $concierge_app_name
+    namespace: $concierge_namespace
+    api_group_suffix: $api_group_suffix
+    log_level: $log_level
+    custom_labels: $concierge_custom_labels
+    image_repo: $registry_repo
+    image_tag: $tag
+    discovery_url: $discovery_url
 EOF
 
   KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
   log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-  kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_PATH}" -y
+  # kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_PATH}" -y
+  kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "${PACKAGE_INSTALL_FILE_PATH}"
+  kubectl apply --dry-run=client -f "${PACKAGE_INSTALL_FILE_PATH}" # Validate manifest schema.
 
-done
+fi
+
 
 
 log_note "Available Packages:"
@@ -240,7 +336,7 @@ kubectl get deploy -n concierge
 
 # FLOW:
 #   kind delete cluster --name pinniped
-#   ./hack/prepare-for-integration-tests.sh --alternate-deploy-supervisor $(pwd)/deploy_carvel/deploy.sh --alternate-deploy-concierge $(pwd)/deploy_carvel/deploy.sh
+#   ./hack/prepare-for-integration-tests.sh --alternate-deploy-supervisor $(pwd)/deploy_carvel/deploy-packges.sh --alternate-deploy-concierge $(pwd)/deploy_carvel/deploy-packges.sh
 #   ./hack/prepare-supervisor-on-kind.sh --oidc
 #
 # TODO:

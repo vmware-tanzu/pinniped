@@ -40,6 +40,9 @@ if [[ "${#KUBE_VERSIONS[@]}" -ne 1 ]]; then
     exit 1
 fi
 
+# Add this to the git config inside the container to avoid permission errors when running this script on linux.
+git config --global --add safe.directory /work
+
 # Link the root directory into GOPATH since that is where output ends up.
 GOPATH_ROOT="${GOPATH}/src/${BASE_PKG}"
 mkdir -p "$(dirname "${GOPATH_ROOT}")"

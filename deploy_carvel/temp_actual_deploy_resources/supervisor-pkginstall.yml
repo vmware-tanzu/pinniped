@@ -23,6 +23,13 @@ metadata:
 stringData:
   values.yml: |
     ---
-    namespace: "supervisor"
-    app_name: "supervisor"    # this affects services and things, needs to be just the resource name to match hack scripts
-    replicas: 1                     # keep logs testing easy
+    app_name: pinniped-supervisor
+    namespace: supervisor
+    api_group_suffix: pinniped.dev
+    image_repo: pinniped.local/test/build
+    image_tag: 879CCF7A-2F00-4355-80A6-76C713116D93
+    log_level: debug
+
+    service_https_nodeport_port: 443
+    service_https_nodeport_nodeport: 31243
+    service_https_clusterip_port: 443

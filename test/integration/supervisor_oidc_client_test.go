@@ -527,7 +527,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 		client         *supervisorconfigv1alpha1.OIDCClient
 		secret         *corev1.Secret
 		wantPhase      string
-		wantConditions []supervisorconfigv1alpha1.Condition
+		wantConditions []metav1.Condition
 	}{
 		{
 			name: "invalid AllowedGrantTypes and AllowedScopes (missing minimum required values), with no Secret",
@@ -542,7 +542,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 				},
 			},
 			wantPhase: "Error",
-			wantConditions: []supervisorconfigv1alpha1.Condition{
+			wantConditions: []metav1.Condition{
 				{
 					Type:    "AllowedGrantTypesValid",
 					Status:  "False",
@@ -577,7 +577,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 			},
 			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{}),
 			wantPhase: "Error",
-			wantConditions: []supervisorconfigv1alpha1.Condition{
+			wantConditions: []metav1.Condition{
 				{
 					Type:    "AllowedGrantTypesValid",
 					Status:  "True",
@@ -612,7 +612,7 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 			},
 			secret:    testutil.OIDCClientSecretStorageSecretWithoutName(t, env.SupervisorNamespace, []string{testutil.HashedPassword1AtSupervisorMinCost}),
 			wantPhase: "Ready",
-			wantConditions: []supervisorconfigv1alpha1.Condition{
+			wantConditions: []metav1.Condition{
 				{
 					Type:    "AllowedGrantTypesValid",
 					Status:  "True",

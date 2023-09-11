@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -63,7 +63,7 @@ func newOIDCClient(
 
 // OIDCClientValidatorFunc is an interface-like type that allows these test helpers to avoid having a direct dependency
 // on the production code, to avoid circular module dependencies. Implemented by oidcclientvalidator.Validate.
-type OIDCClientValidatorFunc func(oidcClient *configv1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*configv1alpha1.Condition, []string)
+type OIDCClientValidatorFunc func(oidcClient *configv1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string)
 
 // FullyCapableOIDCClientAndStorageSecret returns an OIDC client which is allowed to use all grant types and all scopes
 // that are supported by the Supervisor for dynamic clients, along with a corresponding client secret storage Secret.

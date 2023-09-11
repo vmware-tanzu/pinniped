@@ -219,22 +219,22 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		ResourceUID:              upstream.UID,
 	}
 
-	conditions := []*v1alpha1.Condition{
+	conditions := []*metav1.Condition{
 		c.validateSecret(upstream, &result),
 		c.validateIssuer(ctx.Context, upstream, &result),
 	}
 	if len(rejectedAuthcodeAuthorizeParameters) > 0 {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   typeAdditionalAuthorizeParametersValid,
-			Status: v1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonDisallowedParameterName,
 			Message: fmt.Sprintf("the following additionalAuthorizeParameters are not allowed: %s",
 				strings.Join(rejectedAuthcodeAuthorizeParameters, ",")),
 		})
 	} else {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAdditionalAuthorizeParametersValid,
-			Status:  v1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  upstreamwatchers.ReasonSuccess,
 			Message: allParamNamesAllowedMsg,
 		})
@@ -245,7 +245,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 	valid := true
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	for _, condition := range conditions {
-		if condition.Status == v1alpha1.ConditionFalse {
+		if condition.Status == metav1.ConditionFalse {
 			valid = false
 			log.WithValues(
 				"type", condition.Type,
@@ -261,15 +261,15 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 }
 
 // validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsValid condition.
-func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *v1alpha1.Condition {
+func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
 	secretName := upstream.Spec.Client.SecretName
 
 	// Fetch the Secret from informer cache.
 	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
 	if err != nil {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    typeClientCredentialsValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonNotFound,
 			Message: err.Error(),
 		}
@@ -277,9 +277,9 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 
 	// Validate the secret .type field.
 	if secret.Type != oidcClientSecretType {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    typeClientCredentialsValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonWrongType,
 			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)", secretName, secret.Type, oidcClientSecretType),
 		}
@@ -289,9 +289,9 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	clientID := secret.Data[clientIDDataKey]
 	clientSecret := secret.Data[clientSecretDataKey]
 	if len(clientID) == 0 || len(clientSecret) == 0 {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    typeClientCredentialsValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonMissingKeys,
 			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q", secretName, []string{clientIDDataKey, clientSecretDataKey}),
 		}
@@ -300,16 +300,16 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	// If everything is valid, update the result and set the condition to true.
 	result.Config.ClientID = string(clientID)
 	result.Config.ClientSecret = string(clientSecret)
-	return &v1alpha1.Condition{
+	return &metav1.Condition{
 		Type:    typeClientCredentialsValid,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "loaded client credentials",
 	}
 }
 
 // validateIssuer validates the .spec.issuer field, performs OIDC discovery, and returns the appropriate OIDCDiscoverySucceeded condition.
-func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *v1alpha1.Condition {
+func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
 	// Get the provider and HTTP Client from cache if possible.
 	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
 
@@ -318,9 +318,9 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 		var err error
 		httpClient, err = getClient(upstream)
 		if err != nil {
-			return &v1alpha1.Condition{
+			return &metav1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
-				Status:  v1alpha1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  upstreamwatchers.ReasonInvalidTLSConfig,
 				Message: err.Error(),
 			}
@@ -338,9 +338,9 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				"name", upstream.Name,
 				"issuer", upstream.Spec.Issuer,
 			).Error(err, "failed to perform OIDC discovery")
-			return &v1alpha1.Condition{
+			return &metav1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
-				Status:  v1alpha1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  reasonUnreachable,
 				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
 			}
@@ -357,9 +357,9 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 	}
 	if err := discoveredProvider.Claims(&additionalDiscoveryClaims); err != nil {
 		// This shouldn't actually happen because the above call to NewProvider() would have already returned this error.
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidResponse,
 			Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
 		}
@@ -400,15 +400,15 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 	result.Config.Endpoint = discoveredProvider.Endpoint()
 	result.Provider = discoveredProvider
 	result.Client = httpClient
-	return &v1alpha1.Condition{
+	return &metav1.Condition{
 		Type:    typeOIDCDiscoverySucceeded,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "discovered issuer configuration",
 	}
 }
 
-func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, conditions []*v1alpha1.Condition) {
+func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, conditions []*metav1.Condition) {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
@@ -485,28 +485,28 @@ func truncateMostLongErr(err error) string {
 	return msg[:max] + fmt.Sprintf(" [truncated %d chars]", len(msg)-max)
 }
 
-func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *v1alpha1.Condition) {
+func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *metav1.Condition) {
 	parsedURL, err := url.Parse(maybeHTTPSURL)
 	if err != nil {
-		return nil, &v1alpha1.Condition{
+		return nil, &metav1.Condition{
 			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reason,
 			Message: fmt.Sprintf("failed to parse %s URL: %v", endpointType, truncateMostLongErr(err)),
 		}
 	}
 	if parsedURL.Scheme != "https" {
-		return nil, &v1alpha1.Condition{
+		return nil, &metav1.Condition{
 			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reason,
 			Message: fmt.Sprintf(`%s URL '%s' must have "https" scheme, not %q`, endpointType, maybeHTTPSURL, parsedURL.Scheme),
 		}
 	}
 	if len(parsedURL.Query()) != 0 || parsedURL.Fragment != "" {
-		return nil, &v1alpha1.Condition{
+		return nil, &metav1.Condition{
 			Type:    typeOIDCDiscoverySucceeded,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reason,
 			Message: fmt.Sprintf(`%s URL '%s' cannot contain query or fragment component`, endpointType, maybeHTTPSURL),
 		}

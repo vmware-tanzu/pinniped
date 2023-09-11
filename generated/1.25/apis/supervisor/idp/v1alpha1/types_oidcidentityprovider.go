@@ -32,7 +32,7 @@ type OIDCIdentityProviderStatus struct {
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
-	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // OIDCAuthorizationConfig provides information about how to form the OAuth2 authorization

@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -85,7 +85,7 @@ type OIDCClientStatus struct {
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
-	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// totalClientSecrets is the current number of client secrets that are detected for this OIDCClient.
 	// +optional

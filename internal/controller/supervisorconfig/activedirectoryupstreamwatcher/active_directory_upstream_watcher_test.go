@@ -241,8 +241,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 	providerConfigForValidUpstreamWithStartTLS := &copyOfProviderConfigForValidUpstreamWithTLS
 	providerConfigForValidUpstreamWithStartTLS.ConnectionProtocol = upstreamldap.StartTLS
 
-	bindSecretValidTrueCondition := func(gen int64) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	bindSecretValidTrueCondition := func(gen int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "BindSecretValid",
 			Status:             "True",
 			LastTransitionTime: now,
@@ -251,8 +251,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: gen,
 		}
 	}
-	activeDirectoryConnectionValidTrueCondition := func(gen int64, secretVersion string) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	activeDirectoryConnectionValidTrueCondition := func(gen int64, secretVersion string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "LDAPConnectionValid",
 			Status:             "True",
 			LastTransitionTime: now,
@@ -263,21 +263,21 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: gen,
 		}
 	}
-	activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration := func(secretVersion string) v1alpha1.Condition {
+	activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration := func(secretVersion string) metav1.Condition {
 		c := activeDirectoryConnectionValidTrueCondition(0, secretVersion)
 		c.LastTransitionTime = metav1.Time{}
 		return c
 	}
-	condPtr := func(c v1alpha1.Condition) *v1alpha1.Condition {
+	condPtr := func(c metav1.Condition) *metav1.Condition {
 		return &c
 	}
-	withoutTime := func(c v1alpha1.Condition) v1alpha1.Condition {
+	withoutTime := func(c metav1.Condition) metav1.Condition {
 		c = *c.DeepCopy()
 		c.LastTransitionTime = metav1.Time{}
 		return c
 	}
-	tlsConfigurationValidLoadedTrueCondition := func(gen int64) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	tlsConfigurationValidLoadedTrueCondition := func(gen int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "TLSConfigurationValid",
 			Status:             "True",
 			LastTransitionTime: now,
@@ -287,8 +287,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	searchBaseFoundInRootDSECondition := func(gen int64) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	searchBaseFoundInRootDSECondition := func(gen int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "SearchBaseFound",
 			Status:             "True",
 			LastTransitionTime: now,
@@ -298,8 +298,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	searchBaseFoundInConfigCondition := func(gen int64) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	searchBaseFoundInConfigCondition := func(gen int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "SearchBaseFound",
 			Status:             "True",
 			LastTransitionTime: now,
@@ -309,8 +309,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	searchBaseFoundErrorCondition := func(gen int64, message string) v1alpha1.Condition {
-		return v1alpha1.Condition{
+	searchBaseFoundErrorCondition := func(gen int64, message string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "SearchBaseFound",
 			Status:             "False",
 			LastTransitionTime: now,
@@ -320,8 +320,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	allConditionsTrue := func(gen int64, secretVersion string) []v1alpha1.Condition {
-		return []v1alpha1.Condition{
+	allConditionsTrue := func(gen int64, secretVersion string) []metav1.Condition {
+		return []metav1.Condition{
 			bindSecretValidTrueCondition(gen),
 			activeDirectoryConnectionValidTrueCondition(gen, secretVersion),
 			searchBaseFoundInConfigCondition(gen),
@@ -418,7 +418,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{
 							Type:               "BindSecretValid",
 							Status:             "False",
@@ -446,7 +446,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{
 							Type:               "BindSecretValid",
 							Status:             "False",
@@ -473,7 +473,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						{
 							Type:               "BindSecretValid",
 							Status:             "False",
@@ -499,7 +499,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "TLSConfigurationValid",
@@ -525,7 +525,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "TLSConfigurationValid",
@@ -583,7 +583,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInConfigCondition(1234),
@@ -653,7 +653,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInConfigCondition(1234),
@@ -726,7 +726,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "LDAPConnectionValid",
@@ -749,7 +749,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
 				IDPSpecGeneration:         1234,
-				ConnectionValidCondition: &v1alpha1.Condition{
+				ConnectionValidCondition: &metav1.Condition{
 					Type:   "LDAPConnectionValid",
 					Status: "True",
 					Reason: "Success",
@@ -807,7 +807,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "LDAPConnectionValid",
@@ -904,7 +904,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42, UID: "other-uid"},
 					Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 						Phase: "Error",
-						Conditions: []v1alpha1.Condition{
+						Conditions: []metav1.Condition{
 							{
 								Type:               "BindSecretValid",
 								Status:             "False",
@@ -953,7 +953,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "LDAPConnectionValid",
@@ -1021,7 +1021,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "LDAPConnectionValid",
@@ -1057,7 +1057,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						{
 							Type:               "LDAPConnectionValid",
@@ -1080,7 +1080,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection was already validated using TLS for the current resource generation and secret version, then do not validate it again and keep using TLS",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 					searchBaseFoundInConfigCondition(1234),
 				}
@@ -1122,7 +1122,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			// validatedsettings cache invalid.
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 				}
 				upstream.Spec.UserSearch.Base = ""
@@ -1170,7 +1170,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1192,7 +1192,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection was already validated using TLS, and the search base was found, load TLS and search base info into the cache",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 					searchBaseFoundInRootDSECondition(1234),
 				}
@@ -1243,7 +1243,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1265,7 +1265,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection was already validated using StartTLS for the current resource generation and secret version, then do not validate it again and keep using StartTLS",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 					searchBaseFoundInConfigCondition(1234),
 				}
@@ -1305,7 +1305,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection was validated for an older resource generation, then try to validate it again",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234 // current generation
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1233, "4242"), // older spec generation!
 				}
 			})},
@@ -1346,7 +1346,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection condition failed to update previously, then write the cached condition from the previous connection validation",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234 // current generation
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4200"), // old version of the condition, as if the previous update of conditions had failed
 				}
 			})},
@@ -1386,7 +1386,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection validation previously failed for this resource generation, then try to validate it again",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					{
 						Type:               "LDAPConnectionValid",
 						Status:             "False", // failure!
@@ -1425,7 +1425,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the LDAP server connection was already validated for this resource generation but the bind secret has changed, then try to validate it again",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					activeDirectoryConnectionValidTrueCondition(1234, "4241"), // same spec generation, old secret version
 				}
 			})},
@@ -1570,7 +1570,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1634,7 +1634,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1698,7 +1698,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1734,7 +1734,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: some error"),
@@ -1770,7 +1770,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: empty search base DN found"),
@@ -1812,7 +1812,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: expected to find 1 entry but found 2"),
@@ -1841,7 +1841,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: expected to find 1 entry but found 0"),
@@ -1855,7 +1855,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when search base was previously found but the bind secret has changed",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Generation = 1234
-				upstream.Status.Conditions = []v1alpha1.Condition{
+				upstream.Status.Conditions = []metav1.Condition{
 					searchBaseFoundInRootDSECondition(1234),
 				}
 				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
@@ -1910,7 +1910,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInRootDSECondition(1234),
@@ -1973,7 +1973,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
 				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
 					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundInConfigCondition(1234),

@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientwatcher
@@ -169,8 +169,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 	now := metav1.NewTime(time.Now().UTC())
 	earlier := metav1.NewTime(now.Add(-1 * time.Hour).UTC())
 
-	happyAllowedGrantTypesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyAllowedGrantTypesCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "AllowedGrantTypesValid",
 			Status:             "True",
 			LastTransitionTime: time,
@@ -180,8 +180,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadAllowedGrantTypesCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadAllowedGrantTypesCondition := func(time metav1.Time, observedGeneration int64, message string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "AllowedGrantTypesValid",
 			Status:             "False",
 			LastTransitionTime: time,
@@ -191,8 +191,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyClientSecretsCondition := func(howMany int, time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyClientSecretsCondition := func(howMany int, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "ClientSecretExists",
 			Status:             "True",
 			LastTransitionTime: time,
@@ -202,8 +202,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadNoClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadNoClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "ClientSecretExists",
 			Status:             "False",
 			LastTransitionTime: time,
@@ -213,8 +213,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadInvalidClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadInvalidClientSecretsCondition := func(time metav1.Time, observedGeneration int64, message string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "ClientSecretExists",
 			Status:             "False",
 			LastTransitionTime: time,
@@ -224,8 +224,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	happyAllowedScopesCondition := func(time metav1.Time, observedGeneration int64) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	happyAllowedScopesCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
 			Type:               "AllowedScopesValid",
 			Status:             "True",
 			LastTransitionTime: time,
@@ -235,8 +235,8 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		}
 	}
 
-	sadAllowedScopesCondition := func(time metav1.Time, observedGeneration int64, message string) configv1alpha1.Condition {
-		return configv1alpha1.Condition{
+	sadAllowedScopesCondition := func(time metav1.Time, observedGeneration int64, message string) metav1.Condition {
+		return metav1.Condition{
 			Type:               "AllowedScopesValid",
 			Status:             "False",
 			LastTransitionTime: time,
@@ -292,7 +292,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 					Status: configv1alpha1.OIDCClientStatus{
 						Phase: "Ready",
-						Conditions: []configv1alpha1.Condition{
+						Conditions: []metav1.Condition{
 							happyAllowedGrantTypesCondition(now, 1234),
 							happyAllowedScopesCondition(now, 1234),
 							happyClientSecretsCondition(1, now, 1234),
@@ -317,7 +317,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(2, now, 1234),
@@ -336,7 +336,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(earlier, 1234),
 						happyAllowedScopesCondition(earlier, 1234),
 						happyClientSecretsCondition(1, earlier, 1234),
@@ -350,7 +350,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(earlier, 1234),
 						happyAllowedScopesCondition(earlier, 1234),
 						happyClientSecretsCondition(1, earlier, 1234),
@@ -370,7 +370,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"authorization_code" must always be included in "allowedGrantTypes"`),
 						sadAllowedScopesCondition(now, 1234, `"openid" must always be included in "allowedScopes"`),
 						sadNoClientSecretsCondition(now, 1234, "no client secret found (no Secret storage found)"),
@@ -393,7 +393,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						sadNoClientSecretsCondition(now, 1234, "error reading client secret storage: OIDC client secret storage data has wrong version: OIDC client secret storage has version wrong-version instead of 1"),
@@ -416,7 +416,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						sadNoClientSecretsCondition(now, 1234, "no client secret found (empty list in storage)"),
@@ -443,7 +443,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						sadInvalidClientSecretsCondition(now, 1234,
@@ -477,7 +477,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test1", Generation: 1234, UID: "uid1"},
 					Status: configv1alpha1.OIDCClientStatus{
 						Phase: "Ready",
-						Conditions: []configv1alpha1.Condition{
+						Conditions: []metav1.Condition{
 							happyAllowedGrantTypesCondition(now, 1234),
 							happyAllowedScopesCondition(now, 1234),
 							happyClientSecretsCondition(1, now, 1234),
@@ -489,7 +489,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test2", Generation: 4567, UID: "uid2"},
 					Status: configv1alpha1.OIDCClientStatus{
 						Phase: "Error",
-						Conditions: []configv1alpha1.Condition{
+						Conditions: []metav1.Condition{
 							sadAllowedGrantTypesCondition(now, 4567, `"authorization_code" must always be included in "allowedGrantTypes"`),
 							sadAllowedScopesCondition(now, 4567, `"openid" must always be included in "allowedScopes"`),
 							sadNoClientSecretsCondition(now, 4567, "no client secret found (no Secret storage found)"),
@@ -510,7 +510,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				// was invalid on previous run of controller which observed an old generation at an earlier time
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(earlier, 1234, `"authorization_code" must always be included in "allowedGrantTypes"`),
 						sadAllowedScopesCondition(earlier, 1234, `"openid" must always be included in "allowedScopes"`),
 						happyClientSecretsCondition(1, earlier, 1234),
@@ -525,7 +525,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				// status was updated to reflect the current generation at the current time
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 4567),
 						happyAllowedScopesCondition(now, 4567),
 						happyClientSecretsCondition(1, earlier, 4567), // was already validated earlier
@@ -549,7 +549,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"refresh_token" must be included in "allowedGrantTypes" when "offline_access" is included in "allowedScopes"`),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -573,7 +573,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234,
 							`"authorization_code" must always be included in "allowedGrantTypes"; `+
 								`"urn:ietf:params:oauth:grant-type:token-exchange" must be included in "allowedGrantTypes" when "pinniped:request-audience" is included in "allowedScopes"`),
@@ -602,7 +602,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234,
 							`"authorization_code" must always be included in "allowedGrantTypes"; `+
 								`"refresh_token" must be included in "allowedGrantTypes" when "offline_access" is included in "allowedScopes"`),
@@ -630,7 +630,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"urn:ietf:params:oauth:grant-type:token-exchange" must be included in "allowedGrantTypes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -654,7 +654,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						sadAllowedScopesCondition(now, 1234, `"offline_access" must be included in "allowedScopes" when "refresh_token" is included in "allowedGrantTypes"`),
 						happyClientSecretsCondition(1, now, 1234),
@@ -678,7 +678,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
@@ -702,7 +702,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
@@ -726,7 +726,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						sadAllowedScopesCondition(now, 1234, `"username" and "groups" must be included in "allowedScopes" when "pinniped:request-audience" is included in "allowedScopes"`),
 						happyClientSecretsCondition(1, now, 1234),
@@ -750,7 +750,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Error",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						sadAllowedScopesCondition(now, 1234, `"pinniped:request-audience" must be included in "allowedScopes" when "urn:ietf:params:oauth:grant-type:token-exchange" is included in "allowedGrantTypes"`),
 						happyClientSecretsCondition(1, now, 1234),
@@ -774,7 +774,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -798,7 +798,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -822,7 +822,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -846,7 +846,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -870,7 +870,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -894,7 +894,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -918,7 +918,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),
@@ -942,7 +942,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
 				Status: configv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
-					Conditions: []configv1alpha1.Condition{
+					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
 						happyAllowedScopesCondition(now, 1234),
 						happyClientSecretsCondition(1, now, 1234),

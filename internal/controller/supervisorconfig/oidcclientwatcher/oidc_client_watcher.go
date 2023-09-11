@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientwatcher
@@ -128,7 +128,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 func (c *oidcClientWatcherController) updateStatus(
 	ctx context.Context,
 	upstream *v1alpha1.OIDCClient,
-	conditions []*v1alpha1.Condition,
+	conditions []*metav1.Condition,
 	totalClientSecrets int,
 ) error {
 	updated := upstream.DeepCopy()

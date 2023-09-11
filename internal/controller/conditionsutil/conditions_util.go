@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package conditionsutil
@@ -9,13 +9,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/plog"
 )
 
 // MergeIDPConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func MergeIDPConditions(conditions []*idpv1alpha1.Condition, observedGeneration int64, conditionsToUpdate *[]idpv1alpha1.Condition, log plog.MinLogger) bool {
+func MergeIDPConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
@@ -24,7 +22,7 @@ func MergeIDPConditions(conditions []*idpv1alpha1.Condition, observedGeneration 
 		if mergeIDPCondition(conditionsToUpdate, cond) {
 			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
 		}
-		if cond.Status == idpv1alpha1.ConditionFalse {
+		if cond.Status == v1.ConditionFalse {
 			hadErrorCondition = true
 		}
 	}
@@ -34,11 +32,11 @@ func MergeIDPConditions(conditions []*idpv1alpha1.Condition, observedGeneration 
 	return hadErrorCondition
 }
 
-// mergeIDPCondition merges a new idpv1alpha1.Condition into a slice of existing conditions. It returns true
+// mergeIDPCondition merges a new v1.Condition into a slice of existing conditions. It returns true
 // if the condition has meaningfully changed.
-func mergeIDPCondition(existing *[]idpv1alpha1.Condition, new *idpv1alpha1.Condition) bool {
+func mergeIDPCondition(existing *[]v1.Condition, new *v1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *idpv1alpha1.Condition
+	var old *v1.Condition
 	for i := range *existing {
 		if (*existing)[i].Type == new.Type {
 			old = &(*existing)[i]
@@ -69,7 +67,7 @@ func mergeIDPCondition(existing *[]idpv1alpha1.Condition, new *idpv1alpha1.Condi
 }
 
 // MergeConfigConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func MergeConfigConditions(conditions []*configv1alpha1.Condition, observedGeneration int64, conditionsToUpdate *[]configv1alpha1.Condition, log plog.MinLogger) bool {
+func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
@@ -78,7 +76,7 @@ func MergeConfigConditions(conditions []*configv1alpha1.Condition, observedGener
 		if mergeConfigCondition(conditionsToUpdate, cond) {
 			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
 		}
-		if cond.Status == configv1alpha1.ConditionFalse {
+		if cond.Status == v1.ConditionFalse {
 			hadErrorCondition = true
 		}
 	}
@@ -88,11 +86,11 @@ func MergeConfigConditions(conditions []*configv1alpha1.Condition, observedGener
 	return hadErrorCondition
 }
 
-// mergeConfigCondition merges a new idpv1alpha1.Condition into a slice of existing conditions. It returns true
+// mergeConfigCondition merges a new v1.Condition into a slice of existing conditions. It returns true
 // if the condition has meaningfully changed.
-func mergeConfigCondition(existing *[]configv1alpha1.Condition, new *configv1alpha1.Condition) bool {
+func mergeConfigCondition(existing *[]v1.Condition, new *v1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *configv1alpha1.Condition
+	var old *v1.Condition
 	for i := range *existing {
 		if (*existing)[i].Type == new.Type {
 			old = &(*existing)[i]

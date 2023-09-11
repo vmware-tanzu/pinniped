@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -60,7 +61,7 @@ type ValidatedSettings struct {
 	// can keep writing them to the status in the future. This matters most when the first attempt
 	// to write them to the IDP's status fails. In this case, future Syncs calls will be able to
 	// use these cached values to try writing them again.
-	ConnectionValidCondition, SearchBaseFoundCondition *v1alpha1.Condition
+	ConnectionValidCondition, SearchBaseFoundCondition *metav1.Condition
 }
 
 // ValidatedSettingsCacheI is an interface for an in-memory cache with an entry for each upstream
@@ -113,7 +114,7 @@ type UpstreamGenericLDAPSpec interface {
 	BindSecretName() string
 	UserSearch() UpstreamGenericLDAPUserSearch
 	GroupSearch() UpstreamGenericLDAPGroupSearch
-	DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition
+	DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition
 }
 
 type UpstreamGenericLDAPUserSearch interface {
@@ -131,10 +132,10 @@ type UpstreamGenericLDAPGroupSearch interface {
 }
 
 type UpstreamGenericLDAPStatus interface {
-	Conditions() []v1alpha1.Condition
+	Conditions() []metav1.Condition
 }
 
-func ValidateTLSConfig(tlsSpec *v1alpha1.TLSSpec, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func ValidateTLSConfig(tlsSpec *v1alpha1.TLSSpec, config *upstreamldap.ProviderConfig) *metav1.Condition {
 	if tlsSpec == nil {
 		return validTLSCondition(noTLSConfigurationMessage)
 	}
@@ -162,7 +163,7 @@ func TestConnection(
 	bindSecretName string,
 	config *upstreamldap.ProviderConfig,
 	currentSecretVersion string,
-) *v1alpha1.Condition {
+) *metav1.Condition {
 	// First try using TLS.
 	config.ConnectionProtocol = upstreamldap.TLS
 	tlsLDAPProvider := upstreamldap.New(*config)
@@ -187,57 +188,57 @@ func TestConnection(
 	}
 
 	if err != nil {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:   typeLDAPConnectionValid,
-			Status: v1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonLDAPConnectionError,
 			Message: fmt.Sprintf(`could not successfully connect to "%s" and bind as user "%s": %s`,
 				config.Host, config.BindUsername, err.Error()),
 		}
 	}
 
-	return &v1alpha1.Condition{
+	return &metav1.Condition{
 		Type:   typeLDAPConnectionValid,
-		Status: v1alpha1.ConditionTrue,
+		Status: metav1.ConditionTrue,
 		Reason: ReasonSuccess,
 		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			config.Host, config.BindUsername, bindSecretName, currentSecretVersion),
 	}
 }
 
-func validTLSCondition(message string) *v1alpha1.Condition {
-	return &v1alpha1.Condition{
+func validTLSCondition(message string) *metav1.Condition {
+	return &metav1.Condition{
 		Type:    typeTLSConfigurationValid,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  ReasonSuccess,
 		Message: message,
 	}
 }
 
-func invalidTLSCondition(message string) *v1alpha1.Condition {
-	return &v1alpha1.Condition{
+func invalidTLSCondition(message string) *metav1.Condition {
+	return &metav1.Condition{
 		Type:    typeTLSConfigurationValid,
-		Status:  v1alpha1.ConditionFalse,
+		Status:  metav1.ConditionFalse,
 		Reason:  ReasonInvalidTLSConfig,
 		Message: message,
 	}
 }
 
-func ValidateSecret(secretInformer corev1informers.SecretInformer, secretName string, secretNamespace string, config *upstreamldap.ProviderConfig) (*v1alpha1.Condition, string) {
+func ValidateSecret(secretInformer corev1informers.SecretInformer, secretName string, secretNamespace string, config *upstreamldap.ProviderConfig) (*metav1.Condition, string) {
 	secret, err := secretInformer.Lister().Secrets(secretNamespace).Get(secretName)
 	if err != nil {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:    typeBindSecretValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  ReasonNotFound,
 			Message: err.Error(),
 		}, ""
 	}
 
 	if secret.Type != corev1.SecretTypeBasicAuth {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:   typeBindSecretValid,
-			Status: v1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: ReasonWrongType,
 			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)",
 				secretName, secret.Type, corev1.SecretTypeBasicAuth),
@@ -247,18 +248,18 @@ func ValidateSecret(secretInformer corev1informers.SecretInformer, secretName st
 	config.BindUsername = string(secret.Data[corev1.BasicAuthUsernameKey])
 	config.BindPassword = string(secret.Data[corev1.BasicAuthPasswordKey])
 	if len(config.BindUsername) == 0 || len(config.BindPassword) == 0 {
-		return &v1alpha1.Condition{
+		return &metav1.Condition{
 			Type:   typeBindSecretValid,
-			Status: v1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: ReasonMissingKeys,
 			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q",
 				secretName, []string{corev1.BasicAuthUsernameKey, corev1.BasicAuthPasswordKey}),
 		}, secret.ResourceVersion
 	}
 
-	return &v1alpha1.Condition{
+	return &metav1.Condition{
 		Type:    typeBindSecretValid,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  ReasonSuccess,
 		Message: "loaded bind secret",
 	}, secret.ResourceVersion
@@ -266,7 +267,7 @@ func ValidateSecret(secretInformer corev1informers.SecretInformer, secretName st
 
 // gradatedCondition is a condition and a boolean that tells you whether the condition is fatal or just a warning.
 type gradatedCondition struct {
-	condition *v1alpha1.Condition
+	condition *metav1.Condition
 	isFatal   bool
 }
 
@@ -275,15 +276,15 @@ type GradatedConditions struct {
 	gradatedConditions []gradatedCondition
 }
 
-func (g *GradatedConditions) Conditions() []*v1alpha1.Condition {
-	conditions := []*v1alpha1.Condition{}
+func (g *GradatedConditions) Conditions() []*metav1.Condition {
+	conditions := []*metav1.Condition{}
 	for _, gc := range g.gradatedConditions {
 		conditions = append(conditions, gc.condition)
 	}
 	return conditions
 }
 
-func (g *GradatedConditions) Append(condition *v1alpha1.Condition, isFatal bool) {
+func (g *GradatedConditions) Append(condition *metav1.Condition, isFatal bool) {
 	g.gradatedConditions = append(g.gradatedConditions, gradatedCondition{condition: condition, isFatal: isFatal})
 }
 
@@ -302,9 +303,9 @@ func ValidateGenericLDAP(
 	tlsValidCondition := ValidateTLSConfig(upstream.Spec().TLSSpec(), config)
 	conditions.Append(tlsValidCondition, true)
 
-	var ldapConnectionValidCondition, searchBaseFoundCondition *v1alpha1.Condition
+	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 	// No point in trying to connect to the server if the config was already determined to be invalid.
-	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
+	if secretValidCondition.Status == metav1.ConditionTrue && tlsValidCondition.Status == metav1.ConditionTrue {
 		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSettingsCache, upstream, config, currentSecretVersion)
 		conditions.Append(ldapConnectionValidCondition, false)
 		if searchBaseFoundCondition != nil { // currently, only used for AD, so may be nil
@@ -320,9 +321,9 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 	upstream UpstreamGenericLDAPIDP,
 	config *upstreamldap.ProviderConfig,
 	currentSecretVersion string,
-) (*v1alpha1.Condition, *v1alpha1.Condition) {
+) (*metav1.Condition, *metav1.Condition) {
 	validatedSettings, hasPreviousValidatedSettings := validatedSettingsCache.Get(upstream.Name(), currentSecretVersion, upstream.Generation())
-	var ldapConnectionValidCondition, searchBaseFoundCondition *v1alpha1.Condition
+	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 
 	if hasPreviousValidatedSettings && validatedSettings.UserSearchBase != "" && validatedSettings.GroupSearchBase != "" {
 		// Found previously validated settings in the cache (which is also not missing search base fields), so use them.
@@ -344,8 +345,8 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 		// When there were no failures, write the newly validated settings to the cache.
 		// It's okay for the search base condition to be nil, since it's only used by Active Directory providers,
 		// but if it exists make sure it was not a failure.
-		if ldapConnectionValidCondition.Status == v1alpha1.ConditionTrue &&
-			(searchBaseFoundCondition == nil || (searchBaseFoundCondition.Status == v1alpha1.ConditionTrue)) {
+		if ldapConnectionValidCondition.Status == metav1.ConditionTrue &&
+			(searchBaseFoundCondition == nil || (searchBaseFoundCondition.Status == metav1.ConditionTrue)) {
 			// Remember (in-memory for this pod) that the controller has successfully validated the LDAP or AD provider
 			// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
 			// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
@@ -366,14 +367,14 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 
 func EvaluateConditions(conditions GradatedConditions, config *upstreamldap.ProviderConfig) (provider.UpstreamLDAPIdentityProviderI, bool) {
 	for _, gradatedCondition := range conditions.gradatedConditions {
-		if gradatedCondition.condition.Status != v1alpha1.ConditionTrue && gradatedCondition.isFatal {
+		if gradatedCondition.condition.Status != metav1.ConditionTrue && gradatedCondition.isFatal {
 			// Invalid provider, so do not load it into the cache.
 			return nil, true
 		}
 	}
 
 	for _, gradatedCondition := range conditions.gradatedConditions {
-		if gradatedCondition.condition.Status != v1alpha1.ConditionTrue && !gradatedCondition.isFatal {
+		if gradatedCondition.condition.Status != metav1.ConditionTrue && !gradatedCondition.isFatal {
 			// Error but load it into the cache anyway, treating this condition failure more like a warning.
 			// Try again hoping that the condition will improve.
 			return upstreamldap.New(*config), true

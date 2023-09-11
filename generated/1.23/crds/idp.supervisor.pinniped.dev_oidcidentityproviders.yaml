@@ -259,9 +259,15 @@ spec:
                 description: Represents the observations of an identity provider's
                   current state.
                 items:
-                  description: Condition status of a resource (mirrored from the metav1.Condition
-                    type added in Kubernetes 1.19). In a future API version we can
-                    switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource. --- This struct is intended for direct
+                    use as an array at the field path .status.conditions.  For example,
+                    \n type FooStatus struct{ // Represents the observations of a
+                    foo's current state. // Known .status.conditions.type are: \"Available\",
+                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
+                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
+                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
+                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
                   properties:
                     lastTransitionTime:
                       description: lastTransitionTime is the last time the condition

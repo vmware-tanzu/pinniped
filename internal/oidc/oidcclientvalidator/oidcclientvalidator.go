@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientvalidator
@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
@@ -36,8 +37,8 @@ const (
 // get the validation error for that case. It returns a bool to indicate if the client is valid,
 // along with a slice of conditions containing more details, and the list of client secrets in the
 // case that the client was valid.
-func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost int) (bool, []*v1alpha1.Condition, []string) {
-	conds := make([]*v1alpha1.Condition, 0, 3)
+func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string) {
+	conds := make([]*metav1.Condition, 0, 3)
 
 	conds, clientSecrets := validateSecret(secret, conds, minBcryptCost)
 	conds = validateAllowedGrantTypes(oidcClient, conds)
@@ -45,7 +46,7 @@ func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost 
 
 	valid := true
 	for _, cond := range conds {
-		if cond.Status != v1alpha1.ConditionTrue {
+		if cond.Status != metav1.ConditionTrue {
 			valid = false
 			break
 		}
@@ -54,7 +55,7 @@ func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost 
 }
 
 // validateAllowedScopes checks if allowedScopes is valid on the OIDCClient.
-func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
+func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
 	m := make([]string, 0, 4)
 
 	if !allowedScopesContains(oidcClient, oidcapi.ScopeOpenID) {
@@ -75,16 +76,16 @@ func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alph
 	}
 
 	if len(m) == 0 {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedScopesValid,
-			Status:  v1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedScopesFieldName),
 		})
 	} else {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedScopesValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonMissingRequiredValue,
 			Message: strings.Join(m, "; "),
 		})
@@ -94,7 +95,7 @@ func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alph
 }
 
 // validateAllowedGrantTypes checks if allowedGrantTypes is valid on the OIDCClient.
-func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1alpha1.Condition) []*v1alpha1.Condition {
+func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
 	m := make([]string, 0, 3)
 
 	if !allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeAuthorizationCode) {
@@ -111,16 +112,16 @@ func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1
 	}
 
 	if len(m) == 0 {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedGrantTypesValid,
-			Status:  v1alpha1.ConditionTrue,
+			Status:  metav1.ConditionTrue,
 			Reason:  reasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedGrantTypesFieldName),
 		})
 	} else {
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedGrantTypesValid,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonMissingRequiredValue,
 			Message: strings.Join(m, "; "),
 		})
@@ -131,14 +132,14 @@ func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*v1
 
 // validateSecret checks if the client secret storage Secret is valid and contains at least one client secret.
 // It returns the updated conditions slice along with the client secrets found in that case that it is valid.
-func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcryptCost int) ([]*v1alpha1.Condition, []string) {
+func validateSecret(secret *v1.Secret, conditions []*metav1.Condition, minBcryptCost int) ([]*metav1.Condition, []string) {
 	emptyList := []string{}
 
 	if secret == nil {
 		// Invalid: no storage Secret found.
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    clientSecretExists,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonNoClientSecretFound,
 			Message: "no client secret found (no Secret storage found)",
 		})
@@ -148,9 +149,9 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcry
 	storedClientSecrets, err := oidcclientsecretstorage.ReadFromSecret(secret)
 	if err != nil {
 		// Invalid: storage Secret exists but its data could not be parsed.
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    clientSecretExists,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonNoClientSecretFound,
 			Message: fmt.Sprintf("error reading client secret storage: %s", err.Error()),
 		})
@@ -161,9 +162,9 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcry
 	storedClientSecretsCount := len(storedClientSecrets)
 	if storedClientSecretsCount == 0 {
 		// Invalid: no client secrets stored.
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:    clientSecretExists,
-			Status:  v1alpha1.ConditionFalse,
+			Status:  metav1.ConditionFalse,
 			Reason:  reasonNoClientSecretFound,
 			Message: "no client secret found (empty list in storage)",
 		})
@@ -186,9 +187,9 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcry
 	}
 	if len(bcryptErrs) > 0 {
 		// Invalid: some stored client secrets were not valid.
-		conditions = append(conditions, &v1alpha1.Condition{
+		conditions = append(conditions, &metav1.Condition{
 			Type:   clientSecretExists,
-			Status: v1alpha1.ConditionFalse,
+			Status: metav1.ConditionFalse,
 			Reason: reasonInvalidClientSecretFound,
 			Message: fmt.Sprintf("%d stored client secrets found, but some were invalid, so none will be used: %s",
 				storedClientSecretsCount, strings.Join(bcryptErrs, "; ")),
@@ -197,9 +198,9 @@ func validateSecret(secret *v1.Secret, conditions []*v1alpha1.Condition, minBcry
 	}
 
 	// Valid: has at least one client secret stored for this OIDC client, and all stored client secrets are valid.
-	conditions = append(conditions, &v1alpha1.Condition{
+	conditions = append(conditions, &metav1.Condition{
 		Type:    clientSecretExists,
-		Status:  v1alpha1.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: fmt.Sprintf("%d client secret(s) found", storedClientSecretsCount),
 	})

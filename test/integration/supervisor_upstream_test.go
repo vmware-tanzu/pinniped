@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -26,16 +26,16 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
-		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
+		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsValid",
-				Status:  v1alpha1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  "SecretNotFound",
 				Message: `secret "does-not-exist" not found`,
 			},
 			{
 				Type:   "OIDCDiscoverySucceeded",
-				Status: v1alpha1.ConditionFalse,
+				Status: metav1.ConditionFalse,
 				Reason: "Unreachable",
 				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
 Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": dial tcp: address 444444: in [truncated 10 chars]`,
@@ -64,16 +64,16 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
-		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
+		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsValid",
-				Status:  v1alpha1.ConditionTrue,
+				Status:  metav1.ConditionTrue,
 				Reason:  "Success",
 				Message: "loaded client credentials",
 			},
 			{
 				Type:   "OIDCDiscoverySucceeded",
-				Status: v1alpha1.ConditionFalse,
+				Status: metav1.ConditionFalse,
 				Reason: "Unreachable",
 				Message: `failed to perform OIDC discovery against "` + env.SupervisorUpstreamOIDC.Issuer + `/":
 oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorUpstreamOIDC.Issuer + `/" got "` + env.SupervisorUpstreamOIDC.Issuer + `"`,
@@ -102,16 +102,16 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseReady)
-		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
+		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsValid",
-				Status:  v1alpha1.ConditionTrue,
+				Status:  metav1.ConditionTrue,
 				Reason:  "Success",
 				Message: "loaded client credentials",
 			},
 			{
 				Type:    "OIDCDiscoverySucceeded",
-				Status:  v1alpha1.ConditionTrue,
+				Status:  metav1.ConditionTrue,
 				Reason:  "Success",
 				Message: "discovered issuer configuration",
 			},
@@ -125,9 +125,9 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 	})
 }
 
-func expectUpstreamConditions(t *testing.T, upstream *v1alpha1.OIDCIdentityProvider, expected []v1alpha1.Condition) {
+func expectUpstreamConditions(t *testing.T, upstream *v1alpha1.OIDCIdentityProvider, expected []metav1.Condition) {
 	t.Helper()
-	normalized := make([]v1alpha1.Condition, 0, len(upstream.Status.Conditions))
+	normalized := make([]metav1.Condition, 0, len(upstream.Status.Conditions))
 	for _, c := range upstream.Status.Conditions {
 		c.ObservedGeneration = 0
 		c.LastTransitionTime = metav1.Time{}

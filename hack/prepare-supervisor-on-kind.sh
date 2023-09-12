@@ -238,13 +238,23 @@ fi
 kubectl create secret tls -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" my-federation-domain-tls --cert "$tls_crt_path" --key "$tls_key_path" \
   --dry-run=client --output yaml | kubectl apply -f -
 
-# Variable that will be used to build up the "identityProviders" yaml for the FederationDomain.
-fd_idps=""
+# Make a FederationDomain using the TLS Secret and identity providers from above in a temp file.
+fd_file="/tmp/federationdomain.yaml"
+cat << EOF > $fd_file
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
+kind: FederationDomain
+metadata:
+  name: my-federation-domain
+spec:
+  issuer: $issuer
+  tls:
+    secretName: my-federation-domain-tls
+  identityProviders:
+EOF
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  fd_idps="${fd_idps}$(
-    cat <<EOF
+  cat << EOF >> $fd_file
 
     - displayName: "My OIDC IDP 🚀"
       objectRef:
@@ -264,13 +274,11 @@ if [[ "$use_oidc_upstream" == "yes" ]]; then
               username: oidc:ryan@example.com
               groups: [ oidc:a, oidc:b ]
 EOF
-  )"
 fi
 
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  fd_idps="${fd_idps}$(
-    cat <<EOF
+  cat << EOF >> $fd_file
 
     - displayName: "My LDAP IDP 🚀"
       objectRef:
@@ -320,13 +328,11 @@ if [[ "$use_ldap_upstream" == "yes" ]]; then
               rejected: true
               message: "Only users in certain kube groups are allowed to authenticate"
 EOF
-  )"
 fi
 
 if [[ "$use_ad_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  fd_idps="${fd_idps}$(
-    cat <<EOF
+  cat << EOF >> $fd_file
 
     - displayName: "My AD IDP"
       objectRef:
@@ -334,21 +340,10 @@ if [[ "$use_ad_upstream" == "yes" ]]; then
         kind: ActiveDirectoryIdentityProvider
         name: my-ad-provider
 EOF
-  )"
 fi
 
-# Make a FederationDomain using the TLS Secret and identity providers from above.
-cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: config.supervisor.pinniped.dev/v1alpha1
-kind: FederationDomain
-metadata:
-  name: my-federation-domain
-spec:
-  issuer: $issuer
-  tls:
-    secretName: my-federation-domain-tls
-  identityProviders:${fd_idps}
-EOF
+# Apply the FederationDomain from the file created above.
+kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f "$fd_file"
 
 echo "Waiting for FederationDomain to initialize or update..."
 kubectl wait --for=condition=Ready FederationDomain/my-federation-domain -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE"

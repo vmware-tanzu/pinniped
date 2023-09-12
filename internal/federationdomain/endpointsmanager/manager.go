@@ -4,7 +4,6 @@
 package endpointsmanager
 
 import (
-	"go.pinniped.dev/internal/httputil/requestutil"
 	"net/http"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
+	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/pkg/oidcclient/nonce"

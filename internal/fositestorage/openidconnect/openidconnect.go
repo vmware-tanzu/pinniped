@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package openidconnect
@@ -16,8 +16,8 @@ import (
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/fositestorage"
-	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
 )
 
@@ -32,7 +32,8 @@ const (
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
-	oidcStorageVersion = "4"
+	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
+	oidcStorageVersion = "5"
 )
 
 var _ openid.OpenIDConnectRequestStorage = &openIDConnectRequestStorage{}

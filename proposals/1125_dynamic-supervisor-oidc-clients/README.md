@@ -1,7 +1,7 @@
 ---
 title: "Dynamic Supervisor OIDC Clients"
 authors: [ "@cfryanr", "@enj" ]
-status: "approved"
+status: "implemented"
 sponsor: [ ]
 approval_date: "Jul 26, 2022"
 ---

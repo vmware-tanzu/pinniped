@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclient
@@ -28,11 +28,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/mocks/mockupstreamoidcidentityprovider"
 	"go.pinniped.dev/internal/net/phttp"
-	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
@@ -321,10 +321,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 		cache := &mockSessionCache{t: t, getReturnsToken: nil}
 		cacheKey := SessionCacheKey{
-			Issuer:      successServer.URL,
-			ClientID:    "test-client-id",
-			Scopes:      []string{"test-scope"},
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               successServer.URL,
+			ClientID:             "test-client-id",
+			Scopes:               []string{"test-scope"},
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: "some-upstream-name",
 		}
 		t.Cleanup(func() {
 			require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -504,7 +505,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -553,7 +554,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -916,7 +917,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
-			name:     "upstream name and type are included in authorize request if upstream name is provided",
+			name:     "upstream name and type are included in authorize request and session cache key if upstream name is provided",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -926,10 +927,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1159,7 +1161,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 							fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
 						}},
 					}, nil)
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1181,7 +1183,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1207,10 +1209,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1281,7 +1284,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1314,10 +1317,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1392,7 +1396,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1425,10 +1429,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
-						Issuer:      successServer.URL,
-						ClientID:    "test-client-id",
-						Scopes:      []string{"test-scope"},
-						RedirectURI: "http://localhost:0/callback",
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "some-upstream-name",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1855,7 +1860,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					h.cache = cache
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -1993,7 +1998,7 @@ func TestHandlePasteCallback(t *testing.T) {
 						return "invalid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2017,7 +2022,7 @@ func TestHandlePasteCallback(t *testing.T) {
 						return "valid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2237,7 +2242,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2256,7 +2261,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2282,7 +2287,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				return func(h *handlerState) error {
 					h.useFormPost = true
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2311,7 +2316,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				return func(h *handlerState) error {
 					h.useFormPost = true
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2333,7 +2338,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				logger:    plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				logger:    plog.Logr(), //nolint:staticcheck // old test with no log assertions
 				issuer:    "https://valid-issuer.com/with/some/path",
 			}
 			if tt.opt != nil {

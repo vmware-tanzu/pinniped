@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package fositestorage
@@ -7,7 +7,7 @@ import (
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/internal/oidc/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/psession"
 )
 

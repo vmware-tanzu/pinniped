@@ -6,6 +6,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,7 +29,12 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 	defer cancel()
 
 	// Create our FederationDomain under test.
-	federationDomain := testlib.CreateTestFederationDomain(ctx, t, "", "", "")
+	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
+		configv1alpha1.FederationDomainSpec{
+			Issuer: fmt.Sprintf("http://test-issuer-%s.pinniped.dev", testlib.RandHex(t, 8)),
+		},
+		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created, but this test does not care
+	)
 
 	tests := []struct {
 		name        string

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -17,8 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
-	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
 )
@@ -91,7 +91,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// Note that CreateAuthorizeCodeSession() sets Active to true and also sets the Version before storing the session,
 	// so expect those here.
 	session.Active = true
-	session.Version = "4" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
+	session.Version = "5" // this is the value of the authorizationcode.authorizeCodeStorageVersion constant
 	expectedSessionStorageJSON, err := json.Marshal(session)
 	require.NoError(t, err)
 	require.JSONEq(t, string(expectedSessionStorageJSON), string(initialSecret.Data["pinniped-storage-data"]))

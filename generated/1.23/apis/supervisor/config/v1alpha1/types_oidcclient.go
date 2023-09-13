@@ -8,14 +8,14 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 type OIDCClientPhase string
 
 const (
-	// PhasePending is the default phase for newly-created OIDCClient resources.
-	PhasePending OIDCClientPhase = "Pending"
+	// OIDCClientPhasePending is the default phase for newly-created OIDCClient resources.
+	OIDCClientPhasePending OIDCClientPhase = "Pending"
 
-	// PhaseReady is the phase for an OIDCClient resource in a healthy state.
-	PhaseReady OIDCClientPhase = "Ready"
+	// OIDCClientPhaseReady is the phase for an OIDCClient resource in a healthy state.
+	OIDCClientPhaseReady OIDCClientPhase = "Ready"
 
-	// PhaseError is the phase for an OIDCClient in an unhealthy state.
-	PhaseError OIDCClientPhase = "Error"
+	// OIDCClientPhaseError is the phase for an OIDCClient in an unhealthy state.
+	OIDCClientPhaseError OIDCClientPhase = "Error"
 )
 
 // +kubebuilder:validation:Pattern=`^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/`

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -17,8 +17,8 @@ import (
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/fositestorage"
-	"go.pinniped.dev/internal/oidc/clientregistry"
 	"go.pinniped.dev/internal/psession"
 )
 
@@ -32,7 +32,8 @@ const (
 	// Version 2 is when we switched to storing psession.PinnipedSession inside the fosite request.
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
-	authorizeCodeStorageVersion = "4"
+	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
+	authorizeCodeStorageVersion = "5"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -372,42 +373,48 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			},
 			"custom": {
 				"username": "Ĝ眧Ĭ",
-				"providerUID": "ŉ2ƋŢ觛ǂ焺nŐǛ",
-				"providerName": "ɥ闣ʬ橳(ý綃ʃʚƟ覣k眐4",
-				"providerType": "ȣ掘ʃƸ澺淗a紽ǒ|鰽",
+				"upstreamUsername": "ŉ2ƋŢ觛ǂ焺nŐǛ",
+				"upstreamGroups": [
+					"闣ʬ橳(ý綃ʃʚƟ覣k眐4Ĉt",
+					"ʃƸ澺淗a紽ǒ|鰽ŋ猊Ia瓕巈環_ɑ"
+				],
+				"providerUID": "ƴŤȱʀļÂ?墖",
+				"providerName": "7就伒犘c钡",
+				"providerType": "k|鬌R蜚蠣麹概÷驣7Ʀ澉1æɽ誮",
 				"warnings": [
-					"t毇妬\u003e6鉢緋uƴŤȱʀļÂ",
-					"虝27就伒犘c钡ɏȫ齁š"
+					"鷞aŚB碠k9帴ʘ赱",
+					"ď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ¡圔"
 				],
 				"oidc": {
-					"upstreamRefreshToken": "OpKȱ藚ɏ¬Ê蒭堜]ȗ韚ʫ繕ȫ碰+ʫ",
-					"upstreamAccessToken": "k9帴",
-					"upstreamSubject": "磊ůď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ",
-					"upstreamIssuer": "4İ"
+					"upstreamRefreshToken": "墀jMʥ",
+					"upstreamAccessToken": "+î艔垎0",
+					"upstreamSubject": "ĝ",
+					"upstreamIssuer": "ǢIȽ"
 				},
 				"ldap": {
-					"userDN": "×",
+					"userDN": "士b",
 					"extraRefreshAttributes": {
-						"ʥ笿0D": "s"
+						"O灞浛a齙\\蹼偦歛ơ 皦pSǬŝ": "ǅķ?吭匞饫Ƽĝ\"zvư",
+						"f跞@)¿,ɭS隑ip偶宾儮猷": "面@yȝƋ鬯犦獢9c5¤"
 					}
 				},
 				"activedirectory": {
-					"userDN": "ĝ",
+					"userDN": "置b",
 					"extraRefreshAttributes": {
-						"IȽ齤士bEǎ": "跞@)¿,ɭS隑ip偶宾儮猷V麹",
-						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
+						"MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{鼐": "$+溪ŸȢŒų崓ļ憽",
+						"ĩŦʀ宍D挟": "q萮左/篣AÚƄŕ~čfVLPC諡}",
+						"姧骦:駝重EȫʆɵʮGɃ": "囤1+,Ȳ齠@ɍB鳛Nč乿ƔǴę鏶"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			" 皦pSǬŝ社Vƅȭǝ*擦28ǅ",
-			"vư"
+			"ň"
 		],
 		"grantedAudience": [
-			"置b",
-			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
+			"â融貵捠ŉ",
+			"d鞕ȸ腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2"
 		]
 	},
-	"version": "4"
+	"version": "5"
 }`

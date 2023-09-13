@@ -25,7 +25,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
-	"go.pinniped.dev/internal/issuer"
+	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
 	"go.pinniped.dev/internal/mocks/issuermocks"
 	"go.pinniped.dev/internal/testutil"
@@ -392,7 +392,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	})
 }
 
-func successfulIssuer(ctrl *gomock.Controller) issuer.ClientCertIssuer {
+func successfulIssuer(ctrl *gomock.Controller) clientcertissuer.ClientCertIssuer {
 	clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
 	clientCertIssuer.EXPECT().
 		IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).

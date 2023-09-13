@@ -23,8 +23,9 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/mocks/mockkeyset"
-	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -484,7 +485,7 @@ func TestProviderConfig(t *testing.T) {
 	t.Run("RevokeToken", func(t *testing.T) {
 		tests := []struct {
 			name                 string
-			tokenType            provider.RevocableTokenType
+			tokenType            upstreamprovider.RevocableTokenType
 			nilRevocationURL     bool
 			unreachableServer    bool
 			returnStatusCodes    []int
@@ -496,33 +497,33 @@ func TestProviderConfig(t *testing.T) {
 		}{
 			{
 				name:             "success without calling the server when there is no revocation URL set for refresh token",
-				tokenType:        provider.RefreshTokenType,
+				tokenType:        upstreamprovider.RefreshTokenType,
 				nilRevocationURL: true,
 				wantNumRequests:  0,
 			},
 			{
 				name:             "success without calling the server when there is no revocation URL set for access token",
-				tokenType:        provider.AccessTokenType,
+				tokenType:        upstreamprovider.AccessTokenType,
 				nilRevocationURL: true,
 				wantNumRequests:  0,
 			},
 			{
 				name:              "success when the server returns 200 OK on the first call for refresh token",
-				tokenType:         provider.RefreshTokenType,
+				tokenType:         upstreamprovider.RefreshTokenType,
 				returnStatusCodes: []int{http.StatusOK},
 				wantNumRequests:   1,
 				wantTokenTypeHint: "refresh_token",
 			},
 			{
 				name:              "success when the server returns 200 OK on the first call for access token",
-				tokenType:         provider.AccessTokenType,
+				tokenType:         upstreamprovider.AccessTokenType,
 				returnStatusCodes: []int{http.StatusOK},
 				wantNumRequests:   1,
 				wantTokenTypeHint: "access_token",
 			},
 			{
 				name:              "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for refresh token",
-				tokenType:         provider.RefreshTokenType,
+				tokenType:         upstreamprovider.RefreshTokenType,
 				returnStatusCodes: []int{http.StatusBadRequest, http.StatusOK},
 				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
 				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
@@ -531,7 +532,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:              "success when the server returns 400 Bad Request on the first call due to client auth, then 200 OK on second call for access token",
-				tokenType:         provider.AccessTokenType,
+				tokenType:         upstreamprovider.AccessTokenType,
 				returnStatusCodes: []int{http.StatusBadRequest, http.StatusOK},
 				// https://datatracker.ietf.org/doc/html/rfc6749#section-5.2 defines this as the error for client auth failure
 				returnErrBodies:   []string{`{ "error":"invalid_client", "error_description":"unhappy" }`},
@@ -540,7 +541,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when the server returns 400 Bad Request on the first call due to client auth, then any 400 error on second call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusBadRequest},
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, `{ "error":"anything", "error_description":"unhappy" }`},
 				wantErr:              testutil.WantExactErrorString(`server responded with status 400 with body: { "error":"anything", "error_description":"unhappy" }`),
@@ -550,7 +551,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when the server returns 400 Bad Request with bad JSON body on the first call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{`invalid JSON body`},
 				wantErr:              testutil.WantExactErrorString(`error parsing response body "invalid JSON body" on response with status code 400: invalid character 'i' looking for beginning of value`),
@@ -560,7 +561,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when the server returns 400 Bad Request with empty body",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{``},
 				wantErr:              testutil.WantExactErrorString(`error parsing response body "" on response with status code 400: unexpected end of JSON input`),
@@ -570,7 +571,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when the server returns 400 Bad Request on the first call due to client auth, then any other error on second call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusForbidden},
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
 				wantErr:              testutil.WantExactErrorString("server responded with status 403"),
@@ -580,7 +581,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when server returns any other 400 error on first call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest},
 				returnErrBodies:      []string{`{ "error":"anything_else", "error_description":"unhappy" }`},
 				wantErr:              testutil.WantExactErrorString(`server responded with status 400 with body: { "error":"anything_else", "error_description":"unhappy" }`),
@@ -590,7 +591,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "error when server returns any other error aside from 400 on first call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusForbidden},
 				returnErrBodies:      []string{""},
 				wantErr:              testutil.WantExactErrorString("server responded with status 403"),
@@ -600,7 +601,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "retryable error when server returns 503 on first call",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusServiceUnavailable}, // 503
 				returnErrBodies:      []string{""},
 				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 503"),
@@ -610,7 +611,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "retryable error when the server returns 400 Bad Request on the first call due to client auth, then 503 on second call",
-				tokenType:            provider.AccessTokenType,
+				tokenType:            upstreamprovider.AccessTokenType,
 				returnStatusCodes:    []int{http.StatusBadRequest, http.StatusServiceUnavailable}, // 400, 503
 				returnErrBodies:      []string{`{ "error":"invalid_client", "error_description":"unhappy" }`, ""},
 				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 503"),
@@ -620,7 +621,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "retryable error when server returns any 5xx status on first call, testing lower bound of 5xx range",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{http.StatusInternalServerError}, // 500
 				returnErrBodies:      []string{""},
 				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 500"),
@@ -630,7 +631,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "retryable error when server returns any 5xx status on first call, testing upper bound of 5xx range",
-				tokenType:            provider.RefreshTokenType,
+				tokenType:            upstreamprovider.RefreshTokenType,
 				returnStatusCodes:    []int{599}, // not defined by an RFC, but sometimes considered Network Connect Timeout Error
 				returnErrBodies:      []string{""},
 				wantErr:              testutil.WantExactErrorString("retryable revocation error: server responded with status 599"),
@@ -640,7 +641,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:                 "retryable error when the server cannot be reached",
-				tokenType:            provider.AccessTokenType,
+				tokenType:            upstreamprovider.AccessTokenType,
 				unreachableServer:    true,
 				wantErr:              testutil.WantMatchingErrorString("^retryable revocation error: Post .*: dial tcp .*: connect: connection refused$"),
 				wantRetryableErrType: true,
@@ -714,8 +715,8 @@ func TestProviderConfig(t *testing.T) {
 					testutil.RequireErrorStringFromErr(t, err, tt.wantErr)
 
 					if tt.wantRetryableErrType {
-						require.ErrorAs(t, err, &provider.RetryableRevocationError{})
-					} else if errors.As(err, &provider.RetryableRevocationError{}) {
+						require.ErrorAs(t, err, &dynamicupstreamprovider.RetryableRevocationError{})
+					} else if errors.As(err, &dynamicupstreamprovider.RetryableRevocationError{}) {
 						// There is no NotErrorAs() assertion available in the current version of testify, so do the equivalent.
 						require.Fail(t, "error should not be As RetryableRevocationError")
 					}

@@ -28,7 +28,8 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -80,8 +81,8 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
-			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
@@ -92,7 +93,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck // old test with no log assertions
 				withInformer.WithInformer,
 			)
 
@@ -1415,8 +1416,8 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
-			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 

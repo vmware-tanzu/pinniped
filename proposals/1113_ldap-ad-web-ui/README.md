@@ -1,7 +1,7 @@
 ---
 title: "Web UI for LDAP/AD login"
 authors: [ "@margocrawf" ]
-status: "accepted"
+status: "implemented"
 approval_date: "May 11, 2022"
 ---
 
@@ -160,7 +160,7 @@ Once dynamic clients are implemented:
 #### New Dependencies
 This should be kept to a very simple HTML page with minimal, clean CSS styling.
 Javascript should be avoided.
-The styling should match the [form post html page](https://github.com/vmware-tanzu/pinniped/tree/main/internal/oidc/provider/formposthtml)
+The styling should match the [form post html page](https://github.com/vmware-tanzu/pinniped/tree/main/internal/federationdomain/formposthtml)
 as much as possible, we should reuse some of the existing css and add to it to keep the style consistent.
 
 #### Observability Considerations

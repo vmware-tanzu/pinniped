@@ -441,7 +441,7 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
 		// Pinniped API resources. Without this, the test could accidentally skip parts of the tree if the
 		// format has changed.
-		require.Equal(t, 230, foundFieldNames,
+		require.Equal(t, 259, foundFieldNames,
 			"Expected to find all known fields of all Pinniped API resources. "+
 				"You may will need to update this expectation if you added new fields to the API types.",
 		)
@@ -558,7 +558,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		addSuffix("federationdomains.config.supervisor"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
-				{Name: "Status", Type: "string", JSONPath: ".status.status"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

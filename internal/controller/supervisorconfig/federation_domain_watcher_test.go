@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -8,1021 +8,2286 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"reflect"
-	"sync"
+	"sort"
 	"testing"
 	"time"
 
-	"github.com/sclevine/spec"
-	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
+	"k8s.io/utils/ptr"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/testutil"
 )
 
-func TestInformerFilters(t *testing.T) {
-	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
-		var r *require.Assertions
-		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var configMapInformerFilter controllerlib.Filter
+func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
+	t.Parallel()
 
-		it.Before(func() {
-			r = require.New(t)
-			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
-			_ = NewFederationDomainWatcherController(
+	federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
+	oidcIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
+	ldapIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
+	adIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
+
+	tests := []struct {
+		name       string
+		obj        metav1.Object
+		informer   controllerlib.InformerGetter
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "any FederationDomain changes",
+			obj:        &configv1alpha1.FederationDomain{},
+			informer:   federationDomainInformer,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name:       "any OIDCIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.OIDCIdentityProvider{},
+			informer:   oidcIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+		{
+			name:       "any LDAPIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.LDAPIdentityProvider{},
+			informer:   ldapIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+		{
+			name:       "any ActiveDirectoryIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.ActiveDirectoryIdentityProvider{},
+			informer:   adIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			NewFederationDomainWatcherController(
 				nil,
+				"",
 				nil,
 				nil,
 				federationDomainInformer,
-				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+				oidcIdentityProviderInformer,
+				ldapIdentityProviderInformer,
+				adIdentityProviderInformer,
+				withInformer.WithInformer, // make it possible to observe the behavior of the Filters
 			)
-			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(federationDomainInformer)
+
+			unrelatedObj := corev1.Secret{}
+			filter := withInformer.GetFilterForInformer(test.informer)
+			require.Equal(t, test.wantAdd, filter.Add(test.obj))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelatedObj, test.obj))
+			require.Equal(t, test.wantUpdate, filter.Update(test.obj, &unrelatedObj))
+			require.Equal(t, test.wantDelete, filter.Delete(test.obj))
 		})
-
-		when("watching FederationDomain objects", func() {
-			var subject controllerlib.Filter
-			var target, otherNamespace, otherName *v1alpha1.FederationDomain
-
-			it.Before(func() {
-				subject = configMapInformerFilter
-				target = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"}}
-				otherNamespace = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "other-namespace"}}
-				otherName = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "other-name", Namespace: "some-namespace"}}
-			})
-
-			when("any FederationDomain changes", func() {
-				it("returns true to trigger the sync method", func() {
-					r.True(subject.Add(target))
-					r.True(subject.Add(otherName))
-					r.True(subject.Add(otherNamespace))
-					r.True(subject.Update(target, otherName))
-					r.True(subject.Update(otherName, otherName))
-					r.True(subject.Update(otherNamespace, otherName))
-					r.True(subject.Update(otherName, target))
-					r.True(subject.Update(otherName, otherName))
-					r.True(subject.Update(otherName, otherNamespace))
-					r.True(subject.Delete(target))
-					r.True(subject.Delete(otherName))
-					r.True(subject.Delete(otherNamespace))
-				})
-			})
-		})
-	}, spec.Parallel(), spec.Report(report.Terminal{}))
+	}
 }
 
-type fakeProvidersSetter struct {
-	SetProvidersWasCalled     bool
-	FederationDomainsReceived []*provider.FederationDomainIssuer
+type fakeFederationDomainsSetter struct {
+	SetFederationDomainsWasCalled bool
+	FederationDomainsReceived     []*federationdomainproviders.FederationDomainIssuer
 }
 
-func (f *fakeProvidersSetter) SetProviders(federationDomains ...*provider.FederationDomainIssuer) {
-	f.SetProvidersWasCalled = true
+func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...*federationdomainproviders.FederationDomainIssuer) {
+	f.SetFederationDomainsWasCalled = true
 	f.FederationDomainsReceived = federationDomains
 }
 
-func TestSync(t *testing.T) {
-	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
-		const namespace = "some-namespace"
+var federationDomainGVR = schema.GroupVersionResource{
+	Group:    configv1alpha1.SchemeGroupVersion.Group,
+	Version:  configv1alpha1.SchemeGroupVersion.Version,
+	Resource: "federationdomains",
+}
 
-		var r *require.Assertions
+func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
+	t.Parallel()
 
-		var subject controllerlib.Controller
-		var federationDomainInformerClient *pinnipedfake.Clientset
-		var federationDomainInformers pinnipedinformers.SharedInformerFactory
-		var pinnipedAPIClient *pinnipedfake.Clientset
-		var cancelContext context.Context
-		var cancelContextCancelFunc context.CancelFunc
-		var syncContext *controllerlib.Context
-		var frozenNow time.Time
-		var providersSetter *fakeProvidersSetter
-		var federationDomainGVR schema.GroupVersionResource
+	const namespace = "some-namespace"
+	const apiGroupSuffix = "custom.suffix.pinniped.dev"
+	const apiGroupSupervisor = "idp.supervisor." + apiGroupSuffix
 
-		// Defer starting the informers until the last possible moment so that the
-		// nested Before's can keep adding things to the informer caches.
-		var startInformersAndController = func() {
-			// Set this at the last second to allow for injection of server override.
-			subject = NewFederationDomainWatcherController(
-				providersSetter,
-				clocktesting.NewFakeClock(frozenNow),
-				pinnipedAPIClient,
-				federationDomainInformers.Config().V1alpha1().FederationDomains(),
-				controllerlib.WithInformer,
-			)
+	frozenNow := time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
+	frozenMetav1Now := metav1.NewTime(frozenNow)
 
-			// Set this at the last second to support calling subject.Name().
-			syncContext = &controllerlib.Context{
-				Context: cancelContext,
-				Name:    subject.Name(),
-				Key: controllerlib.Key{
-					Namespace: namespace,
-					Name:      "config-name",
-				},
-			}
+	oidcIdentityProvider := &idpv1alpha1.OIDCIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "some-oidc-idp",
+			Namespace: namespace,
+			UID:       "some-oidc-uid",
+		},
+	}
 
-			// Must start informers before calling TestRunSynchronously()
-			federationDomainInformers.Start(cancelContext.Done())
-			controllerlib.TestRunSynchronously(t, subject)
+	ldapIdentityProvider := &idpv1alpha1.LDAPIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "some-ldap-idp",
+			Namespace: namespace,
+			UID:       "some-ldap-uid",
+		},
+	}
+
+	adIdentityProvider := &idpv1alpha1.ActiveDirectoryIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "some-ad-idp",
+			Namespace: namespace,
+			UID:       "some-ad-uid",
+		},
+	}
+
+	federationDomain1 := &configv1alpha1.FederationDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
+	}
+
+	federationDomain2 := &configv1alpha1.FederationDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
+		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
+	}
+
+	invalidIssuerURLFederationDomain := &configv1alpha1.FederationDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace, Generation: 123},
+		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
+	}
+
+	federationDomainIssuerWithIDPs := func(t *testing.T, fedDomainIssuer string, fdIDPs []*federationdomainproviders.FederationDomainIdentityProvider) *federationdomainproviders.FederationDomainIssuer {
+		fdIssuer, err := federationdomainproviders.NewFederationDomainIssuer(fedDomainIssuer, fdIDPs)
+		require.NoError(t, err)
+		return fdIssuer
+	}
+
+	federationDomainIssuerWithDefaultIDP := func(t *testing.T, fedDomainIssuer string, idpObjectMeta metav1.ObjectMeta) *federationdomainproviders.FederationDomainIssuer {
+		fdIDP := &federationdomainproviders.FederationDomainIdentityProvider{
+			DisplayName: idpObjectMeta.Name,
+			UID:         idpObjectMeta.UID,
+			Transforms:  idtransform.NewTransformationPipeline(),
 		}
+		fdIssuer, err := federationdomainproviders.NewFederationDomainIssuerWithDefaultIDP(fedDomainIssuer, fdIDP)
+		require.NoError(t, err)
+		return fdIssuer
+	}
 
-		it.Before(func() {
-			r = require.New(t)
+	happyReadyCondition := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "Ready",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
+				"the discovery endpoint is %s/.well-known/openid-configuration", issuer),
+		}
+	}
 
-			providersSetter = &fakeProvidersSetter{}
-			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
+	sadReadyCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "Ready",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "NotReady",
+			Message:            "the FederationDomain is not ready: see other conditions for details",
+		}
+	}
 
-			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
+	happyIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerIsUnique",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "spec.issuer is unique among all FederationDomains",
+		}
+	}
 
-			federationDomainInformerClient = pinnipedfake.NewSimpleClientset()
-			federationDomainInformers = pinnipedinformers.NewSharedInformerFactory(federationDomainInformerClient, 0)
-			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
+	unknownIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerIsUnique",
+			Status:             "Unknown",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "UnableToValidate",
+			Message:            "unable to check if spec.issuer is unique among all FederationDomains because URL cannot be parsed",
+		}
+	}
 
-			federationDomainGVR = schema.GroupVersionResource{
-				Group:    v1alpha1.SchemeGroupVersion.Group,
-				Version:  v1alpha1.SchemeGroupVersion.Version,
-				Resource: "federationdomains",
+	sadIssuerIsUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerIsUnique",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "DuplicateIssuer",
+			Message:            "multiple FederationDomains have the same spec.issuer URL: these URLs must be unique (can use different hosts or paths)",
+		}
+	}
+
+	happyOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "OneTLSSecretPerIssuerHostname",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL",
+		}
+	}
+
+	unknownOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "OneTLSSecretPerIssuerHostname",
+			Status:             "Unknown",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "UnableToValidate",
+			Message:            "unable to check if all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL because URL cannot be parsed",
+		}
+	}
+
+	sadOneTLSSecretPerIssuerHostnameCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "OneTLSSecretPerIssuerHostname",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "DifferentSecretRefsFound",
+			Message:            "when different FederationDomains are using the same hostname in the spec.issuer URL then they must also use the same TLS secretRef: different secretRefs found",
+		}
+	}
+
+	happyIssuerURLValidCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "spec.issuer is a valid URL",
+		}
+	}
+
+	sadIssuerURLValidConditionCannotHaveQuery := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidIssuerURL",
+			Message:            "issuer must not have query",
+		}
+	}
+
+	sadIssuerURLValidConditionCannotParse := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidIssuerURL",
+			Message:            `could not parse issuer as URL: parse ":/host//path": missing protocol scheme`,
+		}
+	}
+
+	happyIdentityProvidersFoundConditionLegacyConfigurationSuccess := func(idpName string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "LegacyConfigurationSuccess",
+			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef but exactly one "+
+				"identity provider resource has been found: using %q as "+
+				"identity provider: please explicitly list identity providers in .spec.identityProviders "+
+				"(this legacy configuration mode may be removed in a future version of Pinniped)", idpName),
+		}
+	}
+
+	happyIdentityProvidersFoundConditionSuccess := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the resources specified by .spec.identityProviders[].objectRef were found",
+		}
+	}
+
+	sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "LegacyConfigurationIdentityProviderNotFound",
+			Message: "no resources were specified by .spec.identityProviders[].objectRef and no identity provider " +
+				"resources have been found: please create an identity provider resource",
+		}
+	}
+
+	sadIdentityProvidersFoundConditionIdentityProviderNotSpecified := func(idpCRsCount int, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "IdentityProviderNotSpecified",
+			Message: fmt.Sprintf("no resources were specified by .spec.identityProviders[].objectRef "+
+				"and %d identity provider resources have been found: "+
+				"please update .spec.identityProviders to specify which identity providers "+
+				"this federation domain should use", idpCRsCount),
+		}
+	}
+
+	sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersFound",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "IdentityProvidersObjectRefsNotFound",
+			Message:            errorMessages,
+		}
+	}
+
+	happyDisplayNamesUniqueCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersDisplayNamesUnique",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the names specified by .spec.identityProviders[].displayName are unique",
+		}
+	}
+
+	sadDisplayNamesUniqueCondition := func(duplicateNames string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersDisplayNamesUnique",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "DuplicateDisplayNames",
+			Message:            fmt.Sprintf("the names specified by .spec.identityProviders[].displayName contain duplicates: %s", duplicateNames),
+		}
+	}
+
+	happyTransformationExpressionsCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "TransformsExpressionsValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
+		}
+	}
+
+	sadTransformationExpressionsCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "TransformsExpressionsValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidTransformsExpressions",
+			Message:            errorMessages,
+		}
+	}
+
+	happyTransformationExamplesCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "TransformsExamplesPassed",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
+		}
+	}
+
+	sadTransformationExamplesCondition := func(errorMessages string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "TransformsExamplesPassed",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "TransformsExamplesFailed",
+			Message:            errorMessages,
+		}
+	}
+
+	happyAPIGroupSuffixCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the API groups specified by .spec.identityProviders[].objectRef.apiGroup are recognized",
+		}
+	}
+
+	sadAPIGroupSuffixCondition := func(badApiGroups string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersObjectRefAPIGroupSuffixValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "APIGroupUnrecognized",
+			Message: fmt.Sprintf("some API groups specified by .spec.identityProviders[].objectRef.apiGroup "+
+				"are not recognized (should be \"idp.supervisor.%s\"): %s", apiGroupSuffix, badApiGroups),
+		}
+	}
+
+	happyKindCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersObjectRefKindValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "the kinds specified by .spec.identityProviders[].objectRef.kind are recognized",
+		}
+	}
+
+	sadKindCondition := func(badKinds string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IdentityProvidersObjectRefKindValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "KindUnrecognized",
+			Message: fmt.Sprintf(`some kinds specified by .spec.identityProviders[].objectRef.kind are `+
+				`not recognized (should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): %s`, badKinds),
+		}
+	}
+
+	sortConditionsByType := func(c []metav1.Condition) []metav1.Condition {
+		cp := make([]metav1.Condition, len(c))
+		copy(cp, c)
+		sort.SliceStable(cp, func(i, j int) bool {
+			return cp[i].Type < cp[j].Type
+		})
+		return cp
+	}
+
+	replaceConditions := func(conditions []metav1.Condition, sadConditions []metav1.Condition) []metav1.Condition {
+		for _, sadReplaceCondition := range sadConditions {
+			for origIndex, origCondition := range conditions {
+				if origCondition.Type == sadReplaceCondition.Type {
+					conditions[origIndex] = sadReplaceCondition
+					break
+				}
 			}
+		}
+		return conditions
+	}
+
+	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []metav1.Condition {
+		return sortConditionsByType([]metav1.Condition{
+			happyTransformationExamplesCondition(frozenMetav1Now, 123),
+			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
+			happyKindCondition(frozenMetav1Now, 123),
+			happyAPIGroupSuffixCondition(frozenMetav1Now, 123),
+			happyDisplayNamesUniqueCondition(frozenMetav1Now, 123),
+			happyIdentityProvidersFoundConditionSuccess(frozenMetav1Now, 123),
+			happyIssuerIsUniqueCondition(frozenMetav1Now, 123),
+			happyIssuerURLValidCondition(frozenMetav1Now, 123),
+			happyOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+			happyReadyCondition(issuer, frozenMetav1Now, 123),
 		})
+	}
 
-		it.After(func() {
-			cancelContextCancelFunc()
-		})
+	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []metav1.Condition {
+		return replaceConditions(
+			allHappyConditionsSuccess(issuer, time, observedGeneration),
+			[]metav1.Condition{
+				happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
+			},
+		)
+	}
 
-		when("there are some valid FederationDomains in the informer", func() {
-			var (
-				federationDomain1 *v1alpha1.FederationDomain
-				federationDomain2 *v1alpha1.FederationDomain
-			)
+	invalidIssuerURL := ":/host//path"
+	_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
+	require.Error(t, err)
 
-			it.Before(func() {
-				federationDomain1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain1))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain1))
-
-				federationDomain2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain2))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain2))
-			})
-
-			it("calls the ProvidersSetter", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
-				r.NoError(err)
-
-				provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
-				r.NoError(err)
-
-				r.True(providersSetter.SetProvidersWasCalled)
-				r.ElementsMatch(
-					[]*provider.FederationDomainIssuer{
-						provider1,
-						provider2,
+	tests := []struct {
+		name              string
+		inputObjects      []runtime.Object
+		configClient      func(*pinnipedfake.Clientset)
+		wantErr           string
+		wantStatusUpdates []*configv1alpha1.FederationDomain
+		wantFDIssuers     []*federationdomainproviders.FederationDomainIssuer
+	}{
+		{
+			name:          "when there are no FederationDomains, no update actions happen and the list of FederationDomainIssuers is set to the empty list",
+			inputObjects:  []runtime.Object{},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one OIDC identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				oidcIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one LDAP identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				ldapIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one AD identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				adIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, adIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, adIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when there are two valid FederationDomains, but one is already up to date, the sync loop only updates " +
+				"the out-of-date FederationDomain",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: configv1alpha1.FederationDomainStatus{
+						Phase:      configv1alpha1.FederationDomainPhaseReady,
+						Conditions: allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 					},
-					providersSetter.FederationDomainsReceived,
-				)
-			})
-
-			it("updates the status to success in the FederationDomains", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain1.Status.Message = "Provider successfully created"
-				federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain2.Status.Message = "Provider successfully created"
-				federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain1.Namespace,
-						federationDomain1.Name,
+				},
+				federationDomain2,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				// only one update, because the other FederationDomain already had the right status
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when the status of the FederationDomains is based on an old generation, it is updated",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: configv1alpha1.FederationDomainStatus{
+						Phase: configv1alpha1.FederationDomainPhaseReady,
+						Conditions: allHappyConditionsLegacyConfigurationSuccess(
+							federationDomain1.Spec.Issuer,
+							oidcIdentityProvider.Name,
+							frozenMetav1Now,
+							2, // this is an older generation
+						),
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				// only one update, because the other FederationDomain already had the right status
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(
+						federationDomain1.Spec.Issuer,
+						oidcIdentityProvider.Name,
+						frozenMetav1Now,
+						123, // all conditions are updated to the new observed generation
 					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomain1.Namespace,
-						federationDomain1,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain2.Namespace,
-						federationDomain2.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomain2.Namespace,
-						federationDomain2,
-					),
-				}
-				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("one FederationDomain is already up to date", func() {
-				it.Before(func() {
-					federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain1.Status.Message = "Provider successfully created"
-					federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					r.NoError(pinnipedAPIClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
-					r.NoError(federationDomainInformerClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
-				})
-
-				it("only updates the out-of-date FederationDomain", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.NoError(err)
-
-					federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain2.Status.Message = "Provider successfully created"
-					federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain1.Namespace,
-							federationDomain1.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain2.Namespace,
-							federationDomain2.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain2.Namespace,
-							federationDomain2,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
-
-				it("calls the ProvidersSetter with both FederationDomain's", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.NoError(err)
-
-					provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
-					r.NoError(err)
-
-					provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
-					r.NoError(err)
-
-					r.True(providersSetter.SetProvidersWasCalled)
-					r.ElementsMatch(
-						[]*provider.FederationDomainIssuer{
-							provider1,
-							provider2,
-						},
-						providersSetter.FederationDomainsReceived,
-					)
-				})
-			})
-
-			when("updating only one FederationDomain fails for a reason other than conflict", func() {
-				it.Before(func() {
-					once := sync.Once{}
-					pinnipedAPIClient.PrependReactor(
-						"update",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							var err error
-							once.Do(func() {
-								err = errors.New("some update error")
-							})
-							return true, nil, err
-						},
-					)
-				})
-
-				it("sets the provider that it could actually update in the API", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: some update error")
-
-					provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
-					r.NoError(err)
-
-					provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
-					r.NoError(err)
-
-					r.True(providersSetter.SetProvidersWasCalled)
-					r.Len(providersSetter.FederationDomainsReceived, 1)
-					r.True(
-						reflect.DeepEqual(providersSetter.FederationDomainsReceived[0], provider1) ||
-							reflect.DeepEqual(providersSetter.FederationDomainsReceived[0], provider2),
-					)
-				})
-
-				it("returns an error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: some update error")
-
-					federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain1.Status.Message = "Provider successfully created"
-					federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					federationDomain2.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain2.Status.Message = "Provider successfully created"
-					federationDomain2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain1.Namespace,
-							federationDomain1.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain1.Namespace,
-							federationDomain1,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain2.Namespace,
-							federationDomain2.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain2.Namespace,
-							federationDomain2,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-		})
-
-		when("there are errors updating the FederationDomains", func() {
-			var (
-				federationDomain *v1alpha1.FederationDomain
-			)
-
-			it.Before(func() {
-				federationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "config", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer.com"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain))
-			})
-
-			when("there is a conflict while updating an FederationDomain", func() {
-				it.Before(func() {
-					once := sync.Once{}
-					pinnipedAPIClient.PrependReactor(
-						"update",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							var err error
-							once.Do(func() {
-								err = k8serrors.NewConflict(schema.GroupResource{}, "", nil)
-							})
-							return true, nil, err
-						},
-					)
-				})
-
-				it("retries updating the FederationDomain", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.NoError(err)
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain.Namespace,
-							federationDomain,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain.Namespace,
-							federationDomain,
-						),
-					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-
-			when("updating the FederationDomain fails for a reason other than conflict", func() {
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"update",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
+				),
+			},
+		},
+		{
+			name: "when there are two valid FederationDomains, but updating one fails, the status on the FederationDomain will not change",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				oidcIdentityProvider,
+			},
+			configClient: func(client *pinnipedfake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"federationdomains",
+					func(action coretesting.Action) (bool, runtime.Object, error) {
+						fd := action.(coretesting.UpdateAction).GetObject().(*configv1alpha1.FederationDomain)
+						if fd.Name == federationDomain1.Name {
 							return true, nil, errors.New("some update error")
-						},
-					)
-				})
-
-				it("returns an error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: some update error")
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							federationDomain.Namespace,
-							federationDomain,
-						),
-					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-
-			when("there is an error when getting the FederationDomain", func() {
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							return true, nil, errors.New("some get error")
-						},
-					)
-				})
-
-				it("returns the get error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: get failed: some get error")
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-					}
-					r.Equal(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-		})
-
-		when("there are both valid and invalid FederationDomains in the informer", func() {
-			var (
-				validFederationDomain   *v1alpha1.FederationDomain
-				invalidFederationDomain *v1alpha1.FederationDomain
-			)
-
-			it.Before(func() {
-				validFederationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "valid-config", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://valid-issuer.com"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(validFederationDomain))
-				r.NoError(federationDomainInformerClient.Tracker().Add(validFederationDomain))
-
-				invalidFederationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(invalidFederationDomain))
-				r.NoError(federationDomainInformerClient.Tracker().Add(invalidFederationDomain))
-			})
-
-			it("calls the ProvidersSetter with the valid provider", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				validProvider, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer)
-				r.NoError(err)
-
-				r.True(providersSetter.SetProvidersWasCalled)
-				r.Equal(
-					[]*provider.FederationDomainIssuer{
-						validProvider,
+						}
+						return false, nil, nil
 					},
-					providersSetter.FederationDomainsReceived,
 				)
-			})
-
-			it("updates the status to success/invalid in the FederationDomains", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				validFederationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				validFederationDomain.Status.Message = "Provider successfully created"
-				validFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				invalidFederationDomain.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-				invalidFederationDomain.Status.Message = "Invalid: issuer must not have query"
-				invalidFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						invalidFederationDomain.Namespace,
-						invalidFederationDomain.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						invalidFederationDomain.Namespace,
-						invalidFederationDomain,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						validFederationDomain.Namespace,
-						validFederationDomain.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						validFederationDomain.Namespace,
-						validFederationDomain,
-					),
-				}
-				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("updating only the invalid FederationDomain fails for a reason other than conflict", func() {
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"update",
-						"federationdomains",
-						func(action coretesting.Action) (bool, runtime.Object, error) {
-							updateAction := action.(coretesting.UpdateActionImpl)
-							federationDomain := updateAction.Object.(*v1alpha1.FederationDomain)
-							if federationDomain.Name == validFederationDomain.Name {
-								return true, nil, nil
-							}
-
+			},
+			wantErr: "could not update status: some update error",
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when there are both valid and invalid FederationDomains, the status will be correctly set on each " +
+				"FederationDomain individually",
+			inputObjects: []runtime.Object{
+				invalidIssuerURLFederationDomain,
+				federationDomain2,
+				oidcIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				// only the valid FederationDomain
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when there are both valid and invalid FederationDomains, but updating the invalid one fails, the " +
+				"existing status will be unchanged",
+			inputObjects: []runtime.Object{
+				invalidIssuerURLFederationDomain,
+				federationDomain2,
+				oidcIdentityProvider,
+			},
+			configClient: func(client *pinnipedfake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"federationdomains",
+					func(action coretesting.Action) (bool, runtime.Object, error) {
+						fd := action.(coretesting.UpdateAction).GetObject().(*configv1alpha1.FederationDomain)
+						if fd.Name == invalidIssuerURLFederationDomain.Name {
 							return true, nil, errors.New("some update error")
-						},
-					)
-				})
-
-				it("sets the provider that it could actually update in the API", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: some update error")
-
-					validProvider, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer)
-					r.NoError(err)
-
-					r.True(providersSetter.SetProvidersWasCalled)
-					r.Equal(
-						[]*provider.FederationDomainIssuer{
-							validProvider,
-						},
-						providersSetter.FederationDomainsReceived,
-					)
-				})
-
-				it("returns an error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not update status: some update error")
-
-					validFederationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					validFederationDomain.Status.Message = "Provider successfully created"
-					validFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					invalidFederationDomain.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-					invalidFederationDomain.Status.Message = "Invalid: issuer must not have query"
-					invalidFederationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							invalidFederationDomain.Namespace,
-							invalidFederationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							invalidFederationDomain.Namespace,
-							invalidFederationDomain,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							validFederationDomain.Namespace,
-							validFederationDomain.Name,
-						),
-						coretesting.NewUpdateSubresourceAction(
-							federationDomainGVR,
-							"status",
-							validFederationDomain.Namespace,
-							validFederationDomain,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-		})
-
-		when("there are FederationDomains with duplicate issuer names in the informer", func() {
-			var (
-				federationDomainDuplicate1 *v1alpha1.FederationDomain
-				federationDomainDuplicate2 *v1alpha1.FederationDomain
-				federationDomain           *v1alpha1.FederationDomain
-			)
-
-			it.Before(func() {
-				// Hostnames are case-insensitive, so consider them to be duplicates if they only differ by case.
-				// Paths are case-sensitive, so having a path that differs only by case makes a new issuer.
-				federationDomainDuplicate1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate1))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDuplicate1))
-				federationDomainDuplicate2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate2))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDuplicate2))
-
-				federationDomain = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace},
-					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain))
-			})
-
-			it("calls the ProvidersSetter with the non-duplicate", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				nonDuplicateProvider, err := provider.NewFederationDomainIssuer(federationDomain.Spec.Issuer)
-				r.NoError(err)
-
-				r.True(providersSetter.SetProvidersWasCalled)
-				r.Equal(
-					[]*provider.FederationDomainIssuer{
-						nonDuplicateProvider,
+						}
+						return false, nil, nil
 					},
-					providersSetter.FederationDomainsReceived,
 				)
-			})
-
-			it("updates the statuses", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomain.Status.Message = "Provider successfully created"
-				federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomainDuplicate1.Status.Status = v1alpha1.DuplicateFederationDomainStatusCondition
-				federationDomainDuplicate1.Status.Message = "Duplicate issuer: https://iSSueR-duPlicAte.cOm/a"
-				federationDomainDuplicate1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomainDuplicate2.Status.Status = v1alpha1.DuplicateFederationDomainStatusCondition
-				federationDomainDuplicate2.Status.Message = "Duplicate issuer: https://issuer-duplicate.com/a"
-				federationDomainDuplicate2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDuplicate1.Namespace,
-						federationDomainDuplicate1.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainDuplicate1.Namespace,
-						federationDomainDuplicate1,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDuplicate2.Namespace,
-						federationDomainDuplicate2.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainDuplicate2.Namespace,
-						federationDomainDuplicate2,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomain.Namespace,
-						federationDomain.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomain.Namespace,
-						federationDomain,
-					),
-				}
-				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("we cannot talk to the API", func() {
-				var count int
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							count++
-							return true, nil, fmt.Errorf("some get error %d", count)
-						},
-					)
-				})
-
-				it("returns the get errors", func() {
-					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3]`)
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, expectedError)
-
-					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomain.Status.Message = "Provider successfully created"
-					federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDuplicate1.Namespace,
-							federationDomainDuplicate1.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDuplicate2.Namespace,
-							federationDomainDuplicate2.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomain.Namespace,
-							federationDomain.Name,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
-		})
-
-		when("there are FederationDomains with the same issuer DNS hostname using different secretNames", func() {
-			var (
-				federationDomainSameIssuerAddress1     *v1alpha1.FederationDomain
-				federationDomainSameIssuerAddress2     *v1alpha1.FederationDomain
-				federationDomainDifferentIssuerAddress *v1alpha1.FederationDomain
-				federationDomainWithInvalidIssuerURL   *v1alpha1.FederationDomain
-			)
-
-			it.Before(func() {
-				federationDomainSameIssuerAddress1 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "provider1", Namespace: namespace},
-					Spec: v1alpha1.FederationDomainSpec{
+			},
+			wantErr: "could not update status: some update error",
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				// only the valid FederationDomain
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when there are FederationDomains with duplicate issuer strings these particular FederationDomains " +
+				"will report error on IssuerUnique conditions",
+			inputObjects: []runtime.Object{
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
+					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path (paths are case-sensitive)
+				},
+				oidcIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, "https://issuer-duplicate.com/A", oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte.cOm/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/A", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "when there are FederationDomains with the same issuer DNS hostname using different secretNames these " +
+				"particular FederationDomains will report errors on OneTLSSecretPerIssuerHostname conditions",
+			inputObjects: []runtime.Object{
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: "https://iSSueR-duPlicAte-adDress.cOm/path1",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress1))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainSameIssuerAddress1))
-				federationDomainSameIssuerAddress2 = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "provider2", Namespace: namespace},
-					Spec: v1alpha1.FederationDomainSpec{
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
 						// Validation treats these as the same DNS hostname even though they have different port numbers,
 						// because SNI information on the incoming requests is not going to include port numbers.
 						Issuer: "https://issuer-duplicate-address.com:1234/path2",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
 					},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress2))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainSameIssuerAddress2))
-
-				federationDomainDifferentIssuerAddress = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressProvider", Namespace: namespace},
-					Spec: v1alpha1.FederationDomainSpec{
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer-not-duplicate.com",
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDifferentIssuerAddress))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDifferentIssuerAddress))
-
-				// Also add one with a URL that cannot be parsed to make sure that the error handling
-				// for the duplicate issuers and secret names are not confused by invalid URLs.
-				invalidIssuerURL := ":/host//path"
-				_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
-				r.Error(err)
-				federationDomainWithInvalidIssuerURL = &v1alpha1.FederationDomain{
-					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLProvider", Namespace: namespace},
-					Spec: v1alpha1.FederationDomainSpec{
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
 						Issuer: invalidIssuerURL,
-						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
-				}
-				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
-				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
-			})
-
-			it("calls the ProvidersSetter with the non-duplicate", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				nonDuplicateProvider, err := provider.NewFederationDomainIssuer(federationDomainDifferentIssuerAddress.Spec.Issuer)
-				r.NoError(err)
-
-				r.True(providersSetter.SetProvidersWasCalled)
-				r.Equal(
-					[]*provider.FederationDomainIssuer{
-						nonDuplicateProvider,
+				},
+				oidcIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, "https://issuer-not-duplicate.com", oidcIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
 					},
-					providersSetter.FederationDomainsReceived,
-				)
-			})
-
-			it("updates the statuses", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-
-				federationDomainDifferentIssuerAddress.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-				federationDomainDifferentIssuerAddress.Status.Message = "Provider successfully created"
-				federationDomainDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomainSameIssuerAddress1.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition
-				federationDomainSameIssuerAddress1.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
-				federationDomainSameIssuerAddress1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomainSameIssuerAddress2.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition
-				federationDomainSameIssuerAddress2.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
-				federationDomainSameIssuerAddress2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				federationDomainWithInvalidIssuerURL.Status.Status = v1alpha1.InvalidFederationDomainStatusCondition
-				federationDomainWithInvalidIssuerURL.Status.Message = `Invalid: could not parse issuer as URL: parse ":/host//path": missing protocol scheme`
-				federationDomainWithInvalidIssuerURL.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
-
-				expectedActions := []coretesting.Action{
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainSameIssuerAddress1.Namespace,
-						federationDomainSameIssuerAddress1.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainSameIssuerAddress1.Namespace,
-						federationDomainSameIssuerAddress1,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainSameIssuerAddress2.Namespace,
-						federationDomainSameIssuerAddress2.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainSameIssuerAddress2.Namespace,
-						federationDomainSameIssuerAddress2,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainDifferentIssuerAddress.Namespace,
-						federationDomainDifferentIssuerAddress.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainDifferentIssuerAddress.Namespace,
-						federationDomainDifferentIssuerAddress,
-					),
-					coretesting.NewGetAction(
-						federationDomainGVR,
-						federationDomainWithInvalidIssuerURL.Namespace,
-						federationDomainWithInvalidIssuerURL.Name,
-					),
-					coretesting.NewUpdateSubresourceAction(
-						federationDomainGVR,
-						"status",
-						federationDomainWithInvalidIssuerURL.Namespace,
-						federationDomainWithInvalidIssuerURL,
-					),
-				}
-				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-			})
-
-			when("we cannot talk to the API", func() {
-				var count int
-				it.Before(func() {
-					pinnipedAPIClient.PrependReactor(
-						"get",
-						"federationdomains",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							count++
-							return true, nil, fmt.Errorf("some get error %d", count)
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte-adDress.cOm/path1", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate-address.com:1234/path2", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(invalidIssuerURL, oidcIdentityProvider.Name, frozenMetav1Now, 123),
+						[]metav1.Condition{
+							unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadIssuerURLValidConditionCannotParse(frozenMetav1Now, 123),
+							unknownOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess("https://issuer-not-duplicate.com", oidcIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: no identity provider specified in federation domain and no identity providers found results in not found status",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, "", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "legacy config: no identity provider specified in federation domain and multiple identity providers found results in not specified status",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(3, frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain specifies identity providers that cannot be found",
+			inputObjects: []runtime.Object{
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "cant-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "cant-find-me-name",
+								},
+							},
+							{
+								DisplayName: "cant-find-me-either",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "cant-find-me-either-name",
+								},
+							},
+							{
+								DisplayName: "cant-find-me-still",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     "cant-find-me-still-name",
+								},
+							},
 						},
-					)
-				})
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "cant-find-me-name")
 
-				it("returns the get errors", func() {
-					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3, could not update status: get failed: some get error 4]`)
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, expectedError)
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "cant-find-me-either-name")
 
-					federationDomainDifferentIssuerAddress.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
-					federationDomainDifferentIssuerAddress.Status.Message = "Provider successfully created"
-					federationDomainDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "cant-find-me-still-name")`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain specifies identity providers that all exist",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "can-find-me-too",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "can-find-me-three",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithIDPs(t, "https://issuer1.com",
+					[]*federationdomainproviders.FederationDomainIdentityProvider{
+						{
+							DisplayName: "can-find-me",
+							UID:         oidcIdentityProvider.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
+						{
+							DisplayName: "can-find-me-too",
+							UID:         ldapIdentityProvider.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
+						{
+							DisplayName: "can-find-me-three",
+							UID:         adIdentityProvider.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
+					}),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "the federation domain has duplicate display names for IDPs",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "duplicate1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "duplicate2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadDisplayNamesUniqueCondition(`"duplicate1", "duplicate2"`, frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has unrecognized api group names in objectRefs",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To("wrong.example.com"),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "name2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(""), // empty string is wrong
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "name3",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: nil, // nil is wrong, and gets treated like an empty string in the error condition
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "name4",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor), // correct
+									Kind:     "ActiveDirectoryIdentityProvider",
+									Name:     adIdentityProvider.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadAPIGroupSuffixCondition(`"", "", "wrong.example.com"`, frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "some-oidc-idp")
 
-					expectedActions := []coretesting.Action{
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainSameIssuerAddress1.Namespace,
-							federationDomainSameIssuerAddress1.Name,
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "some-ldap-idp")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "some-ldap-idp")`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has unrecognized kind names in objectRefs",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				adIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider", // correct
+									Name:     oidcIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "name2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "wrong",
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+							{
+								DisplayName: "name3",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "", // empty is also wrong
+									Name:     ldapIdentityProvider.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadKindCondition(`"", "wrong"`, frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[1].objectRef (with name "some-ldap-idp")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "some-ldap-idp")`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation expressions which don't compile",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: "this is not a valid cel expression"},
+										{Type: "groups/v1", Expression: "this is also not a valid cel expression"},
+										{Type: "username/v1", Expression: "username"}, // valid
+										{Type: "policy/v1", Expression: "still not a valid cel expression"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[0].transforms.expressions[0].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is not a valid cel expression
+								  | .....^
+
+								 spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'is' expecting <EOF>
+								  | this is also not a valid cel expression
+								  | .....^
+
+								 spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:7: Syntax error: mismatched input 'not' expecting <EOF>
+								  | still not a valid cel expression
+								  | ......^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(
+								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",
+								frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation examples which don't pass",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
+										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
+										{Type: "username/v1", Expression: `"pre:" + username`},
+										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this example should pass
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"pre:b", "pre:a", "pre:b", "pre:a"}, // order and repeats don't matter, treated like a set
+												Rejected: false,
+											},
+										},
+										{ // this example should pass
+											Username: "other",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "only ryan allowed",
+											},
+										},
+										{ // this example should fail because it expects the user to be rejected but the user was actually not rejected
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "this input is ignored in this case",
+											},
+										},
+										{ // this example should fail because it expects the user not to be rejected but they were actually rejected
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:other",
+												Groups:   []string{"pre:a", "pre:b"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong rejection message
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "wrong message",
+											},
+										},
+										{ // this example should pass even though it does not make any assertion about the rejection message
+											// because the message assertions defaults to asserting the default rejection message
+											Username: "rejectMeWithDefaultMessage",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+											},
+										},
+										{ // this example should fail because it expects both the wrong username and groups
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "wrong",
+												Groups:   []string{},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong username only
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "wrong",
+												Groups:   []string{"pre:b", "pre:a"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it expects the wrong groups only
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"wrong2", "wrong1"},
+												Rejected: false,
+											},
+										},
+										{ // this example should fail because it does not expect anything but the auth actually was successful
+											Username: "ryan",
+											Groups:   []string{"b", "a"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[2] example failed:
+								 expected: authentication to be rejected
+								 actual:   authentication was not rejected
+
+								 .spec.identityProviders[0].transforms.examples[3] example failed:
+								 expected: authentication not to be rejected
+								 actual:   authentication was rejected with message "only ryan allowed"
+
+								 .spec.identityProviders[0].transforms.examples[4] example failed:
+								 expected: authentication rejection message "wrong message"
+								 actual:   authentication rejection message "only ryan allowed"
+
+								 .spec.identityProviders[0].transforms.examples[6] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[0].transforms.examples[6] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]
+
+								 .spec.identityProviders[0].transforms.examples[7] example failed:
+								 expected: username "wrong"
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[0].transforms.examples[8] example failed:
+								 expected: groups ["wrong1", "wrong2"]
+								 actual:   groups ["pre:a", "pre:b"]
+
+								 .spec.identityProviders[0].transforms.examples[9] example failed:
+								 expected: username ""
+								 actual:   username "pre:ryan"
+
+								 .spec.identityProviders[0].transforms.examples[9] example failed:
+								 expected: groups []
+								 actual:   groups ["pre:a", "pre:b"]`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has transformation expressions that return illegal values with examples which exercise them",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username == "ryan" ? "" : username`}, // not allowed to return an empty string as the transformed username
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+										},
+										{ // this should pass
+											Username: "other",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "other",
+												Groups:   []string{"a", "b"},
+												Rejected: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: no transformation errors
+								 actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"
+
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: no transformation errors
+								 actual:   transformations resulted in an unexpected error "identity transformation returned an empty username, which is not allowed"`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has lots of errors including errors from multiple IDPs, which are all shown in the status conditions using IDP indices in the messages",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://not-unique.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "not unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "this will not be found",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "foo", Type: "string", StringValue: "bar"},
+										{Name: "bar", Type: "string", StringValue: "baz"},
+									},
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username + ":suffix"`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is wrong string",
+												Groups:   []string{"this is wrong string list"},
+											},
+										},
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is also wrong string",
+												Groups:   []string{"this is also wrong string list"},
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "not unique",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "this is wrong",
+									Name:     "foo",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "foo", Type: "string", StringValue: "bar"},
+										{Name: "bar", Type: "string", StringValue: "baz"},
+									},
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username + ":suffix"`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{ // this should pass
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "ryan:suffix",
+												Groups:   []string{"a", "b"},
+											},
+										},
+										{ // this should fail
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "this is still wrong string",
+												Groups:   []string{"this is still wrong string list"},
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To("this is wrong"),
+									Kind:     "OIDCIdentityProvider",
+									Name:     "foo",
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this does not compile`},
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this also does not compile`},
+									},
+								},
+							},
+						},
+					},
+				},
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://not-unique.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this still does not compile`},
+										{Type: "username/v1", Expression: `username`},
+										{Type: "username/v1", Expression: `this really does not compile`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
+							sadDisplayNamesUniqueCondition(`"not unique"`, frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
+								`cannot find resource specified by .spec.identityProviders[0].objectRef (with name "this will not be found")
+
+								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "foo")
+
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "foo")`,
+							), frozenMetav1Now, 123),
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadKindCondition(`"this is wrong"`, frozenMetav1Now, 123),
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[2].transforms.expressions[1].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'does' expecting <EOF>
+								  | this does not compile
+								  | .....^
+
+								 spec.identityProvider[2].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'also' expecting <EOF>
+								  | this also does not compile
+								  | .....^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(here.Doc(
+								`.spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: username "this is wrong string"
+								 actual:   username "ryan:suffix"
+
+								 .spec.identityProviders[0].transforms.examples[0] example failed:
+								 expected: groups ["this is wrong string list"]
+								 actual:   groups ["a", "b"]
+
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: username "this is also wrong string"
+								 actual:   username "ryan:suffix"
+
+								 .spec.identityProviders[0].transforms.examples[1] example failed:
+								 expected: groups ["this is also wrong string list"]
+								 actual:   groups ["a", "b"]
+
+								 .spec.identityProviders[1].transforms.examples[1] example failed:
+								 expected: username "this is still wrong string"
+								 actual:   username "ryan:suffix"
+
+								 .spec.identityProviders[1].transforms.examples[1] example failed:
+								 expected: groups ["this is still wrong string list"]
+								 actual:   groups ["a", "b"]
+
+								 unable to check if the examples specified by .spec.identityProviders[2].transforms.examples[] had errors because an expression was invalid`,
+							), frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseError,
+					replaceConditions(
+						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
+						[]metav1.Condition{
+							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
+							sadTransformationExpressionsCondition(here.Doc(
+								`spec.identityProvider[0].transforms.expressions[1].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'still' expecting <EOF>
+								  | this still does not compile
+								  | .....^
+
+								 spec.identityProvider[0].transforms.expressions[3].expression was invalid:
+								 CEL expression compile error: ERROR: <input>:1:6: Syntax error: mismatched input 'really' expecting <EOF>
+								  | this really does not compile
+								  | .....^`,
+							), frozenMetav1Now, 123),
+							sadTransformationExamplesCondition(
+								"unable to check if the examples specified by .spec.identityProviders[0].transforms.examples[] had errors because an expression was invalid",
+								frozenMetav1Now, 123),
+							sadReadyCondition(frozenMetav1Now, 123),
+						}),
+				),
+			},
+		},
+		{
+			name: "the federation domain has valid IDPs and transformations and examples",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				ldapIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "name1",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
+										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
+										{Type: "username/v1", Expression: `"pre:" + username`},
+										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
+									},
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{Name: "str", Type: "string", StringValue: "abc"},
+										{Name: "strL", Type: "stringList", StringListValue: []string{"def"}},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"pre:b", "pre:a"},
+												Rejected: false,
+											},
+										},
+										{
+											Username: "other",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "only ryan allowed",
+											},
+										},
+										{
+											Username: "rejectMeWithDefaultMessage",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												// Not specifying message is the same as expecting the default message.
+											},
+										},
+										{
+											Username: "rejectMeWithDefaultMessage",
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Rejected: true,
+												Message:  "authentication was rejected by a configured policy", // this is the default message
+											},
+										},
+									},
+								},
+							},
+							{
+								DisplayName: "name2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "LDAPIdentityProvider",
+									Name:     ldapIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{Type: "username/v1", Expression: `"pre:" + username`},
+									},
+									Examples: []configv1alpha1.FederationDomainTransformsExample{
+										{
+											Username: "ryan",
+											Groups:   []string{"a", "b"},
+											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+												Username: "pre:ryan",
+												Groups:   []string{"b", "a"},
+												Rejected: false,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithIDPs(t, "https://issuer1.com", []*federationdomainproviders.FederationDomainIdentityProvider{
+					{
+						DisplayName: "name1",
+						UID:         oidcIdentityProvider.UID,
+						Transforms: newTransformationPipeline(t, &celtransformer.TransformationConstants{
+							StringConstants:     map[string]string{"str": "abc"},
+							StringListConstants: map[string][]string{"strL": {"def"}},
+						},
+							&celtransformer.AllowAuthenticationPolicy{
+								Expression:                    `username == "ryan" || username == "rejectMeWithDefaultMessage"`,
+								RejectedAuthenticationMessage: "only ryan allowed",
+							},
+							&celtransformer.AllowAuthenticationPolicy{Expression: `username != "rejectMeWithDefaultMessage"`},
+							&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
+							&celtransformer.GroupsTransformation{Expression: `groups.map(g, "pre:" + g)`},
 						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainSameIssuerAddress2.Namespace,
-							federationDomainSameIssuerAddress2.Name,
+					},
+					{
+						DisplayName: "name2",
+						UID:         ldapIdentityProvider.UID,
+						Transforms: newTransformationPipeline(t, &celtransformer.TransformationConstants{},
+							&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
 						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainDifferentIssuerAddress.Namespace,
-							federationDomainDifferentIssuerAddress.Name,
-						),
-						coretesting.NewGetAction(
-							federationDomainGVR,
-							federationDomainWithInvalidIssuerURL.Namespace,
-							federationDomainWithInvalidIssuerURL.Name,
-						),
-					}
-					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
-				})
-			})
+					},
+				}),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(
+					&configv1alpha1.FederationDomain{
+						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					},
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "the federation domain specifies illegal const type, which shouldn't really happen since the CRD validates it",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+										{
+											Type: "this is illegal",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `one of spec.identityProvider[].transforms.constants[].type is invalid: "this is illegal"`,
+		},
+		{
+			name: "the federation domain specifies illegal expression type, which shouldn't really happen since the CRD validates it",
+			inputObjects: []runtime.Object{
+				oidcIdentityProvider,
+				&configv1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
+					Spec: configv1alpha1.FederationDomainSpec{
+						Issuer: "https://issuer1.com",
+						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+							{
+								DisplayName: "can-find-me",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "OIDCIdentityProvider",
+									Name:     oidcIdentityProvider.Name,
+								},
+								Transforms: configv1alpha1.FederationDomainTransforms{
+									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+										{
+											Type: "this is illegal",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `one of spec.identityProvider[].transforms.expressions[].type is invalid: "this is illegal"`,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			federationDomainsSetter := &fakeFederationDomainsSetter{}
+			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
+			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
+			for _, o := range tt.inputObjects {
+				require.NoError(t, pinnipedAPIClient.Tracker().Add(o))
+				require.NoError(t, pinnipedInformerClient.Tracker().Add(o))
+			}
+			if tt.configClient != nil {
+				tt.configClient(pinnipedAPIClient)
+			}
+			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
+
+			controller := NewFederationDomainWatcherController(
+				federationDomainsSetter,
+				apiGroupSuffix,
+				clocktesting.NewFakeClock(frozenNow),
+				pinnipedAPIClient,
+				pinnipedInformers.Config().V1alpha1().FederationDomains(),
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
+				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
+				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
+				controllerlib.WithInformer,
+			)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			pinnipedInformers.Start(ctx.Done())
+			controllerlib.TestRunSynchronously(t, controller)
+
+			syncCtx := controllerlib.Context{Context: ctx, Key: controllerlib.Key{Namespace: namespace, Name: "config-name"}}
+
+			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tt.wantFDIssuers != nil {
+				require.True(t, federationDomainsSetter.SetFederationDomainsWasCalled)
+				// This is ugly, but we cannot test equality on compiled identity transformations because cel.Program
+				// cannot be compared for equality. This converts them to a type which can be tested for equality,
+				// which should be good enough for the purposes of this test.
+				require.ElementsMatch(t,
+					convertToComparableType(tt.wantFDIssuers),
+					convertToComparableType(federationDomainsSetter.FederationDomainsReceived))
+			} else {
+				require.False(t, federationDomainsSetter.SetFederationDomainsWasCalled)
+			}
+
+			if tt.wantStatusUpdates != nil {
+				// This controller should only perform updates to FederationDomain statuses.
+				// In this controller we don't actually care about the order of the actions, since the FederationDomains
+				// statuses can be updated in any order.  Therefore, we are sorting here so we can use require.Equal
+				// to make the test output easier to read. Unfortunately the timezone nested in the condition can still
+				// make the test failure diffs ugly sometimes, but we do want to assert about timestamps so there's not
+				// much we can do about those.
+				actualFederationDomainUpdates := getFederationDomainStatusUpdates(t, pinnipedAPIClient.Actions())
+				sortFederationDomainsByName(actualFederationDomainUpdates)
+				sortFederationDomainsByName(tt.wantStatusUpdates)
+				// Use require.Equal instead of require.ElementsMatch because require.Equal prints a nice diff.
+				require.Equal(t, tt.wantStatusUpdates, actualFederationDomainUpdates)
+			} else {
+				require.Empty(t, pinnipedAPIClient.Actions())
+			}
 		})
+	}
+}
 
-		when("there are no FederationDomains in the informer", func() {
-			it("keeps waiting for one", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-				r.Empty(pinnipedAPIClient.Actions())
-				r.True(providersSetter.SetProvidersWasCalled)
-				r.Empty(providersSetter.FederationDomainsReceived)
-			})
-		})
-	}, spec.Parallel(), spec.Report(report.Terminal{}))
+type comparableFederationDomainIssuer struct {
+	issuer                  string
+	identityProviders       []*comparableFederationDomainIdentityProvider
+	defaultIdentityProvider *comparableFederationDomainIdentityProvider
+}
+
+type comparableFederationDomainIdentityProvider struct {
+	DisplayName      string
+	UID              types.UID
+	TransformsSource []interface{}
+}
+
+func makeFederationDomainIdentityProviderComparable(fdi *federationdomainproviders.FederationDomainIdentityProvider) *comparableFederationDomainIdentityProvider {
+	if fdi == nil {
+		return nil
+	}
+	return &comparableFederationDomainIdentityProvider{
+		DisplayName:      fdi.DisplayName,
+		UID:              fdi.UID,
+		TransformsSource: fdi.Transforms.Source(),
+	}
+}
+
+func convertToComparableType(fdis []*federationdomainproviders.FederationDomainIssuer) []*comparableFederationDomainIssuer {
+	result := []*comparableFederationDomainIssuer{}
+	for _, fdi := range fdis {
+		comparableFDIs := make([]*comparableFederationDomainIdentityProvider, len(fdi.IdentityProviders()))
+		for _, idp := range fdi.IdentityProviders() {
+			comparableFDIs = append(comparableFDIs, makeFederationDomainIdentityProviderComparable(idp))
+		}
+		converted := &comparableFederationDomainIssuer{
+			issuer:                  fdi.Issuer(),
+			identityProviders:       comparableFDIs,
+			defaultIdentityProvider: makeFederationDomainIdentityProviderComparable(fdi.DefaultIdentityProvider()),
+		}
+		result = append(result, converted)
+	}
+	return result
+}
+
+func expectedFederationDomainStatusUpdate(
+	fd *configv1alpha1.FederationDomain,
+	phase configv1alpha1.FederationDomainPhase,
+	conditions []metav1.Condition,
+) *configv1alpha1.FederationDomain {
+	fdCopy := fd.DeepCopy()
+
+	// We don't care about the spec of a FederationDomain in an update status action,
+	// so clear it out to make it easier to write expected values.
+	fdCopy.Spec = configv1alpha1.FederationDomainSpec{}
+
+	fdCopy.Status.Phase = phase
+	fdCopy.Status.Conditions = conditions
+
+	return fdCopy
+}
+
+func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action) []*configv1alpha1.FederationDomain {
+	federationDomains := []*configv1alpha1.FederationDomain{}
+
+	for _, action := range actions {
+		updateAction, ok := action.(coretesting.UpdateAction)
+		require.True(t, ok, "failed to cast an action as an coretesting.UpdateAction: %#v", action)
+		require.Equal(t, federationDomainGVR, updateAction.GetResource(), "an update action should have updated a FederationDomain but updated something else")
+		require.Equal(t, "status", updateAction.GetSubresource(), "an update action should have updated the status subresource but updated something else")
+
+		fd, ok := updateAction.GetObject().(*configv1alpha1.FederationDomain)
+		require.True(t, ok, "failed to cast an action's object as a FederationDomain: %#v", updateAction.GetObject())
+		require.Equal(t, fd.Namespace, updateAction.GetNamespace(), "an update action might have been called on the wrong namespace for a FederationDomain")
+
+		// We don't care about the spec of a FederationDomain in an update status action,
+		// so clear it out to make it easier to write expected values.
+		copyOfFD := fd.DeepCopy()
+		copyOfFD.Spec = configv1alpha1.FederationDomainSpec{}
+
+		federationDomains = append(federationDomains, copyOfFD)
+	}
+
+	return federationDomains
+}
+
+func sortFederationDomainsByName(federationDomains []*configv1alpha1.FederationDomain) {
+	sort.SliceStable(federationDomains, func(a, b int) bool {
+		return federationDomains[a].GetName() < federationDomains[b].GetName()
+	})
+}
+
+func newTransformationPipeline(
+	t *testing.T,
+	consts *celtransformer.TransformationConstants,
+	transformations ...celtransformer.CELTransformation,
+) *idtransform.TransformationPipeline {
+	pipeline := idtransform.NewTransformationPipeline()
+
+	compiler, err := celtransformer.NewCELTransformer(celTransformerMaxExpressionRuntime)
+	require.NoError(t, err)
+
+	if consts.StringConstants == nil {
+		consts.StringConstants = map[string]string{}
+	}
+	if consts.StringListConstants == nil {
+		consts.StringListConstants = map[string][]string{}
+	}
+
+	for _, transform := range transformations {
+		compiledTransform, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		pipeline.AppendTransformation(compiledTransform)
+	}
+
+	return pipeline
+}
+
+func TestTransformationPipelinesCanBeTestedForEqualityUsingSourceToMakeTestingEasier(t *testing.T) {
+	compiler, err := celtransformer.NewCELTransformer(5 * time.Second)
+	require.NoError(t, err)
+
+	transforms := []celtransformer.CELTransformation{
+		&celtransformer.AllowAuthenticationPolicy{
+			Expression:                    `username == "ryan" || username == "rejectMeWithDefaultMessage"`,
+			RejectedAuthenticationMessage: "only ryan allowed",
+		},
+		&celtransformer.UsernameTransformation{Expression: `"pre:" + username`},
+		&celtransformer.GroupsTransformation{Expression: `groups.map(g, "pre:" + g)`},
+	}
+
+	differentTransforms := []celtransformer.CELTransformation{
+		&celtransformer.AllowAuthenticationPolicy{
+			Expression:                    `username == "ryan" || username == "different"`,
+			RejectedAuthenticationMessage: "different",
+		},
+		&celtransformer.UsernameTransformation{Expression: `"different:" + username`},
+		&celtransformer.GroupsTransformation{Expression: `groups.map(g, "different:" + g)`},
+	}
+
+	consts := &celtransformer.TransformationConstants{
+		StringConstants: map[string]string{
+			"foo": "bar",
+			"baz": "bat",
+		},
+		StringListConstants: map[string][]string{
+			"foo": {"a", "b"},
+			"bar": {"c", "d"},
+		},
+	}
+
+	differentConsts := &celtransformer.TransformationConstants{
+		StringConstants: map[string]string{
+			"foo": "barDifferent",
+			"baz": "bat",
+		},
+		StringListConstants: map[string][]string{
+			"foo": {"aDifferent", "b"},
+			"bar": {"c", "d"},
+		},
+	}
+
+	pipeline := idtransform.NewTransformationPipeline()
+	equalPipeline := idtransform.NewTransformationPipeline()
+	differentPipeline1 := idtransform.NewTransformationPipeline()
+	differentPipeline2 := idtransform.NewTransformationPipeline()
+	expectedSourceList := []interface{}{}
+
+	for i, transform := range transforms {
+		// Compile and append to a pipeline.
+		compiledTransform1, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		pipeline.AppendTransformation(compiledTransform1)
+
+		// Recompile the same thing and append it to another pipeline.
+		// This pipeline should end up being equal to the first one.
+		compiledTransform2, err := compiler.CompileTransformation(transform, consts)
+		require.NoError(t, err)
+		equalPipeline.AppendTransformation(compiledTransform2)
+
+		// Build up a test expectation value.
+		expectedSourceList = append(expectedSourceList, &celtransformer.CELTransformationSource{Expr: transform, Consts: consts})
+
+		// Compile a different expression using the same constants and append it to a different pipeline.
+		// This should not be equal to the other pipelines.
+		compiledDifferentExpressionSameConsts, err := compiler.CompileTransformation(differentTransforms[i], consts)
+		require.NoError(t, err)
+		differentPipeline1.AppendTransformation(compiledDifferentExpressionSameConsts)
+
+		// Compile the same expression using the different constants and append it to a different pipeline.
+		// This should not be equal to the other pipelines.
+		compiledSameExpressionDifferentConsts, err := compiler.CompileTransformation(transform, differentConsts)
+		require.NoError(t, err)
+		differentPipeline2.AppendTransformation(compiledSameExpressionDifferentConsts)
+	}
+
+	require.Equal(t, expectedSourceList, pipeline.Source())
+	require.Equal(t, expectedSourceList, equalPipeline.Source())
+
+	// The source of compiled pipelines can be compared to each other in this way for testing purposes.
+	require.Equal(t, pipeline.Source(), equalPipeline.Source())
+	require.NotEqual(t, pipeline.Source(), differentPipeline1.Source())
+	require.NotEqual(t, pipeline.Source(), differentPipeline2.Source())
 }

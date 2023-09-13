@@ -267,29 +267,25 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	}
 }
 
-// CreateTestFederationDomain creates and returns a test FederationDomain in
+// CreateTestFederationDomain creates and returns a test FederationDomain in the
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
 // current test's lifetime.
-// If the provided issuer is not the empty string, then it will be used for the
-// FederationDomain.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.FederationDomainStatusCondition) *configv1alpha1.FederationDomain {
+func CreateTestFederationDomain(
+	ctx context.Context,
+	t *testing.T,
+	spec configv1alpha1.FederationDomainSpec,
+	expectStatus configv1alpha1.FederationDomainPhase,
+) *configv1alpha1.FederationDomain {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	if issuer == "" {
-		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
-	}
-
-	federationDomains := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
-	federationDomain, err := federationDomains.Create(createContext, &configv1alpha1.FederationDomain{
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
-		Spec: configv1alpha1.FederationDomainSpec{
-			Issuer: issuer,
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecretName},
-		},
+		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test FederationDomain")
 	t.Logf("created test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
@@ -299,7 +295,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		t.Logf("cleaning up test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		err := federationDomains.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
+		err := federationDomainsClient.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
@@ -307,28 +303,58 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		}
 	})
 
-	// If we're not expecting any particular status, just return the new FederationDomain immediately.
-	if expectStatus == "" {
-		return federationDomain
-	}
-
 	// Wait for the FederationDomain to enter the expected phase (or time out).
-	var result *configv1alpha1.FederationDomain
+	WaitForFederationDomainStatusPhase(ctx, t, federationDomain.Name, expectStatus)
+
+	return federationDomain
+}
+
+func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase configv1alpha1.FederationDomainPhase) {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+
 	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
-		var err error
-		result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
+		fd, err := federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
 		requireEventually.NoError(err)
-		requireEventually.Equal(expectStatus, result.Status.Status)
+		requireEventually.Equalf(expectPhase, fd.Status.Phase, "actual status conditions were: %#v", fd.Status.Conditions)
 
 		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-		if expectStatus == configv1alpha1.SuccessFederationDomainStatusCondition {
-			requireEventually.NotEmpty(result.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
-			requireEventually.NotEmpty(result.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
+		if expectPhase == configv1alpha1.FederationDomainPhaseReady {
+			requireEventually.NotEmpty(fd.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
+			requireEventually.NotEmpty(fd.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
 		}
-	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
-	return federationDomain
+	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectPhase)
+}
+
+func WaitForFederationDomainStatusConditions(ctx context.Context, t *testing.T, federationDomainName string, expectConditions []metav1.Condition) {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		fd, err := federationDomainsClient.Get(ctx, federationDomainName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+
+		requireEventually.Lenf(fd.Status.Conditions, len(expectConditions),
+			"wanted status conditions: %#v", expectConditions)
+
+		for i, wantCond := range expectConditions {
+			actualCond := fd.Status.Conditions[i]
+
+			// This is a cheat to avoid needing to make equality assertions on these fields.
+			requireEventually.NotZero(actualCond.LastTransitionTime)
+			wantCond.LastTransitionTime = actualCond.LastTransitionTime
+			requireEventually.NotZero(actualCond.ObservedGeneration)
+			wantCond.ObservedGeneration = actualCond.ObservedGeneration
+
+			requireEventually.Equalf(wantCond, actualCond,
+				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
+				expectConditions, fd.Status.Conditions, i)
+		}
+	}, 60*time.Second, 1*time.Second, "wanted FederationDomain conditions")
 }
 
 func RandBytes(t *testing.T, numBytes int) []byte {
@@ -476,6 +502,11 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
+	return CreateTestOIDCIdentityProviderWithObjectMeta(t, spec, testObjectMeta(t, "upstream-oidc-idp"), expectedPhase)
+}
+
+func CreateTestOIDCIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, objectMeta metav1.ObjectMeta, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
+	t.Helper()
 	env := IntegrationEnv(t)
 	client := NewSupervisorClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -485,7 +516,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 
 	// Create the OIDCIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
+		ObjectMeta: objectMeta,
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -494,7 +525,11 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	t.Cleanup(func() {
 		t.Logf("cleaning up test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		notFound := k8serrors.IsNotFound(err)
+		// It's okay if it is not found, because it might have been deleted by another part of this test.
+		if !notFound {
+			require.NoErrorf(t, err, "could not cleanup test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
+		}
 	})
 	t.Logf("created test OIDCIdentityProvider %s", created.Name)
 
@@ -722,5 +757,13 @@ func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {
 		GenerateName: fmt.Sprintf("test-%s-", baseName),
 		Labels:       map[string]string{"pinniped.dev/test": ""},
 		Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+	}
+}
+
+func ObjectMetaWithRandomName(t *testing.T, baseName string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		Name:        fmt.Sprintf("test-%s-%s", baseName, RandHex(t, 8)),
+		Labels:      map[string]string{"pinniped.dev/test": ""},
+		Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
 	}
 }

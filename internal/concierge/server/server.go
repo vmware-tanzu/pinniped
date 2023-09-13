@@ -23,6 +23,7 @@ import (
 
 	conciergeopenapi "go.pinniped.dev/generated/latest/client/concierge/openapi"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
+	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/config/concierge"
@@ -33,7 +34,6 @@ import (
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/pversion"
@@ -159,7 +159,7 @@ func (a *App) runServer(ctx context.Context) error {
 		return fmt.Errorf("could not prepare controllers: %w", err)
 	}
 
-	certIssuer := issuer.ClientCertIssuers{
+	certIssuer := clientcertissuer.ClientCertIssuers{
 		dynamiccertauthority.New(dynamicSigningCertProvider),            // attempt to use the real Kube CA if possible
 		dynamiccertauthority.New(impersonationProxySigningCertProvider), // fallback to our internal CA if we need to
 	}
@@ -194,7 +194,7 @@ func (a *App) runServer(ctx context.Context) error {
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Private,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
-	issuer issuer.ClientCertIssuer,
+	issuer clientcertissuer.ClientCertIssuer,
 	buildControllers controllerinit.RunnerBuilder,
 	apiGroupSuffix string,
 	aggregatedAPIServerPort int64,

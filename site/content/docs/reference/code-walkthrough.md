@@ -192,28 +192,28 @@ The Supervisor's endpoints are:
 Each FederationDomain's endpoints are mounted under the path of the FederationDomain's `spec.issuer`,
 if the `spec.issuer` URL has a path component specified. If the issuer has no path, then they are mounted under `/`.
 These per-FederationDomain endpoint are all mounted by the code in
-[internal/oidc/provider/manager/manager.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/provider/manager/manager.go).
+[internal/federationdomain/endpointsmanager/manager.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpointsmanager/manager.go).
 
 The per-FederationDomain endpoints are:
 
 - `<issuer_path>/.well-known/openid-configuration` is the standard OIDC discovery endpoint, which can be used to discover all the other endpoints listed here.
-  See [internal/oidc/discovery/discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/discovery/discovery_handler.go).
+  See [internal/federationdomain/endpoints/discovery/discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/discovery/discovery_handler.go).
 - `<issuer_path>/jwks.json` is the standard OIDC JWKS discovery endpoint.
-  See [internal/oidc/jwks/jwks_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/jwks/jwks_handler.go).
+  See [internal/federationdomain/endpoints/jwks/jwks_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/jwks/jwks_handler.go).
 - `<issuer_path>/oauth2/authorize` is the standard OIDC authorize endpoint.
-  See [internal/oidc/auth/auth_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/auth/auth_handler.go).
+  See [internal/federationdomain/endpoints/auth/auth_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/auth/auth_handler.go).
 - `<issuer_path>/oauth2/token` is the standard OIDC token endpoint.
-  See [internal/oidc/token/token_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token/token_handler.go).
+  See [internal/federationdomain/endpoints/token/token_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/token/token_handler.go).
   The token endpoint can handle the standard OIDC `authorization_code` and `refresh_token` grant types, and has also been
-  extended in [internal/oidc/token_exchange.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/token_exchange.go)
+  extended in [internal/federationdomain/endpoints/tokenexchange/token_exchange.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/tokenexchange/token_exchange.go)
   to handle an additional grant type for [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) token exchanges to
   reduce the applicable scope (technically, the `aud` claim) of ID tokens.
 - `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider custom resource.
-  See [internal/oidc/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/callback/callback_handler.go).
+  See [internal/federationdomain/endpoints/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
-  See [internal/oidc/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/idpdiscovery/idp_discovery_handler.go).
+  See [internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go).
 - `<issuer_path>/login` is a login UI page to support the optional browser-based login flow for LDAP and Active Directory identity providers.
-  See [internal/oidc/login/login_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/oidc/login/login_handler.go).
+  See [internal/federationdomain/endpoints/login/login_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/login/login_handler.go).
 
 The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).
 

@@ -92,7 +92,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 				caSignerName,
 				nil,
-				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck // old test with no log assertions
 			)
 			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)

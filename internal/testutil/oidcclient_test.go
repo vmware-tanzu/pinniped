@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -6,10 +6,10 @@ package testutil
 import (
 	"testing"
 
-	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
-
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
+
+	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 )
 
 func TestBcryptConstants(t *testing.T) {

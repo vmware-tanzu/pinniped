@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -25,11 +25,12 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
-	"go.pinniped.dev/internal/oidc/clientregistry"
-	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -137,7 +138,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
-		var startInformersAndController = func(idpCache provider.DynamicUpstreamIDPProvider) {
+		var startInformersAndController = func(idpCache dynamicupstreamprovider.DynamicUpstreamIDPProvider) {
 			// Set this at the last second to allow for injection of server override.
 			subject = GarbageCollectorController(
 				idpCache,
@@ -263,7 +264,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired authcode secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -308,7 +309,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
 
 				inactiveOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  false,
 					Request: &fosite.Request{
 						ID:     "request-id-2",
@@ -360,7 +361,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the active authcode session.
@@ -369,7 +370,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -387,7 +388,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired authcode secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -432,7 +433,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(activeOIDCAuthcodeSessionSecret))
 
 				inactiveOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  false,
 					Request: &fosite.Request{
 						ID:     "request-id-2",
@@ -484,7 +485,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the active authcode session.
@@ -493,7 +494,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 
@@ -511,7 +512,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is an invalid, expired authcode secret", func() {
 			it.Before(func() {
 				invalidOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "", // it is invalid for there to be a missing request ID
@@ -561,7 +562,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't read the invalid secret.
@@ -580,7 +581,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, expired authcode secret but its upstream name does not match any existing upstream", func() {
 			it.Before(func() {
 				wrongProviderNameOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -632,7 +633,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
@@ -651,7 +652,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, expired authcode secret but its upstream UID does not match any existing upstream", func() {
 			it.Before(func() {
 				wrongProviderNameOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -703,7 +704,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Nothing to revoke since we couldn't find the upstream in the cache.
@@ -722,7 +723,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, recently expired authcode secret but the upstream revocation fails", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -773,10 +774,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					// make the upstream revocation fail in a retryable way
-					WithRevokeTokenError(provider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
+					WithRevokeTokenError(dynamicupstreamprovider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -785,7 +786,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -801,7 +802,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(errors.New("some upstream revocation error not worth retrying"))
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -810,7 +811,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -827,7 +828,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there is a valid, long-since expired authcode secret but the upstream revocation fails", func() {
 			it.Before(func() {
 				activeOIDCAuthcodeSession := &authorizationcode.Session{
-					Version: "4",
+					Version: "5",
 					Active:  true,
 					Request: &fosite.Request{
 						ID:     "request-id-1",
@@ -880,7 +881,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// Tried to revoke it, although this revocation will fail.
@@ -889,7 +890,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -906,7 +907,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired access token secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				offlineAccessGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2", "offline_access"},
 						ID:           "request-id-1",
@@ -951,7 +952,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(offlineAccessGrantedOIDCAccessTokenSessionSecret))
 
 				offlineAccessNotGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2"},
 						ID:           "request-id-2",
@@ -1003,7 +1004,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the downstream session which had offline_access granted.
@@ -1012,7 +1013,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -1030,7 +1031,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired access token secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				offlineAccessGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2", "offline_access"},
 						ID:           "request-id-1",
@@ -1075,7 +1076,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(offlineAccessGrantedOIDCAccessTokenSessionSecret))
 
 				offlineAccessNotGrantedOIDCAccessTokenSession := &accesstoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						GrantedScope: fosite.Arguments{"scope1", "scope2"},
 						ID:           "request-id-2",
@@ -1127,7 +1128,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is only revoked for the downstream session which had offline_access granted.
@@ -1136,7 +1137,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 
@@ -1154,7 +1155,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired refresh secrets which contain upstream refresh tokens", func() {
 			it.Before(func() {
 				oidcRefreshSession := &refreshtoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
@@ -1205,7 +1206,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is revoked.
@@ -1214,7 +1215,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-refresh-token",
-						TokenType: provider.RefreshTokenType,
+						TokenType: upstreamprovider.RefreshTokenType,
 					},
 				)
 
@@ -1231,7 +1232,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		when("there are valid, expired refresh secrets which contain upstream access tokens", func() {
 			it.Before(func() {
 				oidcRefreshSession := &refreshtoken.Session{
-					Version: "4",
+					Version: "5",
 					Request: &fosite.Request{
 						ID:     "request-id-1",
 						Client: &clientregistry.Client{},
@@ -1282,7 +1283,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithRevokeTokenError(nil)
 				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
-				startInformersAndController(idpListerBuilder.Build())
+				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 				// The upstream refresh token is revoked.
@@ -1291,7 +1292,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					&oidctestutil.RevokeTokenArgs{
 						Ctx:       syncContext.Context,
 						Token:     "fake-upstream-access-token",
-						TokenType: provider.AccessTokenType,
+						TokenType: upstreamprovider.AccessTokenType,
 					},
 				)
 

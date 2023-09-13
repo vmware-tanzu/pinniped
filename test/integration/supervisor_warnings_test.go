@@ -28,8 +28,9 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -82,9 +83,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		issuerURL.String(),
-		certSecret.Name,
-		configv1alpha1.SuccessFederationDomainStatusCondition,
+		configv1alpha1.FederationDomainSpec{
+			Issuer: issuerURL.String(),
+			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+		},
+		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
@@ -105,7 +108,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -173,10 +177,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
-			Issuer:      downstream.Spec.Issuer,
-			ClientID:    "pinniped-cli",
-			Scopes:      downstreamScopes,
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               downstream.Spec.Issuer,
+			ClientID:             "pinniped-cli",
+			Scopes:               downstreamScopes,
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: createdProvider.Name,
 		}
 		// use it to get the cache entry
 		token := cache.GetToken(sessionCacheKey)
@@ -186,7 +191,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// out of kube secret storage.
 		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
 		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		oauthStore := storage.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)
@@ -194,7 +199,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// change the groups to simulate them changing in the IDP.
 		pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 		require.True(t, ok, "should have been able to cast session data to PinnipedSession")
-		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+		pinnipedSession.Custom.UpstreamGroups = []string{"some-wrong-group", "some-other-group"}         // update upstream groups
+		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"} // update downstream groups
 
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, refreshTokenSignature))
 		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, storedRefreshSession))
@@ -248,6 +254,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -371,7 +378,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -387,6 +394,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -481,10 +489,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
 		sort.Strings(downstreamScopes)
 		sessionCacheKey := oidcclient.SessionCacheKey{
-			Issuer:      downstream.Spec.Issuer,
-			ClientID:    "pinniped-cli",
-			Scopes:      downstreamScopes,
-			RedirectURI: "http://localhost:0/callback",
+			Issuer:               downstream.Spec.Issuer,
+			ClientID:             "pinniped-cli",
+			Scopes:               downstreamScopes,
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: createdProvider.Name,
 		}
 		// use it to get the cache entry
 		token := cache.GetToken(sessionCacheKey)
@@ -494,7 +503,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// out of kube secret storage.
 		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
 		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		oauthStore := storage.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, refreshTokenSignature, nil)
 		require.NoError(t, err)

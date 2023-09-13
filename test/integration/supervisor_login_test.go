@@ -26,13 +26,15 @@ import (
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -160,13 +162,56 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		return ldapIDP, secret
 	}
 
+	// The downstream ID token Subject should include the upstream user ID after the upstream issuer name
+	// and IDP display name.
+	expectedIDTokenSubjectRegexForUpstreamOIDC := "^" +
+		regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?idpName=test-upstream-oidc-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub=") + ".+" +
+		"$"
+
+	// The downstream ID token Subject should be the Host URL, plus the user search base, plus the IDP display name,
+	// plus value pulled from the requested UserSearch.Attributes.UID attribute.
+	expectedIDTokenSubjectRegexForUpstreamLDAP := "^" +
+		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamLDAP.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)) +
+		regexp.QuoteMeta("&idpName=test-upstream-ldap-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue))) +
+		"$"
+
+	// Some of the LDAP tests below use the StartTLS server and port.
+	expectedIDTokenSubjectRegexForUpstreamLDAPStartTLSHost := "^" +
+		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamLDAP.StartTLSOnlyHost+"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)) +
+		regexp.QuoteMeta("&idpName=test-upstream-ldap-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue))) +
+		"$"
+
+	// The downstream ID token Subject should be in the the same format as LDAP above, but with AD-specific values.
+	expectedIDTokenSubjectRegexForUpstreamAD := "^" +
+		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)) +
+		regexp.QuoteMeta("&idpName=test-upstream-ad-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue) +
+		"$"
+
+	// Sometimes the AD tests below use a different search base.
+	expectedIDTokenSubjectRegexForUpstreamADWithCustomUserSearchBase := "^" +
+		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase)) +
+		regexp.QuoteMeta("&idpName=test-upstream-ad-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue) +
+		"$"
+
+	// Sometimes the AD tests below create a user dynamically so we can't know the UID up front.
+	expectedIDTokenSubjectRegexForUpstreamADWithUnkownUID := "^" +
+		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)) +
+		regexp.QuoteMeta("&idpName=test-upstream-ad-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&sub=") + ".+" +
+		"$"
+
 	// These tests attempt to exercise the entire login and refresh flow of the Supervisor for various cases.
 	// They do not use the Pinniped CLI as the client, which allows them to exercise the Supervisor as an
 	// OIDC provider in ways that the CLI might not use. Similar tests exist using the CLI in e2e_test.go.
 	//
 	// Each of these tests perform the following flow:
-	// 1. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
-	// 2. Configure an IDP CR.
+	// 1. Configure an IDP CR.
+	// 2. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
 	// 3. Call the authorization endpoint and log in as a specific user.
 	//    Note that these tests do not use form_post response type (which is tested by e2e_test.go).
 	// 4. Listen on a local callback server for the authorization redirect, and assert that it was success or failure.
@@ -188,6 +233,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// This required function should configure an IDP CR. It should also wait for it to be ready and schedule
 		// its cleanup. Return the name of the IDP CR.
 		createIDP func(t *testing.T) string
+
+		// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
+		// Also return the displayName of the IDP that should be used during authentication.
+		// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
+		federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
 
 		// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
 		// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
@@ -268,8 +318,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				pinnipedSessionData := pinnipedSession.Custom
 				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
 			},
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
@@ -292,15 +341,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				customSessionData := pinnipedSession.Custom
 				customSessionData.Username = "some-incorrect-username"
 			},
-			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value after we refresh.
+				// Even if we update the groups to some names that did not come from the OIDC server,
+				// we expect that it will revert to the real groups from the OIDC server after we refresh.
 				// However if there are no expected groups then they will not update, so we should skip this.
 				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
-					sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+					initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+					sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+					sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				}
 				return env.SupervisorUpstreamOIDC.ExpectedGroups
 			},
@@ -337,7 +388,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				customSessionData := pinnipedSession.Custom
 				customSessionData.Username = "some-incorrect-username"
 			},
-			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
@@ -366,8 +417,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.OIDC.UpstreamRefreshToken)
 				customSessionData.OIDC.UpstreamRefreshToken = "invalid-updated-refresh-token"
 			},
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
@@ -397,8 +447,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
@@ -422,9 +471,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
@@ -449,9 +497,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value after we refresh.
-				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
@@ -461,12 +511,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Subject = "not-right"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -493,12 +538,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -523,12 +563,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -552,7 +587,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			downstreamScopes:                     []string{"openid", "pinniped:request-audience", "offline_access"},
 			wantDownstreamScopes:                 []string{"openid", "pinniped:request-audience", "offline_access", "username", "groups"},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
@@ -568,13 +603,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -623,13 +653,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentialsAndThenGoodCredentials,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAPWithBadCredentialsAndThenGoodCredentials,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -655,11 +680,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// update the list of groups to the wrong thing and see that they do not get updated because
-				// skip group refresh is set
-				wrongGroups := []string{"some-wrong-group", "some-other-group"}
-				sessionData.Fosite.Claims.Extra["groups"] = wrongGroups
-				return wrongGroups
+				// Update the list of groups to some groups that would not come from the real LDAP queries,
+				// and see that these become the user's new groups after refresh, because LDAP skip group refresh is set.
+				// Since we are skipping the LDAP group query during refresh, the refresh should use what the session
+				// says is the original list of untransformed groups from the initial login, and then perform the
+				// transformations on them again. However, since there are no transformations configured, they will not
+				// be changed by any transformations in this case.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"} // these groups are not in LDAP server
+				sessionData.Custom.UpstreamGroups = initialGroupMembership                 // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership         // downstream group names in session
+				return initialGroupMembership                                              // these are the expected groups after the refresh is performed
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -668,12 +698,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Subject = "not-right"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -708,9 +733,12 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				)
 			},
 			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
-				// even if we update this group to the wrong thing, we expect that it will return to the correct
-				// value (no groups) after we refresh.
-				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh,
+				// which in this case is no groups since this test uses a group search base which results in no groups.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
 				return []string{}
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
@@ -720,12 +748,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Subject = "not-right"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -759,12 +782,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
 				customSessionData.Username = "not-the-same"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.StartTLSOnlyHost+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAPStartTLSHost,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs,
@@ -833,12 +851,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
 				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -904,12 +917,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.LDAP.UserDN)
 				customSessionData.LDAP.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -938,12 +946,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
 				customSessionData.Username = "not-the-same"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
@@ -988,12 +991,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				fositeSessionData := pinnipedSession.Fosite
 				fositeSessionData.Claims.Subject = "not-right"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamADWithCustomUserSearchBase,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue) + "$"
@@ -1036,12 +1034,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					false,
 				)
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamADWithCustomUserSearchBase,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue) + "$"
@@ -1093,12 +1086,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
 				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
@@ -1165,12 +1153,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
 				customSessionData.ActiveDirectory.UserDN = "cn=not-a-user,dc=pinniped,dc=dev"
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
@@ -1199,8 +1182,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
 				testlib.ChangeADTestUserPassword(t, env, username)
 			},
-			// we can't know the subject ahead of time because we created a new user and don't know their uid,
-			// so skip wantDownstreamIDTokenSubjectToMatch
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamADWithUnkownUID,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
 				return "^" + regexp.QuoteMeta(username+"@"+env.SupervisorUpstreamActiveDirectory.Domain) + "$"
@@ -1229,8 +1211,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
 				testlib.DeactivateADTestUser(t, env, username)
 			},
-			// we can't know the subject ahead of time because we created a new user and don't know their uid,
-			// so skip wantDownstreamIDTokenSubjectToMatch
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamADWithUnkownUID,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
 				return "^" + regexp.QuoteMeta(username+"@"+env.SupervisorUpstreamActiveDirectory.Domain) + "$"
@@ -1259,8 +1240,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			breakRefreshSessionData: func(t *testing.T, sessionData *psession.PinnipedSession, _, username string) {
 				testlib.LockADTestUser(t, env, username)
 			},
-			// we can't know the subject ahead of time because we created a new user and don't know their uid,
-			// so skip wantDownstreamIDTokenSubjectToMatch
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamADWithUnkownUID,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(username string) string {
 				return "^" + regexp.QuoteMeta(username+"@"+env.SupervisorUpstreamActiveDirectory.Domain) + "$"
@@ -1318,12 +1298,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				require.NoError(t, err)
 				time.Sleep(10 * time.Second) // wait for controllers to pick up the change
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -1362,12 +1337,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				time.Sleep(10 * time.Second) // wait for controllers to pick up the change
 				return []string{}
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -1380,10 +1350,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			createIDP: func(t *testing.T) string {
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			requestTokenExchangeAud: "contains-disallowed-substring.pinniped.dev-something", // .pinniped.dev substring is not allowed
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud:             "contains-disallowed-substring.pinniped.dev-something", // .pinniped.dev substring is not allowed
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
@@ -1401,10 +1370,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			createIDP: func(t *testing.T) string {
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			requestTokenExchangeAud: "client.oauth.pinniped.dev-client-name", // OIDC dynamic client name is not allowed
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud:             "client.oauth.pinniped.dev-client-name", // OIDC dynamic client name is not allowed
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
@@ -1422,10 +1390,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			createIDP: func(t *testing.T) string {
 				return testlib.CreateTestOIDCIdentityProvider(t, basicOIDCIdentityProviderSpec(), idpv1alpha1.PhaseReady).Name
 			},
-			requestAuthorization:    requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			requestTokenExchangeAud: "pinniped-cli", // pinniped-cli is not allowed
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			requestTokenExchangeAud:             "pinniped-cli", // pinniped-cli is not allowed
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 			wantTokenExchangeResponse: func(t *testing.T, status int, body string) {
@@ -1456,11 +1423,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
@@ -1489,11 +1455,10 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
-			// the ID token Subject should include the upstream user ID after the upstream issuer name
-			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
@@ -1513,20 +1478,15 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -1545,7 +1505,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // token exchange grant type not allowed
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // a validation requires that we also disallow the pinniped:request-audience scope
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1579,7 +1539,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1613,7 +1573,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1639,7 +1599,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1665,21 +1625,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			downstreamScopes:     []string{"openid", "pinniped:request-audience", "offline_access", "username"}, // do not request (or expect) groups
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			downstreamScopes:                    []string{"openid", "pinniped:request-audience", "offline_access", "username"}, // do not request (or expect) groups
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
@@ -1698,21 +1653,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			downstreamScopes:     []string{"openid", "pinniped:request-audience", "offline_access", "groups"}, // do not request (or expect) username
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			downstreamScopes:                    []string{"openid", "pinniped:request-audience", "offline_access", "groups"}, // do not request (or expect) username
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "" // username should not exist as a claim since we did not request it
 			},
@@ -1737,21 +1687,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access"}, // validations require that when username/groups are excluded, then token exchange must also not be allowed
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
 				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
 			},
-			downstreamScopes:     []string{"openid", "offline_access"}, // do not request (or expect) pinniped:request-audience or username or groups
-			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamLDAP.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)+
-					"&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
-			) + "$",
+			downstreamScopes:                    []string{"openid", "offline_access"}, // do not request (or expect) pinniped:request-audience or username or groups
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "" // username should not exist as a claim since we did not request it
 			},
@@ -1776,24 +1721,15 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 			},
-			requestAuthorization: func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
-				requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t,
-					downstreamIssuer,
-					downstreamAuthorizeURL,
-					downstreamCallbackURL,
-					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
-					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
-					httpClient,
-				)
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword // password to present to server during login
 			},
-			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
-			wantDownstreamIDTokenSubjectToMatch: "^" + regexp.QuoteMeta(
-				"ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+
-					"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)+
-					"&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
-			) + "$",
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
@@ -1812,7 +1748,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.PhaseReady)
+				}, configv1alpha1.OIDCClientPhaseReady)
 				return clientID, "wrong-client-secret"
 			},
 			testUser: func(t *testing.T) (string, string) {
@@ -1822,6 +1758,340 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			requestAuthorization:      requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
 			wantAuthcodeExchangeError: `oauth2: "invalid_client" "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."`,
+		},
+		{
+			name:      "oidc browser flow with custom username and groups claim settings with identity transformations",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my oidc idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "OIDCIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamOIDC.Username),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer) +
+				regexp.QuoteMeta("?idpName="+url.QueryEscape("my oidc idp")) +
+				regexp.QuoteMeta("&sub=") + ".+" +
+				"$",
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamOIDC.Username) + "$"
+			},
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups),
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update the groups to some names that did not come from the OIDC server,
+				// we expect that it will revert to the real groups from the OIDC server after we refresh.
+				// However if there are no expected groups then they will not update, so we should skip this.
+				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
+					initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+					sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+					sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				}
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamOIDC.ExpectedGroups)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+		},
+		{
+			name:      "ldap CLI flow with email as username and groups names as DNs and using an LDAP provider which supports TLS with identity transformations",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my ldap idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "LDAPIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamLDAP.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)) +
+				regexp.QuoteMeta("&idpName="+url.QueryEscape("my ldap idp")) +
+				regexp.QuoteMeta("&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue))) +
+				"$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute and then transformed
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
+		},
+		{
+			name:      "ldap browser flow with email as username and groups names as DNs and using an LDAP provider which supports TLS with identity transformations",
+			maybeSkip: skipLDAPTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my ldap idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "LDAPIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamLDAP.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase)) +
+				regexp.QuoteMeta("&idpName="+url.QueryEscape("my ldap idp")) +
+				regexp.QuoteMeta("&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue))) +
+				"$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute and then transformed
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs),
+		},
+		{
+			name:      "active directory CLI flow with all default options with identity transformations",
+			maybeSkip: skipActiveDirectoryTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my ad idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "ActiveDirectoryIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the AD server,
+				// we expect that it will return to the real groups from the AD server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)) +
+				regexp.QuoteMeta("&idpName="+url.QueryEscape("my ad idp")) +
+				regexp.QuoteMeta("&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue) +
+				"$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
+		},
+		{
+			name:      "active directory browser flow with all default options with identity transformations",
+			maybeSkip: skipActiveDirectoryTests,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my ad idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: displayName,
+						ObjectRef: v1.TypedLocalObjectReference{
+							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+							Kind:     "ActiveDirectoryIdentityProvider",
+							Name:     idpName,
+						},
+						Transforms: configv1alpha1.FederationDomainTransforms{
+							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								{
+									Type: "username/v1",
+									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
+										env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue),
+								},
+								{
+									Type:       "groups/v1",
+									Expression: `groups.map(g, "group-prefix:" + g)`,
+								},
+							},
+						},
+					},
+				}, displayName
+			},
+			testUser: func(t *testing.T) (string, string) {
+				// return the username and password of the existing user that we want to use for this test
+				return env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword // password to present to server during login
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowLDAP,
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the AD server,
+				// we expect that it will return to the real groups from the AD server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				// Simulate what happens when the transformations choose a different downstream username during refresh
+				// compared to what they chose during the initial login, by changing what they decided during the initial login.
+				customSessionData.Username = "some-different-downstream-username"
+			},
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)) +
+				regexp.QuoteMeta("&idpName="+url.QueryEscape("my ad idp")) +
+				regexp.QuoteMeta("&sub="+env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue) +
+				"$",
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta("username-prefix:"+env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: testutil.AddPrefixToEach("group-prefix:", env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames),
 		},
 	}
 
@@ -1833,6 +2103,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			testSupervisorLogin(
 				t,
 				tt.createIDP,
+				tt.federationDomainIDPs,
 				tt.requestAuthorization,
 				tt.editRefreshSessionDataWithoutBreaking,
 				tt.breakRefreshSessionData,
@@ -1987,6 +2258,7 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
+	federationDomainIDPs func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string),
 	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
 	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
@@ -2063,11 +2335,26 @@ func testSupervisorLogin(
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 
-	// Create the downstream FederationDomain and expect it to go into the success status condition.
+	// Create upstream IDP and wait for it to become ready.
+	idpName := createIDP(t)
+
+	// Determine if and how we should set spec.identityProviders for the FederationDomain.
+	var fdIDPSpec []configv1alpha1.FederationDomainIdentityProvider
+	useIDPDisplayName := ""
+	if federationDomainIDPs != nil {
+		fdIDPSpec, useIDPDisplayName = federationDomainIDPs(t, idpName)
+	}
+
+	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		issuerURL.String(),
-		certSecret.Name,
-		configv1alpha1.SuccessFederationDomainStatusCondition,
+		configv1alpha1.FederationDomainSpec{
+			Issuer:            issuerURL.String(),
+			TLS:               &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			IdentityProviders: fdIDPSpec,
+		},
+		// The IDP CR already exists, so even for legacy FederationDomains which do not explicitly list
+		// the IDPs in the spec, the FederationDomain should be ready.
+		configv1alpha1.FederationDomainPhaseReady,
 	)
 
 	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
@@ -2087,9 +2374,6 @@ func testSupervisorLogin(
 		requireEventually.NoError(rsp.Body.Close())
 		requireEventually.Equal(http.StatusOK, rsp.StatusCode)
 	}, 30*time.Second, 200*time.Millisecond)
-
-	// Create upstream IDP and wait for it to become ready.
-	idpName := createIDP(t)
 
 	// Start a callback server on localhost.
 	localCallbackServer := startLocalCallbackServer(t)
@@ -2151,12 +2435,15 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 	pkceParam, err := pkce.Generate()
 	require.NoError(t, err)
-	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(
-		stateParam.String(),
+	authorizeRequestParams := []oauth2.AuthCodeOption{
 		nonceParam.Param(),
 		pkceParam.Challenge(),
 		pkceParam.Method(),
-	)
+	}
+	if useIDPDisplayName != "" {
+		authorizeRequestParams = append(authorizeRequestParams, oauth2.SetAuthURLParam("pinniped_idp_name", useIDPDisplayName))
+	}
+	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(stateParam.String(), authorizeRequestParams...)
 
 	// Perform parameterized auth code acquisition.
 	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
@@ -2240,7 +2527,7 @@ func testSupervisorLogin(
 		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
 		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
 		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		oauthStore := storage.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
 		require.NoError(t, err)
 
@@ -2302,7 +2589,7 @@ func testSupervisorLogin(
 		// First use the latest downstream refresh token to look up the corresponding session in the Supervisor's storage.
 		supervisorSecretsClient := testlib.NewKubernetesClientset(t).CoreV1().Secrets(env.SupervisorNamespace)
 		supervisorOIDCClientsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
-		oauthStore := oidc.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
+		oauthStore := storage.NewKubeStorage(supervisorSecretsClient, supervisorOIDCClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), oidcclientvalidator.DefaultMinBcryptCost)
 		storedRefreshSession, err := oauthStore.GetRefreshTokenSession(ctx, signatureOfLatestRefreshToken, nil)
 		require.NoError(t, err)
 
@@ -2526,7 +2813,16 @@ func makeAuthorizationRequestAndRequireSecurityHeaders(ctx context.Context, t *t
 	require.NoError(t, err)
 	authorizeResp, err := httpClient.Do(authorizeRequest)
 	require.NoError(t, err)
+	body, err := io.ReadAll(authorizeResp.Body)
+	require.NoError(t, err)
 	require.NoError(t, authorizeResp.Body.Close())
+	if authorizeResp.StatusCode >= 400 {
+		// The request should not have failed, so print the response for debugging purposes.
+		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response: %#v", authorizeResp)
+		t.Logf("makeAuthorizationRequestAndRequireSecurityHeaders authorization response body: %q", body)
+	}
+	require.Less(t, authorizeResp.StatusCode, 400,
+		"expected a successful authorize response, but got a response status indicating an error (see log above)")
 	expectSecurityHeaders(t, authorizeResp, false)
 }
 

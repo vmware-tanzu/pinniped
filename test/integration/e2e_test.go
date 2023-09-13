@@ -29,7 +29,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/ptr"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -100,16 +102,18 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := testlib.CreateTestFederationDomain(topSetupCtx, t,
-		issuerURL.String(),
-		certSecret.Name,
-		configv1alpha1.SuccessFederationDomainStatusCondition,
+	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
+		configv1alpha1.FederationDomainSpec{
+			Issuer: issuerURL.String(),
+			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+		},
+		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authv1alpha.JWTAuthenticatorSpec{
-		Issuer:   downstream.Spec.Issuer,
+		Issuer:   federationDomain.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
 	})
@@ -140,7 +144,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -156,9 +160,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -168,6 +174,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -182,8 +189,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
@@ -191,7 +198,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// If the username and groups scope are not requested by the CLI, then the CLI still gets them, to allow for
@@ -221,7 +229,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -237,9 +245,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -249,6 +259,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
 		})
 
@@ -263,8 +274,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
 		// It should now be in the "success" state.
@@ -276,8 +287,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
 		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
 		// assert that the expected username and groups claims/values are in the downstream ID token.
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath,
-			pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
@@ -305,7 +316,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -321,9 +332,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -334,6 +347,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -368,8 +382,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
 		authCode := formpostExpectManualState(t, browser)
@@ -388,7 +402,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("access token based refresh with Supervisor OIDC upstream IDP and manual authcode copy-paste from browser flow", func(t *testing.T) {
@@ -424,7 +439,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		}
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -440,9 +455,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -453,6 +470,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-listen",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -493,8 +511,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
 
 		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
-		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
-		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
 		// The response page should have failed to automatically post, and should now be showing the manual instructions.
 		authCode := formpostExpectManualState(t, browser)
@@ -524,7 +542,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow without web browser", func(t *testing.T) {
@@ -549,7 +568,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -566,9 +585,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -580,6 +601,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -607,7 +629,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and CLI password flow when OIDCIdentityProvider disallows it", func(t *testing.T) {
@@ -634,9 +657,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -654,6 +679,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-flow", "cli_password",
 			"--oidc-ca-bundle", testCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -705,10 +731,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -716,6 +744,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -743,7 +772,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// If the username and groups scope are not requested by the CLI, then the CLI still gets them, to allow for
@@ -759,10 +789,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -770,6 +802,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
 		})
 
@@ -801,8 +834,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// The scopes portion of the cache key is made up of the requested scopes from the CLI flag, not the granted
 		// scopes returned by the Supervisor, so list the requested scopes from the CLI flag here. This helper will
 		// assert that the expected username and groups claims/values are in the downstream ID token.
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath,
-			pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, []string{"offline_access", "openid", "pinniped:request-audience"})
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
@@ -818,10 +851,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -829,6 +864,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -868,7 +904,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
@@ -884,10 +921,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
-		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -895,6 +934,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -922,7 +962,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an ActiveDirectory upstream IDP and try using it to authenticate during kubectl commands
@@ -938,10 +979,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
-		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -949,6 +992,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -988,7 +1032,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, os.Unsetenv(usernameEnvVar))
 		require.NoError(t, os.Unsetenv(passwordEnvVar))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
@@ -1006,10 +1051,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1020,6 +1067,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1031,14 +1079,15 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands, using the browser flow.
@@ -1056,10 +1105,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
-		setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1070,6 +1121,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1081,14 +1133,15 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamActiveDirectory.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands, using the env var to choose the browser flow.
@@ -1106,10 +1159,12 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
 
 		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 			"get", "kubeconfig",
@@ -1120,6 +1175,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-ca-bundle", testCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
 		})
 
@@ -1137,14 +1193,340 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the Supervisor's login page, fill out the form, and submit the form.
-		browsertest.LoginToUpstreamLDAP(t, browser, downstream.Spec.Issuer,
+		browsertest.LoginToUpstreamLDAP(t, browser, federationDomain.Spec.Issuer,
 			expectedUsername, env.SupervisorUpstreamLDAP.TestUserPassword)
 
 		formpostExpectSuccessState(t, browser)
 
 		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
 
-		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, downstream, kubeconfigPath, sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+	})
+
+	t.Run("with multiple IDPs: one OIDC and one LDAP", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		browser := browsertest.OpenBrowser(t)
+
+		downstreamPrefix := "pre:"
+
+		expectedUpstreamLDAPUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedDownstreamLDAPUsername := downstreamPrefix + expectedUpstreamLDAPUsername
+		expectedUpstreamLDAPGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+		expectedDownstreamLDAPGroups := make([]string, 0, len(expectedUpstreamLDAPGroups))
+		for _, g := range expectedUpstreamLDAPGroups {
+			expectedDownstreamLDAPGroups = append(expectedDownstreamLDAPGroups, downstreamPrefix+g)
+		}
+
+		expectedUpstreamOIDCUsername := env.SupervisorUpstreamOIDC.Username
+		expectedDownstreamOIDCUsername := downstreamPrefix + expectedUpstreamOIDCUsername
+		expectedUpstreamOIDCGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+		expectedDownstreamOIDCGroups := make([]string, 0, len(expectedUpstreamOIDCGroups))
+		for _, g := range expectedUpstreamOIDCGroups {
+			expectedDownstreamOIDCGroups = append(expectedDownstreamOIDCGroups, downstreamPrefix+g)
+		}
+
+		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
+
+		// Having one IDP should put the FederationDomain into a ready state.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedDownstreamOIDCUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedDownstreamOIDCUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream OIDC provider and wait for it to become ready.
+		createdOIDCProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
+
+		// Update the FederationDomain to use the two IDPs.
+		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		ldapIDPDisplayName := "My LDAP IDP 💾"
+		oidcIDPDisplayName := "My OIDC IDP 🚀"
+
+		gotFederationDomain.Spec.IdentityProviders = []configv1alpha1.FederationDomainIdentityProvider{
+			{
+				DisplayName: ldapIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "LDAPIdentityProvider",
+					Name:     createdLDAPProvider.Name,
+				},
+				Transforms: configv1alpha1.FederationDomainTransforms{
+					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamLDAPUsername},
+						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamLDAPUsername, "someone else"}},
+					},
+					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
+						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
+						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
+					},
+					Examples: []configv1alpha1.FederationDomainTransformsExample{
+						{
+							Username: expectedUpstreamLDAPUsername,
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Username: expectedDownstreamLDAPUsername,
+								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
+							},
+						},
+						{
+							Username: "someone other user",
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Rejected: true,
+								Message:  "only special users allowed",
+							},
+						},
+					},
+				},
+			},
+			{
+				DisplayName: oidcIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "OIDCIdentityProvider",
+					Name:     createdOIDCProvider.Name,
+				},
+				Transforms: configv1alpha1.FederationDomainTransforms{
+					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamOIDCUsername},
+						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamOIDCUsername, "someone else"}},
+					},
+					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
+						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
+						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
+					},
+					Examples: []configv1alpha1.FederationDomainTransformsExample{
+						{
+							Username: expectedUpstreamOIDCUsername,
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Username: expectedDownstreamOIDCUsername,
+								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
+							},
+						},
+						{
+							Username: "someone other user",
+							Groups:   []string{"a", "b"},
+							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+								Rejected: true,
+								Message:  "only special users allowed",
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err = federationDomainsClient.Update(testCtx, gotFederationDomain, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// The FederationDomain should be valid after the above update.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
+
+		ldapKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+			"--upstream-identity-provider-name", ldapIDPDisplayName,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		oidcKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+			"--upstream-identity-provider-name", oidcIDPDisplayName,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
+		t.Log("starting LDAP auth via kubectl")
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUpstreamLDAPUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
+		t.Log("starting OIDC auth via kubectl")
+		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
+
+		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
+
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, browser)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		// The user is now logged in to the cluster as two different identities simultaneously, and can switch
+		// back and forth by switching kubeconfigs, without needing to auth again.
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+
+		// Update the policies of both IDPs on the FederationDomain to reject the expected upstream usernames during authentication.
+		// Remove the examples since we are changing the transforms.
+		_, err = federationDomainsClient.Patch(testCtx, gotFederationDomain.Name, types.JSONPatchType,
+			[]byte(here.Doc(
+				`[
+					{
+					  "op": "replace",
+					  "path": "/spec/identityProviders/0/transforms/expressions/0",
+					  "value": {
+						"type": "policy/v1",
+						"expression": "username != strConst.allowedUser",
+						"message": "only special LDAP users allowed"
+					  }
+					},
+					{
+					  "op": "replace",
+					  "path": "/spec/identityProviders/1/transforms/expressions/0",
+					  "value": {
+						"type": "policy/v1",
+						"expression": "username != strConst.allowedUser",
+						"message": "only special OIDC users allowed"
+					  }
+					},
+					{
+					  "op": "remove",
+					  "path": "/spec/identityProviders/0/transforms/examples"
+					},
+					{
+					  "op": "remove",
+					  "path": "/spec/identityProviders/1/transforms/examples"
+					}
+				 ]`,
+			)),
+			metav1.PatchOptions{},
+		)
+		require.NoError(t, err)
+
+		// Wait for the status conditions to have observed the current spec generation so we can be sure that the
+		// controller has observed our latest update.
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			fd, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			t.Log("saw FederationDomain", fd)
+			requireEventually.Equal(fd.Generation, fd.Status.Conditions[0].ObservedGeneration)
+		}, 20*time.Second, 250*time.Millisecond)
+		// The FederationDomain should be valid after the above update.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+
+		// Log out so we can try fresh logins again.
+		require.NoError(t, os.Remove(credentialCachePath))
+		require.NoError(t, os.Remove(sessionCachePath))
+
+		// Policies don't impact the kubeconfig files, so we can reuse the existing kubeconfig files.
+		// Try to log again, and this time expect to be rejected by the configured policies.
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
+		t.Log("starting second LDAP auth via kubectl")
+		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err = pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedUpstreamLDAPUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ = io.ReadAll(ptyFile)
+		t.Log("kubectl command output:\n", string(kubectlOutputBytes))
+		require.Contains(t, string(kubectlOutputBytes),
+			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
+				`The resource owner or authorization server denied the request. `+
+				`Reason: configured identity policy rejected this authentication: only special LDAP users allowed.`)
+		require.Contains(t, string(kubectlOutputBytes), "pinniped failed with exit code 1")
 	})
 }
 
@@ -1241,7 +1623,7 @@ func waitForKubectlOutput(t *testing.T, kubectlOutputChan chan string) string {
 	return kubectlOutput
 }
 
-func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib.TestEnv) {
+func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib.TestEnv) *idpv1alpha1.LDAPIdentityProvider {
 	// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 	testlib.CreateTestClusterRoleBinding(t,
 		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: username},
@@ -1263,7 +1645,7 @@ func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib
 	)
 
 	// Create upstream LDAP provider and wait for it to become ready.
-	testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+	return testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 		Host: env.SupervisorUpstreamLDAP.Host,
 		TLS: &idpv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
@@ -1289,7 +1671,7 @@ func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib
 	}, idpv1alpha1.LDAPPhaseReady)
 }
 
-func setupClusterForEndToEndActiveDirectoryTest(t *testing.T, username string, env *testlib.TestEnv) {
+func setupClusterForEndToEndActiveDirectoryTest(t *testing.T, username string, env *testlib.TestEnv) *idpv1alpha1.ActiveDirectoryIdentityProvider {
 	// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 	testlib.CreateTestClusterRoleBinding(t,
 		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: username},
@@ -1311,7 +1693,7 @@ func setupClusterForEndToEndActiveDirectoryTest(t *testing.T, username string, e
 	)
 
 	// Create upstream LDAP provider and wait for it to become ready.
-	testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+	return testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
 		Host: env.SupervisorUpstreamActiveDirectory.Host,
 		TLS: &idpv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
@@ -1369,6 +1751,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	t *testing.T,
 	env *testlib.TestEnv,
 	downstream *configv1alpha1.FederationDomain,
+	upstreamProviderName string,
 	kubeconfigPath string,
 	sessionCachePath string,
 	pinnipedExe string,
@@ -1392,10 +1775,11 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 
 	sort.Strings(downstreamScopes)
 	token := cache.GetToken(oidcclient.SessionCacheKey{
-		Issuer:      downstream.Spec.Issuer,
-		ClientID:    "pinniped-cli",
-		Scopes:      downstreamScopes,
-		RedirectURI: "http://localhost:0/callback",
+		Issuer:               downstream.Spec.Issuer,
+		ClientID:             "pinniped-cli",
+		Scopes:               downstreamScopes,
+		RedirectURI:          "http://localhost:0/callback",
+		UpstreamProviderName: upstreamProviderName,
 	})
 	require.NotNil(t, token)
 
@@ -1498,7 +1882,7 @@ func runPinnipedGetKubeconfig(t *testing.T, env *testlib.TestEnv, pinnipedExe st
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
 
-	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
+	kubeconfigPath := filepath.Join(tempDir, fmt.Sprintf("kubeconfig-%s.yaml", testlib.RandHex(t, 8)))
 	require.NoError(t, os.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
 	return kubeconfigPath

@@ -15,8 +15,8 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 
+	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/controllerinit"
-	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/credentialrequest"
@@ -30,7 +30,7 @@ type Config struct {
 
 type ExtraConfig struct {
 	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
-	Issuer                        issuer.ClientCertIssuer
+	Issuer                        clientcertissuer.ClientCertIssuer
 	BuildControllersPostStartHook controllerinit.RunnerBuilder
 	Scheme                        *runtime.Scheme
 	NegotiatedSerializer          runtime.NegotiatedSerializer

@@ -179,7 +179,7 @@ func NewAgentController(
 		dynamicCertProvider,
 		&clock.RealClock{},
 		cache.NewExpiring(),
-		plog.Logr(), //nolint:staticcheck  // old controller with lots of log statements
+		plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 	)
 }
 

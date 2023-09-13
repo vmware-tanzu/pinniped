@@ -235,6 +235,26 @@ func TestTransformer(t *testing.T) {
 			wantGroups:   []string{"admins", "developers", "other"},
 		},
 		{
+			name:     "can use regex on strings: when the regex matches",
+			username: "ryan",
+			groups:   []string{"admins", "developers", "other"},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `username.matches("^r[abcy].n$") ? "ryan-modified" : username`},
+			},
+			wantUsername: "ryan-modified",
+			wantGroups:   []string{"admins", "developers", "other"},
+		},
+		{
+			name:     "can use regex on strings: when the regex does not match",
+			username: "olive",
+			groups:   []string{"admins", "developers", "other"},
+			transforms: []CELTransformation{
+				&UsernameTransformation{Expression: `username.matches("^r[abcy].n$") ? "ryan-modified" : username`},
+			},
+			wantUsername: "olive",
+			wantGroups:   []string{"admins", "developers", "other"},
+		},
+		{
 			name:     "can filter groups based on an allow list",
 			username: "ryan",
 			groups:   []string{"admins", "developers", "other"},

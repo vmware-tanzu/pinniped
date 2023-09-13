@@ -11,8 +11,8 @@ menu:
 aliases:
    - /docs/howto/configure-supervisor-with-okta/
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
-"upstream" identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting
+"upstream" identity providers to many "downstream" cluster clients.
 
 This guide shows you how to configure the Supervisor so that users can authenticate to their Kubernetes
 cluster using their Okta credentials.

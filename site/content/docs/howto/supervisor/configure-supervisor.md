@@ -12,8 +12,8 @@ aliases:
   - /docs/howto/configure-supervisor/
 ---
 
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
-"upstream" identity provider to many "downstream" cluster clients. When a user authenticates, the Supervisor can issue
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting
+"upstream" identity providers to many "downstream" cluster clients. When a user authenticates, the Supervisor can issue
 [JSON Web Tokens (JWTs)](https://tools.ietf.org/html/rfc7519) that can be [validated by the Pinniped Concierge]({{< ref "configure-concierge-jwt" >}}).
 
 This guide explains how to expose the Supervisor's REST endpoints to clients.
@@ -246,10 +246,54 @@ spec:
   # for the HTTPS endpoints served by this OIDC Provider.
   tls:
     secretName: my-tls-cert-secret
+  # Configure which identity providers (OIDCIdentityProvider,
+  # ActiveDirectoryIdentityProvider, or LDAPIdentityProvider)
+  # shall be used by this FederationDomain.
+  identityProviders:
+    # See the "IDPs on FederationDomains" Supervisor configuration guide
+    # for details on how to configure this section of the FederationDomain's
+    # spec.
 ```
 
-You can create multiple FederationDomains as long as each has a unique issuer string.
+### How FederationDomains Work
+
 Each FederationDomain can be used to provide access to a set of Kubernetes clusters for a set of user identities.
+A FederationDomain will allow the same set of users to authenticate into all Kubernetes clusters
+which choose to trust that FederationDomain to provide authentication services. Authenticating to a FederationDomain
+will only provide access to those clusters which choose to trust that FederationDomain, and will not provide access
+to any clusters that are trusting other FederationDomains. Therefore, FederationDomains are a means of providing
+authentication isolation.
+
+You can create multiple FederationDomains in a single Pinniped Supervisor, as long as each has a unique issuer string.
+
+When a user authenticates into any cluster that chooses to trust the FederationDomain for authentication,
+then the user has started a single sign-on session with that FederationDomain which will last approximately 9 hours.
+The user will not need to manually authenticate again into any cluster any cluster that chooses to trust the
+FederationDomain for authentication until the session expires. Behind the scenes, the user's client (e.g. `kubectl`)
+will only be given short-lived access to each cluster (approximately 5 minutes), but will automatically refresh those
+credentials without the need for user interaction. During each refresh, the Supervisor will perform checks against
+the external identity provider to determine if the user's session should be allowed to continue.
+A user may have active sessions with multiple FederationDomains at the same time, but each will require authenticating
+separately to start the single sign-on session with that FederationDomain.
+
+Technically, each FederationDomain is a separate OIDC issuer which serves multiple REST endpoints to clients, such
+as the Pinniped CLI. The tokens issued by each FederationDomain are signed by that FederationDomain and cannot
+be used by any other FederationDomain, which provides the isolation properties of the FederationDomain concept.
+
+Any Kubernetes cluster can choose to trust a FederationDomain to provide user authentication
+for that cluster by using the FederationDomain its OIDC issuer for JSON Web Token (JWT) formatted ID tokens.
+This can be done by installing the Pinniped Concierge on each cluster and
+[configuring the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}})
+on each cluster. Alternatively, it can be done by [configuring the Kubernetes API server on each cluster to use
+the FederationDomain as its OIDC issuer]({{< ref "../../tutorials/supervisor-without-concierge-demo" >}}).
+
+When two FederationDomains use the same hostname in the `spec.issuer`, then:
+1. They must use different paths in their `spec.issuer` URLs to differentiate them from each other.
+2. They must use the same `tls.secretName` if they both configure a `tls.secretName` (see below for details of TLS configuration).
+
+The Supervisor uses the hostname on the each incoming request to determine which TLS certificate to serve for that
+request, and then it uses the path to determine which FederationDomain should serve the request if there are multiple
+FederationDomains with the same hostname.
 
 ### Configuring TLS for the Supervisor OIDC endpoints
 
@@ -295,6 +339,7 @@ should be signed by a certificate authority that is trusted by their browsers.
 ## Next steps
 
 Next, configure an OIDCIdentityProvider, ActiveDirectoryIdentityProvider, or an LDAPIdentityProvider for the Supervisor
-(several examples are available in these guides). Then
+(several examples are available in these guides). Then learn [how to configure a FederationDomain to use one or more
+identity providers]({{< ref "configure-supervisor-federationdomain-idps" >}}). And finally,
 [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}})
-on each cluster!
+on each cluster.

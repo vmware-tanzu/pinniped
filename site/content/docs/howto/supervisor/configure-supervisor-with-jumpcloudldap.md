@@ -11,8 +11,8 @@ menu:
 aliases:
    - /docs/howto/configure-supervisor-with-jumpcloudldap/
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
-"upstream" identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting
+"upstream" identity providers to many "downstream" cluster clients.
 
 [JumpCloud](https://jumpcloud.com) is a cloud-based service which bills itself as
 "a comprehensive and flexible cloud directory platform". It includes the capability to act as an LDAP identity provider.

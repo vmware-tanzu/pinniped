@@ -11,8 +11,8 @@ menu:
 aliases: 
   - /docs/howto/configure-supervisor-with-openldap/
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
-"upstream" identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting
+"upstream" identity providers to many "downstream" cluster clients.
 
 [OpenLDAP](https://www.openldap.org) is a popular open source LDAP server for Linux/UNIX.
 

@@ -36,25 +36,38 @@ function check_dependency() {
   fi
 }
 
-app="${1:-undefined}"
-tag="${2:-undefined}"
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-log_note "log-args.sh >>> script dir: ${SCRIPT_DIR}"
-log_note "log-args.sh >>> app: ${app} tag: ${tag}"
-exit 1
 
-# Build the PackageRepository and Package resources
-# - container images
-# - yaml files
-# Deploy the container images to a registry
-# No need for a running cluster
+# NOTES:
+# - on images
+#   prepare-for-integration-tests.sh simply creates images with a "docker build" call.
+#   then it loads them into the kind cluster via kind load docker-image ....
+#   nothing fancy here.
+# so, in this script, we ought be able to do the same, build images and imgpkg bundles
+# and push or load them into a kind cluster.
+
+# ./prepare-for-integration-tests.sh will pass each of these.
+# optionally could be user defined.
+# app is currently ignored, tag is necessary.
+app="${1:-undefined}"
+tag="${2:-$(uuidgen)}"  # always a new tag to force K8s to reload the image on redeploy
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+
+# TODO: final resting place for these images (PackageRepository, Packge) will need to be in the same plate as our regular images:
+#   https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0
 #
-# TODO: final resting place for these images (PackageRepository, Packge) will need to
-# be in the same plate as our regular images:
-# - https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0
-# namely docker.io/getpinniped/ and projects.registry.vmware.com/pinniped/
-#
-PACKAGE_REPO_HOST="benjaminapetersen/pinniped-package-repo"
+# from prepare-for-integration-tests.sh
+# registry="pinniped.local"
+# repo="test/build"
+registry="docker.io/benjaminapetersen" # docker.io default
+repo="pinniped-package-repo"
+registry_repo="$registry/$repo"
+tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+# can't use this straight from prepare-for-integration-tests.sh as we build several images in this file
+# registry_repo_tag="${registry_repo}:${tag}"
+
+PACKAGE_REPO_HOST="${registry_repo}"
 # TODO: this variable is currently a little quirky as our values.yaml files do NOT pin pinniped to a specific
 # hard-coded version.  Rather, Pinniped's values.yaml allows for a passed-in version.
 PINNIPED_PACKAGE_VERSION="0.25.0"
@@ -80,48 +93,66 @@ declare -a arr=("supervisor" "concierge")
 for resource_name in "${arr[@]}"
 do
   log_note "Generating for ${resource_name}..."
+  RESOURCE_DIR="${SCRIPT_DIR}/${resource_name}"
+  CONFIG_DIR="${RESOURCE_DIR}/config"
+  VALUES_FILE="${CONFIG_DIR}/values.yaml"
+  IMGPKG_IMAGES_FILE="${RESOURCE_DIR}/.imgpkg/images.yml"
+  SCHEMA_OPENAPI_FILE="${RESOURCE_DIR}/schema-openapi.yaml"
 
-  log_note "Generating ${resource_name} imgpkg lock file... ${resource_name}/.imgpkg/images.yaml"
-  kbld --file "./${resource_name}/config/" --imgpkg-lock-output "./${resource_name}/.imgpkg/images.yml"
+  log_note "Generating ${resource_name} imgpkg lock file... ${IMGPKG_IMAGES_FILE}"
+  kbld --file "${CONFIG_DIR}" --imgpkg-lock-output "${IMGPKG_IMAGES_FILE}"
 
   # generate a schema in each package directory
-  log_note "Generating ${resource_name} OpenAPIv3 Schema... ./${resource_name}/schema-openapi.yaml"
+  log_note "Generating ${resource_name} OpenAPIv3 Schema... ${SCHEMA_OPENAPI_FILE}"
   ytt \
-    --file "${resource_name}/config/values.yaml" \
-    --data-values-schema-inspect --output openapi-v3 > "${resource_name}/schema-openapi.yml"
+    --file "${VALUES_FILE}" \
+    --data-values-schema-inspect --output openapi-v3 > "${SCHEMA_OPENAPI_FILE}"
 
   # TODO: this is not the pattern we want.
   # final resting place should be with our primary Pinniped image at:
   # - projects.registry.vmware.com/pinniped/pinniped-server:v0.25.0	VMware Harbor
   # - docker.io/getpinniped/pinniped-server:v0.25.0	DockerHub
   package_push_repo_location="${PACKAGE_REPO_HOST}-package-${resource_name}:${PINNIPED_PACKAGE_VERSION}"
+  package_repo_pull_location=""
   log_note "Pushing ${resource_name} package image: ${package_push_repo_location} ..."
-  imgpkg push --bundle "${package_push_repo_location}" --file "./${resource_name}"
+
+  # need to push and then pull in order to kind load it later
+  # imgpkg does not support a "build it locally and keep the image in your docker registry"
+  imgpkg push --bundle "${package_push_repo_location}" --file "${RESOURCE_DIR}"
+  docker pull "${package_push_repo_location}"
+  # TODO:
+  # - match prepare-for-integration-tests.sh
+  # - do we want this in this script, or do we want to split things apart into several scripts?
+  log_note "Loading Package image ${resource_name} into kind from repo ${package_push_repo_location}..."
+  kind load docker-image "${package_push_repo_location}" --name "${resource_name}"
 
   resource_package_version="${resource_name}.pinniped.dev"
+  PACKAGE_REPO_PACKGE_FILE="${RSOURCE_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
   log_note "Generating ${resource_name} PackageRepository yaml..."
-  log_note "generating ./${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+  log_note "generating ${PACKAGE_REPO_PACKGE_FILE}"
   ytt \
     --file "${resource_name}/package-template.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
-    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPO_PACKGE_FILE}"
 
-  log_note "generating ./${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
+  PACKAGE_METADATA_FILE="${RSOURCE_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
+  log_note "generating ${PACKAGE_METADATA_FILE}"
   ytt \
     --file "${resource_name}/metadata.yml" \
     --data-value-file openapi="$(pwd)/${resource_name}/schema-openapi.yml" \
     --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
-    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
-
+    --data-value package_image_repo="${package_push_repo_location}" > "${PACKAGE_METADATA_FILE}"
 done
 
+
 log_note "Generating Pinniped PackageRepository..."
-log_note "Generating ./${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
-kbld --file "./${PACKAGE_REPOSITORY_DIR}/packages/" --imgpkg-lock-output "${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
+log_note "Generating ${RESOURCE_DIR}/${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
+kbld --file "${RESOURCE_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/" --imgpkg-lock-output "${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
 package_repository_push_repo_location="${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
 log_note "Pushing Pinniped package repository image: ${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}..."
 imgpkg push --bundle "${package_repository_push_repo_location}" --file "./${PACKAGE_REPOSITORY_DIR}"
+docker pull "${package_repository_push_repo_location}"
 
 # handy for a quick debug
 # log_note "Validating imgpkg package bundle contents..."
@@ -132,6 +163,15 @@ imgpkg push --bundle "${package_repository_push_repo_location}" --file "./${PACK
 log_note "Generating PackageRepository yaml file..."
 PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
 PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
+
+
+# TODO:
+# - match prepare-for-integration-tests.sh
+# - do we want this in this script, or do we want to split things apart into several scripts?
+log_note "Loading PackageRepository PINNIPED_PACKGE_REPOSITORY_NAME into kind from repo ${package_repository_push_repo_location}..."
+kind load docker-image "${package_repository_push_repo_location}" --name "${PINNIPED_PACKGE_REPOSITORY_NAME}"
+
+
 echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
 
 cat <<EOT >> "${PINNIPED_PACKGE_REPOSITORY_FILE}"

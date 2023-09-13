@@ -27,7 +27,7 @@ stringData:
     namespace: supervisor
     api_group_suffix: pinniped.dev
     image_repo: pinniped.local/test/build
-    image_tag: 879CCF7A-2F00-4355-80A6-76C713116D93
+    image_tag: 9EA78F67-5129-45B4-96E1-597073E864F9
     log_level: debug
 
     service_https_nodeport_port: 443

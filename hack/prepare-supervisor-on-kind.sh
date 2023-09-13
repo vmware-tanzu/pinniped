@@ -137,6 +137,11 @@ sleep 5
 
 # Test that the federation domain is working before we proceed.
 echo "Fetching FederationDomain discovery info..."
+echo "proxy: ${PINNIPED_TEST_PROXY}"
+echo "cacert: ${root_ca_crt_path}"
+echo "issuer: ${issuer}"
+echo "curl via:"
+echo "https_proxy='$PINNIPED_TEST_PROXY' curl -fLsS --cacert '$root_ca_crt_path' '$issuer/.well-known/openid-configuration' | jq ."
 https_proxy="$PINNIPED_TEST_PROXY" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then

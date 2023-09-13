@@ -54,7 +54,7 @@ function check_dependency() {
 # Does not configure Pinniped
 #
 app="${1:-undefined}"
-tag="${2:-undefined}"
+tag="${2:-$(uuidgen)}"  # always a new tag to force K8s to reload the image on redeploy
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 log_note "log-args.sh >>> script dir: ${SCRIPT_DIR} 🦄 🦄 🦄 🦄 🦄 🦄 🦄 🦄"
 log_note "log-args.sh >>> app: ${app} tag: ${tag}   🦄 🦄 🦄 🦄 🦄 🦄 🦄 🦄"
@@ -66,7 +66,6 @@ api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 registry="pinniped.local"
 repo="test/build"
 registry_repo="$registry/$repo"
-tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
 
 
 
@@ -123,12 +122,12 @@ kapp inspect \
 
 
 
-log_note "Generating RBAC for use with pinniped PackageInstall..."
 
 # TODO: obviously a mega-role that can do everything is not good. we need to scope this down to appropriate things.
 declare -a arr=("supervisor" "concierge")
 for resource_name in "${arr[@]}"
 do
+  log_note "Generating RBAC for use with ${resource_name} PackageInstall..."
   # we want the install-ns to not be "default"
   # it should be a unique namespace
   # but it should also not be in kapp-controllers global namespace
@@ -186,7 +185,7 @@ EOF
   kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_RBAC_FILE_PATH}" -y
 done
 
-
+# IF SUPERVISOR ........
 if [ "${app}" = "pinniped-supervisor" ]; then
   resource_name="supervisor"
 
@@ -207,7 +206,7 @@ if [ "${app}" = "pinniped-supervisor" ]; then
   PACKAGE_INSTALL_FILE_NAME="./${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
   PACKAGE_INSTALL_FILE_PATH="${SCRIPT_DIR}/${PACKAGE_INSTALL_FILE_NAME}"
   SECRET_NAME="${resource_name}-package-install-secret"
-  log_note "Deploying PackageInstall resources for ${resource_name}..."
+  log_note "🦄${resource_name}🦄: Creating PackageInstall resources for ${resource_name}..."
   # generate an install file to use
   cat > "${PACKAGE_INSTALL_FILE_PATH}" << EOF
 ---
@@ -250,11 +249,12 @@ EOF
 # custom_labels: $supervisor_custom_labels
 
   KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+  log_note "🦄${resource_name}🦄: Deploying ${KAPP_CONTROLLER_APP_NAME}..."
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "${PACKAGE_INSTALL_FILE_PATH}"
   kubectl apply --dry-run=client -f "${PACKAGE_INSTALL_FILE_PATH}" # Validate manifest schema.
 fi
 
+# IF CONCIERGE ........
 if [ "${app}" = "pinniped-concierge" ]; then
   resource_name="concierge"
 
@@ -276,7 +276,7 @@ if [ "${app}" = "pinniped-concierge" ]; then
   PACKAGE_INSTALL_FILE_NAME="./${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
   PACKAGE_INSTALL_FILE_PATH="${SCRIPT_DIR}/${PACKAGE_INSTALL_FILE_NAME}"
   SECRET_NAME="${resource_name}-package-install-secret"
-  log_note "Deploying PackageInstall resources for ${resource_name}..."
+  log_note "🦄${resource_name}🦄: Creating PackageInstall resources for ${resource_name}..." # concierge version
 
   cat > "${PACKAGE_INSTALL_FILE_PATH}" << EOF
 ---
@@ -313,9 +313,8 @@ stringData:
     image_tag: $tag
     discovery_url: $discovery_url
 EOF
-
   KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+  log_note "🦄${resource_name}🦄: Deploying ${KAPP_CONTROLLER_APP_NAME}..."
   # kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_PATH}" -y
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "${PACKAGE_INSTALL_FILE_PATH}"
   kubectl apply --dry-run=client -f "${PACKAGE_INSTALL_FILE_PATH}" # Validate manifest schema.

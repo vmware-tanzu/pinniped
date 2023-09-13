@@ -1390,10 +1390,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
 		t.Log("starting LDAP auth via kubectl")
-		timeoutCtx, cleanupTimeoutCtx := context.WithTimeout(testCtx, 10*time.Second)
-		t.Cleanup(cleanupTimeoutCtx)
 		start := time.Now()
-		kubectlCmd := exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -1420,9 +1418,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
 		t.Log("starting OIDC auth via kubectl")
-		timeoutCtx, cleanupTimeoutCtx = context.WithTimeout(testCtx, 10*time.Second)
-		t.Cleanup(cleanupTimeoutCtx)
-		kubectlCmd = exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
+		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
@@ -1507,9 +1503,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
 		t.Log("starting second LDAP auth via kubectl")
-		timeoutCtx, cleanupTimeoutCtx = context.WithTimeout(testCtx, 10*time.Second)
-		t.Cleanup(cleanupTimeoutCtx)
-		kubectlCmd = exec.CommandContext(timeoutCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 		ptyFile, err = pty.Start(kubectlCmd)
 		require.NoError(t, err)

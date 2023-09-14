@@ -17,7 +17,7 @@ environments with zero configuration.
 Pinniped is composed of two parts.
 
 1. The Pinniped Supervisor is an OIDC server which allows users to authenticate
-with an external identity provider (IDP), and then issues its own federation ID tokens
+with external identity providers (IDP), and then issues its own federation ID tokens
 to be passed on to clusters based on the user information from the IDP.
 1. The Pinniped Concierge is a credential exchange API which takes as input a
 credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),

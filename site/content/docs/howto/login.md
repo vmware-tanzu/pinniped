@@ -76,6 +76,11 @@ One flag of note is `--upstream-identity-provider-flow browser_authcode` to choo
 (the default for OIDCIdentityProviders), and `--upstream-identity-provider-flow cli_password` to choose end-user `kubectl`
 login via CLI username/password prompts (the default for LDAPIdentityProviders and ActiveDirectoryIdentityProviders).
 
+If the cluster is using a Pinniped Supervisor's FederationDomain to provide authentication services,
+and if that FederationDomain allows multiple identity providers, then you will need to specify which identity provider
+you would like to use in the resulting kubeconfig with the `--upstream-identity-provider-name` and/or `--upstream-identity-provider-type` flags.
+You may call `pinniped get kubeconfig` multiple times to generate multiple kubeconfigs for the cluster.
+
 ## Use the generated kubeconfig with `kubectl` to access the cluster
 
 A cluster user will typically be given a Pinniped-compatible kubeconfig by their cluster admin. They can use this kubeconfig

@@ -20,7 +20,7 @@ require (
 	github.com/go-logr/zapr v1.2.4
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
-	github.com/google/cel-go v0.16.1
+	github.com/google/cel-go v0.18.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.1

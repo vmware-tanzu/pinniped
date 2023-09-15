@@ -18,8 +18,9 @@ features described herein might have continued to evolve since.
 There are a number of tools available to the Kubernetes ecosystem for deploying complex software 
 to a Kubernetes cluster.  The Carvel toolchain provides a set of APIs, Custom Resources and CLI tools
 that can aid a user in the configuration and lifecycle management of software deployed to a cluster.
-We should enhance our deployment options by providing Carvel Packages that may be installed on a cluster
-configured with `kapp-controller` to manage the software on the cluster. 
+We should enhance our deployment options by providing Carvel Packages for the `Suervisor` and `Concierge`
+that may be installed on a cluster configured with Carvel's `kapp-controller` to manage the software 
+on the cluster. 
 
 ## How Pinniped Works Today (as of version v0.25.0)
 
@@ -29,6 +30,7 @@ that:
   - [v0.25.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0)
 - Can optionally be customized and rendered by a consumer of the Pinniped project by cloning down
   the github repository, making changes to the `values.yaml` file and then rendered via `ytt`.
+
 
 ## Terminology / Concepts
 
@@ -52,21 +54,75 @@ that:
 ## Proposal
 
 Allow Pinniped to be deployed onto a Kuberentes cluster through the mechanism of two Carvel `Packages`,
-a Supervisor and a Concierge package. These may be delivered via a `PackageRepository` resource. 
+a Supervisor and a Concierge package. These may be delivered via a `PackageRepository` resource and installed
+via `PackageInstall` custom resources, and `Secret`s containing `Package` configuration.
+
+Conceptually, cluster managers would make the Pinniped software available on the 
+cluster by deploying the PackageRepository:
+
+```bash
+# Deploy the Pinniped PackageRepository to the globally available
+# namespace watched by kapp-controller for new Packages 
+kapp deploy --app pinniped-package-repository --file <pinniped-release-files>/pinniped-package-repository.yaml
+```
+
+Then developers responsible for deploying Supervisor and Concierge would create the 
+appropriate resources to successfully deploy the PackageInstall and Packages for both 
+`Supervisor` and `Concierge`:
+
+```bash 
+# create a Service account and RBAC for the PackageInstall 
+vim supervisor-service-and-rbac.yaml
+kapp deploy --app supervisor-rbac --file supervisor-service-and-rbac.yaml
+vim concierge-service-and-rbac.yaml
+kapp deploy --app concierge-rbac --file concierge-service-and-rbac.yaml
+
+# create a PackageInstall and a Secret for configuring the Concierge
+vim supervisor-package-install-bundle.yaml
+kapp deploy --app supervisor --file supervisor-package-install-bundle.yaml
+vim concierge-package-install-bundle.yaml
+kapp deploy --app supervisor --file concierge-package-install-bundle.yaml
+```
+
+The `PackageRepository` will contain a series of versions of each of the Packages for Supervisor 
+and Concierge.
+
+The `PackageInstall` files will contain `constraints` representing acceptable versions of both the 
+`Supervisor` and `Concierge. For example:
+
+```yaml
+spec:  
+  packageRef:
+    # there will be two separate PackageInstall files, one for each 
+    # Supervisor and Concierge
+    refName: "supervisor.pinniped.dev"
+    versionSelection:
+      # Constraints may be used to specify an exact version of the package    
+      constraints: "0.25.0"  
+      # Alternatively, a constraint can be based on a semver range and can 
+      # specify multiple acceptible versions of the software.  In this case, 
+      # the Package will automatically upgrade to new versions when they become
+      # available, for example, when a new verison of the PackageRepository is 
+      # deployed containing new versions of the Packages.
+      constraints: ">0.25.0"  
+```
 
 ### Goals and Non-goals
 
 Goals
 - Provide an additional deployment option to deliver Pinniped software to a Kubernetes cluster
   in the form of the `Package` apis provided by the Carvel toolchain.
+- Provide a `PackageRepository` and two separate `Package`s for Supervisor and Concierge.
 
 Non-Goals
 - Provide additional deployment alternatives, such as official Helm charts
+- Provide a single package for both Supervisor and Concierge.
+- Provide Packages for testing tools, such as `local-user-authenticator`.
 
 #### API Changes
 
-No changes or additions to Pinniped APIs, this proposal represents a second, alternative 
-method for deployment utilising Carvel APIs.  
+No changes or additions to Pinniped's own APIs, this proposal represents a second, alternative 
+method for deployment utilising Carvel APIs and tools.  
 
 #### Upgrades
 
@@ -162,8 +218,14 @@ A list of questions that need to be answered.
 
 ## Answered Questions 
 
+* TBD - [Consult the open issue](https://github.com/vmware-tanzu/pinniped/issues/1614) requesting
+  the creation of this proposal
+
 ## Implementation Plan
+
+* TBD
 
 ## Implementation PRs
 
 * TBD
+* Consult the [Proof of concept WIP PR](https://github.com/vmware-tanzu/pinniped/pull/1635) 

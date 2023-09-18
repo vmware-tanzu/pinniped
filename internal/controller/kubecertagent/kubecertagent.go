@@ -69,6 +69,8 @@ const (
 	ClusterInfoNamespace    = "kube-public"
 	clusterInfoName         = "cluster-info"
 	clusterInfoConfigMapKey = "kubeconfig"
+
+	agentPodContainerName = "sleeper"
 )
 
 // AgentConfig is the configuration for the kube-cert-agent controller.
@@ -348,7 +350,7 @@ func (c *agentController) loadSigningKey(ctx context.Context, agentPod *corev1.P
 	}
 
 	// Exec into the agent pod and cat out the certificate and the key.
-	outputJSON, err := c.executor.Exec(ctx, agentPod.Namespace, agentPod.Name, "pinniped-concierge-kube-cert-agent", "print")
+	outputJSON, err := c.executor.Exec(ctx, agentPod.Namespace, agentPod.Name, agentPodContainerName, "pinniped-concierge-kube-cert-agent", "print")
 	if err != nil {
 		return fmt.Errorf("could not exec into agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
@@ -532,7 +534,7 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 					ImagePullSecrets:              imagePullSecrets,
 					Containers: []corev1.Container{
 						{
-							Name:            "sleeper",
+							Name:            agentPodContainerName,
 							Image:           c.cfg.ContainerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"pinniped-concierge-kube-cert-agent", "sleep"},

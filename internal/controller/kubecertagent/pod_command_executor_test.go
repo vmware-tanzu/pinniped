@@ -37,7 +37,7 @@ func TestSecureTLS(t *testing.T) {
 	// build this exactly like our production could does
 	podCommandExecutor := NewPodCommandExecutor(client.JSONConfig, client.Kubernetes)
 
-	got, err := podCommandExecutor.Exec(context.Background(), "podNamespace", "podName", "command", "arg1", "arg2")
+	got, err := podCommandExecutor.Exec(context.Background(), "podNamespace", "podName", "containerName", "command", "arg1", "arg2")
 	require.Equal(t, &errors.StatusError{}, err)
 	require.Empty(t, got)
 

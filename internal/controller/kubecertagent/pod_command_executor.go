@@ -16,7 +16,7 @@ import (
 
 // PodCommandExecutor can exec a command in a pod located via namespace and name.
 type PodCommandExecutor interface {
-	Exec(ctx context.Context, podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
+	Exec(ctx context.Context, podNamespace string, podName string, containerName string, commandAndArgs ...string) (stdoutResult string, err error)
 }
 
 type kubeClientPodCommandExecutor struct {
@@ -32,7 +32,7 @@ func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.
 	return &kubeClientPodCommandExecutor{kubeConfig: kubeConfig, kubeClient: kubeClient}
 }
 
-func (s *kubeClientPodCommandExecutor) Exec(ctx context.Context, podNamespace string, podName string, commandAndArgs ...string) (string, error) {
+func (s *kubeClientPodCommandExecutor) Exec(ctx context.Context, podNamespace string, podName string, containerName string, commandAndArgs ...string) (string, error) {
 	request := s.kubeClient.
 		CoreV1().
 		RESTClient().
@@ -42,11 +42,12 @@ func (s *kubeClientPodCommandExecutor) Exec(ctx context.Context, podNamespace st
 		Name(podName).
 		SubResource("exec").
 		VersionedParams(&v1.PodExecOptions{
-			Stdin:   false,
-			Stdout:  true,
-			Stderr:  false,
-			TTY:     false,
-			Command: commandAndArgs,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    false,
+			TTY:       false,
+			Container: containerName,
+			Command:   commandAndArgs,
 		}, scheme.ParameterCodec)
 
 	executor, err := remotecommand.NewSPDYExecutor(s.kubeConfig, "POST", request.URL())

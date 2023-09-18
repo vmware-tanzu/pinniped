@@ -598,7 +598,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.ConnectionProtocol = upstreamldap.StartTLS })),
-			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: unexpected EOF`, ldapsLocalhostPort),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: EOF`, ldapsLocalhostPort),
 		},
 		{
 			name:      "when the UsernameAttribute attribute has multiple values in the entry",

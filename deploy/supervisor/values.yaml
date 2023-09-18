@@ -22,8 +22,9 @@ into_namespace: my-preexisting-namespace
 #@    resources that were dynamically created by controllers at runtime \
 #@ 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
+#@schema/type any=True
 #@schema/nullable
-custom_labels: {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
+custom_labels: {} #! {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
 
 #@schema/desc "Specify how many replicas of the Pinniped server to run."
 replicas: 2

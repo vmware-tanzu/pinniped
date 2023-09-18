@@ -22,8 +22,9 @@ into_namespace: my-preexisting-namespace
 #@    resources that were dynamically created by controllers at runtime \
 #@ 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
+#@schema/type any=True
 #@schema/nullable
-custom_labels: {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
+custom_labels: {} #! {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
 
 #@schema/desc "Specify how many replicas of the Pinniped server to run."
 replicas: 2
@@ -60,10 +61,8 @@ discovery_url: https://example.com
 #@ The defaults are set to expire the cert about every 30 days, and to rotate it \
 #@ about every 25 days."
 #@schema/desc api_serving_certificate_desc
-#@schema/nullable
 api_serving_certificate_duration_seconds: 2592000
 #@schema/desc api_serving_certificate_desc
-#@schema/nullable
 api_serving_certificate_renew_before_seconds: 2160000
 
 #! Specify the verbosity of logging: info ("nice to know" information), debug (developer information), trace (timing information),
@@ -92,7 +91,6 @@ api_group_suffix: pinniped.dev
 
 
 #@schema/desc "Customize CredentialIssuer.spec.impersonationProxy to change how the concierge handles impersonation."
-#@schema/nullable
 impersonation_proxy_spec:
   #! options are "auto", "disabled" or "enabled".
   #! If auto, the impersonation proxy will run only if the cluster signing key is not available
@@ -107,6 +105,7 @@ impersonation_proxy_spec:
   #@schema/desc external_endpoint_desc
   #@schema/nullable
   external_endpoint: 1.2.3.4:5678
+  #@schema/desc "The impersonation proxy service configuration"
   service:
     #! Options are "LoadBalancer", "ClusterIP" and "None".
     #! LoadBalancer automatically provisions a Service of type LoadBalancer pointing at
@@ -117,11 +116,14 @@ impersonation_proxy_spec:
     #! None does not provision either and assumes that you have set the external_endpoint
     #! and set up your own ingress to connect to the impersonation proxy.
     #@schema/desc "Options are 'LoadBalancer', 'ClusterIP' and 'None'."
+    #@schema/nullable
     type: LoadBalancer
     #@schema/desc "The annotations that should be set on the ClusterIP or LoadBalancer Service."
+    #@schema/nullable
     annotations:
       {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}
     #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP."
+    #@schema/nullable
     load_balancer_ip: 1.2.3.4:5678
 
 #@ https_proxy_desc = "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. \

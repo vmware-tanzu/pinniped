@@ -3,7 +3,7 @@
 
 #@data/values-schema
 ---
-#@schema/desc "Namespace of pinniped-supervisor."
+#@schema/desc "Name of pinniped-supervisor."
 app_name: pinniped-supervisor
 
 #@schema/desc "Creates a new namespace statically in yaml with the given name and installs the app into that namespace."

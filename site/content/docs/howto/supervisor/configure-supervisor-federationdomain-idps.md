@@ -21,9 +21,9 @@ and have already read the guide about how to [configure the Supervisor as an OID
 
 This guide focuses on the use of the `spec.identityProviders` setting on the
 [FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#federationdomain)
-CRD.
+resource.
 
-Note that the `spec.identityProviders` setting on the FederationDomain CRD was added in v0.26.0 of Pinniped.
+Note that the `spec.identityProviders` setting on the FederationDomain resource was added in v0.26.0 of Pinniped.
 This guide assumes that you are using at least that version.
 
 ## Summary
@@ -36,7 +36,7 @@ There are two ways to configure which of these external identity providers shall
 1. When there is no `spec.identityProviders` configured on a FederationDomain, then the FederationDomain will use
    the one and only identity provider that is configured in the same namespace. This provides backwards compatibility
    with older configurations of Supervisors from before the `spec.identityProviders` setting was added to the
-   FederationDomain CRD. There must be exactly one OIDCIdentityProvider,
+   FederationDomain resource. There must be exactly one OIDCIdentityProvider,
    ActiveDirectoryIdentityProvider, or LDAPIdentityProvider resource in the same namespace as the Supervisor.
    If there are no identity provider resources, or if there are more than one, then the FederationDomain will
    not allow any users to authenticate, and a error message will be shown in its `status`.
@@ -231,7 +231,7 @@ The following example is contrived to demonstrate every feature of the `transfor
 
 Documentation for each of the fields shown below can be found in the API docs for the
 [FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#federationdomain)
-CRD.
+resource.
 
 ```yaml
 kind: FederationDomain

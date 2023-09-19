@@ -209,13 +209,13 @@ func (b *Browser) AttrValueOfFirstMatch(t *testing.T, selector string, attribute
 
 func (b *Browser) SendKeysToFirstMatch(t *testing.T, selector string, runesToType string) {
 	t.Helper()
-	b.runWithTimeout(t, b.timeout(), chromedp.SendKeys(selector, runesToType, chromedp.NodeVisible))
+	b.runWithTimeout(t, b.timeout(), chromedp.SendKeys(selector, runesToType, chromedp.NodeVisible, chromedp.NodeEnabled))
 }
 
 func (b *Browser) ClickFirstMatch(t *testing.T, selector string) string {
 	t.Helper()
 	var text string
-	b.runWithTimeout(t, b.timeout(), chromedp.Click(selector, chromedp.NodeVisible))
+	b.runWithTimeout(t, b.timeout(), chromedp.Click(selector, chromedp.NodeVisible, chromedp.NodeEnabled))
 	return text
 }
 
@@ -336,6 +336,12 @@ func LoginToUpstreamOIDC(t *testing.T, b *Browser, upstream testlib.TestOIDCUpst
 	t.Logf("logging into %s", cfg.Name)
 	b.SendKeysToFirstMatch(t, cfg.UsernameSelector, upstream.Username)
 	b.SendKeysToFirstMatch(t, cfg.PasswordSelector, upstream.Password)
+
+	// The Okta login page has a lot of Javascript on it. Give it a second to catch up after typing the
+	// username and password. Hoping that this might help with the test flake where the Okta login page
+	// never continues to the next page after trying to click the login button below.
+	time.Sleep(1 * time.Second)
+
 	b.ClickFirstMatch(t, cfg.LoginButtonSelector)
 }
 

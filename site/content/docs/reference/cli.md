@@ -333,7 +333,8 @@ pinniped version [flags]
 ### Options
 
 ```
-  -h, --help   help for version
+  -h, --help            help for version
+  -o, --output string   one of 'yaml' or 'json'
 ```
 
 ### SEE ALSO

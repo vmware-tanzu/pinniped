@@ -98,6 +98,7 @@ func New(podInfo *downward.PodInfo, deployment *appsv1.Deployment, opts ...kubec
 
 		go func() {
 			controllers(ctx) // run the controllers with the global context, this blocks until the context is canceled
+			plog.Debug("leader election saw controllers have stopped")
 
 			if isLeader.stop() { // remove our in-memory leader status before we release the lock
 				plog.Debug("leader lost", "identity", identity, "reason", "controller stop")

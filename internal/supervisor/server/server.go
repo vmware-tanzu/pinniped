@@ -382,8 +382,10 @@ func prepareControllers(
 	return controllerinit.Prepare(controllerManager.Start, leaderElector, kubeInformers, pinnipedInformers)
 }
 
-//nolint:funlen
-func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+// Boot the aggregated API server, which will in turn boot the controllers. Also open the appropriate network ports
+// and start serving the health endpoint and the endpoints of the configured FederationDomains.
+// In practice, the ctx passed in should be one which will be cancelled when the process receives SIGTERM or SIGINT.
+func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error { //nolint:funlen
 	serverInstallationNamespace := podInfo.Namespace
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 
@@ -575,7 +577,9 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 	plog.Debug("supervisor started")
 	defer plog.Debug("supervisor exiting")
 
-	// Run the server. Its post-start hook will start the controllers.
+	// Run the server. Its post-start hook will start the controllers. Its pre shutdown hook will be called when ctx is
+	// cancelled, and that hook should graceful stop the controllers and give up the leader election lease. See the
+	// code for these hooks in internal/supervisor/apiserver.go.
 	err = server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 	if err != nil {
 		return err

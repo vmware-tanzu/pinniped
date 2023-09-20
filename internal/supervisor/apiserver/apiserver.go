@@ -113,39 +113,45 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		return nil, fmt.Errorf("could not install API groups: %w", err)
 	}
 
-	shutdown := &sync.WaitGroup{}
+	controllersShutdownWaitGroup := &sync.WaitGroup{}
+	controllersCtx, cancelControllerCtx := context.WithCancel(context.Background())
+
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
 		func(postStartContext genericapiserver.PostStartHookContext) error {
 			plog.Debug("start-controllers post start hook starting")
+			defer plog.Debug("start-controllers post start hook completed")
 
-			ctx, cancel := context.WithCancel(context.Background())
-			go func() {
-				defer cancel()
-
-				<-postStartContext.StopCh
-			}()
-
-			runControllers, err := c.ExtraConfig.BuildControllersPostStartHook(ctx)
+			runControllers, err := c.ExtraConfig.BuildControllersPostStartHook(controllersCtx)
 			if err != nil {
 				return fmt.Errorf("cannot create run controller func: %w", err)
 			}
 
-			shutdown.Add(1)
+			controllersShutdownWaitGroup.Add(1)
 			go func() {
-				defer shutdown.Done()
+				// When this goroutine ends, then also end the WaitGroup, allowing anyone who called Wait() to proceed.
+				defer controllersShutdownWaitGroup.Done()
 
-				runControllers(ctx)
+				// Start the controllers and block until their context is cancelled and they have shut down.
+				runControllers(controllersCtx)
+				plog.Debug("start-controllers post start hook's background goroutine saw runControllers() finish")
 			}()
 
 			return nil
 		},
 	)
+
 	s.GenericAPIServer.AddPreShutdownHookOrDie("stop-controllers",
 		func() error {
 			plog.Debug("stop-controllers pre shutdown hook starting")
 			defer plog.Debug("stop-controllers pre shutdown hook completed")
 
-			shutdown.Wait()
+			// The generic api server is telling us that it wants to shut down, so tell our controllers that we
+			// want them to shut down by cancelling their context.
+			cancelControllerCtx()
+
+			// Now wait for the controllers to finish shutting down. By blocking here, we prevent the generic api server's
+			// graceful shutdown process from continuing until we are finished shutting down our own controllers.
+			controllersShutdownWaitGroup.Wait()
 
 			return nil
 		},

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -102,6 +102,7 @@ func (c *controller) Run(ctx context.Context, workers int) {
 	workerContext, workerContextCancel := context.WithCancel(context.Background())
 
 	defer func() {
+		plog.Debug("starting to shut down controller workers", "controller", c.Name(), "workers", workers)
 		c.queue.ShutDown()    // shutdown the controller queue first
 		workerContextCancel() // cancel the worker context, which tell workers to initiate shutdown
 
@@ -126,7 +127,9 @@ func (c *controller) Run(ctx context.Context, workers int) {
 		}()
 	}
 
+	plog.Debug("controller started", "controller", c.Name(), "workers", workers)
 	<-ctx.Done() // wait for controller context to be cancelled
+	plog.Debug("controller context cancelled, next will terminate workers", "controller", c.Name(), "workers", workers)
 }
 
 func (c *controller) invokeAllRunOpts() {

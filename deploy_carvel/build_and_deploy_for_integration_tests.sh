@@ -1,0 +1,411 @@
+#!/usr/bin/env bash
+
+# https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425
+set -e # immediately exit
+set -u # error if variables undefined
+set -o pipefail # prevent masking errors in a pipeline
+# set -x # print all executed commands to terminal
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+DEFAULT='\033[0m'
+
+echo_yellow() {
+    echo -e "${YELLOW}>> $@${DEFAULT}\n"
+    # printf "${GREEN}$@${DEFAULT}"
+}
+
+echo_green() {
+    echo -e "${GREEN}>> $@${DEFAULT}\n"
+    # printf "${BLUE}$@${DEFAULT}"
+}
+echo_red() {
+    echo -e "${RED}>> $@${DEFAULT}\n"
+    # printf "${BLUE}$@${DEFAULT}"
+}
+echo_blue() {
+    echo -e "${BLUE}>> $@${DEFAULT}\n"
+    # printf "${BLUE}$@${DEFAULT}"
+}
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+# got a cluster?
+echo_yellow "Verify you have a functional kind cluster, otherwise this will fail..."
+# ./kind-with-registry.sh
+# got kapp-controller bits?
+kubectl get customresourcedefinitions
+echo_yellow "deploying kapp-controller..."
+kapp deploy --app kapp-controller --file https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml -y
+kubectl get customresourcedefinitions
+
+# this argument is given to kapp-controller by default
+# in the above deployment manfiest:
+#   -packaging-global-namespace=kapp-controller-packaging-global
+# which means, PackageRepos and Packages ought be installed in this
+# namespace to be globally available by default, since
+# PackageRepos and Packages are namespaced resources.
+KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
+
+# START PINNIPED IMAGE, NOT PACKAGE -------------- >>>>
+# note: hack this into whatever
+# is currently storing the
+# pinniped image itself,
+# i think the default is fine
+# since we ran prepare-for-integration-test.sh
+# and it does the "kind load" on the
+# pinniped image
+registry="pinniped.local"
+repo="test/build"
+registry_repo="$registry/$repo"
+
+# tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+# build_and_deploy_for_integration_tests.sh 123455
+tag=${1} # need to manually pass this, use the same from prepare-for-integreation-tests.sh
+echo_yellow "using tag: ${tag}"
+sleep 1 # just to give enough time to see it for a human
+
+api_group_suffix="pinniped.dev"
+# END PINNIPED IMAGE, NOT PACKAGE -------------- >>>>
+
+
+# TODO: since I removed the deployments there is not much in the ./imgpkg/images.yaml output
+#
+# build images found in these directories.
+# make use of build.yaml files to specify how builds should work,
+# if we need it to be done.
+# kbld --file ./concierge/config --imgpkg-lock-output ./concierge/.imgpkg/images.yml
+
+# this is used in the package-template.yml file for declaring where the package will live.
+# we need to know where these package images should live :)
+# REPO_HOST="1.2.3.4.fake.repo.host:5000"
+# PACKAGE_REPO_HOST="projects.registry.vmware.com/pinniped/pinniped-server"
+# PACKAGE_REPO_HOST="docker.io/benjaminapetersen/pinniped-package-repo"
+PACKAGE_REPO_HOST="benjaminapetersen/pinniped-package-repo"
+PINNIPED_PACKAGE_VERSION="0.25.0"
+
+# TODO: cp ./deploy/supervisor.... into ./deploy_carvel/supervisor/config...
+# TODO: cp ./deploy/concierge.... into ./deploy_carvel/concierge/config...
+# -- we should copy this over, yeah?
+#   NOTE: I did make changes to values.yaml to turn it into a values schema....
+
+echo ""
+echo_yellow "cleaning ./package-repository..."
+PACKAGE_REPOSITORY_DIR="package-repository"
+rm -rf "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}"
+mkdir -p "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/.imgpkg"
+mkdir -p "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/concierge.pinniped.dev"
+mkdir -p "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/supervisor.pinniped.dev"
+
+PACKAGE_INSTALL_DIR="temp_actual_deploy_resources"
+rm -rf "${SCRIPT_DIR}/${PACKAGE_INSTALL_DIR}"
+mkdir "${SCRIPT_DIR}/${PACKAGE_INSTALL_DIR}"
+
+## TODO:
+## "${resource_name}/deployment.yml" vs "${resource_name}/deployment-HACKED.yml"
+## the real one has images.
+## - CURRENTLY the deployment.yaml files don't work, there is some error with pushing images.
+##   come back to this later?
+declare -a arr=("supervisor" "concierge")
+for resource_name in "${arr[@]}"
+do
+  echo ""
+  echo_yellow "handling ${resource_name}..."
+
+  # just simple templating
+  echo_yellow "generating ${resource_name}/.imgpkg/images.yaml"
+  # there are bits for image substitution in some of the ytt commands
+  kbld --file "${SCRIPT_DIR}/${resource_name}/config/" --imgpkg-lock-output "${SCRIPT_DIR}/${resource_name}/.imgpkg/images.yml"
+
+  # generate a schema in each package directory
+  echo_yellow "generating ${SCRIPT_DIR}/${resource_name}/schema-openapi.yaml"
+  ytt \
+    --file "${SCRIPT_DIR}/${resource_name}/config/values.yaml" \
+    --data-values-schema-inspect --output openapi-v3 > "${SCRIPT_DIR}/${resource_name}/schema-openapi.yml"
+
+  # TODO:
+  # push each package to the repository
+  # note that I am hacking at this pattern to just get them to my dockerhub
+  # this may or may not be the pattern we want when we push to a formal repository location
+  # package_push_repo_location="${PACKAGE_REPO_HOST}/packages/${resource_name}:${PINNIPED_PACKAGE_VERSION}"
+  package_push_repo_location="${PACKAGE_REPO_HOST}-package-${resource_name}:${PINNIPED_PACKAGE_VERSION}"
+  echo_yellow "pushing package image: ${package_push_repo_location} ..."
+  imgpkg push --bundle "${package_push_repo_location}" --file "${SCRIPT_DIR}/${resource_name}"
+
+  resource_package_version="${resource_name}.pinniped.dev"
+  echo_yellow "generating ${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+  ytt \
+    --file "${SCRIPT_DIR}/${resource_name}/package-template.yml" \
+    --data-value-file openapi="${SCRIPT_DIR}/${resource_name}/schema-openapi.yml" \
+    --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
+    --data-value package_image_repo="${package_push_repo_location}" > "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/${PINNIPED_PACKAGE_VERSION}.yml"
+
+  echo_yellow "generating ${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
+  ytt \
+    --file "${SCRIPT_DIR}/${resource_name}/metadata.yml" \
+    --data-value-file openapi="${SCRIPT_DIR}/${resource_name}/schema-openapi.yml" \
+    --data-value package_version="${PINNIPED_PACKAGE_VERSION}" \
+    --data-value package_image_repo="${package_push_repo_location}" > "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/${resource_package_version}/metadata.yml"
+
+done
+
+echo_yellow "generating ${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
+kbld --file "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/packages/" --imgpkg-lock-output "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}/.imgpkg/images.yml"
+package_repository_push_repo_location="${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
+echo_yellow "pushing package repository image: ${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}..."
+imgpkg push --bundle "${package_repository_push_repo_location}" --file "${SCRIPT_DIR}/${PACKAGE_REPOSITORY_DIR}"
+
+echo_yellow "validating imgpkg package bundle contents..."
+imgpkg pull --bundle "${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}" --output "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
+ls -la "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
+
+
+echo_yellow "deploying PackageRepository..."
+PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
+PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
+echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+
+cat <<EOT >> "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageRepository
+metadata:
+  name: "${PINNIPED_PACKGE_REPOSITORY_NAME}"
+spec:
+  fetch:
+    imgpkgBundle:
+      image: "${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
+EOT
+
+
+# Now, gotta make this work.  It'll be interesting if we can...
+kapp deploy --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --file "${PINNIPED_PACKGE_REPOSITORY_FILE}" -y
+kapp inspect --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --tree
+
+sleep 2 # TODO: remove
+
+# this is just a note to break this up, probably should use a separate ./deploy_stuff.sh file.
+# at this point, we are "consumers".
+# above we are packaging.
+# this would be separated out into another script or potentially
+# be on the user to craft (though we should likely provide something)
+echo_green "Package Installation...."
+
+echo_yellow "deploying RBAC for use with pinniped PackageInstall..."
+
+# TODO: obviously a mega-role that can do everything is not good. we need to scope this down to appropriate things.
+declare -a arr=("supervisor" "concierge")
+for resource_name in "${arr[@]}"
+do
+
+NAMESPACE="${resource_name}-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+PINNIPED_PACKAGE_RBAC_FILE="${SCRIPT_DIR}/${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PREFIX}-${resource_name}-rbac.yml"
+
+echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
+cat <<EOF >> "${PINNIPED_PACKAGE_RBAC_FILE}"
+# ---
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#  name: "${NAMESPACE}" <--- "supervisor-ns" will cause other package install errors.
+---
+# ServiceAccount details from the file linked above
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  # namespace: "${NAMESPACE}"
+  namespace: default # --> sticking to default for everything for now.
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-role-superadmin-dangerous"
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-role-binding-superadmin-dangerous"
+subjects:
+- kind: ServiceAccount
+  name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  # namespace: "${NAMESPACE}"
+  namespace: default # --> sticking to default for everything for now.
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "${PINNIPED_PACKAGE_RBAC_PREFIX}-role-superadmin-dangerous"
+
+EOF
+
+kapp deploy --app "${PINNIPED_PACKAGE_RBAC_PREFIX}" --file "${PINNIPED_PACKAGE_RBAC_FILE}" -y
+done
+
+
+#PINNIPED_PACKAGE_RBAC_FILE="./${PACKAGE_INSTALL_DIR}/${PINNIPED_PACKAGE_RBAC_PREFIX}-rbac.yml"
+## TODO: obviously a mega-role that can do everything is not good.
+#echo -n "" > "${PINNIPED_PACKAGE_RBAC_FILE}"
+#cat <<EOF >> "${PINNIPED_PACKAGE_RBAC_FILE}"
+#
+echo_yellow "deploying supervisor PackageInstall resources..."
+resource_name="supervisor"
+NAMESPACE="${resource_name}-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+RESOURCE_PACKGE_VERSION="${resource_name}.pinniped.dev"
+PACKAGE_INSTALL_FILE_NAME="${SCRIPT_DIR}/${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
+SECRET_NAME="${resource_name}-package-install-secret"
+
+# from prepare-for-integration-test.sh
+supervisor_app_name="pinniped-supervisor"
+supervisor_namespace="supervisor"
+supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
+log_level="debug"
+service_https_nodeport_port="443"
+service_https_nodeport_nodeport="31243"
+service_https_clusterip_port="443"
+cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "${resource_name}-package-install"
+    # namespace: "${NAMESPACE}"
+    namespace: default # --> sticking to default for everything for now.
+spec:
+  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  packageRef:
+    refName: "${RESOURCE_PACKGE_VERSION}"
+    versionSelection:
+      constraints: "${PINNIPED_PACKAGE_VERSION}"
+  values:
+  - secretRef:
+      name: "${SECRET_NAME}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${SECRET_NAME}"
+stringData:
+  values.yml: |
+    ---
+    app_name: $supervisor_app_name
+    namespace: $supervisor_namespace
+    api_group_suffix: $api_group_suffix
+    image_repo: $registry_repo
+    image_tag: $tag
+    log_level: $log_level
+
+    service_https_nodeport_port: $service_https_nodeport_port
+    service_https_nodeport_nodeport: $service_https_nodeport_nodeport
+    service_https_clusterip_port: $service_https_clusterip_port
+EOF
+
+KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+echo_yellow "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
+# end supervisor
+
+# concierge
+echo_yellow "deploying concierge PackageInstall resources..."
+resource_name="concierge"
+NAMESPACE="${resource_name}-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+RESOURCE_PACKGE_VERSION="${resource_name}.pinniped.dev"
+PACKAGE_INSTALL_FILE_NAME="${SCRIPT_DIR}/${PACKAGE_INSTALL_DIR}/${resource_name}-pkginstall.yml"
+SECRET_NAME="${resource_name}-package-install-secret"
+
+# from prepare-for-integration-tests.sh
+concierge_app_name="pinniped-concierge"
+concierge_namespace="concierge"
+webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
+concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
+log_level="debug"
+cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "${resource_name}-package-install"
+    # namespace: "${NAMESPACE}"
+    namespace: default # --> sticking to default for everything for now.
+spec:
+  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  packageRef:
+    refName: "${RESOURCE_PACKGE_VERSION}"
+    versionSelection:
+      constraints: "${PINNIPED_PACKAGE_VERSION}"
+  values:
+  - secretRef:
+      name: "${SECRET_NAME}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${SECRET_NAME}"
+stringData:
+  values.yml: |
+    ---
+    app_name: $concierge_app_name
+    namespace: $concierge_namespace
+    api_group_suffix: $api_group_suffix
+    log_level: $log_level
+
+    image_repo: $registry_repo
+    image_tag: $tag
+EOF
+
+KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+echo_yellow "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
+# end concierge
+
+echo_yellow "verifying PackageInstall resources..."
+kubectl get PackageInstall -A | grep pinniped
+kubectl get secret -A | grep pinniped
+
+echo_yellow "listing all package resources (PackageRepository, Package, PackageInstall)..."
+kubectl get pkgi && kubectl get pkgr && kubectl get pkg
+
+echo_yellow "listing all kapp cli apps..."
+# list again what is installed so we can ensure we have everything
+kapp ls --all-namespaces
+
+# these are fundamentally different than what kapp cli understands, unfortunately.
+# the term "app" is overloaded in Carvel and can mean two different things, based on
+# the use of kapp cli and kapp-controller on cluster
+echo_yellow "listing all kapp-controller apps..."
+kubectl get app --all-namespaces
+
+# TODO:
+# update the deployment.yaml and remove the deployment-HACKED.yaml files
+# both are probably hacked a bit, so delete them and just get fresh from the ./deploy directory
+# then make sure REAL PINNIPED actually deploys.
+
+
+# In the end we should have:
+# docker pull benjaminapetersen/pinniped-package-repo:latest
+# docker pull benjaminapetersen/pinniped-package-repo-package-supervisor:0.25.0
+# docker pull benjaminapetersen/pinniped-package-repo-package-concierge:0.25.0
+
+# echo_yellow "verifying RBAC resources created (namespace, serviceaccount, clusterrole, clusterrolebinding)..."
+# kubectl get ns -A | grep pinniped
+# kubectl get sa -A | grep pinniped
+# kubectl get ClusterRole -A | grep pinniped
+# kubectl get clusterrolebinding -A | grep pinniped
+
+
+# stuff
+kubectl get PackageRepository -A
+kubectl get Package -A
+kubectl get PackageInstall -A

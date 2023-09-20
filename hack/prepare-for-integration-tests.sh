@@ -501,3 +501,11 @@ log_note
 log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
 log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
+
+log_note "--------------------"
+log_note "tag deployed: ${tag}"
+log_note "tag deployed: ${tag}"
+log_note "tag deployed: ${tag}"
+log_note "pass tag ${tag} to script: "
+log_note "    ./deploy_carvel/build_and_deploy_for_integration_tests.sh ${tag}"
+log_note "--------------------"

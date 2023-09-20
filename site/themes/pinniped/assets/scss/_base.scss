@@ -22,6 +22,12 @@ body {
     max-width: 980px;
     margin: 0px auto;
     padding: 20px;
+    .hero {
+        h1, .h1 {
+            color: #fff;
+            line-height: 1em;
+        }
+    }
     @include breakpoint(small) {
         max-width: 100%;
     }
@@ -42,10 +48,10 @@ body {
 h1, h2, h3, h4, h5, h6 {
     font-weight: 300;
 }
-h1 {
+h1, .h1 {
     font-size: 36px;
 }
-h2 {
+h2, .h2 {
     font-size: 28px;
 }
 h3 {
@@ -150,7 +156,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-BoldItalic";
     src:url("/fonts/Metropolis-BoldItalic.eot");
@@ -160,7 +166,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-Light";
     src:url("/fonts/Metropolis-Light.eot");
@@ -170,7 +176,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-LightItalic";
     src:url("/fonts/Metropolis-LightItalic.eot");
@@ -180,7 +186,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-Regular";
     src:url("/fonts/Metropolis-Regular.eot");
@@ -190,7 +196,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-RegularItalic";
     src:url("/fonts/Metropolis-RegularItalic.eot");
@@ -200,7 +206,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-Medium";
     src:url("/fonts/Metropolis-Medium.eot");
@@ -210,7 +216,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-MediumItalic";
     src:url("/fonts/Metropolis-MediumItalic.eot");
@@ -220,7 +226,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-SemiBold";
     src:url("/fonts/Metropolis-SemiBold.eot");
@@ -230,7 +236,7 @@ button {
     font-weight: normal;
     font-style: normal;
   }
-  
+
   @font-face {
     font-family: "Metropolis-SemiBoldItalic";
     src:url("/fonts/Metropolis-SemiBoldItalic.eot");

@@ -338,7 +338,7 @@ if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_supervisor" !=
   fi
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
-  pushd deploy/supervisor >/dev/null
+  pushd deploy/supervisor/config >/dev/null
   ytt --file . \
     --data-value "app_name=$supervisor_app_name" \
     --data-value "namespace=$supervisor_namespace" \
@@ -380,7 +380,7 @@ if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_concierge" != 
   fi
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
-  pushd deploy/concierge >/dev/null
+  pushd deploy/concierge/config >/dev/null
   ytt --file . \
     --data-value "app_name=$concierge_app_name" \
     --data-value "namespace=$concierge_namespace" \

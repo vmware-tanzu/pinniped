@@ -1,0 +1,35 @@
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "supervisor-package-install"
+    # namespace: "supervisor-ns"
+    namespace: default # --> sticking to default for everything for now.
+spec:
+  serviceAccountName: "pinniped-package-rbac-supervisor-sa-superadmin-dangerous"
+  packageRef:
+    refName: "supervisor.pinniped.dev"
+    versionSelection:
+      constraints: "0.25.0"
+  values:
+  - secretRef:
+      name: "supervisor-package-install-secret"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "supervisor-package-install-secret"
+stringData:
+  values.yml: |
+    ---
+    app_name: pinniped-supervisor
+    namespace: supervisor
+    api_group_suffix: pinniped.dev
+    image_repo: pinniped.local/test/build
+    image_tag: 24753D27-6217-4E65-B508-71CB1DAF70D3
+    log_level: debug
+
+    service_https_nodeport_port: 443
+    service_https_nodeport_nodeport: 31243
+    service_https_clusterip_port: 443

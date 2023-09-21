@@ -57,7 +57,7 @@ KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
 # since we ran prepare-for-integration-test.sh
 # and it does the "kind load" on the
 # pinniped image
-registry="pinniped.local"
+registry="pinniped.local" # Hack, but not what we really want: getpinniped/pinniped-server:latest
 repo="test/build"
 registry_repo="$registry/$repo"
 

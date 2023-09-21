@@ -7,12 +7,12 @@ images:
       - resolved:
           tag: 0.25.0
           url: benjaminapetersen/pinniped-package-repo-package-concierge:0.25.0
-  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-concierge@sha256:bcf825330cf8946b4c9a7a0cc7a774748dd519c4fe1c22a076b64dc9f369c59c
+  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-concierge@sha256:8cfac137dcb7e3edcf0dcc9d032ff67c9d26a7ce863ead5b28bff457336ad3e0
 - annotations:
     kbld.carvel.dev/id: benjaminapetersen/pinniped-package-repo-package-supervisor:0.25.0
     kbld.carvel.dev/origins: |
       - resolved:
           tag: 0.25.0
           url: benjaminapetersen/pinniped-package-repo-package-supervisor:0.25.0
-  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-supervisor@sha256:12577787d82b4f565be28c65c229c87dd8ac9890d0f44a690725fdb4ac7f4082
+  image: index.docker.io/benjaminapetersen/pinniped-package-repo-package-supervisor@sha256:f59ad2eb1737f2098e1cd4957f062b0c01de9d1ab7230c58093ab16d2192e302
 kind: ImagesLock

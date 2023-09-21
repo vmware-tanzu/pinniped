@@ -30,6 +30,18 @@ echo_blue() {
     # printf "${BLUE}$@${DEFAULT}"
 }
 
+# tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+# build_and_deploy_for_integration_tests.sh 123455
+echo ""
+echo ""
+tag=${1} # need to manually pass this, use the same from prepare-for-integreation-tests.sh
+echo_yellow "using tag: ${tag}"
+echo_yellow "does this match output tag from prepare-for-integration-test.sh?"
+echo ""
+echo ""
+sleep 3 # just to give enough time to see it for a human
+
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # got a cluster?
@@ -61,11 +73,7 @@ registry="pinniped.local" # Hack, but not what we really want: getpinniped/pinni
 repo="test/build"
 registry_repo="$registry/$repo"
 
-# tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
-# build_and_deploy_for_integration_tests.sh 123455
-tag=${1} # need to manually pass this, use the same from prepare-for-integreation-tests.sh
-echo_yellow "using tag: ${tag}"
-sleep 1 # just to give enough time to see it for a human
+
 
 api_group_suffix="pinniped.dev"
 # END PINNIPED IMAGE, NOT PACKAGE -------------- >>>>
@@ -116,8 +124,12 @@ do
 
   # just simple templating
   echo_yellow "generating ${resource_name}/.imgpkg/images.yaml"
-  # there are bits for image substitution in some of the ytt commands
-  kbld --file "${SCRIPT_DIR}/${resource_name}/config/" --imgpkg-lock-output "${SCRIPT_DIR}/${resource_name}/.imgpkg/images.yml"
+
+  # in order to run kbld to generate correct imgpkg lock files,
+  # we must ytt render the templates and then pass the output to kbld
+  ytt \
+    --file "${SCRIPT_DIR}/${resource_name}/config/" | \
+    kbld -f- --imgpkg-lock-output "${SCRIPT_DIR}/${resource_name}/.imgpkg/images.yml"
 
   # generate a schema in each package directory
   echo_yellow "generating ${SCRIPT_DIR}/${resource_name}/schema-openapi.yaml"

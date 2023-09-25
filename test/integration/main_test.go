@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -65,8 +65,8 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 	serialTest := testing.InternalTest{
 		Name: "TestIntegrationSerial",
 		F: func(t *testing.T) {
-			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
-			t.Parallel()                  // outer test always runs in parallel for this bucket
+			testlib.SkipUnlessIntegration(t) // make sure these tests do not run during unit tests
+			t.Parallel()                     // outer test always runs in parallel for this bucket
 
 			for _, test := range serialTests {
 				test := test
@@ -80,8 +80,8 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 	parallelTest := testing.InternalTest{
 		Name: "TestIntegrationParallel",
 		F: func(t *testing.T) {
-			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
-			t.Parallel()                  // outer test always runs in parallel for this bucket
+			testlib.SkipUnlessIntegration(t) // make sure these tests do not run during unit tests
+			t.Parallel()                     // outer test always runs in parallel for this bucket
 
 			for _, test := range parallelTests {
 				test := test
@@ -97,7 +97,7 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 	disruptiveTest := testing.InternalTest{
 		Name: "TestIntegrationDisruptive",
 		F: func(t *testing.T) {
-			_ = testlib.IntegrationEnv(t) // make sure these tests do not run during unit tests
+			testlib.SkipUnlessIntegration(t) // make sure these tests do not run during unit tests
 			// outer test never runs in parallel for this bucket
 
 			for _, test := range disruptiveTests {

@@ -37,6 +37,8 @@ const (
 type TestEnv struct {
 	t *testing.T
 
+	skipPodRestartAssertions bool
+
 	ToolsNamespace                 string                               `json:"toolsNamespace"`
 	ConciergeNamespace             string                               `json:"conciergeNamespace"`
 	SupervisorNamespace            string                               `json:"supervisorNamespace"`
@@ -120,15 +122,28 @@ func (e *TestEnv) ProxyEnv() []string {
 // environment parsing N times per test and so that any implicit assertions happen only once.
 var memoizedTestEnvsByTest sync.Map //nolint:gochecknoglobals
 
+type TestEnvOption func(env *TestEnv)
+
+// SkipPodRestartAssertions is a functional option that can be passed to IntegrationEnv()
+// to skip using the implicit assertions which check that no pods get restarted during tests.
+// Please using this sparingly, since most pod restarts are caused by unintentional crashes
+// and should therefore cause tests to fail.
+func SkipPodRestartAssertions() TestEnvOption {
+	return func(t *TestEnv) {
+		t.skipPodRestartAssertions = true
+		t.t.Log("skipping pod restart assertions for test", t.t.Name())
+	}
+}
+
 // IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
-func IntegrationEnv(t *testing.T) *TestEnv {
+func IntegrationEnv(t *testing.T, opts ...TestEnvOption) *TestEnv {
 	if existing, exists := memoizedTestEnvsByTest.Load(t); exists {
 		return existing.(*TestEnv)
 	}
 
 	t.Helper()
-	skipUnlessIntegration(t)
+	SkipUnlessIntegration(t)
 
 	capabilitiesDescriptionYAML := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_YAML")
 	capabilitiesDescriptionFile := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_FILE")
@@ -142,18 +157,26 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 		require.NoError(t, err)
 	}
 
-	var result TestEnv
-	err := yaml.Unmarshal([]byte(capabilitiesDescriptionYAML), &result)
+	var testEnv TestEnv
+	err := yaml.Unmarshal([]byte(capabilitiesDescriptionYAML), &testEnv)
 	require.NoErrorf(t, err, "capabilities specification was invalid YAML")
 
-	loadEnvVars(t, &result)
-	result.t = t
-	memoizedTestEnvsByTest.Store(t, &result)
+	loadEnvVars(t, &testEnv)
+	testEnv.t = t
 
-	// In every integration test, assert that no pods in our namespaces restart during the test.
-	assertNoRestartsDuringTest(t, result.ConciergeNamespace, "!pinniped.dev/test")
-	assertNoRestartsDuringTest(t, result.SupervisorNamespace, "!pinniped.dev/test")
-	return &result
+	for _, opt := range opts {
+		opt(&testEnv)
+	}
+
+	memoizedTestEnvsByTest.Store(t, &testEnv)
+
+	// By default, in every integration test, assert that no pods in our namespaces restart during the test.
+	if !testEnv.skipPodRestartAssertions {
+		assertNoRestartsDuringTest(t, testEnv.ConciergeNamespace, "!pinniped.dev/test")
+		assertNoRestartsDuringTest(t, testEnv.SupervisorNamespace, "!pinniped.dev/test")
+	}
+
+	return &testEnv
 }
 
 func needEnv(t *testing.T, key string) string {

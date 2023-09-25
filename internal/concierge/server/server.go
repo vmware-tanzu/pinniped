@@ -100,6 +100,7 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.
+// In practice, the ctx passed in should be one which will be cancelled when the process receives SIGTERM or SIGINT.
 func (a *App) runServer(ctx context.Context) error {
 	// Read the server config file.
 	cfg, err := concierge.FromPath(ctx, a.configPath)
@@ -186,7 +187,9 @@ func (a *App) runServer(ctx context.Context) error {
 		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
 
-	// Run the server. Its post-start hook will start the controllers.
+	// Run the server. Its post-start hook will start the controllers. Its pre shutdown hook will be called when ctx is
+	// cancelled, and that hook should graceful stop the controllers and give up the leader election lease. See the
+	// code for these hooks in internal/concierge/apiserver.go.
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
@@ -276,7 +279,15 @@ func main() error {
 		"time-since-build", timeSinceCompile,
 	)
 
+	// This context will be cancelled upon the first SIGTERM or SIGINT, and will os.Exit() to kill the process
+	// upon the second SIGTERM or SIGINT.
 	ctx := genericapiserver.SetupSignalContext()
+
+	// Just for debugging purposes, log when the first signal is received.
+	go func() {
+		<-ctx.Done() // wait for the Done channel to be closed, indicating that ctx was cancelled by the signal handler
+		plog.Debug("concierge shutdown initiated due to process receiving SIGTERM or SIGINT")
+	}()
 
 	return New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run()
 }

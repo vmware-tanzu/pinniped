@@ -1174,7 +1174,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:   successServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "error during authorization code exchange: some authcode exchange or token validation error",
+			wantErr:  "could not complete authorization code exchange: some authcode exchange or token validation error",
 		},
 		{
 			name:     "successful ldap login with prompts for username and password",
@@ -2236,7 +2236,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 		{
 			name:           "invalid code",
 			query:          "state=test-state&code=invalid",
-			wantErr:        "could not complete code exchange: some exchange error",
+			wantErr:        "could not complete authorization code exchange: some exchange error",
 			wantHeaders:    map[string][]string{},
 			wantHTTPStatus: http.StatusBadRequest,
 			opt: func(t *testing.T) Option {
@@ -2362,14 +2362,25 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			err = h.handleAuthCodeCallback(resp, req)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				if tt.wantHTTPStatus != 0 {
-					rec := httptest.NewRecorder()
-					err.(httperr.Responder).Respond(rec)
-					require.Equal(t, tt.wantHTTPStatus, rec.Code)
-				}
+				rec := httptest.NewRecorder()
+				err.(httperr.Responder).Respond(rec)
+				require.Equal(t, tt.wantHTTPStatus, rec.Code)
+				// The error message returned (to be shown by the CLI) and the error message shown in the resulting
+				// web page should always be the same.
+				require.Equal(t, http.StatusText(tt.wantHTTPStatus)+": "+tt.wantErr+"\n", rec.Body.String())
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.wantHTTPStatus, resp.Code)
+				switch {
+				case tt.wantNoCallbacks:
+					// When we return an error but keep listening, then we don't need a response body.
+					require.Empty(t, resp.Body)
+				case tt.wantHTTPStatus == http.StatusOK:
+					// When the login succeeds, the response body should show the success message.
+					require.Equal(t, "you have been logged in and may now close this tab", resp.Body.String())
+				default:
+					t.Fatal("test author made a mistake by expecting a non-200 response code without a wantErr")
+				}
 			}
 
 			if tt.wantHeaders != nil {
@@ -2385,11 +2396,12 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			case result := <-h.callbacks:
 				if tt.wantErr != "" {
 					require.EqualError(t, result.err, tt.wantErr)
-					return
+					require.Nil(t, result.token)
+				} else {
+					require.NoError(t, result.err)
+					require.NotNil(t, result.token)
+					require.Equal(t, result.token.IDToken.Token, "test-id-token")
 				}
-				require.NoError(t, result.err)
-				require.NotNil(t, result.token)
-				require.Equal(t, result.token.IDToken.Token, "test-id-token")
 				gotCallback = true
 			}
 			require.Equal(t, tt.wantNoCallbacks, !gotCallback)

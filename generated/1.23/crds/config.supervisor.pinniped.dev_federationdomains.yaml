@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.13.0
   name: federationdomains.config.supervisor.pinniped.dev
 spec:
   group: config.supervisor.pinniped.dev
@@ -116,6 +115,7 @@ spec:
                       - kind
                       - name
                       type: object
+                      x-kubernetes-map-type: atomic
                     transforms:
                       description: Transforms is an optional way to specify transformations
                         to be applied during user authentication and session refresh.
@@ -444,6 +444,7 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   stateEncryptionKey:
                     description: StateSigningKey holds the name of the corev1.Secret
                       in which this OIDC Provider's key for encrypting state parameters
@@ -454,6 +455,7 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   stateSigningKey:
                     description: StateSigningKey holds the name of the corev1.Secret
                       in which this OIDC Provider's key for signing state parameters
@@ -464,6 +466,7 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   tokenSigningKey:
                     description: TokenSigningKey holds the name of the corev1.Secret
                       in which this OIDC Provider's key for signing tokens is stored.
@@ -473,6 +476,7 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
             type: object
         required:
@@ -482,9 +486,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

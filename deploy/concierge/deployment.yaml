@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -134,8 +134,6 @@ spec:
         #! More recently added the more unique deploymentPodLabel() so Services can select these Pods more specifically
         #! without accidentally selecting any other Deployment's Pods, especially the kube cert agent Deployment's Pods.
         _: #@ template.replace(deploymentPodLabel())
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       securityContext:
         runAsUser: #@ data.values.run_as_user
@@ -247,9 +245,6 @@ spec:
           effect: NoSchedule
         - key: node-role.kubernetes.io/control-plane #! The new name for these nodes as of Kubernetes 1.24.
           effect: NoSchedule
-      #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
-      #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).
-      #!priorityClassName: system-cluster-critical
       #! This will help make sure our multiple pods run on different nodes, making
       #! our deployment "more" "HA".
       affinity:

@@ -104,7 +104,7 @@ while (("$#")); do
     dockerfile_path=$1
     shift
     ;;
-  -d | --alternate-deploy)
+  --alternate-deploy)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
       log_error "--alternate-deploy requires a script path to be specified"
@@ -113,7 +113,7 @@ while (("$#")); do
     alternate_deploy=$1
     shift
     ;;
-  -p | --alternate-deploy-supervisor)
+  --alternate-deploy-supervisor)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
       log_error "--alternate-deploy-supervisor requires a script path to be specified"
@@ -122,7 +122,7 @@ while (("$#")); do
     alternate_deploy_supervisor=$1
     shift
     ;;
-  -c | --alternate-deploy-concierge)
+  --alternate-deploy-concierge)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
       log_error "--alternate-deploy-concierge requires a script path to be specified"
@@ -131,7 +131,7 @@ while (("$#")); do
     alternate_deploy_concierge=$1
     shift
     ;;
-  -l | --alternate-deploy-local-user-authenticator)
+  --alternate-deploy-local-user-authenticator)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
       log_error "--alternate-deploy-local-user-authenticator requires a script path to be specified"
@@ -165,10 +165,10 @@ if [[ "$help" == "yes" ]]; then
   log_note "   -g, --api-group-suffix:                            deploy Pinniped with an alternate API group suffix"
   log_note "   -s, --skip-build:                                  reuse the most recently built image of the app instead of building"
   log_note "   -a, --get-active-directory-vars:                   specify a script that exports active directory environment variables"
-  log_note "   -d, --alternate-deploy:                            specify an alternate deploy script to install each component of Pinniped (Supervisor, Concierge, local-user-authenticator)"
-  log_note "   -p, --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
-  log_note "   -c, --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
-  log_note "   -l, --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
+  log_note "       --alternate-deploy:                            specify an alternate deploy script to install all components of Pinniped"
+  log_note "       --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
+  log_note "       --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
+  log_note "       --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
   exit 1
 fi
 

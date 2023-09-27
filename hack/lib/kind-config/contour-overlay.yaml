@@ -1,0 +1,16 @@
+#! Copyright 2023 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:overlay", "overlay")
+#@overlay/match by=overlay.subset({"kind": "Cluster"}), expects=1
+---
+#! Appends another port mapping to every node in the CLuster config.
+#! Contour will use this port mapping to expose the https endpoints
+#! of in-cluster apps at localhost:443 on your host.
+nodes:
+  #@overlay/match by=overlay.all, expects="1+"
+  - extraPortMappings:
+      - protocol: TCP
+        containerPort: 443
+        hostPort: 443
+        listenAddress: 127.0.0.1

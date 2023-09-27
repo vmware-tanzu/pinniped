@@ -7,14 +7,26 @@
 # A script to perform the setup required to manually test using the supervisor on a kind cluster.
 # Assumes that you installed the apps already using hack/prepare-for-integration-tests.sh.
 #
-# This script is a little hacky to avoid setting up any kind of ingress or load balancer on Kind.
-# It uses an http proxy server and port forwarding to route the requests into the cluster.
+# By default, this script does something hacky to avoid setting up any type of ingress or load balancer
+# on Kind. It uses an http proxy server and port forwarding to route the requests into the cluster.
 # This is only intended for quick manual testing of features by contributors and is not a
 # representation of how to really deploy or configure Pinniped.
 #
-# This uses the Supervisor and Concierge in the same cluster. Usually the Supervisor would be
-# deployed in one cluster while each workload cluster would have a Concierge. All the workload
-# cluster Concierge configurations would be similar to each other, all trusting the same Supervisor.
+# When invoked with the PINNIPED_USE_CONTOUR environment variable set to a non-empty value,
+# the script will install Contour into Kind and configure ingress using Contour. This requires that you
+# also set PINNIPED_USE_CONTOUR to a non-empty value when you ran hack/prepare-for-integration-tests.sh.
+# This will require editing your /etc/hosts file, and this script will echo instructions for doing so.
+# When using PINNIPED_USE_CONTOUR, the proxy server is not needed, which makes it easier
+# to use any web browser to complete web-based login flows (e.g. Safari, where configuring proxies
+# on localhost is painfully difficult). This still does something a little hacky though, which is that
+# it uses .cluster.local hostnames, because the Supervisor must be accessible by the same hostname both
+# inside and outside the cluster, since the Concierge's JWTAuthenticator needs to be able to
+# reach the discovery endpoint of the Supervisor by using the same hostname that is configured in the
+# Supervisor's FederationDomain.
+#
+# Example usage:
+#   PINNIPED_USE_CONTOUR=1 hack/prepare-for-integration-tests.sh -c
+#   PINNIPED_USE_CONTOUR=1 hack/prepare-supervisor-on-kind.sh --oidc --ldap
 #
 # Depends on `step` which can be installed by `brew install step` on MacOS.
 #
@@ -102,6 +114,74 @@ audience="my-workload-cluster-$(openssl rand -hex 4)"
 # the cluster whenever we want to be able to connect to it.
 issuer_host="pinniped-supervisor-clusterip.supervisor.svc.cluster.local"
 issuer="https://$issuer_host/some/path"
+dex_host="dex.tools.svc.cluster.local"
+
+if [[ "${PINNIPED_USE_CONTOUR:-}" != "" ]]; then
+  # Install Contour.
+  kubectl apply -f https://projectcontour.io/quickstart/contour.yaml
+
+  # Wait for its pods to be ready.
+  echo "Waiting for Contour to be ready..."
+  kubectl wait --for 'jsonpath={.status.phase}=Succeeded' pods -l 'app=contour-certgen'  -n projectcontour --timeout 60s
+  kubectl wait --for 'jsonpath={.status.phase}=Running' pods -l 'app!=contour-certgen'  -n projectcontour --timeout 60s
+
+  # Create an ingress for the Supervisor which uses TLS passthrough to allow the Supervisor to terminate TLS.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: supervisor-proxy
+spec:
+  virtualhost:
+    fqdn: $issuer_host
+    tls:
+      passthrough: true
+  tcpproxy:
+    services:
+      - name: pinniped-supervisor-clusterip
+        port: 443
+EOF
+
+  # Create an ingress for Dex which uses TLS passthrough to allow Dex to terminate TLS.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_TOOLS_NAMESPACE" -f -
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: dex-proxy
+spec:
+  virtualhost:
+    fqdn: $dex_host
+    tls:
+      passthrough: true
+  tcpproxy:
+    services:
+      - name: dex
+        port: 443
+EOF
+
+  issuer_host_missing=no
+  if ! grep -q "$issuer_host" /etc/hosts; then
+    issuer_host_missing=yes
+  fi
+
+  dex_host_missing=no
+  if ! grep -q "$dex_host" /etc/hosts; then
+    dex_host_missing=yes
+  fi
+
+  if [[ "$issuer_host_missing" == "yes" || ("$dex_host_missing" == "yes" && "$use_oidc_upstream" == "yes") ]]; then
+    echo
+    log_error "Please run these commands to edit /etc/hosts, and then run this script again with the same options."
+    if [[ "$issuer_host_missing" == "yes" ]]; then
+      echo "sudo bash -c \"echo '127.0.0.1 $issuer_host' >> /etc/hosts\""
+    fi
+    if [[ "$dex_host_missing" == "yes" && "$use_oidc_upstream" == "yes" ]]; then
+      echo "sudo bash -c \"echo '127.0.0.1 $dex_host' >> /etc/hosts\""
+    fi
+    log_error "When you are finished with your Kind cluster, you can remove these lines from /etc/hosts."
+    exit 1
+  fi
+fi
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   # Make an OIDCIdentityProvider which uses Dex to provide identity.
@@ -348,9 +428,22 @@ kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f "$fd_file"
 echo "Waiting for FederationDomain to initialize or update..."
 kubectl wait --for=condition=Ready FederationDomain/my-federation-domain -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE"
 
+# Decide if we need to use the proxy settings for certain commands below.
+if [[ "${PINNIPED_USE_CONTOUR:-}" != "" ]]; then
+  # Using the proxy is not needed with Contour.
+  proxy_server=""
+  proxy_except=""
+  proxy_env_vars=""
+else
+  # Without Contour, we will use the proxy for several commands below.
+  proxy_server="$PINNIPED_TEST_PROXY"
+  proxy_except="127.0.0.1"
+  proxy_env_vars="https_proxy=$proxy_server no_proxy=$proxy_except "
+fi
+
 # Test that the federation domain is working before we proceed.
-echo "Fetching FederationDomain discovery info via command: https_proxy=\"$PINNIPED_TEST_PROXY\" curl -fLsS --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""
-https_proxy="$PINNIPED_TEST_PROXY" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
+echo "Fetching FederationDomain discovery info via command: ${proxy_env_vars}curl -fLsS --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""
+https_proxy="$proxy_server" no_proxy="$proxy_except" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   certificateAuthorityData=$(cat "$root_ca_crt_path" | base64)
@@ -378,6 +471,7 @@ echo "Waiting for JWTAuthenticator to initialize or update..."
 sleep 5
 
 # Compile the CLI.
+echo "Building the Pinniped CLI..."
 go build ./cmd/pinniped
 
 # In case Pinniped was just installed moments ago, wait for the CredentialIssuer to be ready.
@@ -387,21 +481,24 @@ while [[ -z "$(kubectl get credentialissuer pinniped-concierge-config -o=jsonpat
 done
 
 # Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for browser-based
-# flows so we can open our own browser with the proxy settings. Generate a kubeconfig for each IDP.
+# flows so we can open our own browser with the proxy settings (if needed). Generate a kubeconfig for each IDP.
 flow_arg=""
 if [[ -n "$use_flow" ]]; then
   flow_arg="--upstream-identity-provider-flow $use_flow"
 fi
 if [[ "$use_oidc_upstream" == "yes" ]]; then
-  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+  echo "Generating OIDC kubeconfig..."
+  https_proxy="$proxy_server" no_proxy="$proxy_except" \
     ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type oidc >kubeconfig-oidc.yaml
 fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
-  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+  echo "Generating LDAP kubeconfig..."
+  https_proxy="$proxy_server" no_proxy="$proxy_except" \
     ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type ldap >kubeconfig-ldap.yaml
 fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
-  https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" \
+  echo "Generating AD kubeconfig..."
+  https_proxy="$proxy_server" no_proxy="$proxy_except" \
     ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type activedirectory >kubeconfig-ad.yaml
 fi
 
@@ -412,10 +509,11 @@ rm -f "$HOME/.config/pinniped/credentials.yaml"
 echo
 echo "Ready! 🚀"
 
-if [[ "$use_oidc_upstream" == "yes" || "$use_flow" == "browser_authcode" ]]; then
+# These instructions only apply when you are not using Contour and you will need a browser to log in.
+if [[ "${PINNIPED_USE_CONTOUR:-}" == "" && ("$use_oidc_upstream" == "yes" || "$use_flow" == "browser_authcode") ]]; then
   echo
   echo "To be able to access the Supervisor URL during login, start Chrome like this:"
-  echo "    open -a \"Google Chrome\" --args --proxy-server=\"$PINNIPED_TEST_PROXY\""
+  echo "    open -a \"Google Chrome\" --args --proxy-server=\"$proxy_server\""
   echo "Note that Chrome must be fully quit before being started with --proxy-server."
   echo "Then open the login URL shown below in that new Chrome window."
   echo
@@ -446,16 +544,16 @@ fi
 # they expire, so you should not be prompted to log in again for the rest of the day.
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   echo "To log in using OIDC, run:"
-  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml"
   echo
 fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   echo "To log in using LDAP, run:"
-  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml"
   echo
 fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "To log in using AD, run:"
-  echo "PINNIPED_DEBUG=true https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" ./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
   echo
 fi

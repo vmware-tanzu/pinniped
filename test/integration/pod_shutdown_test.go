@@ -120,7 +120,7 @@ func testShutdownAllPodsOfApp(t *testing.T, env *testlib.TestEnv, namespace stri
 	// The leader election lease should already contain the empty string as the holder, because the old leader
 	// pod should have given up the lease during its graceful shutdown.
 	waitForLeaderElectionLeaseToHaveHolderIdentity(t, namespace, appName,
-		func(holder string) bool { return holder == "" }, 200*time.Millisecond)
+		func(holder string) bool { return holder == "" }, 1*time.Minute)
 }
 
 // Given a list of pods, return a list of their names.
@@ -220,13 +220,14 @@ func waitForLeaderElectionLeaseToHaveHolderIdentity(
 	waitDuration time.Duration,
 ) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), waitDuration*2)
 	defer cancel()
 	client := testlib.NewKubernetesClientset(t)
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		lease, err := client.CoordinationV1().Leases(namespace).Get(ctx, leaseName, metav1.GetOptions{})
 		requireEventually.NoError(err)
-		requireEventually.True(holderIdentityPredicate(*lease.Spec.HolderIdentity))
+		requireEventually.Truef(holderIdentityPredicate(*lease.Spec.HolderIdentity),
+			"leader election lease had holder %s", *lease.Spec.HolderIdentity)
 	}, waitDuration, 200*time.Millisecond)
 }

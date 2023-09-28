@@ -5,6 +5,9 @@ go 1.20
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.2/go.mod#L14
 replace github.com/google/cel-go => github.com/google/cel-go v0.16.1
 
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.2/go.mod#L50
+replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
+
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20230914224007-a15a36ccbc2e
@@ -20,7 +23,7 @@ require (
 	github.com/go-logr/zapr v1.2.4
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
-	github.com/google/cel-go v0.18.0
+	github.com/google/cel-go v0.18.1
 	github.com/google/go-cmp v0.5.9
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.1
@@ -53,7 +56,7 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/kube-aggregator v0.28.2
-	k8s.io/kube-openapi v0.0.0-20230905202853-d090da108d2f
+	k8s.io/kube-openapi v0.0.0-20230918164632-68afd615200d
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/yaml v1.3.0
 )

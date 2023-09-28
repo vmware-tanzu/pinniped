@@ -59,7 +59,8 @@ KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
 # REPO_HOST="1.2.3.4.fake.repo.host:5000"
 # PACKAGE_REPO_HOST="projects.registry.vmware.com/pinniped/pinniped-server"
 # PACKAGE_REPO_HOST="docker.io/benjaminapetersen/pinniped-package-repo"
-PACKAGE_REPO_HOST="benjaminapetersen/pinniped-package-repo"
+# PACKAGE_REPO_HOST="benjaminapetersen/pinniped-package-repo"
+PACKGE_REPO_HOST="localhost:5001/pinniped-package-repo"
 PINNIPED_PACKAGE_VERSION="0.25.0"
 
 # TODO: cp ./deploy/supervisor.... into ./deploy_carvel/supervisor/config...

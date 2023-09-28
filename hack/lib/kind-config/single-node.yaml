@@ -44,3 +44,11 @@ kubeadmConfigPatches:
     extraArgs:
       # See comment above.
       enable-aggregator-routing: "true"
+# part of the configuration enabling kind access to a local running docker registry
+# this will eventually be replaced by a built-in kind feature:
+# - https://kind.sigs.k8s.io/docs/user/local-registry/
+# - https://github.com/kubernetes-sigs/kind/issues/1213
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"

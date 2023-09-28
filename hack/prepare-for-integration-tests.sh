@@ -55,6 +55,7 @@ alternate_deploy="undefined"
 alternate_deploy_supervisor="undefined"
 alternate_deploy_concierge="undefined"
 alternate_deploy_local_user_authenticator="undefined"
+post_install="undefined"
 
 # supported variable style:
 #  --dockerfile-path ./foo.sh
@@ -140,6 +141,15 @@ while (("$#")); do
     alternate_deploy_local_user_authenticator=$1
     shift
     ;;
+  --post-install)
+    shift
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--post-install requires a script path to be specified"
+      exit 1
+    fi
+    post_install=$1
+    shift
+    ;;
   -*)
     log_error "Unsupported flag $1" >&2
     if [[ "$1" == *"active-directory"* ]]; then
@@ -169,6 +179,7 @@ if [[ "$help" == "yes" ]]; then
   log_note "   -p, --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
   log_note "   -c, --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
   log_note "   -l, --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
+  log_note "   --post-install:                                    specify an post-install script"
   exit 1
 fi
 
@@ -220,7 +231,8 @@ else
   fi
 fi
 
-registry="pinniped.local"
+# registry="pinniped.local"
+registry="localhost:5001" # local registry setup via splicing in https://kind.sigs.k8s.io/docs/user/local-registry/
 repo="test/build"
 registry_repo="$registry/$repo"
 tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
@@ -255,6 +267,9 @@ fi
 
 # Load it into the cluster
 log_note "Loading the app's container image into the kind cluster..."
+# TODO: do I need to change anything here yet?
+#    with this new update that we are making?
+#    probably need to docker push to the new local registry instead of kind side-load?
 kind load docker-image "$registry_repo_tag" --name pinniped
 
 #
@@ -402,6 +417,17 @@ fi
 #
 test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem"}}')"
 
+
+#
+# Call a post-install script
+# simplifies passing the $tag which may be necessary if the current local build is to be
+# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
+if [ "$post_install" != "undefined" ] ; then
+  log_note "The post-install script will be called with $tag..."
+  $post_install post-install-script $tag
+fi
+
+
 #
 # Create the environment file.
 #
@@ -501,11 +527,3 @@ log_note
 log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
 log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
-
-log_note "--------------------"
-log_note "tag deployed: ${tag}"
-log_note "tag deployed: ${tag}"
-log_note "tag deployed: ${tag}"
-log_note "pass tag ${tag} to script: "
-log_note "    ./deploy_carvel/build_and_deploy_for_integration_tests.sh ${tag}"
-log_note "--------------------"

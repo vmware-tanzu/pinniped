@@ -34,13 +34,10 @@ echo_blue() {
 # build_and_deploy_for_integration_tests.sh 123455
 echo ""
 echo ""
-tag=${1} # need to manually pass this, use the same from prepare-for-integreation-tests.sh
+app=${1} # throw away, pattern is always to call scripts with 2 args
+tag=${2} # need to manually pass this, use the same from prepare-for-integreation-tests.sh
 echo_yellow "using tag: ${tag}"
-echo_yellow "does this match output tag from prepare-for-integration-test.sh?"
 echo ""
-echo ""
-sleep 3 # just to give enough time to see it for a human
-
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -69,10 +66,10 @@ KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
 # since we ran prepare-for-integration-test.sh
 # and it does the "kind load" on the
 # pinniped image
-registry="pinniped.local" # Hack, but not what we really want: getpinniped/pinniped-server:latest
+# registry="pinniped.local" # Hack, but not what we really want: getpinniped/pinniped-server:latest
+registry="localhost:5001" # local registry setup via splicing in https://kind.sigs.k8s.io/docs/user/local-registry/
 repo="test/build"
 registry_repo="$registry/$repo"
-
 
 
 api_group_suffix="pinniped.dev"
@@ -175,16 +172,16 @@ ls -la "/tmp/${PACKAGE_REPO_HOST}:${PINNIPED_PACKAGE_VERSION}"
 
 
 echo_yellow "deploying PackageRepository..."
-PINNIPED_PACKGE_REPOSITORY_NAME="pinniped-package-repository"
-PINNIPED_PACKGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
-echo -n "" > "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+PINNIPED_PACKAGE_REPOSITORY_NAME="pinniped-package-repository"
+PINNIPED_PACKAGE_REPOSITORY_FILE="packagerepository.${PINNIPED_PACKAGE_VERSION}.yml"
+echo -n "" > "${PINNIPED_PACKAGE_REPOSITORY_FILE}"
 
-cat <<EOT >> "${PINNIPED_PACKGE_REPOSITORY_FILE}"
+cat <<EOT >> "${PINNIPED_PACKAGE_REPOSITORY_FILE}"
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageRepository
 metadata:
-  name: "${PINNIPED_PACKGE_REPOSITORY_NAME}"
+  name: "${PINNIPED_PACKAGE_REPOSITORY_NAME}"
 spec:
   fetch:
     imgpkgBundle:
@@ -193,8 +190,8 @@ EOT
 
 
 # Now, gotta make this work.  It'll be interesting if we can...
-kapp deploy --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --file "${PINNIPED_PACKGE_REPOSITORY_FILE}" -y
-kapp inspect --app "${PINNIPED_PACKGE_REPOSITORY_NAME}" --tree
+kapp deploy --app "${PINNIPED_PACKAGE_REPOSITORY_NAME}" --file "${PINNIPED_PACKAGE_REPOSITORY_FILE}" -y
+kapp inspect --app "${PINNIPED_PACKAGE_REPOSITORY_NAME}" --tree
 
 sleep 2 # TODO: remove
 

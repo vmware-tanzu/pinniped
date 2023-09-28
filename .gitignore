@@ -22,3 +22,8 @@
 
 # Hugo temp file
 .hugo_build.lock
+
+# deploy_carvel is an ephemeral directory generated when certain scripts are executed.
+# this directory will be created and populated with files that can be applied to a
+# kubernetes cluster (specifically kind) in order to deploy Pinniped in an alternative way.
+deploy_carvel

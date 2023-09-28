@@ -1,0 +1,4 @@
+Dummy Release Notes for Supervisor
+- foo
+- bar
+- baz

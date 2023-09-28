@@ -220,8 +220,11 @@ else
   fi
 fi
 
-registry="pinniped.local"
+# NOW CHANGE THIS SO WE PUSH TO THE REGISTRY?
+# registry="pinniped.local"
+registry="kind-registry.local:5000"
 repo="test/build"
+# TODO: can we force HTTP here? HTTPS is problematic.
 registry_repo="$registry/$repo"
 tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
 
@@ -254,8 +257,11 @@ if [[ "$do_build" == "yes" ]]; then
 fi
 
 # Load it into the cluster
-log_note "Loading the app's container image into the kind cluster..."
-kind load docker-image "$registry_repo_tag" --name pinniped
+log_note "Loading the app's container image into the local registry ($registry)..."
+# TODO: now we don't want to direct load anymore, we want to docker push to our new local registry.
+# and then be sure that it pulls?
+# kind load docker-image "$registry_repo_tag" --name pinniped
+docker push "$registry_repo_tag"
 
 #
 # Deploy local-user-authenticator
@@ -501,3 +507,9 @@ log_note
 log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
 log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
+log_note
+# TODO: come back and check the /etc/hosts file for the existence of
+# the correct lines, just like is done in prepare-supervisor-on-kind.sh
+log_note "Please run these commands to edit /etc/hosts, and then run this script again with the same options."
+log_note "  sudo bash -c \"echo '127.0.0.1 kind-registry.local' >> /etc/hosts\""
+log_note "When you are finished with your Kind cluster, you can remove these lines from /etc/hosts."

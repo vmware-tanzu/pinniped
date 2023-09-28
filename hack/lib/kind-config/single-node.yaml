@@ -44,3 +44,11 @@ kubeadmConfigPatches:
     extraArgs:
       # See comment above.
       enable-aggregator-routing: "true"
+# TODO: in kind-up.sh these variables are created, but aren't passed in here, so we are hard-coding them
+# reg_name='kind-registry.local'
+# reg_port='5000'
+# perhaps we need to ytt --overlay it like we do the contour configuration?
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."kind-registry.local:5000"]
+    endpoint = ["http://kind-registry.local:5000"]

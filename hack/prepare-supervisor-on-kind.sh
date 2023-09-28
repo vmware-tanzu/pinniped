@@ -442,8 +442,11 @@ else
 fi
 
 # Test that the federation domain is working before we proceed.
-echo "Fetching FederationDomain discovery info via command: ${proxy_env_vars}curl -fLsS --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""
-https_proxy="$proxy_server" no_proxy="$proxy_except" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
+echo "Fetching FederationDomain discovery info via command:" \
+  "${proxy_env_vars}curl -fLsS --retry-all-errors --retry 5 --cacert \"$root_ca_crt_path\" \"$issuer/.well-known/openid-configuration\""
+https_proxy="$proxy_server" no_proxy="$proxy_except" curl -fLsS \
+  --retry-all-errors --retry 5 --cacert "$root_ca_crt_path" \
+  "$issuer/.well-known/openid-configuration" | jq .
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   certificateAuthorityData=$(cat "$root_ca_crt_path" | base64)

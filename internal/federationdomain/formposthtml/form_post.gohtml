@@ -30,5 +30,10 @@ SPDX-License-Identifier: Apache-2.0
         <code id="manual-auth-code">{{ .Parameters.Get "code" }}</code>
     </button>
 </div>
+<div id="error" class="state" data-favicon="⛔" data-title="Error during login" hidden>
+    <h1>Error during login</h1>
+    <p id="message" class="error"></p>
+    <p>Please try again.</p>
+</div>
 </body>
 </html>

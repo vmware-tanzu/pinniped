@@ -922,7 +922,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 		w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
 	} else {
-		// Return HTTP 405 for anything that's not a GET.
+		// When we are not using form_post, then return HTTP 405 for anything that's not a GET.
 		if r.Method != http.MethodGet {
 			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -932,6 +932,9 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		// Pull response parameters from the URL query string.
 		params = r.URL.Query()
 	}
+
+	// At this point, it doesn't matter if we got the params from a form_post POST request or a regular GET request.
+	// Next, validate the params, and if we got an authcode then try to use it to complete the login.
 
 	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
 	if err := h.state.Validate(params.Get("state")); err != nil {

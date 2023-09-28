@@ -1,0 +1,11 @@
+apiVersion: data.packaging.carvel.dev/v1alpha1
+kind: PackageMetadata
+metadata:
+  name: local-user-authenticator.pinniped.dev
+spec:
+  displayName: "local-user-authenticator"
+  longDescription: "The local-user-authenticator app is an identity provider used for integration testing and demos. Note that this is not recommended for
+production use."
+  shortDescription: "The local-user-authenticator app is an identity provider used for integration testing and demos."
+  categories:
+  - auth

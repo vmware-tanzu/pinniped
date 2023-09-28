@@ -1,0 +1,4 @@
+Dummy Release Notes for local-user-authenticator
+- foo
+- bar
+- baz

@@ -1,0 +1,16 @@
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "local-user-authenticator-package-install"
+    namespace: "local-user-authenticator-install-ns"
+spec:
+  serviceAccountName: "pinniped-package-rbac-local-user-authenticator-sa-superadmin-dangerous"
+  packageRef:
+    refName: "local-user-authenticator.pinniped.dev"
+    versionSelection:
+      constraints: "0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D"
+  values:
+  - secretRef:
+      name: "local-user-authenticator-package-install-secret"

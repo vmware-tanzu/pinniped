@@ -1,0 +1,25 @@
+---
+apiVersion: imgpkg.carvel.dev/v1alpha1
+images:
+- annotations:
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/package-local-user-authenticator:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+    kbld.carvel.dev/origins: |
+      - resolved:
+          tag: 0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+          url: kind-registry.local:5000/test/build/package-local-user-authenticator:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+  image: kind-registry.local:5000/test/build/package-local-user-authenticator@sha256:b22fae4efc03672bd1b5c7d609afb4699686e46c254a4290e977abdcb28c5494
+- annotations:
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/package-pinniped-concierge:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+    kbld.carvel.dev/origins: |
+      - resolved:
+          tag: 0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+          url: kind-registry.local:5000/test/build/package-pinniped-concierge:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+  image: kind-registry.local:5000/test/build/package-pinniped-concierge@sha256:5f18db066cc3ee65495a92db848acc5599e658277aca8fdf7dea2a4e47725500
+- annotations:
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/package-pinniped-supervisor:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+    kbld.carvel.dev/origins: |
+      - resolved:
+          tag: 0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+          url: kind-registry.local:5000/test/build/package-pinniped-supervisor:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+  image: kind-registry.local:5000/test/build/package-pinniped-supervisor@sha256:9cb8d6646be818c5fe08e860c37952636f3f80d58817a9f8076c9ff88659d47b
+kind: ImagesLock

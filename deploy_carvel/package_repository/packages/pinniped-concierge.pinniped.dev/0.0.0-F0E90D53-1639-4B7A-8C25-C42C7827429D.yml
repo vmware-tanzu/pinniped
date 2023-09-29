@@ -1,0 +1,154 @@
+apiVersion: data.packaging.carvel.dev/v1alpha1
+kind: Package
+metadata:
+  name: pinniped-concierge.pinniped.dev.0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+spec:
+  refName: pinniped-concierge.pinniped.dev
+  version: 0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+  releaseNotes: Dummy Release Notes for Concierge - foo - bar - baz
+  valuesSchema:
+    openAPIv3:
+      type: object
+      additionalProperties: false
+      properties:
+        app_name:
+          type: string
+          description: Name of pinniped-concierge.
+          default: pinniped-concierge
+        namespace:
+          type: string
+          description: Creates a new namespace statically in yaml with the given name and installs the app into that namespace.
+          default: pinniped-concierge
+        into_namespace:
+          type: string
+          nullable: true
+          description: If specified, assumes that a namespace of the given name already exists and installs the app into that namespace. If both `namespace` and `into_namespace` are specified, then only `into_namespace` is used.
+          default: null
+        custom_labels:
+          nullable: true
+          description: 'All resources created statically by yaml at install-time and all resources created dynamically by controllers at runtime will be labelled with `app: $app_name` and also with the labels specified here. The value of `custom_labels` must be a map of string keys to string values. The app can be uninstalled either by: 1. Deleting the static install-time yaml resources including the static namespace, which will cascade and also delete    resources that were dynamically created by controllers at runtime 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace.'
+          default: {}
+        replicas:
+          type: integer
+          description: Specify how many replicas of the Pinniped server to run.
+          default: 2
+        image_repo:
+          type: string
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: projects.registry.vmware.com/pinniped/pinniped-server
+        image_digest:
+          type: string
+          nullable: true
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: null
+        image_tag:
+          type: string
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: latest
+        kube_cert_agent_image:
+          type: string
+          nullable: true
+          description: Optionally specify a different image for the 'kube-cert-agent' pod which is scheduled on the control plane. This image needs only to include `sleep` and `cat` binaries. By default, the same image specified for image_repo/image_digest/image_tag will be re-used.
+          default: null
+        image_pull_dockerconfigjson:
+          type: string
+          nullable: true
+          description: 'Specifies a secret to be used when pulling the above `image_repo` container image. Can be used when the above image_repo is a private registry. Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r ''.data[".dockerconfigjson"]'' Optional.'
+          default: null
+        discovery_url:
+          type: string
+          nullable: true
+          description: Pinniped will try to guess the right K8s API URL for sharing that information with potential clients. This setting allows the guess to be overridden.
+          default: null
+        api_serving_certificate_duration_seconds:
+          type: integer
+          description: Specify the duration and renewal interval for the API serving certificate. The defaults are set to expire the cert about every 30 days, and to rotate it about every 25 days.
+          default: 2592000
+        api_serving_certificate_renew_before_seconds:
+          type: integer
+          description: Specify the duration and renewal interval for the API serving certificate. The defaults are set to expire the cert about every 30 days, and to rotate it about every 25 days.
+          default: 2160000
+        log_level:
+          type: string
+          nullable: true
+          description: default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.
+          default: null
+        deprecated_log_format:
+          type: string
+          nullable: true
+          description: 'Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs). By default, when this value is left unset, logs are formatted in json. This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json.'
+          default: null
+        run_as_user:
+          type: integer
+          description: run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
+          default: 65532
+        run_as_group:
+          type: integer
+          description: run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice
+          default: 65532
+        api_group_suffix:
+          type: string
+          description: Specify the API group suffix for all Pinniped API groups. By default, this is set to pinniped.dev, so Pinniped API groups will look like foo.pinniped.dev, authentication.concierge.pinniped.dev, etc. As an example, if this is set to tuna.io, then Pinniped API groups will look like foo.tuna.io. authentication.concierge.tuna.io, etc.
+          default: pinniped.dev
+        impersonation_proxy_spec:
+          type: object
+          additionalProperties: false
+          description: Customize CredentialIssuer.spec.impersonationProxy to change how the concierge handles impersonation.
+          properties:
+            mode:
+              type: string
+              description: If enabled, the impersonation proxy will always run regardless of other strategies available.
+              default: auto
+            external_endpoint:
+              type: string
+              nullable: true
+              description: The endpoint which the client should use to connect to the impersonation proxy. If left unset, the client will default to connecting based on the ClusterIP or LoadBalancer endpoint.
+              default: null
+            service:
+              type: object
+              additionalProperties: false
+              description: The impersonation proxy service configuration
+              properties:
+                type:
+                  type: string
+                  nullable: true
+                  description: Options are 'LoadBalancer', 'ClusterIP' and 'None'.
+                  default: null
+                annotations:
+                  type: object
+                  additionalProperties: false
+                  nullable: true
+                  description: The annotations that should be set on the ClusterIP or LoadBalancer Service.
+                  properties:
+                    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout:
+                      type: string
+                      default: "4000"
+                load_balancer_ip:
+                  type: string
+                  nullable: true
+                  description: When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP.
+                  default: null
+        https_proxy:
+          type: string
+          nullable: true
+          description: Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS, e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider. The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY. Optional.
+          default: null
+        no_proxy:
+          type: string
+          description: do not proxy Kubernetes endpoints
+          default: $(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local
+  template:
+    spec:
+      fetch:
+      - imgpkgBundle:
+          image: kind-registry.local:5000/test/build/package-pinniped-concierge:0.0.0-F0E90D53-1639-4B7A-8C25-C42C7827429D
+      template:
+      - ytt:
+          paths:
+          - config/
+      - kbld:
+          paths:
+          - .imgpkg/images.yml
+          - '-'
+      deploy:
+      - kapp: {}

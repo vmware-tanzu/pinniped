@@ -1,0 +1,11 @@
+---
+apiVersion: imgpkg.carvel.dev/v1alpha1
+images:
+- annotations:
+    kbld.carvel.dev/id: projects.registry.vmware.com/pinniped/pinniped-server:latest
+    kbld.carvel.dev/origins: |
+      - resolved:
+          tag: latest
+          url: projects.registry.vmware.com/pinniped/pinniped-server:latest
+  image: projects.registry.vmware.com/pinniped/pinniped-server@sha256:a92183de893eb0b1850cc3a1d33306b96ba2cdb72a8a49c6493a58c01b4fa9cd
+kind: ImagesLock

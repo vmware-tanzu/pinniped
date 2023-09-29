@@ -59,6 +59,11 @@ do
     --data-values-schema-inspect \
     --output openapi-v3 > \
     "deploy_carvel/${resource_name}/schema-openapi.yaml"
+
+  log_note "Generating .imgpkg/images.yml for ${resource_name}..."
+  ytt \
+    --file "deploy/${resource_name}/" | \
+    kbld -f- --imgpkg-lock-output "deploy_carvel/${resource_name}/.imgpkg/images.yml"
 done
 
 

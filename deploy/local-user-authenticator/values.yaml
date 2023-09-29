@@ -1,19 +1,26 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
-#@data/values
+#@data/values-schema
 ---
 
-#! Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
 image_repo: projects.registry.vmware.com/pinniped/pinniped-server
-image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
+#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
+#@schema/nullable
+image_digest: sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
+#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
 image_tag: latest
 
-#! Specifies a secret to be used when pulling the above `image_repo` container image.
-#! Can be used when the above image_repo is a private registry.
-#! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
-#! Optional.
-image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+#@ image_pull_dockerconfigjson_desc = "Specifies a secret to be used when pulling the above `image_repo` container image. \
+#@ Can be used when the above image_repo is a private registry. \
+#@ Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username='USERNAME' --docker-password='PASSWORD' --dry-run=client -o json | jq -r '.data['.dockerconfigjson']' \
+#@ Optional."
+#@schema/desc image_pull_dockerconfigjson_desc
+#@schema/nullable
+image_pull_dockerconfigjson: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
-run_as_user: 65532 #! run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
-run_as_group: 65532 #! run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice
+#@schema/desc "run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+run_as_user: 65532
+#@schema/desc "run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+run_as_group: 65532

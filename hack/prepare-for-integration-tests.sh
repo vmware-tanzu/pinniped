@@ -220,11 +220,9 @@ else
   fi
 fi
 
-# NOW CHANGE THIS SO WE PUSH TO THE REGISTRY?
 # registry="pinniped.local"
 registry="kind-registry.local:5000"
 repo="test/build"
-# TODO: can we force HTTP here? HTTPS is problematic.
 registry_repo="$registry/$repo"
 tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
 
@@ -258,9 +256,6 @@ fi
 
 # Load it into the cluster
 log_note "Loading the app's container image into the local registry ($registry)..."
-# TODO: now we don't want to direct load anymore, we want to docker push to our new local registry.
-# and then be sure that it pulls?
-# kind load docker-image "$registry_repo_tag" --name pinniped
 docker push "$registry_repo_tag"
 
 #

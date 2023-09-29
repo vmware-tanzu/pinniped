@@ -55,6 +55,7 @@ alternate_deploy="undefined"
 alternate_deploy_supervisor="undefined"
 alternate_deploy_concierge="undefined"
 alternate_deploy_local_user_authenticator="undefined"
+post_install="undefined"
 
 # supported variable style:
 #  --dockerfile-path ./foo.sh
@@ -140,6 +141,15 @@ while (("$#")); do
     alternate_deploy_local_user_authenticator=$1
     shift
     ;;
+  --post-install)
+    shift
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--post-install requires a script path to be specified"
+      exit 1
+    fi
+    post_install=$1
+    shift
+    ;;
   -*)
     log_error "Unsupported flag $1" >&2
     if [[ "$1" == *"active-directory"* ]]; then
@@ -169,6 +179,7 @@ if [[ "$help" == "yes" ]]; then
   log_note "       --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
   log_note "       --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
   log_note "       --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
+  log_note "       --post-install:                                specify an post-install script"
   exit 1
 fi
 
@@ -395,6 +406,15 @@ else
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   popd >/dev/null
+fi
+
+#
+# Call a post-install script
+# simplifies passing the $tag which may be necessary if the current local build is to be
+# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
+if [ "$post_install" != "undefined" ] ; then
+  log_note "The post-install script will be called with $tag..."
+  $post_install post-install-script $tag
 fi
 
 #

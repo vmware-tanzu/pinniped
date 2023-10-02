@@ -1,0 +1,32 @@
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "concierge-package-install"
+    namespace: "concierge-install-ns"
+spec:
+  serviceAccountName: "pinniped-package-rbac-concierge-sa-superadmin-dangerous"
+  packageRef:
+    refName: "concierge.pinniped.dev"
+    versionSelection:
+      constraints: "0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7"
+  values:
+  - secretRef:
+      name: "concierge-package-install-secret"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "concierge-package-install-secret"
+  namespace: "concierge-install-ns"
+stringData:
+  values.yml: |
+    ---
+    app_name: pinniped-concierge
+    namespace: concierge
+    api_group_suffix: pinniped.dev
+    log_level: debug
+
+    image_repo: kind-registry.local:5000/test/build
+    image_tag: 0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7

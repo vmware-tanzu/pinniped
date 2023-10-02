@@ -4,12 +4,12 @@
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
-  name: #@ "supervisor.pinniped.dev." + data.values.version
+  name: #@ "concierge.pinniped.dev." + data.values.version
 spec:
-  refName: supervisor.pinniped.dev
+  refName: concierge.pinniped.dev
   version: #@ data.values.version
   releaseNotes: |
-        Initial release of the pinniped supervisor package, TODO: AUTOMATE THIS??
+        Initial release of the pinniped concierge package, TODO: AUTOMATE THIS??
   valuesSchema:
     openAPIv3: #@ yaml.decode(data.values.openapi)["components"]["schemas"]["dataValues"]
   template:

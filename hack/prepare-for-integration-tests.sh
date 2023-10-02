@@ -235,7 +235,7 @@ fi
 registry="kind-registry.local:5000"
 repo="test/build"
 registry_repo="$registry/$repo"
-tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+tag="0.0.0-$(uuidgen)" # always a new tag to force K8s to reload the image on redeploy
 
 if [[ "$skip_build" == "yes" ]]; then
   most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
@@ -292,6 +292,20 @@ else
 
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+
+  # TODO: will have to create this in our package install script....
+  test_username="test-username"
+  test_groups="test-group-0,test-group-1"
+  test_password="$(openssl rand -hex 16)"
+  log_note "Creating test user '$test_username'..."
+  kubectl create secret generic "$test_username" \
+    --namespace local-user-authenticator \
+    --from-literal=groups="$test_groups" \
+    --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
+    --dry-run=client \
+    --output yaml |
+    kubectl apply -f -
+
   popd >/dev/null
 fi
 
@@ -314,18 +328,6 @@ kapp deploy --yes --app tools --diff-changes --file "$manifest"
 kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
 popd >/dev/null
-
-test_username="test-username"
-test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)"
-log_note "Creating test user '$test_username'..."
-kubectl create secret generic "$test_username" \
-  --namespace local-user-authenticator \
-  --from-literal=groups="$test_groups" \
-  --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
-  --dry-run=client \
-  --output yaml |
-  kubectl apply -f -
 
 #
 # Deploy the Pinniped Supervisor

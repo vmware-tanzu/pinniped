@@ -84,7 +84,7 @@ spec:
         - key: kubernetes.io/arch
           effect: NoSchedule
           operator: Equal
-          value: arm64 #! Also allow running on arm64 nodes.
+          value: arm64 #! Also allow running on arm64 nodes
 ---
 apiVersion: v1
 kind: Service

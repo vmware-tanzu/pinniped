@@ -16,7 +16,7 @@ spec:
     spec:
       fetch:
       - imgpkgBundle:
-          image: #@ "${REPO_HOST}/packages/local-user-authenticator:" + data.values.version
+          image: #@ data.values.repo_host + ":" + data.values.version
       template:
       - ytt:
           paths:

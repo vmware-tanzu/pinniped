@@ -1,10 +1,10 @@
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
-  name: supervisor.pinniped.dev.0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  name: supervisor.pinniped.dev.0.0.0-B0EC99E6-F598-42A9-8976-DFCE049C768D
 spec:
   refName: supervisor.pinniped.dev
-  version: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  version: 0.0.0-B0EC99E6-F598-42A9-8976-DFCE049C768D
   releaseNotes: |
     Initial release of the pinniped supervisor package, TODO: AUTOMATE THIS??
   valuesSchema:
@@ -169,7 +169,7 @@ spec:
     spec:
       fetch:
       - imgpkgBundle:
-          image: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+          image: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-B0EC99E6-F598-42A9-8976-DFCE049C768D
       template:
       - ytt:
           paths:

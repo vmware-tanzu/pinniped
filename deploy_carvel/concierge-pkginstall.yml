@@ -10,7 +10,7 @@ spec:
   packageRef:
     refName: "concierge.pinniped.dev"
     versionSelection:
-      constraints: "0.0.0-F3326187-009A-4313-B188-1B454D1A7E04"
+      constraints: "0.0.0-B0EC99E6-F598-42A9-8976-DFCE049C768D"
   values:
   - secretRef:
       name: "concierge-package-install-secret"
@@ -29,4 +29,4 @@ stringData:
     log_level: debug
 
     image_repo: kind-registry.local:5000/test/build
-    image_tag: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+    image_tag: 0.0.0-B0EC99E6-F598-42A9-8976-DFCE049C768D

@@ -2,45 +2,24 @@
 apiVersion: imgpkg.carvel.dev/v1alpha1
 images:
 - annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
     kbld.carvel.dev/origins: |
       - resolved:
-          tag: 0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-          url: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-  image: kind-registry.local:5000/test/build/test/build-package-concierge@sha256:666682c02d09cef2d116152d4762e8af52c03bc133d06c91f8ea1ff2db605a90
+          tag: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+          url: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  image: kind-registry.local:5000/test/build/test/build-package-concierge@sha256:ffc8371ff94e939233af0643476a597c025adb5609cc35c5ded6bd67ce13fdec
 - annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
     kbld.carvel.dev/origins: |
       - resolved:
-          tag: 0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-          url: kind-registry.local:5000/test/build/test/build-package-concierge:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-  image: kind-registry.local:5000/test/build/test/build-package-concierge@sha256:666682c02d09cef2d116152d4762e8af52c03bc133d06c91f8ea1ff2db605a90
+          tag: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+          url: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  image: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator@sha256:4f111f27ecf38622e4cbb29ce1d88589b488d8eb57d9b29cb577d64a417a2c4c
 - annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
+    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
     kbld.carvel.dev/origins: |
       - resolved:
-          tag: 0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-          url: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-  image: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator@sha256:a094c2971a8a24c3ab34e0146cbb540d6277e853bbc8fd3efb6691b174bb5709
-- annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-    kbld.carvel.dev/origins: |
-      - resolved:
-          tag: 0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-          url: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-  image: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator@sha256:a094c2971a8a24c3ab34e0146cbb540d6277e853bbc8fd3efb6691b174bb5709
-- annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-    kbld.carvel.dev/origins: |
-      - resolved:
-          tag: 0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-          url: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-84D55AC3-B367-41A3-B17B-E11B10443CC8
-  image: kind-registry.local:5000/test/build/test/build-package-supervisor@sha256:28488e1c9bbf8988c9a9f70ae6478188b6ebe01522fe45029940ed21a2cf221f
-- annotations:
-    kbld.carvel.dev/id: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-    kbld.carvel.dev/origins: |
-      - resolved:
-          tag: 0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-          url: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
-  image: kind-registry.local:5000/test/build/test/build-package-supervisor@sha256:28488e1c9bbf8988c9a9f70ae6478188b6ebe01522fe45029940ed21a2cf221f
+          tag: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+          url: kind-registry.local:5000/test/build/test/build-package-supervisor:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  image: kind-registry.local:5000/test/build/test/build-package-supervisor@sha256:f3ceb23f0202c83955f4ad1a7836325340da25ebb6d2e14f02a66e915b4e09f5
 kind: ImagesLock

@@ -80,7 +80,7 @@ kapp deploy --app kapp-controller --file "https://github.com/vmware-tanzu/carvel
 kubectl get customresourcedefinitions
 
 # Generate the OpenAPI v3 Schema files, imgpkg images.yml files
-declare -a arr=("supervisor" "concierge" "local-user-authenticator")
+declare -a arr=("local-user-authenticator" "concierge" "supervisor")
 for resource_name in "${arr[@]}"
 do
   resource_qualified_name="${resource_name}.${api_group_suffix}"
@@ -88,11 +88,12 @@ do
 
   resource_dir="deploy_carvel/${resource_name}"
   resource_config_source_dir="deploy/${resource_name}"
-  resource_config_destination_dir="deploy_carvel/${resource_name}/config"
+  resource_destination_dir="deploy_carvel/${resource_name}"
+  resource_config_destination_dir="${resource_destination_dir}/config"
 
   # these must be real files, not symlinks
   log_note "Vendir sync deploy directory for ${resource_name} to package bundle..."
-  pushd "${resource_config_destination_dir}" > /dev/null
+  pushd "${resource_destination_dir}" > /dev/null
     vendir sync
   popd > /dev/null
 
@@ -122,6 +123,9 @@ do
   # TODO: what is package_image_repo?
   # TODO: package_version should just become version, no need for it to not match.
   package_repository_dir="deploy_carvel/package_repository/packages/${resource_qualified_name}"
+  rm -rf "${package_repository_dir}"
+  mkdir "${package_repository_dir}"
+
   ytt \
     --file "${resource_dir}/package-template.yml" \
     --data-value-file openapi="${resource_dir}/schema-openapi.yml" \
@@ -129,6 +133,7 @@ do
     --data-value version="${pinniped_package_version}" > "${package_repository_dir}/${pinniped_package_version}.yml"
   cp "deploy_carvel/${resource_name}/metadata.yml" "${package_repository_dir}/metadata.yml"
 done
+
 
 log_note "Generating .imgpkg/images.yml for  Pinniped PackageRepository bundle..."
 mkdir -p "deploy_carvel/package_repository/.imgpkg"
@@ -142,9 +147,13 @@ log_note "Validating Pinniped PackageRepository bundle not empty /tmp/${package_
 imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"
 
 
+
+## NOTE: could break apart here at a build and a deploy script.
+
+
 log_note "deploying PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
-pinniped_package_repository_file="packagerepository.${pinniped_package_version}.yml"
+pinniped_package_repository_file="packagerepository.${pinniped_package_version}.yml" # TODO: deploy_carvel/ dir...
 echo -n "" > "${pinniped_package_repository_file}"
 cat <<EOT >> "${pinniped_package_repository_file}"
 ---
@@ -161,7 +170,6 @@ EOT
 
 kapp deploy --app "${pinniped_package_repository_name}" --file "${pinniped_package_repository_file}" -y
 kapp inspect --app "${pinniped_package_repository_name}" --tree
-
 
 
 for resource_name in "${arr[@]}"
@@ -213,8 +221,123 @@ EOF
   kapp deploy --app "${pinniped_package_rbac_prefix}" --file "${pinniped_package_rbac_file}" -y
 done
 
+# start local-user-authenticator
+# local-user-authenticator
+log_note "deploying local-user-authenticator PackageInstall resources..."
+resource_name="local-user-authenticator"
+NAMESPACE="${resource_name}-install-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
+SECRET_NAME="${resource_name}-package-install-secret"
+
+cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "${resource_name}-package-install"
+    namespace: "${NAMESPACE}"
+spec:
+  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  packageRef:
+    refName: "${RESOURCE_PACKAGE_VERSION}"
+    versionSelection:
+      constraints: "${pinniped_package_version}"
+  values:
+  - secretRef:
+      name: "${SECRET_NAME}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${SECRET_NAME}"
+  namespace: "${NAMESPACE}"
+stringData:
+  values.yml: |
+    ---
+    image_repo: $registry_repo
+    image_tag: $tag
+EOF
+
+KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
+
+test_username="test-username"
+test_groups="test-group-0,test-group-1"
+test_password="$(openssl rand -hex 16)"
+log_note "Creating test user '$test_username'..."
+kubectl create secret generic "$test_username" \
+  --namespace local-user-authenticator \
+  --from-literal=groups="$test_groups" \
+  --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
+  --dry-run=client \
+  --output yaml |
+  kubectl apply -f -
+# end local-user-authenticator
 
 
+# start concierge
+log_note "deploying concierge PackageInstall resources..."
+resource_name="concierge"
+NAMESPACE="${resource_name}-install-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
+SECRET_NAME="${resource_name}-package-install-secret"
+
+# from prepare-for-integration-tests.sh
+concierge_app_name="pinniped-concierge"
+concierge_namespace="concierge"
+webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
+concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
+log_level="debug"
+cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageInstall
+metadata:
+    # name, does not have to be versioned, versionSelection.constraints below will handle
+    name: "${resource_name}-package-install"
+    namespace: "${NAMESPACE}"
+spec:
+  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
+  packageRef:
+    refName: "${RESOURCE_PACKAGE_VERSION}"
+    versionSelection:
+      constraints: "${pinniped_package_version}"
+  values:
+  - secretRef:
+      name: "${SECRET_NAME}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "${SECRET_NAME}"
+  namespace: "${NAMESPACE}"
+stringData:
+  values.yml: |
+    ---
+    app_name: $concierge_app_name
+    namespace: $concierge_namespace
+    api_group_suffix: $api_group_suffix
+    log_level: $log_level
+
+    image_repo: $registry_repo
+    image_tag: $tag
+EOF
+
+KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
+# end concierge
+
+
+# start supervisor
 log_note "deploying supervisor PackageInstall resources..."
 resource_name="supervisor"
 NAMESPACE="${resource_name}-install-ns"
@@ -275,123 +398,22 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 # end supervisor
 
 
+log_note "appending environment variables to /tmp/integration-test-env"
+# TODO: since I pulled these out of the main script, I'll have to put them back as well.
+# To be "finished" the scripts need to work for both the ytt deploy and the carvel package,
+# regardless of which branch the user takes.
+integration_env_file="/tmp/integration-test-env"
+integration_env_file_text=$(cat "${integration_env_file}")
 
-# concierge
-log_note "deploying concierge PackageInstall resources..."
-resource_name="concierge"
-NAMESPACE="${resource_name}-install-ns"
-PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
-SECRET_NAME="${resource_name}-package-install-secret"
-
-# from prepare-for-integration-tests.sh
-concierge_app_name="pinniped-concierge"
-concierge_namespace="concierge"
-webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
-discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
-concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
-log_level="debug"
-cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
----
-apiVersion: packaging.carvel.dev/v1alpha1
-kind: PackageInstall
-metadata:
-    # name, does not have to be versioned, versionSelection.constraints below will handle
-    name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"
-spec:
-  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  packageRef:
-    refName: "${RESOURCE_PACKAGE_VERSION}"
-    versionSelection:
-      constraints: "${pinniped_package_version}"
-  values:
-  - secretRef:
-      name: "${SECRET_NAME}"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: "${SECRET_NAME}"
-  namespace: "${NAMESPACE}"
-stringData:
-  values.yml: |
-    ---
-    app_name: $concierge_app_name
-    namespace: $concierge_namespace
-    api_group_suffix: $api_group_suffix
-    log_level: $log_level
-
-    image_repo: $registry_repo
-    image_tag: $tag
-EOF
-
-KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-# end concierge
+cat <<EOT >"${integration_env_file}"
+export PINNIPED_TEST_USER_USERNAME=${test_username}
+export PINNIPED_TEST_USER_GROUPS=${test_groups}
+export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
+export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
+EOT
+echo "${integration_env_file_text}" >> "${integration_env_file}"
 
 
-
-
-# local-user-authenticator
-log_note "deploying local-user-authenticator PackageInstall resources..."
-resource_name="local-user-authenticator"
-NAMESPACE="${resource_name}-install-ns"
-PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
-SECRET_NAME="${resource_name}-package-install-secret"
-
-# from prepare-for-integration-tests.sh
-concierge_app_name="pinniped-concierge"
-concierge_namespace="concierge"
-webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
-discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
-concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
-log_level="debug"
-cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
----
-apiVersion: packaging.carvel.dev/v1alpha1
-kind: PackageInstall
-metadata:
-    # name, does not have to be versioned, versionSelection.constraints below will handle
-    name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"
-spec:
-  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  packageRef:
-    refName: "${RESOURCE_PACKAGE_VERSION}"
-    versionSelection:
-      constraints: "${pinniped_package_version}"
-  values:
-  - secretRef:
-      name: "${SECRET_NAME}"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: "${SECRET_NAME}"
-  namespace: "${NAMESPACE}"
-stringData:
-  values.yml: |
-    ---
-    app_name: $concierge_app_name
-    namespace: $concierge_namespace
-    api_group_suffix: $api_group_suffix
-    log_level: $log_level
-
-    image_repo: $registry_repo
-    image_tag: $tag
-EOF
-
-KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-# end concierge
 
 log_note "verifying PackageInstall resources..."
 kubectl get PackageInstall -A | grep pinniped

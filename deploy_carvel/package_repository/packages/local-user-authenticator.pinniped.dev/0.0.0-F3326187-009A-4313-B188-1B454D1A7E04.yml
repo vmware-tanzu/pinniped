@@ -1,0 +1,73 @@
+apiVersion: data.packaging.carvel.dev/v1alpha1
+kind: Package
+metadata:
+  name: local-user-authenticator.pinniped.dev.0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+spec:
+  refName: local-user-authenticator.pinniped.dev
+  version: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+  releaseNotes: |
+    Initial release of the local-user-authenticator package, TODO: AUTOMATE THIS??
+  valuesSchema:
+    openAPIv3:
+      type: object
+      additionalProperties: false
+      properties:
+        image_repo:
+          type: string
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: projects.registry.vmware.com/pinniped/pinniped-server
+        image_digest:
+          type: string
+          nullable: true
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: null
+        image_tag:
+          type: string
+          description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
+          default: latest
+        image_pull_dockerconfigjson:
+          type: object
+          additionalProperties: false
+          nullable: true
+          description: 'Specifies a secret to be used when pulling the above `image_repo` container image. Can be used when the above image_repo is a private registry. Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username=''USERNAME'' --docker-password=''PASSWORD'' --dry-run=client -o json | jq -r ''.data[''.dockerconfigjson'']'' Optional.'
+          properties:
+            auths:
+              type: object
+              additionalProperties: false
+              properties:
+                https://registry.example.com:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    username:
+                      type: string
+                      default: USERNAME
+                    password:
+                      type: string
+                      default: PASSWORD
+                    auth:
+                      type: string
+                      default: BASE64_ENCODED_USERNAME_COLON_PASSWORD
+        run_as_user:
+          type: integer
+          description: run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice
+          default: 65532
+        run_as_group:
+          type: integer
+          description: run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice
+          default: 65532
+  template:
+    spec:
+      fetch:
+      - imgpkgBundle:
+          image: kind-registry.local:5000/test/build/test/build-package-local-user-authenticator:0.0.0-F3326187-009A-4313-B188-1B454D1A7E04
+      template:
+      - ytt:
+          paths:
+          - config/
+      - kbld:
+          paths:
+          - .imgpkg/images.yml
+          - '-'
+      deploy:
+      - kapp: {}

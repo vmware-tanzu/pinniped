@@ -10,7 +10,7 @@ spec:
   packageRef:
     refName: "local-user-authenticator.pinniped.dev"
     versionSelection:
-      constraints: "0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7"
+      constraints: "0.0.0-F3326187-009A-4313-B188-1B454D1A7E04"
   values:
   - secretRef:
       name: "local-user-authenticator-package-install-secret"
@@ -23,10 +23,5 @@ metadata:
 stringData:
   values.yml: |
     ---
-    app_name: pinniped-concierge
-    namespace: concierge
-    api_group_suffix: pinniped.dev
-    log_level: debug
-
     image_repo: kind-registry.local:5000/test/build
-    image_tag: 0.0.0-EEE84AC0-DE44-425C-8785-4C6DD92307F7
+    image_tag: 0.0.0-F3326187-009A-4313-B188-1B454D1A7E04

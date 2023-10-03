@@ -90,11 +90,11 @@ do
   resource_config_source_dir="deploy/${resource_name}"
   resource_config_destination_dir="deploy_carvel/${resource_name}/config"
 
-  # this must be real files, not symlinks
-  log_note "Copy deploy directory for ${resource_name} to package bundle..."
-  echo "cp -aRf ${resource_config_source_dir} ${resource_config_destination_dir}"
-  rm -rf "${resource_config_destination_dir}" # clean
-  cp -r "${resource_config_source_dir}" "${resource_config_destination_dir}"
+  # these must be real files, not symlinks
+  log_note "Vendir sync deploy directory for ${resource_name} to package bundle..."
+  pushd "${resource_config_destination_dir}" > /dev/null
+    vendir sync
+  popd > /dev/null
 
   log_note "Generating OpenAPI v3 schema for ${resource_name}..."
   ytt \

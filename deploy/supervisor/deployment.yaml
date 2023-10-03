@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -190,6 +190,15 @@ spec:
         - name: socket
           emptyDir: {}
         #@ end
+      tolerations:
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: amd64 #! Allow running on amd64 nodes.
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: arm64 #! Also allow running on arm64 nodes.
       #! This will help make sure our multiple pods run on different nodes, making
       #! our deployment "more" "HA".
       affinity:

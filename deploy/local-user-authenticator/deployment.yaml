@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -76,6 +76,15 @@ spec:
             #! `--validate=false` flag. Note that installing via `kapp` does not complain about this validation error.
             seccompProfile:
               type: "RuntimeDefault"
+      tolerations:
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: amd64 #! Allow running on amd64 nodes.
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: arm64 #! Also allow running on arm64 nodes.
 ---
 apiVersion: v1
 kind: Service

@@ -134,7 +134,6 @@ do
   cp "deploy_carvel/${resource_name}/metadata.yml" "${package_repository_dir}/metadata.yml"
 done
 
-
 log_note "Generating .imgpkg/images.yml for  Pinniped PackageRepository bundle..."
 mkdir -p "deploy_carvel/package_repository/.imgpkg"
 kbld --file "deploy_carvel/package_repository/packages/" --imgpkg-lock-output "deploy_carvel/package_repository/.imgpkg/images.yml"
@@ -153,7 +152,9 @@ imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_r
 
 log_note "deploying PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
-pinniped_package_repository_file="packagerepository.${pinniped_package_version}.yml" # TODO: deploy_carvel/ dir...
+# TODO: deploy_carvel/ dir...
+# TODO: delete the "extras", so perhaps put this in a "deploy_carvel/tmp/" dir that can be cleaned.
+pinniped_package_repository_file="deploy_carvel/packagerepository.${pinniped_package_version}.yml"
 echo -n "" > "${pinniped_package_repository_file}"
 cat <<EOT >> "${pinniped_package_repository_file}"
 ---

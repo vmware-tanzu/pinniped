@@ -155,59 +155,31 @@ stringData: #@ ldapLIDIF()
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ldap-server-config-before-ldif-files
+  name: ldap-server-additional-schema-ldif-files
   namespace: tools
 type: Opaque
 stringData:
-  server-config.ldif: |
-    # Load the memberof module.
+  #! From https://github.com/bitnami/containers/issues/982#issuecomment-1220354408
+  memberof.ldif: |
     dn: cn=module,cn=config
     cn: module
     objectClass: olcModuleList
-    objectClass: top
     olcModulePath: /opt/bitnami/openldap/lib/openldap
-    olcModuleLoad: memberof
+    olcModuleLoad: memberof.so
+    olcModuleLoad: refint.so
 
-    dn: olcOverlay={0}memberof,olcDatabase={2}hdb,cn=config
-    objectClass: olcConfig
+    dn: olcOverlay=memberof,olcDatabase={2}mdb,cn=config
     objectClass: olcMemberOf
     objectClass: olcOverlayConfig
-    objectClass: top
     olcOverlay: memberof
-    olcMemberOfDangling: ignore
-    olcMemberOfRefInt: TRUE
-    olcMemberOfGroupOC: groupOfNames
-    olcMemberOfMemberAD: member
 
-    # Load the refint module.
-    dn: cn=module,cn=config
-    cn: module
-    objectclass: olcModuleList
-    objectclass: top
-    olcmodulepath: /opt/bitnami/openldap/lib/openldap
-    olcmoduleload: refint
-
-    dn: olcOverlay={1}refint,olcDatabase={2}hdb,cn=config
+    dn: olcOverlay=refint,olcDatabase={2}mdb,cn=config
     objectClass: olcConfig
     objectClass: olcOverlayConfig
     objectClass: olcRefintConfig
     objectClass: top
-    olcOverlay: {1}refint
+    olcOverlay: refint
     olcRefintAttribute: memberof member manager owner
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ldap-server-config-after-ldif-files
-  namespace: tools
-type: Opaque
-stringData:
-  server-config.ldif: |
-    # Reject any further connections that do not use TLS or StartTLS
-    dn: olcDatabase={2}hdb,cn=config
-    changetype: modify
-    add: olcSecurity
-    olcSecurity: tls=1
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -241,13 +213,6 @@ spec:
               containerPort: 1389
             - name: ldaps
               containerPort: 1636
-          resources:
-            requests:
-              cpu: "100m" #! one-tenth of one CPU
-              memory: "64Mi"
-            limits:
-              #! Do not limit CPU because it was causing issues running integration tests on AKS where openldap became very slow.
-              memory: "64Mi"
           readinessProbe:
             tcpSocket:
               port: ldap
@@ -274,6 +239,8 @@ spec:
               value: "password" #! ok to hardcode: the LDAP server will not be available from outside the cluster
             - name: LDAP_ENABLE_TLS
               value: "yes"
+            - name: LDAP_REQUIRE_TLS
+              value: "yes"
             - name: LDAP_TLS_CERT_FILE
               value: "/var/certs/ldap.pem"
             - name: LDAP_TLS_KEY_FILE
@@ -283,14 +250,12 @@ spec:
               #! Note that the custom LDIF file is only read at pod start-up time.
             - name: LDAP_CUSTOM_LDIF_DIR
               value: "/var/ldifs"
-            - name: LDAP_SERVER_CONFIG_BEFORE_CUSTOM_LDIF_DIR
-              value: "/var/server-config-before-ldifs"
-            - name: LDAP_SERVER_CONFIG_AFTER_CUSTOM_LDIF_DIR
-              value: "/var/server-config-after-ldifs"
               #! Seems like LDAP_ROOT is still required when using LDAP_CUSTOM_LDIF_DIR because it effects the admin user.
               #! Presumably this needs to match the root that we create in the LDIF file.
             - name: LDAP_ROOT
               value: "dc=pinniped,dc=dev"
+            - name: LDAP_EXTRA_SCHEMAS
+              value: "cosine,inetorgperson,nis,memberof"
           volumeMounts:
             - name: certs
               mountPath: /var/certs
@@ -298,11 +263,9 @@ spec:
             - name: ldifs
               mountPath: /var/ldifs
               readOnly: true
-            - name: server-config-before-ldifs
-              mountPath: /var/server-config-before-ldifs
-              readOnly: true
-            - name: server-config-after-ldifs
-              mountPath: /var/server-config-after-ldifs
+            - name: additional-schema
+              mountPath: /opt/bitnami/openldap/etc/schema/memberof.ldif
+              subPath: memberof.ldif
               readOnly: true
       volumes:
         - name: certs
@@ -311,12 +274,9 @@ spec:
         - name: ldifs
           secret:
             secretName: ldap-ldif-files
-        - name: server-config-before-ldifs
+        - name: additional-schema
           secret:
-            secretName: ldap-server-config-before-ldif-files
-        - name: server-config-after-ldifs
-          secret:
-            secretName: ldap-server-config-after-ldif-files
+            secretName: ldap-server-additional-schema-ldif-files
 ---
 apiVersion: v1
 kind: Service

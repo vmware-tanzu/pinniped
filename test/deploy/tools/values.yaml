@@ -1,4 +1,4 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values
@@ -28,7 +28,7 @@ pinny_ldap_password:
 
 #! Images for each of the deployed test components.
 dex_image: ghcr.io/pinniped-ci-bot/test-dex:latest
-ldap_image: ghcr.io/pinniped-ci-bot/test-ldap:latest
+ldap_image: ghcr.io/pinniped-ci-bot/test-bitnami-ldap:latest
 proxy_image: ghcr.io/pinniped-ci-bot/test-forward-proxy:latest
 cfssl_image: ghcr.io/pinniped-ci-bot/test-cfssl:latest
 kubectl_image: ghcr.io/pinniped-ci-bot/test-kubectl:latest

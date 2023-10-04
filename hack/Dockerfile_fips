@@ -15,11 +15,22 @@
 # hidden behind a `GOEXPERIMENT=boringcrypto` env var.
 # See https://go.googlesource.com/go/+/dev.boringcrypto/README.boringcrypto.md
 # and https://kupczynski.info/posts/fips-golang/ for details.
+
+# This is not currently using --platform to prepare to cross-compile because we use gcc below to build
+# platform-specific GCO code. This makes multi-arch builds slow due to target platform emulation.
 FROM golang:1.21.1 as build-env
 
 WORKDIR /work
-COPY . .
+
 ARG GOPROXY
+
+ARG KUBE_GIT_VERSION
+ENV KUBE_GIT_VERSION=$KUBE_GIT_VERSION
+
+# These will be set by buildkit automatically, e.g. TARGETOS set to "linux" and TARGETARCH set to "amd64" or "arm64".
+# Useful for building multi-arch container images.
+ARG TARGETOS
+ARG TARGETARCH
 
 # Build the executable binary (CGO_ENABLED=1 is required for go boring).
 # Even though we need cgo to call the boring crypto C functions, these
@@ -27,10 +38,7 @@ ARG GOPROXY
 # link any libc bits hence we pass "-linkmode=external -extldflags -static"
 # to the ldflags directive.  We do not pass "-s" to ldflags because we do
 # not want to strip symbols - those are used to verify if we compiled correctly.
-# We do not pass in GOCACHE (build cache) and GOMODCACHE (module cache)
-# because there have been bugs in the Go compiler caching when using cgo
-# (it will sometimes use cached artifiacts when it should not).  Since we
-# use gcc as the C compiler, the following warning is emitted:
+# Since we use gcc as the C compiler, the following warning is emitted:
 # /boring/boringssl/build/../crypto/bio/socket_helper.c:55: warning:
 # Using 'getaddrinfo' in statically linked applications requires at
 # runtime the shared libraries from the glibc version used for linking
@@ -43,13 +51,11 @@ ARG GOPROXY
 # The osusergo and netgo tags are used to make sure that the Go implementations of these
 # standard library packages are used instead of the libc based versions.
 # We want to have no reliance on any C code other than the boring crypto bits.
-# Setting GOOS=linux GOARCH=amd64 is a hard requirment for boring crypto:
-# https://github.com/golang/go/blob/9d6ab825f6fe125f7ce630e103b887e580403802/misc/boring/README.md?plain=1#L95
-# Thus trying to compile the pinniped CLI with boring crypto is meaningless
-# since we would not be able to ship windows and macOS binaries.
 RUN \
-  mkdir out && \
-  export CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOEXPERIMENT=boringcrypto && \
+  --mount=target=. \
+  --mount=type=cache,target=/cache/gocache \
+  --mount=type=cache,target=/cache/gomodcache \
+  export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH GOEXPERIMENT=boringcrypto && \
   go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
   go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
@@ -57,6 +63,9 @@ RUN \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator
 
 # Use a distroless runtime image with CA certificates, timezone data, and not much else.
+# Note that we are not using --platform here, so it will choose the base image for the target platform, not the build platform.
+# By using "distroless/static" instead of "distroless/static-debianXX" we can float on the latest stable version of debian.
+# See https://github.com/GoogleContainerTools/distroless#base-operating-system
 FROM gcr.io/distroless/static:nonroot@sha256:2a9e2b4fa771d31fe3346a873be845bfc2159695b9f90ca08e950497006ccc2e
 
 # Copy the server binary from the build-env stage.

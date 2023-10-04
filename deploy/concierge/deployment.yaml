@@ -245,6 +245,14 @@ spec:
           effect: NoSchedule
         - key: node-role.kubernetes.io/control-plane #! The new name for these nodes as of Kubernetes 1.24.
           effect: NoSchedule
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: amd64 #! Allow running on amd64 nodes.
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: arm64 #! Also allow running on arm64 nodes.
       #! This will help make sure our multiple pods run on different nodes, making
       #! our deployment "more" "HA".
       affinity:

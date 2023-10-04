@@ -90,6 +90,10 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
    - `ytt --file . --file site/dev-env.yaml | kapp deploy --app pinniped-concierge --file -`
 
+## Supported Node Architectures
+
+The Pinniped Concierge can be installed on Kubernetes clusters with available `amd64` or `arm64` linux nodes.
+
 ## Other notes
 
 _Important:_ Configure Kubernetes authorization policies (i.e. RBAC) to prevent non-admin users from reading the

@@ -48,25 +48,15 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 	t.Run("callback server error", func(t *testing.T) {
 		browser := browsertest.OpenBrowser(t)
 
-		// Serve the form_post template with a redirect URI that will return an HTTP 500 response.
+		// Serve the form_post template with a redirect URI that will return an HTTP 400 response.
 		responseParams := formpostRandomParams(t)
-		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL+"?fail=500", responseParams))
+		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL+"?fail=400", responseParams))
 
 		// Now we handle the callback and assert that we got what we expected.
 		expectCallback(t, responseParams)
 
-		// This is not 100% the behavior we'd like, but because our JS is making
-		// a cross-origin fetch() without CORS, we don't get to know anything
-		// about the response (even whether it is 200 vs. 500), so this case
-		// is the same as the success case.
-		//
-		// This case is fairly unlikely in practice, and if the CLI encounters
-		// an error it can also expose it via stderr anyway.
-		//
-		// In the future, we could change the Javascript code to use mode 'cors'
-		// because we have upgraded our CLI callback endpoint to handle CORS,
-		// and then we could change this to formpostExpectManualState().
-		formpostExpectSuccessState(t, browser)
+		// This failure should cause the UI to enter the "error" state.
+		formpostExpectErrorState(t, browser)
 	})
 
 	t.Run("network failure", func(t *testing.T) {
@@ -113,7 +103,7 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 // It returns the URL of the running test server and a function for fetching the next
 // received form POST parameters.
 //
-// The test server supports special `?fail=close` and `?fail=500` to force error cases.
+// The test server supports special `?fail=close` and `?fail=400` to force error cases.
 func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values)) {
 	t.Helper()
 	results := make(chan url.Values)
@@ -156,8 +146,9 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 				_ = conn.Close()
 			}
 			return
-		case "500": // If "fail=500" is passed, return a 500 error.
-			w.WriteHeader(http.StatusInternalServerError)
+		case "400": // If "fail=400" is passed, return a 400 error.
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte("this is the text of the bad request error response"))
 			return
 		}
 	}))
@@ -263,6 +254,19 @@ func formpostExpectSuccessState(t *testing.T, b *browsertest.Browser) {
 	require.Contains(t, successDivText, "You have successfully logged in. You may now close this tab.")
 	require.Equal(t, "Login succeeded", b.Title(t))
 	formpostExpectFavicon(t, b, "✅")
+}
+
+// formpostExpectErrorState asserts that the page is in the "error" state.
+func formpostExpectErrorState(t *testing.T, b *browsertest.Browser) {
+	t.Helper()
+	t.Logf("expecting to see error message become visible...")
+	b.WaitForVisibleElements(t, "div#error")
+	errorDivText := b.TextOfFirstMatch(t, "div#error")
+	require.Contains(t, errorDivText, "Error during login")
+	require.Contains(t, errorDivText, "400: this is the text of the bad request error response")
+	require.Contains(t, errorDivText, "Please try again.")
+	require.Equal(t, "Error during login", b.Title(t))
+	formpostExpectFavicon(t, b, "⛔")
 }
 
 // formpostExpectManualState asserts that the page is in the "manual" state and returns the auth code.

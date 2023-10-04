@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 window.onload = () => {
-    const transitionToState = (id) => {
+    const transitionToState = (id, message) => {
+        // For the error state, there is also a message to show.
+        if (id === 'error') {
+            document.getElementById('message').innerText = message
+        }
+
         // Hide all the other ".state" <div>s.
         Array.from(document.querySelectorAll('.state')).forEach(e => e.hidden = true);
 
@@ -44,22 +49,31 @@ window.onload = () => {
         responseParams['redirect_uri'].value,
         {
             method: 'POST',
-            mode: 'no-cors', // in the future, we could change this to "cors" (see comment below)
+            mode: 'cors', // Using 'cors' is required to get actual response status codes.
             headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
             body: responseParams['encoded_params'].value,
         })
         .then(response => {
             clearTimeout(timeout);
-            // Requests made using "no-cors" mode will hide the real response.status by making it 0
-            // and the real response.ok by making it false.
-            // If the real response was success, then we would like to show the success state.
-            // If the real response was an error, then we wish we could do something else (maybe show the error?),
-            // but we have no way to know the real response as long as we are making "no-cors" requests.
-            // For now, show the success status for all responses.
-            // In the future, we could make this request in "cors" mode once old versions of our CLI
-            // which did not handle CORS are upgraded out by our users. That would allow us to use
-            // a conditional statement based on response.ok here to decide which state to transition into.
-            transitionToState('success');
+            if (response.ok) {
+                // Got 2XX http response status, so the user has logged in successfully.
+                transitionToState('success');
+            } else {
+                // Got non-2XX http response status. Show the error after trying to read the response body.
+                // These are not recoverable errors. The CLI stop listening and is no longer prompting for authcode.
+                response.text()
+                    .then(function (text) {
+                        transitionToState('error', response.status + ": " + text);
+                    })
+                    .catch((reason) => {
+                        console.error("error while reading response.text()", reason);
+                        transitionToState('error', response.status + ": [could not read response body]");
+                    })
+            }
         })
+        // A network error is encountered or CORS is misconfigured on the server-side.
+        // This could happen in the case where the CLI is running on a different machine (e.g. ssh jumphost).
+        // This always happens in Safari because that browser always prevents an https (TLS) web site from making
+        // fetch calls to an http (non-TLS) localhost site (see https://bugs.webkit.org/show_bug.cgi?id=171934).
         .catch(() => transitionToState('manual'));
 };

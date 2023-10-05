@@ -277,6 +277,15 @@ spec:
         - name: additional-schema
           secret:
             secretName: ldap-server-additional-schema-ldif-files
+      tolerations:
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: amd64 #! Allow running on amd64 nodes.
+        - key: kubernetes.io/arch
+          effect: NoSchedule
+          operator: Equal
+          value: arm64 #! Also allow running on arm64 nodes.
 ---
 apiVersion: v1
 kind: Service

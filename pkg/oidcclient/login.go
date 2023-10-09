@@ -513,6 +513,10 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 	var err error
 
+	if h.upstreamIdentityProviderName != "" {
+		_, _ = fmt.Fprintf(h.out, "\nLog in to %s\n\n", h.upstreamIdentityProviderName)
+	}
+
 	username := h.getEnv(defaultUsernameEnvVarName)
 	if username == "" {
 		username, err = h.promptForValue(h.ctx, usernamePrompt, h.out)

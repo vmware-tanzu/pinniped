@@ -1080,9 +1080,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "error prompting for username: some prompt error",
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    "error prompting for username: some prompt error",
 		},
 		{
 			name:     "ldap login when prompting for password returns an error",
@@ -1094,9 +1095,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "error prompting for password: some prompt error",
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    "error prompting for password: some prompt error",
 		},
 		{
 			name:     "ldap login when there is a problem with parsing the authorize URL",
@@ -1149,8 +1151,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return defaultLDAPTestOpts(t, h, nil, errors.New("some error fetching authorize endpoint"))
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr: `authorization response error: Get "https://` + successServer.Listener.Addr().String() +
 				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=` + testCodeChallenge +
 				`&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&` +
@@ -1165,9 +1168,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return defaultLDAPTestOpts(t, h, &http.Response{StatusCode: http.StatusBadGateway, Status: "502 Bad Gateway"}, nil)
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `error getting authorization: expected to be redirected, but response status was 502 Bad Gateway`,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    `error getting authorization: expected to be redirected, but response status was 502 Bad Gateway`,
 		},
 		{
 			name:     "ldap login when the OIDC provider authorization endpoint redirect has an error and error description",
@@ -1182,9 +1186,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					}, nil)
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `login failed with code "access_denied": optional-error-description`,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    `login failed with code "access_denied": optional-error-description`,
 		},
 		{
 			name:     "ldap login when the OIDC provider authorization endpoint redirects us to a different server",
@@ -1199,9 +1204,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					}, nil)
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `error getting authorization: redirected to the wrong location: http://other-server.example.com/callback?code=foo&state=test-state`,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    `error getting authorization: redirected to the wrong location: http://other-server.example.com/callback?code=foo&state=test-state`,
 		},
 		{
 			name:     "ldap login when the OIDC provider authorization endpoint redirect has an error but no error description",
@@ -1216,9 +1222,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					}, nil)
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `login failed with code "access_denied"`,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    `login failed with code "access_denied"`,
 		},
 		{
 			name:     "ldap login when the OIDC provider authorization endpoint redirect has the wrong state value",
@@ -1231,9 +1238,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					}, nil)
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  `missing or invalid state parameter in authorization response: http://127.0.0.1:0/callback?code=foo&state=wrong-state`,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    `missing or invalid state parameter in authorization response: http://127.0.0.1:0/callback?code=foo&state=wrong-state`,
 		},
 		{
 			name:     "ldap login when there is an error exchanging the authcode or validating the tokens",
@@ -1258,9 +1266,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "could not complete authorization code exchange: some authcode exchange or token validation error",
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantErr:    "could not complete authorization code exchange: some authcode exchange or token validation error",
 		},
 		{
 			name:     "successful ldap login with prompts for username and password",
@@ -1356,9 +1365,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			issuer:    successServer.URL,
-			wantLogs:  []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantToken: &testToken,
+			issuer:     successServer.URL,
+			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantToken:  &testToken,
 		},
 		{
 			name:     "successful ldap login with env vars for username and password",
@@ -1572,7 +1582,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				"\"level\"=4 \"msg\"=\"Pinniped: Read username from environment variable\"  \"name\"=\"PINNIPED_USERNAME\"",
 				"\"level\"=4 \"msg\"=\"Pinniped: Read password from environment variable\"  \"name\"=\"PINNIPED_PASSWORD\"",
 			},
-			wantToken: &testToken,
+			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantToken:  &testToken,
 		},
 		{
 			name:     "with requested audience, session cache hit with valid token, but discovery fails",

@@ -56,8 +56,8 @@ const (
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
 
-	defaultLDAPUsernamePrompt = "Username: "
-	defaultLDAPPasswordPrompt = "Password: "
+	usernamePrompt = "Username: "
+	passwordPrompt = "Password: "
 
 	// For CLI-based auth, such as with LDAP upstream identity providers, the user may use these environment variables
 	// to avoid getting interactively prompted for username and password.
@@ -513,7 +513,7 @@ func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 
 	username := h.getEnv(defaultUsernameEnvVarName)
 	if username == "" {
-		username, err = h.promptForValue(h.ctx, defaultLDAPUsernamePrompt)
+		username, err = h.promptForValue(h.ctx, usernamePrompt)
 		if err != nil {
 			return "", "", fmt.Errorf("error prompting for username: %w", err)
 		}
@@ -523,7 +523,7 @@ func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 
 	password := h.getEnv(defaultPasswordEnvVarName)
 	if password == "" {
-		password, err = h.promptForSecret(defaultLDAPPasswordPrompt)
+		password, err = h.promptForSecret(passwordPrompt)
 		if err != nil {
 			return "", "", fmt.Errorf("error prompting for password: %w", err)
 		}

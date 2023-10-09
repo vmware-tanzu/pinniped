@@ -10,7 +10,7 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20230914224007-a15a36ccbc2e
+	github.com/chromedp/cdproto v0.0.0-20231007061347-18b01cd81617
 	github.com/chromedp/chromedp v0.9.2
 	github.com/coreos/go-oidc/v3 v3.6.0
 	github.com/coreos/go-semver v0.3.1
@@ -40,11 +40,11 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify/v2 v2.12.9
 	go.uber.org/zap v1.26.0
-	golang.org/x/crypto v0.13.0
-	golang.org/x/net v0.15.0
-	golang.org/x/oauth2 v0.12.0
-	golang.org/x/sync v0.3.0
-	golang.org/x/term v0.12.0
+	golang.org/x/crypto v0.14.0
+	golang.org/x/net v0.16.0
+	golang.org/x/oauth2 v0.13.0
+	golang.org/x/sync v0.4.0
+	golang.org/x/term v0.13.0
 	golang.org/x/text v0.13.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.28.2
@@ -149,7 +149,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.8.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

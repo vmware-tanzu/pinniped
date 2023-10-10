@@ -96,6 +96,7 @@ type getKubeconfigParams struct {
 	credentialCachePath       string
 	credentialCachePathSet    bool
 	installHint               string
+	pinnipedCliPath           string
 }
 
 type discoveryResponseScopesSupported struct {
@@ -151,14 +152,16 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
 	f.StringVar(&flags.generatedNameSuffix, "generated-name-suffix", "-pinniped", "Suffix to append to generated cluster, context, user kubeconfig entries")
 	f.StringVar(&flags.credentialCachePath, "credential-cache", "", "Path to cluster-specific credentials cache")
+	f.StringVar(&flags.pinnipedCliPath, "pinniped-cli-path", "", "Full path or executable name for the Pinniped CLI binary to be embedded in the resulting kubeconfig output (e.g. 'pinniped') (default: full path of the binary used to execute this command)")
 	f.StringVar(&flags.installHint, "install-hint", "The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli for more details", "This text is shown to the user when the pinniped CLI is not installed.")
-	mustMarkHidden(cmd, "oidc-debug-session-cache")
 
-	// --oidc-skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
-	mustMarkHidden(cmd, "oidc-skip-listen")
+	mustMarkHidden(cmd,
+		"oidc-debug-session-cache",
+		"oidc-skip-listen", // --oidc-skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
+		"concierge-namespace",
+	)
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
-	mustMarkHidden(cmd, "concierge-namespace")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if flags.outputPath != "" {
@@ -268,7 +271,12 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 
 	execConfig.InstallHint = flags.installHint
 	var err error
-	execConfig.Command, err = deps.getPathToSelf()
+	execConfig.Command, err = func() (string, error) {
+		if flags.pinnipedCliPath != "" {
+			return flags.pinnipedCliPath, nil
+		}
+		return deps.getPathToSelf()
+	}()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine the Pinniped executable path: %w", err)
 	}

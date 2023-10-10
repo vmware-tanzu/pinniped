@@ -147,6 +147,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-session-cache string                Path to OpenID Connect session cache file
 				      --oidc-skip-browser                        During OpenID Connect login, skip opening the browser (just print the URL)
 				  -o, --output string                            Output file path (default: stdout)
+				      --pinniped-cli-path string                 Full path or executable name for the Pinniped CLI binary to be embedded in the resulting kubeconfig output (e.g. 'pinniped') (default: full path of the binary used to execute this command)
 				      --skip-validation                          Skip final validation of the kubeconfig (default: false)
 				      --static-token string                      Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string                  Instead of doing an OIDC-based login, read a static token from the environment
@@ -1583,7 +1584,6 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
-
 			name: "autodetect nothing, set a bunch of options",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
@@ -1607,6 +1607,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--skip-validation",
 					"--generated-name-suffix", "-sso",
 					"--credential-cache", "/path/to/cache/dir/credentials.yaml",
+					"--pinniped-cli-path", "/some/path/to/command-exe",
 				}
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
@@ -1658,7 +1659,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --session-cache=/path/to/cache/dir/sessions.yaml
 						  - --debug-session-cache
 						  - --request-audience=test-audience
-						  command: '.../path/to/pinniped'
+						  command: /some/path/to/command-exe
 						  env: []
 						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
 						    for more details

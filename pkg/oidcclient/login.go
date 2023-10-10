@@ -56,8 +56,8 @@ const (
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
 
-	defaultLDAPUsernamePrompt = "Username: "
-	defaultLDAPPasswordPrompt = "Password: "
+	usernamePrompt = "Username: "
+	passwordPrompt = "Password: "
 
 	// For CLI-based auth, such as with LDAP upstream identity providers, the user may use these environment variables
 	// to avoid getting interactively prompted for username and password.
@@ -78,6 +78,7 @@ type handlerState struct {
 	clientID string
 	scopes   []string
 	cache    SessionCache
+	out      io.Writer
 
 	upstreamIdentityProviderName string
 	upstreamIdentityProviderType string
@@ -109,8 +110,8 @@ type handlerState struct {
 	isTTY           func(int) bool
 	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error)
-	promptForValue  func(ctx context.Context, promptLabel string) (string, error)
-	promptForSecret func(promptLabel string) (string, error)
+	promptForValue  func(ctx context.Context, promptLabel string, out io.Writer) (string, error)
+	promptForSecret func(promptLabel string, out io.Writer) (string, error)
 
 	callbacks chan callbackResult
 }
@@ -292,6 +293,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		},
 		promptForValue:  promptForValue,
 		promptForSecret: promptForSecret,
+		out:             os.Stderr,
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -511,9 +513,13 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 	var err error
 
+	if h.upstreamIdentityProviderName != "" {
+		_, _ = fmt.Fprintf(h.out, "\nLog in to %s\n\n", h.upstreamIdentityProviderName)
+	}
+
 	username := h.getEnv(defaultUsernameEnvVarName)
 	if username == "" {
-		username, err = h.promptForValue(h.ctx, defaultLDAPUsernamePrompt)
+		username, err = h.promptForValue(h.ctx, usernamePrompt, h.out)
 		if err != nil {
 			return "", "", fmt.Errorf("error prompting for username: %w", err)
 		}
@@ -523,7 +529,7 @@ func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 
 	password := h.getEnv(defaultPasswordEnvVarName)
 	if password == "" {
-		password, err = h.promptForSecret(defaultLDAPPasswordPrompt)
+		password, err = h.promptForSecret(passwordPrompt, h.out)
 		if err != nil {
 			return "", "", fmt.Errorf("error prompting for password: %w", err)
 		}
@@ -581,7 +587,7 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 
 	// Prompt the user to visit the authorize URL, and to paste a manually-copied auth code (if possible).
 	ctx, cancel := context.WithCancel(h.ctx)
-	cleanupPrompt := h.promptForWebLogin(ctx, authorizeURL, os.Stderr)
+	cleanupPrompt := h.promptForWebLogin(ctx, authorizeURL)
 	defer func() {
 		cancel()
 		cleanupPrompt()
@@ -599,8 +605,8 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	}
 }
 
-func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, out io.Writer) func() {
-	_, _ = fmt.Fprintf(out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string) func() {
+	_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
 
 	// If stdin is not a TTY, print the URL but don't prompt for the manual paste,
 	// since we have no way of reading it.
@@ -621,15 +627,15 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 	go func() {
 		defer func() {
 			// Always emit a newline so the kubectl output is visually separated from the login prompts.
-			_, _ = fmt.Fprintln(os.Stderr)
+			_, _ = fmt.Fprintln(h.out)
 
 			wg.Done()
 		}()
-		code, err := h.promptForValue(ctx, "    Optionally, paste your authorization code: ")
+		code, err := h.promptForValue(ctx, "    Optionally, paste your authorization code: ", h.out)
 		if err != nil {
 			// Print a visual marker to show the the prompt is no longer waiting for user input, plus a trailing
 			// newline that simulates the user having pressed "enter".
-			_, _ = fmt.Fprint(os.Stderr, "[...]\n")
+			_, _ = fmt.Fprint(h.out, "[...]\n")
 
 			h.callbacks <- callbackResult{err: fmt.Errorf("failed to prompt for manual authorization code: %v", err)}
 			return
@@ -642,11 +648,11 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 	return wg.Wait
 }
 
-func promptForValue(ctx context.Context, promptLabel string) (string, error) {
+func promptForValue(ctx context.Context, promptLabel string, out io.Writer) (string, error) {
 	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
-	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	_, err := fmt.Fprint(out, promptLabel)
 	if err != nil {
 		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
 	}
@@ -674,11 +680,11 @@ func promptForValue(ctx context.Context, promptLabel string) (string, error) {
 	}
 }
 
-func promptForSecret(promptLabel string) (string, error) {
+func promptForSecret(promptLabel string, out io.Writer) (string, error) {
 	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
-	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	_, err := fmt.Fprint(out, promptLabel)
 	if err != nil {
 		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
 	}
@@ -689,7 +695,7 @@ func promptForSecret(promptLabel string) (string, error) {
 	// term.ReadPassword swallows the newline that was typed by the user, so to
 	// avoid the next line of output from happening on same line as the password
 	// prompt, we need to print a newline.
-	_, err = fmt.Fprint(os.Stderr, "\n")
+	_, err = fmt.Fprint(out, "\n")
 	if err != nil {
 		return "", fmt.Errorf("could not print newline to stderr: %w", err)
 	}

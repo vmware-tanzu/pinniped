@@ -81,6 +81,17 @@ and if that FederationDomain allows multiple identity providers, then you will n
 you would like to use in the resulting kubeconfig with the `--upstream-identity-provider-name` and/or `--upstream-identity-provider-type` flags.
 You may call `pinniped get kubeconfig` multiple times to generate multiple kubeconfigs for the cluster.
 
+By default, the resulting kubeconfig will contain the absolute path to the Pinniped CLI binary that was used to run `pinniped get kubeconfig`.
+However, this absolute path may not work on the local machines for your end users to whom you distribute the kubeconfig,
+since they may have the Pinniped CLI installed elsewhere.
+You can optionally set the absolute path or executable name in the resulting kubeconfig by using the `--pinniped-cli-path`
+argument. For example, when using `pinniped get kubeconfig --pinniped-cli-path=pinniped` then the resulting kubeconfig
+will include `pinniped` as the command to execute the Pinniped CLI, and during user login it will find the CLI by
+searching the user's PATH for a binary named `pinniped`. This also works on Windows, where using `pinniped` as the command
+can find a binary named `pinniped.exe` in the user's PATH.
+Alternatively, you could use `pinniped get kubeconfig --pinniped-cli-path=/usr/local/bin/pinniped`
+if you have reason to believe that your end users' machines will always have the Pinniped CLI installed in `/usr/local/bin`.
+
 ## Use the generated kubeconfig with `kubectl` to access the cluster
 
 A cluster user will typically be given a Pinniped-compatible kubeconfig by their cluster admin. They can use this kubeconfig

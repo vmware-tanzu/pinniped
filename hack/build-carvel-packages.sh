@@ -120,8 +120,6 @@ do
 
   log_note "Generating PackageRepository Package entry for ${resource_name}"
   # publish package versions to package repository
-  # TODO: what is package_image_repo?
-  # TODO: package_version should just become version, no need for it to not match.
   package_repository_dir="deploy_carvel/package_repository/packages/${resource_qualified_name}"
   rm -rf "${package_repository_dir}"
   mkdir "${package_repository_dir}"
@@ -293,7 +291,6 @@ SECRET_NAME="${resource_name}-package-install-secret"
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
@@ -400,7 +397,6 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 
 
 log_note "appending environment variables to /tmp/integration-test-env"
-# TODO: since I pulled these out of the main script, I'll have to put them back as well.
 # To be "finished" the scripts need to work for both the ytt deploy and the carvel package,
 # regardless of which branch the user takes.
 integration_env_file="/tmp/integration-test-env"
@@ -410,7 +406,6 @@ cat <<EOT >"${integration_env_file}"
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
-export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 EOT
 echo "${integration_env_file_text}" >> "${integration_env_file}"
 

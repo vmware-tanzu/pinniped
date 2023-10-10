@@ -276,7 +276,7 @@ manifest=/tmp/pinniped-local-user-authenticator.yaml
 test_username=""
 test_groups=""
 test_password=""
-webhook_ca_bundle="undefined"
+webhook_ca_bundle=""
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
@@ -295,7 +295,6 @@ else
 
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
   test_username="test-username"
   test_groups="test-group-0,test-group-1"
@@ -413,6 +412,16 @@ else
 fi
 
 #
+# Call a post-install script
+# simplifies passing the $tag which may be necessary if the current local build is to be
+# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
+# running it after the above also allows appending to the environment variable file
+if [ "$post_install" != "undefined" ] ; then
+  log_note "The post-install script will be called with $tag..."
+  $post_install post-install-script $tag
+fi
+
+#
 # Download the test CA bundle that was generated in the Dex pod.
 # Note that this returns a base64 encoded value.
 #
@@ -428,6 +437,8 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
+# however it was installed, we need the CA bundle now
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
 cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
@@ -500,17 +511,6 @@ PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF
 
 export PINNIPED_TEST_CLUSTER_CAPABILITY_YAML
 EOF
-
-
-#
-# Call a post-install script
-# simplifies passing the $tag which may be necessary if the current local build is to be
-# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
-# running it after the above also allows appending to the environment variable file
-if [ "$post_install" != "undefined" ] ; then
-  log_note "The post-install script will be called with $tag..."
-  $post_install post-install-script $tag
-fi
 
 
 #

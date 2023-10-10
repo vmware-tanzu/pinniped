@@ -8,4 +8,9 @@ set -euo pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 cd "${ROOT}"
 
+reg_name='kind-registry.local'
+docker network disconnect "kind" "${reg_name}" || true
+docker stop "${reg_name}" || true
+docker rm "${reg_name}" || true
+
 kind delete cluster --name pinniped

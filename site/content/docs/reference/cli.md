@@ -198,6 +198,7 @@ pinniped get kubeconfig [flags]
       --oidc-session-cache string                Path to OpenID Connect session cache file
       --oidc-skip-browser                        During OpenID Connect login, skip opening the browser (just print the URL)
   -o, --output string                            Output file path (default: stdout)
+      --pinniped-cli-path string                 Full path or executable name for the Pinniped CLI binary to be embedded in the resulting kubeconfig output (e.g. 'pinniped') (default: full path of the binary used to execute this command)
       --skip-validation                          Skip final validation of the kubeconfig (default: false)
       --static-token string                      Instead of doing an OIDC-based login, specify a static token
       --static-token-env string                  Instead of doing an OIDC-based login, read a static token from the environment

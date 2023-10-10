@@ -19,3 +19,6 @@
 
 # MacOS Desktop Services Store
 .DS_Store
+
+# Hugo temp file
+.hugo_build.lock

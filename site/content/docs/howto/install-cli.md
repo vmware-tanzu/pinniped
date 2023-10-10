@@ -24,13 +24,16 @@ Use [Homebrew](https://brew.sh/) to install from the Pinniped [tap](https://gith
 Find the appropriate binary for your platform from the [latest release](https://github.com/vmware-tanzu/pinniped/releases/latest):
 
 {{< buttonlink filename="pinniped-cli-darwin-amd64" >}}Download {{< latestversion >}} for macOS/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-darwin-arm64" >}}Download {{< latestversion >}} for macOS/arm64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
 {{< buttonlink filename="pinniped-cli-linux-amd64" >}}Download {{< latestversion >}} for Linux/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-linux-arm64" >}}Download {{< latestversion >}} for Linux/arm64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
 {{< buttonlink filename="pinniped-cli-windows-amd64.exe" >}}Download {{< latestversion >}} for Windows/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-windows-arm64.exe" >}}Download {{< latestversion >}} for Windows/arm64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
 You should put the command-line tool somewhere on your `$PATH`, such as `/usr/local/bin` on macOS/Linux.
-You'll also need to mark the file as executable.
+You'll also need to mark the file as executable, e.g. `chmod +x pinniped` on macOS/Linux.
 
 To find specific versions or view all available platforms and architectures, visit the [releases page](https://github.com/vmware-tanzu/pinniped/releases/).
 

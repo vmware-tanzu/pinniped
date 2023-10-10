@@ -273,7 +273,9 @@ docker push "$registry_repo_tag"
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-
+test_username=""
+test_groups=""
+test_password=""
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
@@ -293,7 +295,6 @@ else
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
-  # TODO: will have to create this in our package install script....
   test_username="test-username"
   test_groups="test-group-0,test-group-1"
   test_password="$(openssl rand -hex 16)"
@@ -378,14 +379,12 @@ manifest=/tmp/pinniped-concierge.yaml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-webhook_ca_bundle="undefined" # TODO: need to fix this later
+webhook_ca_bundle="undefined"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
 
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_concierge" != "undefined" ] ; then
-  # TODO: this is typically needed to export below....
-  # our deploy_carvel script may need to append this to the same file.
   webhook_ca_bundle="(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
@@ -429,16 +428,16 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
-# TODO: fix this later
-# export PINNIPED_TEST_USER_USERNAME=${test_username}
-# export PINNIPED_TEST_USER_GROUPS=${test_groups}
-# export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
+
 cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
 export PINNIPED_TEST_TOOLS_NAMESPACE="tools"
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
+export PINNIPED_TEST_USER_USERNAME=${test_username}
+export PINNIPED_TEST_USER_GROUPS=${test_groups}
+export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}

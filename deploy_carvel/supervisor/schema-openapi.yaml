@@ -44,28 +44,10 @@ components:
           description: Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
           default: latest
         image_pull_dockerconfigjson:
-          type: object
-          additionalProperties: false
+          type: string
           nullable: true
           description: 'Specifies a secret to be used when pulling the above `image_repo` container image. Can be used when the above image_repo is a private registry. Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username=''USERNAME'' --docker-password=''PASSWORD'' --dry-run=client -o json | jq -r ''.data[''.dockerconfigjson'']'' Optional.'
-          properties:
-            auths:
-              type: object
-              additionalProperties: false
-              properties:
-                https://registry.example.com:
-                  type: object
-                  additionalProperties: false
-                  properties:
-                    username:
-                      type: string
-                      default: USERNAME
-                    password:
-                      type: string
-                      default: PASSWORD
-                    auth:
-                      type: string
-                      default: BASE64_ENCODED_USERNAME_COLON_PASSWORD
+          default: null
         deprecated_service_http_nodeport_port:
           type: integer
           nullable: true

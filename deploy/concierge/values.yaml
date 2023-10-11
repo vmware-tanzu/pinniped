@@ -47,9 +47,11 @@ kube_cert_agent_image: projects.registry.vmware.com/pinniped/pinniped-server
 #@ Can be used when the above image_repo is a private registry. \
 #@ Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username='USERNAME' --docker-password='PASSWORD' --dry-run=client -o json | jq -r '.data['.dockerconfigjson']' \
 #@ Optional."
+#! base64 encoded: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+#! result: eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ==
 #@schema/desc image_pull_dockerconfigjson_desc
 #@schema/nullable
-image_pull_dockerconfigjson: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+image_pull_dockerconfigjson: "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
 
 #@schema/desc "Pinniped will try to guess the right K8s API URL for sharing that information with potential clients. This setting allows the guess to be overridden."
 #@schema/nullable

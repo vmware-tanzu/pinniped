@@ -147,12 +147,13 @@ imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_r
 
 ## NOTE: could break apart here at a build and a deploy script.
 
+log_note "cleaning deploy artifacts..."
+rm -rf "deploy_carvel/deploy"
+mkdir "deploy_carvel/deploy"
 
 log_note "deploying PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
-# TODO: deploy_carvel/ dir...
-# TODO: delete the "extras", so perhaps put this in a "deploy_carvel/tmp/" dir that can be cleaned.
-pinniped_package_repository_file="deploy_carvel/packagerepository.${pinniped_package_version}.yml"
+pinniped_package_repository_file="deploy_carvel/deploy/packagerepository.${pinniped_package_version}.yml"
 echo -n "" > "${pinniped_package_repository_file}"
 cat <<EOT >> "${pinniped_package_repository_file}"
 ---
@@ -177,7 +178,7 @@ do
 
   namespace="${resource_name}-install-ns"
   pinniped_package_rbac_prefix="pinniped-package-rbac-${resource_name}"
-  pinniped_package_rbac_file="deploy_carvel/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
+  pinniped_package_rbac_file="deploy_carvel/deploy/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
   echo -n "" > "${pinniped_package_rbac_file}"
 cat <<EOF >> "${pinniped_package_rbac_file}"
 ---
@@ -227,7 +228,7 @@ resource_name="local-user-authenticator"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
@@ -397,6 +398,9 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 
 
 log_note "appending environment variables to /tmp/integration-test-env"
+echo "PINNIPED_TEST_USER_USERNAME=${test_username}"
+echo "PINNIPED_TEST_USER_GROUPS=${test_groups}"
+echo "PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}"
 # To be "finished" the scripts need to work for both the ytt deploy and the carvel package,
 # regardless of which branch the user takes.
 integration_env_file="/tmp/integration-test-env"
@@ -408,8 +412,6 @@ export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 EOT
 echo "${integration_env_file_text}" >> "${integration_env_file}"
-
-
 
 log_note "verifying PackageInstall resources..."
 kubectl get PackageInstall -A | grep pinniped

@@ -277,7 +277,7 @@ manifest=/tmp/pinniped-local-user-authenticator.yaml
 #   since the script can't write to the same env file (it would be overwritten)
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)"
+test_password="$(openssl rand -hex 16)" # TODO: this will be different than in the build-carvel-packages.sh file
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."

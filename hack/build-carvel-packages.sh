@@ -267,7 +267,7 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)"
+test_password="$(openssl rand -hex 16)" # TODO: this will be different than in the prepare-for-integration-tests.sh file.
 log_note "Creating test user '$test_username'..."
 kubectl create secret generic "$test_username" \
   --namespace local-user-authenticator \
@@ -325,7 +325,7 @@ stringData:
     namespace: $concierge_namespace
     api_group_suffix: $api_group_suffix
     log_level: $log_level
-
+    custom_labels: $concierge_custom_labels
     image_repo: $registry_repo
     image_tag: $tag
 EOF
@@ -385,7 +385,7 @@ stringData:
     image_repo: $registry_repo
     image_tag: $tag
     log_level: $log_level
-
+    custom_labels: $supervisor_custom_labels
     service_https_nodeport_port: $service_https_nodeport_port
     service_https_nodeport_nodeport: $service_https_nodeport_nodeport
     service_https_clusterip_port: $service_https_clusterip_port

@@ -273,10 +273,11 @@ docker push "$registry_repo_tag"
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-test_username=""
-test_groups=""
-test_password=""
-webhook_ca_bundle=""
+# TODO: these are duplicated into the build-carvel-packages.sh script
+#   since the script can't write to the same env file (it would be overwritten)
+test_username="test-username"
+test_groups="test-group-0,test-group-1"
+test_password="$(openssl rand -hex 16)"
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
@@ -296,9 +297,7 @@ else
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
-  test_username="test-username"
-  test_groups="test-group-0,test-group-1"
-  test_password="$(openssl rand -hex 16)"
+
   log_note "Creating test user '$test_username'..."
   kubectl create secret generic "$test_username" \
     --namespace local-user-authenticator \
@@ -437,7 +436,10 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
-# however it was installed, we need the CA bundle now
+# whether installed by the carvel package or the default method, we need to get this
+# entered into the environment variable file now.
+# TODO: this is a bit of a bleeding of concerns... ideally if the carvel package method installs the
+# local-user-authenticator, it would write this env var to the env file.
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
 cat <<EOF >/tmp/integration-test-env

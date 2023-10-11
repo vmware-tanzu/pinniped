@@ -4,3 +4,9 @@
 
 # installation artifacts will be generated here
 deploy_carvel/deploy/
+
+# images.yml files contain specific SHAs of images
+concierge/.imgpkg/images.yml
+supervisor/.imgpkg/images.yml
+local-user-authenticator/.imgpkg/images.yml
+package_repository/.imgpkg/images.yml

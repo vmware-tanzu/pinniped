@@ -2,13 +2,5 @@
 # we are using 0.0.0- to indicate dev versions of images
 *0.0.0*
 
-# pkginstall.yml files contain specific SHAs of images
-concierge-pkginstall.yml
-local-user-authenticator-pkginstall.yml
-supervisor-pkginstall.yml
-
-# images.yml files contain specific SHAs of images
-concierge/.imgpkg/images.yml
-supervisor/.imgpkg/images.yml
-local-user-authenticator/.imgpkg/images.yml
-package_repository/.imgpkg/images.yml
+# installation artifacts will be generated here
+deploy_carvel/deploy/

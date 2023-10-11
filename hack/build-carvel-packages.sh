@@ -285,7 +285,7 @@ resource_name="concierge"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 # from prepare-for-integration-tests.sh
@@ -342,7 +342,7 @@ resource_name="supervisor"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 # from prepare-for-integration-test.sh
@@ -396,22 +396,6 @@ log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
 kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
 # end supervisor
 
-
-log_note "appending environment variables to /tmp/integration-test-env"
-echo "PINNIPED_TEST_USER_USERNAME=${test_username}"
-echo "PINNIPED_TEST_USER_GROUPS=${test_groups}"
-echo "PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}"
-# To be "finished" the scripts need to work for both the ytt deploy and the carvel package,
-# regardless of which branch the user takes.
-integration_env_file="/tmp/integration-test-env"
-integration_env_file_text=$(cat "${integration_env_file}")
-
-cat <<EOT >"${integration_env_file}"
-export PINNIPED_TEST_USER_USERNAME=${test_username}
-export PINNIPED_TEST_USER_GROUPS=${test_groups}
-export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
-EOT
-echo "${integration_env_file_text}" >> "${integration_env_file}"
 
 log_note "verifying PackageInstall resources..."
 kubectl get PackageInstall -A | grep pinniped

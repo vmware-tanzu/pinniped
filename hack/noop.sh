@@ -47,6 +47,8 @@ app=${1}
 ## tag is fed in from the prepare-for-integration-tests.sh script, just uuidgen to identify a
 ## specific docker build of the pinniped-server image.
 tag=${2}
+# env_file_name is where to write env vars, if necessary to contribute to the environment
+env_file_name=${3}
 #SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 #log_note "noop.sh >>> script dir: ${SCRIPT_DIR}"
 log_note "noop.sh >>> app: ${app} tag: ${tag}"

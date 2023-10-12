@@ -69,6 +69,8 @@ fi
 pinniped_package_version="${tag}" # ie, "0.25.0"
 
 # core pinniped binaries (concierge, supervisor, local-user-authenticator)
+# TODO: we can likely just pass in the whole registry_repo_tag from the parent script and be done.
+#    the duplication is unnecessary.  This script doesn't ever need to run standalone again.
 registry="kind-registry.local:5000"
 repo="test/build"
 registry_repo="$registry/$repo"
@@ -191,6 +193,10 @@ do
   pinniped_package_rbac_prefix="pinniped-package-rbac-${resource_name}"
   pinniped_package_rbac_file="deploy_carvel/deploy/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
   echo -n "" > "${pinniped_package_rbac_file}"
+# TODO: will just a Role and RoleBinding work? Just for the target namespace.
+# - limit this to the LEAST privilege for each of the resources
+# - and document this for each of the resources.
+# - and we may need to TEMPLATE the namespace, if pinniped is installed in alt namespaces?
 cat <<EOF >> "${pinniped_package_rbac_file}"
 ---
 apiVersion: v1
@@ -208,7 +214,6 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: "${pinniped_package_rbac_prefix}-role-superadmin-dangerous"
-  namespace: "${namespace}"
 rules:
 - apiGroups: ["*"]
   resources: ["*"]
@@ -278,7 +283,7 @@ kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_N
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)" # TODO: this will be different than in the prepare-for-integration-tests.sh file.
+test_password="$(openssl rand -hex 16)"
 log_note "Creating test user '$test_username'..."
 kubectl create secret generic "$test_username" \
   --namespace local-user-authenticator \
@@ -288,6 +293,7 @@ kubectl create secret generic "$test_username" \
   --output yaml |
   kubectl apply -f -
 
+# TODO: this is a race, we need to wait for this secret to exist, should we --wait?
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 # end local-user-authenticator
 
@@ -406,6 +412,7 @@ EOF
 
 KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
 log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
+# TODO: does this wait not only for the PackageInstall, but the Package, and its deployments and pods, to be successful?  Because we need that.
 kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
 # end supervisor
 

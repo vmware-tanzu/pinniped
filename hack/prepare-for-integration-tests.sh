@@ -318,6 +318,7 @@ else
     --output yaml |
     kubectl apply -f -
 
+  # TODO: this is a race, we need to wait for this secret to exist, should we --wait?
   webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
   echo "export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}" >> "${env_file_name}"
   popd >/dev/null

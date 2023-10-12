@@ -231,6 +231,11 @@ else
   fi
 fi
 
+
+# since we allow other scripts to write to the environment file, we need to create a new one every time
+env_file_name="$(mktemp /tmp/pinniped.integration.XXXXXXXX)"
+log_note "creating environment variable file: $env_file_name"
+
 # registry="pinniped.local"
 registry="kind-registry.local:5000"
 repo="test/build"
@@ -273,19 +278,18 @@ docker push "$registry_repo_tag"
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-# TODO: these are duplicated into the build-carvel-packages.sh script
-#   since the script can't write to the same env file (it would be overwritten)
-test_username="test-username"
-test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)" # TODO: this will be different than in the build-carvel-packages.sh file
+test_username=""
+test_groups=""
+test_password=""
+webhook_ca_bundle=""
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
-    $alternate_deploy local-user-authenticator $tag
+    $alternate_deploy local-user-authenticator $tag $env_file_name
   fi
   if [ "$alternate_deploy_local_user_authenticator" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy_local_user_authenticator local-user-authenticator $tag..."
-    $alternate_deploy_local_user_authenticator local-user-authenticator $tag
+    $alternate_deploy_local_user_authenticator local-user-authenticator $tag $env_file_name
   fi
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
@@ -299,6 +303,13 @@ else
 
 
   log_note "Creating test user '$test_username'..."
+  test_username="test-username"
+  test_groups="test-group-0,test-group-1"
+  test_password="$(openssl rand -hex 16)"
+  echo "export PINNIPED_TEST_USER_USERNAME=${test_username}" >> "${env_file_name}"
+  echo "export PINNIPED_TEST_USER_GROUPS=${test_groups}" >> "${env_file_name}"
+  echo "export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}" >> "${env_file_name}"
+
   kubectl create secret generic "$test_username" \
     --namespace local-user-authenticator \
     --from-literal=groups="$test_groups" \
@@ -307,6 +318,7 @@ else
     --output yaml |
     kubectl apply -f -
 
+  webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
   popd >/dev/null
 fi
 
@@ -345,11 +357,11 @@ service_https_clusterip_port="443"
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_supervisor" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
-    $alternate_deploy pinniped-supervisor $tag
+    $alternate_deploy pinniped-supervisor $tag $env_file_name
   fi
   if [ "$alternate_deploy_supervisor" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy_supervisor pinniped-supervisor $tag..."
-    $alternate_deploy_supervisor pinniped-supervisor $tag
+    $alternate_deploy_supervisor pinniped-supervisor $tag $env_file_name
   fi
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
@@ -386,11 +398,11 @@ log_level="debug"
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_concierge" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
-    $alternate_deploy pinniped-concierge $tag
+    $alternate_deploy pinniped-concierge $tag $env_file_name
   fi
   if [ "$alternate_deploy_concierge" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy_concierge pinniped-concierge $tag..."
-    $alternate_deploy_concierge pinniped-concierge $tag
+    $alternate_deploy_concierge pinniped-concierge $tag $env_file_name
   fi
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
@@ -436,21 +448,13 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
-# whether installed by the carvel package or the default method, we need to get this
-# entered into the environment variable file now.
-# TODO: this is a bit of a bleeding of concerns... ideally if the carvel package method installs the
-# local-user-authenticator, it would write this env var to the env file.
-webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
-cat <<EOF >/tmp/integration-test-env
+cat <<EOF >>"$env_file_name"
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
 export PINNIPED_TEST_TOOLS_NAMESPACE="tools"
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
-export PINNIPED_TEST_USER_USERNAME=${test_username}
-export PINNIPED_TEST_USER_GROUPS=${test_groups}
-export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
@@ -522,7 +526,7 @@ log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
 log_note "    ulimit -n 512"
-log_note '    source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration'
+log_note "    source $env_file_name && go test -v -race -count 1 -timeout 0 ./test/integration"
 log_note
 log_note "Using GoLand? Paste the result of this command into GoLand's run configuration \"Environment\"."
 log_note "    hack/integration-test-env-goland.sh | pbcopy"

@@ -51,6 +51,7 @@ use_oidc_upstream=no
 use_ldap_upstream=no
 use_ad_upstream=no
 use_flow=""
+env_file_name=""
 while (("$#")); do
   case "$1" in
   --flow)
@@ -81,6 +82,13 @@ while (("$#")); do
     use_ad_upstream=yes
     shift
     ;;
+  --env)
+    shift
+    # Use an ActiveDirectoryIdentityProvider.
+    # This assumes that you used the --get-active-directory-vars flag with hack/prepare-for-integration-tests.sh.
+    env_file_name=$1
+    shift
+    ;;
   -*)
     log_error "Unsupported flag $1" >&2
     exit 1
@@ -97,8 +105,13 @@ if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_u
   exit 1
 fi
 
+if [[ "$env_file_name" == "" ]]; then
+  log_error "Error: Please provide --env file, typically printed in the output of ./hack/prepare-for-integration-tests.sh"
+  exit 1
+fi
+
 # Read the env vars output by hack/prepare-for-integration-tests.sh
-source /tmp/integration-test-env
+source $env_file_name
 
 # Choose some filenames.
 root_ca_crt_path=root_ca.crt

@@ -319,6 +319,7 @@ else
     kubectl apply -f -
 
   webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+  echo "export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}" >> "${env_file_name}"
   popd >/dev/null
 fi
 
@@ -429,7 +430,7 @@ fi
 # running it after the above also allows appending to the environment variable file
 if [ "$post_install" != "undefined" ] ; then
   log_note "The post-install script will be called with $tag..."
-  $post_install post-install-script $tag
+  $post_install post-install-script $tag $env_file_name
 fi
 
 #
@@ -456,7 +457,6 @@ export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
-export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'

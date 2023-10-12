@@ -50,8 +50,19 @@ cd "$pinniped_path" || exit 1
 # - app: unimportant, but always first
 # - tag: uuidgen in hack/prepare-for-integration-tests.sh
 #        if this script is run standalone, then auto-fill with a unique value
+# - env_file_name: the text file to write environment variables for integration tests, IDEs, etc.
 app=${1:-"undefined"}
 tag=${2:-$(uuidgen)}
+# best if this is passed in by calling code to share the same file
+env_file_name=${3:-"undefined"}
+
+
+if [ "${env_file_name}" == "undefined" ]; then
+  env_file_name="$(mktemp /tmp/pinniped.integration.XXXXXXXX)"
+  log_note "env file name not passed, generating new environment file: ${env_file_name}"
+else
+  log_note "appending to shared env file: ${env_file_name}"
+fi
 
 # TODO: automate the version by release somehow.
 # the tag is the version in our build scripts, but we will want real versions for releases
@@ -276,6 +287,8 @@ kubectl create secret generic "$test_username" \
   --dry-run=client \
   --output yaml |
   kubectl apply -f -
+
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 # end local-user-authenticator
 
 
@@ -396,6 +409,13 @@ log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
 kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
 # end supervisor
 
+log_note "writing to environment file: ${env_file_name}..."
+echo "# carvel package script additions........."
+echo "export PINNIPED_TEST_USER_USERNAME=${test_username}" >> "${env_file_name}"
+echo "export PINNIPED_TEST_USER_GROUPS=${test_groups}" >> "${env_file_name}"
+echo "export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}" >> "${env_file_name}"
+echo "export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}" >> "${env_file_name}"
+echo "# carvel package script additions end....."
 
 log_note "verifying PackageInstall resources..."
 kubectl get PackageInstall -A | grep pinniped

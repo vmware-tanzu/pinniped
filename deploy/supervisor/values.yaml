@@ -38,7 +38,7 @@ image_tag: latest
 
 #@ image_pull_dockerconfigjson_desc = "Specifies a secret to be used when pulling the above `image_repo` container image. \
 #@ Can be used when the above image_repo is a private registry. \
-#@ Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]' \
+#@ Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username=\"USERNAME\" --docker-password=\"PASSWORD\" --dry-run=client -o json | jq -r '.data[\".dockerconfigjson\"]' \
 #@ Optional."
 #! base64 encoded: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 #! result: eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ==

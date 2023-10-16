@@ -238,6 +238,8 @@ log_note "creating environment variable file: $env_file_name"
 
 # registry="pinniped.local"
 registry="kind-registry.local:5000"
+# TODO: need to prompt the user to edit their /etc/hosts here, because otherwise
+# we can't push images to the registry!  maybe check /etc/hosts for this change else error?
 repo="test/build"
 registry_repo="$registry/$repo"
 tag="0.0.0-$(uuidgen)" # always a new tag to force K8s to reload the image on redeploy

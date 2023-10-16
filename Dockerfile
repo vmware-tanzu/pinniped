@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Prepare to cross-compile by always running the build stage in the build platform, not the target platform.
-FROM --platform=$BUILDPLATFORM golang:1.21.2 as build-env
+FROM --platform=$BUILDPLATFORM golang:1.21.3 as build-env
 
 WORKDIR /work
 

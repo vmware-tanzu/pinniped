@@ -18,7 +18,7 @@
 
 # This is not currently using --platform to prepare to cross-compile because we use gcc below to build
 # platform-specific GCO code. This makes multi-arch builds slow due to target platform emulation.
-FROM golang:1.21.2 as build-env
+FROM golang:1.21.3 as build-env
 
 WORKDIR /work
 

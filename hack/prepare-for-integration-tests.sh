@@ -233,15 +233,29 @@ fi
 
 
 # registry="pinniped.local"
-registry="kind-registry.local:5000"
-# TODO: need to prompt the user to edit their /etc/hosts here, because otherwise
-# we can't push images to the registry!  maybe check /etc/hosts for this change else error?
+registry="kind-registry.local"
+registry_with_port="$registry:5000"
 repo="test/build"
-registry_repo="$registry/$repo"
+registry_repo="$registry_with_port/$repo"
 tag="0.0.0-$(uuidgen)" # always a new tag to force K8s to reload the image on redeploy
 
+
+etc_hosts_local_registry_missing=no
+if ! grep -q "$registry" /etc/hosts; then
+  etc_hosts_local_registry_missing=yes
+fi
+
+if [[ "$etc_hosts_local_registry_missing" == "yes" ]]; then
+  echo
+  log_error "In order to configure the kind cluster to use the local registry properly,"
+  log_error "please run this command to edit /etc/hosts, and then run this script again with the same options."
+  echo "sudo bash -c \"echo '127.0.0.1 $registry' >> /etc/hosts\""
+  log_error "When you are finished with your Kind cluster, you can remove this line from /etc/hosts."
+  exit 1
+fi
+
 if [[ "$skip_build" == "yes" ]]; then
-  most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
+  most_recent_tag=$(docker images "$registry_repo" --format "{{.Tag}}" | head -1)
   if [[ -n "$most_recent_tag" ]]; then
     tag="$most_recent_tag"
     do_build=no
@@ -269,7 +283,7 @@ if [[ "$do_build" == "yes" ]]; then
 fi
 
 # Load it into the cluster
-log_note "Loading the app's container image into the local registry ($registry)..."
+log_note "Loading the app's container image into the local registry ($registry_with_port)..."
 docker push "$registry_repo_tag"
 
 #
@@ -539,8 +553,3 @@ log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
 log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
 log_note
-# TODO: come back and check the /etc/hosts file for the existence of
-# the correct lines, just like is done in prepare-supervisor-on-kind.sh
-log_note "Please run these commands to edit /etc/hosts, and then run this script again with the same options."
-log_note "  sudo bash -c \"echo '127.0.0.1 kind-registry.local' >> /etc/hosts\""
-log_note "When you are finished with your Kind cluster, you can remove these lines from /etc/hosts."

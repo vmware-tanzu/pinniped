@@ -232,10 +232,6 @@ else
 fi
 
 
-# since we allow other scripts to write to the environment file, we need to create a new one every time
-env_file_name="$(mktemp /tmp/pinniped.integration.XXXXXXXX)"
-log_note "creating environment variable file: $env_file_name"
-
 # registry="pinniped.local"
 registry="kind-registry.local:5000"
 # TODO: need to prompt the user to edit their /etc/hosts here, because otherwise
@@ -280,18 +276,14 @@ docker push "$registry_repo_tag"
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-test_username=""
-test_groups=""
-test_password=""
-webhook_ca_bundle=""
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
-    $alternate_deploy local-user-authenticator $tag $env_file_name
+    $alternate_deploy local-user-authenticator $tag
   fi
   if [ "$alternate_deploy_local_user_authenticator" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy_local_user_authenticator local-user-authenticator $tag..."
-    $alternate_deploy_local_user_authenticator local-user-authenticator $tag $env_file_name
+    $alternate_deploy_local_user_authenticator local-user-authenticator $tag
   fi
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
@@ -303,26 +295,6 @@ else
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 
-
-  log_note "Creating test user '$test_username'..."
-  test_username="test-username"
-  test_groups="test-group-0,test-group-1"
-  test_password="$(openssl rand -hex 16)"
-  echo "export PINNIPED_TEST_USER_USERNAME=${test_username}" >> "${env_file_name}"
-  echo "export PINNIPED_TEST_USER_GROUPS=${test_groups}" >> "${env_file_name}"
-  echo "export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}" >> "${env_file_name}"
-
-  kubectl create secret generic "$test_username" \
-    --namespace local-user-authenticator \
-    --from-literal=groups="$test_groups" \
-    --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
-    --dry-run=client \
-    --output yaml |
-    kubectl apply -f -
-
-  # TODO: this is a race, we need to wait for this secret to exist, should we --wait?
-  webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
-  echo "export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}" >> "${env_file_name}"
   popd >/dev/null
 fi
 
@@ -361,11 +333,11 @@ service_https_clusterip_port="443"
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_supervisor" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
-    $alternate_deploy pinniped-supervisor $tag $env_file_name
+    $alternate_deploy pinniped-supervisor $tag
   fi
   if [ "$alternate_deploy_supervisor" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy_supervisor pinniped-supervisor $tag..."
-    $alternate_deploy_supervisor pinniped-supervisor $tag $env_file_name
+    $alternate_deploy_supervisor pinniped-supervisor $tag
   fi
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
@@ -402,11 +374,11 @@ log_level="debug"
 if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_concierge" != "undefined" ] ; then
   if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
-    $alternate_deploy pinniped-concierge $tag $env_file_name
+    $alternate_deploy pinniped-concierge $tag
   fi
   if [ "$alternate_deploy_concierge" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy_concierge pinniped-concierge $tag..."
-    $alternate_deploy_concierge pinniped-concierge $tag $env_file_name
+    $alternate_deploy_concierge pinniped-concierge $tag
   fi
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
@@ -433,8 +405,30 @@ fi
 # running it after the above also allows appending to the environment variable file
 if [ "$post_install" != "undefined" ] ; then
   log_note "The post-install script will be called with $tag..."
-  $post_install post-install-script $tag $env_file_name
+  $post_install post-install-script $tag
 fi
+
+#
+# Test user for the authenticator
+# the authenticator may be deployed in alternative ways (ex. carvel package) but regardless we need a test user.
+#
+log_note "Creating test user for local-user-authenticator..."
+test_username="test-username"
+test_groups="test-group-0,test-group-1"
+test_password="$(openssl rand -hex 16)"
+
+kubectl create secret generic "$test_username" \
+  --namespace local-user-authenticator \
+  --from-literal=groups="$test_groups" \
+  --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
+  --dry-run=client \
+  --output yaml |
+  kubectl apply -f -
+
+#
+# Regardless of how the local-user-authenticator is installed, we need the webhook bundle in the environment file.
+#
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
 #
 # Download the test CA bundle that was generated in the Dex pod.
@@ -452,14 +446,19 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
+env_file_name="/tmp/integration-test-env"
 
-cat <<EOF >>"$env_file_name"
+cat <<EOF >"$env_file_name"
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
 export PINNIPED_TEST_TOOLS_NAMESPACE="tools"
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
+export PINNIPED_TEST_USER_USERNAME=${test_username}
+export PINNIPED_TEST_USER_GROUPS=${test_groups}
+export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
+export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'

@@ -11,15 +11,8 @@ set -euo pipefail
 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-env_file_name=${1:-"undefined"}
-if [ "${env_file_name}" == "undefined" ]
-then
-  echo "environment variable file name must be specified."
-  echo "hint: this is typically in the output of running hack/prepare-for-integration-tests.sh"
-  exit 1
-fi
 
-source "${env_file_name}"
+source "/tmp/integration-test-env"
 
 echo -n "PINNIPED_TEST_GOLAND_RUNNER=true;"
 

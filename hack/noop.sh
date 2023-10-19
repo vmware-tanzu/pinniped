@@ -40,31 +40,6 @@ function check_dependency() {
   fi
 }
 
-## two vars will be received by this script:
-## Received: local-user-authenticator
-## Received: D00A4537-80F1-4AF2-A3B3-5F20BDBB9AEB
 app=${1}
-## tag is fed in from the prepare-for-integration-tests.sh script, just uuidgen to identify a
-## specific docker build of the pinniped-server image.
 tag=${2}
-# env_file_name is where to write env vars, if necessary to contribute to the environment
-env_file_name=${3}
-#SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-#log_note "noop.sh >>> script dir: ${SCRIPT_DIR}"
 log_note "noop.sh >>> app: ${app} tag: ${tag}"
-## nothing else, this is a test.
-#
-#log_note "temporarily creating ns:local-user-authenticator as workaround..."
-#
-#local_user_authenticator_file="/tmp/install-local-user-authenticator-namespace.yaml"
-#cat <<EOF > "${local_user_authenticator_file}"
-#---
-#apiVersion: v1
-#kind: Namespace
-#metadata:
-#  name: local-user-authenticator
-#  labels:
-#    name: local-user-authenticator
-#EOF
-#
-#kubectl apply -f "${local_user_authenticator_file}"

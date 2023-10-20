@@ -4,11 +4,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
-# This script can be used to prepare a kind cluster and deploy the app.
-# You can call this script again to redeploy the app.
-# It will also output instructions on how to run the integration.
+# This script can be used in conjunction with prepare-for-integration-tests.sh.
+# When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value,
+# the integration tests script will create a local docker registry and configure kind to use the registry
+# and will build the Pinniped binary and container image.
+# This script will then create Carvel Packages for supervisor,concierge and local-user-authenticator.
+# It will also create a Carvel PackageRepository.
+# The PackageRepository will be installed on the kind cluster, then PackageInstall resources
+# will be created to deploy an instance of each of the packages on the cluster.
+# Once this script has completed, Pinniped can be interacted with as if it had been deployed in the usual way,
+# for example by running tests or by preparing supervisor for manual interactions:
+#  source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration -run  /TestE2EFullIntegration_Browser
+#  hack/prepare-supervisor-on-kind.sh --oidc
 #
-
+# Example usage:
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh
+#
 set -euo pipefail
 
 #
@@ -53,6 +64,14 @@ cd "$pinniped_path" || exit 1
 app=${1:-"undefined"}
 tag=${2:-$(uuidgen)}
 
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
+  log_error "Building the Carvel package requires configuring kind with a local registry."
+  log_error "please set the environment variable PINNIPED_USE_LOCAL_KIND_REGISTRY"
+  log_error "for example:"
+  log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh"
+fi
+
+
 # TODO: automate the version by release somehow.
 # the tag is the version in our build scripts, but we will want real versions for releases
 pinniped_package_version="${tag}" # ie, "0.25.0"
@@ -68,11 +87,10 @@ registry_repo_tag="${registry_repo}:${tag}"
 api_group_suffix="pinniped.dev"
 
 # Package prefix for concierge, supervisor, local-user-authenticator
-package_prefix="test/build-package" # + $resource_name + ":" + $tag
-package_repo_prefix="${registry_repo}/${package_prefix}" # + $resource_name + ":" + $tag
+package_repo_prefix="${registry_repo}/package" # + $resource_name + ":" + $tag
 
 # Pinniped Package repository
-package_repository_repo="test/build-package-repository-pinniped"
+package_repository_repo="pinniped-package-repository"
 package_repository_repo_tag="${registry_repo}/${package_repository_repo}:${tag}"
 
 # carvel

@@ -8,7 +8,15 @@
 # You can call this script again to redeploy the app.
 # It will also output instructions on how to run the integration.
 #
-
+# When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value,
+# the script will create a local docker registry and configure kind to use the registry.  When building
+# and installing Pinniped normally this is unnecessary. However, if an alternative build and install approach
+# is taken, such as via a Carvel packaging mechanism, a local registry might be needed (for example, the
+# kbld tool requires a registry to resolve images to shas).
+#
+# Example usage:
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1  ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh
+#
 set -euo pipefail
 
 #
@@ -231,27 +239,31 @@ else
   fi
 fi
 
+registry="pinniped.local"
+registry_with_port="$registry"
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
+  registry="kind-registry.local"
+  registry_with_port="$registry:5000"
+fi
 
-# registry="pinniped.local"
-registry="kind-registry.local"
-registry_with_port="$registry:5000"
 repo="test/build"
 registry_repo="$registry_with_port/$repo"
 tag="0.0.0-$(uuidgen)" # always a new tag to force K8s to reload the image on redeploy
 
 
-etc_hosts_local_registry_missing=no
-if ! grep -q "$registry" /etc/hosts; then
-  etc_hosts_local_registry_missing=yes
-fi
-
-if [[ "$etc_hosts_local_registry_missing" == "yes" ]]; then
-  echo
-  log_error "In order to configure the kind cluster to use the local registry properly,"
-  log_error "please run this command to edit /etc/hosts, and then run this script again with the same options."
-  echo "sudo bash -c \"echo '127.0.0.1 $registry' >> /etc/hosts\""
-  log_error "When you are finished with your Kind cluster, you can remove this line from /etc/hosts."
-  exit 1
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
+  etc_hosts_local_registry_missing=no
+  if ! grep -q "$registry" /etc/hosts; then
+    etc_hosts_local_registry_missing=yes
+  fi
+  if [[ "$etc_hosts_local_registry_missing" == "yes" ]]; then
+    echo
+    log_error "In order to configure the kind cluster to use the local registry properly,"
+    log_error "please run this command to edit /etc/hosts, and then run this script again with the same options."
+    echo "sudo bash -c \"echo '127.0.0.1 $registry' >> /etc/hosts\""
+    log_error "When you are finished with your Kind cluster, you can remove this line from /etc/hosts."
+    exit 1
+  fi
 fi
 
 if [[ "$skip_build" == "yes" ]]; then
@@ -282,10 +294,15 @@ if [[ "$do_build" == "yes" ]]; then
   fi
 fi
 
-# Load it into the cluster
-log_note "Loading the app's container image into the local registry ($registry_with_port)..."
-docker push "$registry_repo_tag"
-
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
+  # if registry used, push to the registry
+  log_note "Loading the app's container image into the local registry ($registry_with_port)..."
+  docker push "$registry_repo_tag"
+else
+  # otherwise side-load directly
+  log_note "Loading the app's container image into the kind cluster..."
+  kind load docker-image "$registry_repo_tag" --name pinniped
+fi
 #
 # Deploy local-user-authenticator
 #

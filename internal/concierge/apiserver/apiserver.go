@@ -21,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 	"go.pinniped.dev/internal/registry/whoamirequest"
+	"go.pinniped.dev/internal/tokenclient"
 )
 
 type Config struct {
@@ -36,6 +37,7 @@ type ExtraConfig struct {
 	NegotiatedSerializer          runtime.NegotiatedSerializer
 	LoginConciergeGroupVersion    schema.GroupVersion
 	IdentityConciergeGroupVersion schema.GroupVersion
+	TokenClient                   *tokenclient.TokenClient
 }
 
 type PinnipedServer struct {
@@ -128,6 +130,24 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 				// Start the controllers and block until their context is cancelled and they have shut down.
 				runControllers(controllersCtx)
 				plog.Debug("start-controllers post start hook's background goroutine saw runControllers() finish")
+			}()
+
+			return nil
+		},
+	)
+
+	s.GenericAPIServer.AddPostStartHookOrDie("fetch-impersonation-proxy-tokens",
+		func(postStartContext genericapiserver.PostStartHookContext) error {
+			plog.Debug("fetch-impersonation-proxy-tokens start hook starting")
+			defer plog.Debug("fetch-impersonation-proxy-tokens start hook completed")
+
+			controllersShutdownWaitGroup.Add(1)
+			go func() {
+				defer controllersShutdownWaitGroup.Done()
+
+				// Start the token client
+				c.ExtraConfig.TokenClient.Start(controllersCtx)
+				plog.Debug("fetch-impersonation-proxy-tokens start hook's background goroutine has finished")
 			}()
 
 			return nil

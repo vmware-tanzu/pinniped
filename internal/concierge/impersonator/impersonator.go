@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -56,6 +55,7 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/tokenclient"
 	"go.pinniped.dev/internal/valuelesscontext"
 )
 
@@ -68,26 +68,38 @@ type FactoryFunc func(
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
+	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
 ) (func(stopCh <-chan struct{}) error, error)
 
 func New(
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
+	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
 ) (func(stopCh <-chan struct{}) error, error) {
-	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, kubeclient.Secure, nil, nil, nil)
+	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, kubeclient.Secure, impersonationProxyTokenCache, nil, nil, nil)
 }
 
-func newInternal( //nolint:funlen // yeah, it's kind of long.
+//nolint:funlen // It is definitely too complicated. New calls newInternal, which makes another function.
+func newInternal(
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 	restConfigFunc ptls.RestConfigFunc, // for unit testing, should always be kubeclient.Secure in production
-	clientOpts []kubeclient.Option, // for unit testing, should always be nil in production
+	cache tokenclient.ExpiringSingletonTokenCacheGet,
+	baseConfig *rest.Config, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
 	recConfig func(*genericapiserver.RecommendedConfig), // for unit testing, should always be nil in production
 ) (func(stopCh <-chan struct{}) error, error) {
 	var listener net.Listener
+	var err error
+
+	if baseConfig == nil {
+		baseConfig, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	constructServer := func() (func(stopCh <-chan struct{}) error, error) {
 		// Bare minimum server side scheme to allow for status messages to be encoded.
@@ -117,7 +129,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// along with the Kube API server's CA.
 		// Note: any changes to the Authentication stack need to be kept in sync with any assumptions made
 		// by getTransportForUser, especially if we ever update the TCR API to start returning bearer tokens.
-		kubeClientUnsafeForProxying, err := kubeclient.New(clientOpts...)
+		kubeClientUnsafeForProxying, err := kubeclient.New(kubeclient.WithConfig(baseConfig))
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +180,8 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		)
 
 		// use the custom impersonation proxy service account credentials when reverse proxying to the API server
-		kubeClientForProxy, err := getReverseProxyClient(clientOpts)
+
+		kubeClientForProxy, err := getReverseProxyClient(baseConfig, cache)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build reverse proxy client: %w", err)
 		}
@@ -321,11 +334,6 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			return nil, fmt.Errorf("invalid mutation of impersonation authorizer detected: %#v", preparedRun.Authorizer)
 		}
 
-		// Sanity check. Assert that we have a functioning token file to use and no bearer token.
-		if len(preparedRun.LoopbackClientConfig.BearerToken) != 0 || len(preparedRun.LoopbackClientConfig.BearerTokenFile) == 0 {
-			return nil, constable.Error("invalid impersonator loopback rest config has wrong bearer token semantics")
-		}
-
 		return preparedRun.Run, nil
 	}
 
@@ -341,28 +349,16 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 	return result, nil
 }
 
-func getReverseProxyClient(clientOpts []kubeclient.Option) (*kubeclient.Client, error) {
-	// just use the overrides given during unit tests
-	if len(clientOpts) != 0 {
-		return kubeclient.New(clientOpts...)
+func getReverseProxyClient(baseConfig *rest.Config, cache tokenclient.ExpiringSingletonTokenCacheGet) (*kubeclient.Client, error) {
+	impersonationProxyRestConfig := kubeclient.SecureAnonymousClientConfig(baseConfig)
+
+	authRoundTripper := func(base http.RoundTripper) http.RoundTripper {
+		return &authorizationRoundTripper{
+			cache: cache,
+			base:  base,
+		}
 	}
-
-	// this is the magic path where the impersonation proxy SA token is mounted
-	const tokenFile = "/var/run/secrets/impersonation-proxy.concierge.pinniped.dev/serviceaccount/token" //nolint:gosec // this is not a credential
-
-	// make sure the token file we need exists before trying to use it
-	if _, err := os.Stat(tokenFile); err != nil {
-		return nil, err
-	}
-
-	// build an in cluster config that uses the impersonation proxy token file
-	impersonationProxyRestConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	impersonationProxyRestConfig = kubeclient.SecureAnonymousClientConfig(impersonationProxyRestConfig)
-	impersonationProxyRestConfig.BearerTokenFile = tokenFile
-
+	impersonationProxyRestConfig.Wrap(authRoundTripper)
 	return kubeclient.New(kubeclient.WithConfig(impersonationProxyRestConfig))
 }
 

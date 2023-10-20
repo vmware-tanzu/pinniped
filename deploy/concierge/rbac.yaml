@@ -1,4 +1,4 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -156,6 +156,13 @@ rules:
   - apiGroups: [ coordination.k8s.io ]
     resources: [ leases ]
     verbs: [ create, get, update ]
+  #! We need to be able to get service accounts and create serviceaccounts/tokens so that we can create short-lived tokens for the impersonation proxy
+  - apiGroups: [""]
+    resources: [ serviceaccounts ]
+    verbs: [ get ]
+  - apiGroups: [""]
+    resources: [ serviceaccounts/token ]
+    verbs: [ create ]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

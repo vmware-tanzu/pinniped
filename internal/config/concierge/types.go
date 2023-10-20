@@ -45,6 +45,8 @@ type NamesConfigSpec struct {
 	ImpersonationCACertificateSecret  string `json:"impersonationCACertificateSecret"`
 	ImpersonationSignerSecret         string `json:"impersonationSignerSecret"`
 	AgentServiceAccount               string `json:"agentServiceAccount"`
+	ImpersonationProxyServiceAccount  string `json:"impersonationProxyServiceAccount"`
+	ImpersonationProxyLegacySecret    string `json:"impersonationProxyLegacySecret"`
 }
 
 // ServingCertificateConfigSpec contains the configuration knobs for the API's

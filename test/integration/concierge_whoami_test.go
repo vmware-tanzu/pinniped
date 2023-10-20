@@ -89,6 +89,7 @@ func TestWhoAmI_ServiceAccount_Legacy_Parallel(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
+	// TODO: What is this used for?
 	secret, err := kubeClient.Secrets(ns.Name).Create(ctx, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-whoami-",

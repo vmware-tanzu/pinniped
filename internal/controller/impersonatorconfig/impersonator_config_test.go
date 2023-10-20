@@ -45,6 +45,7 @@ import (
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/tokenclient"
 )
 
 func TestImpersonatorConfigControllerOptions(t *testing.T) {
@@ -93,6 +94,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				caSignerName,
 				nil,
 				plog.Logr(), //nolint:staticcheck // old test with no log assertions
+				nil,
 			)
 			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
@@ -272,6 +274,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const httpsPort = ":443"
 		const fakeServerResponseBody = "hello, world!"
 		const externallyProvidedTLSSecretName = "external-tls-secret" //nolint:gosec // this is not a credential
+		fakeExpiringSingletonTokenCacheGet := *new(tokenclient.ExpiringSingletonTokenCacheGet)
 		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions
@@ -308,11 +311,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			port int,
 			dynamicCertProvider dynamiccert.Private,
 			impersonationProxySignerCAProvider dynamiccert.Public,
+			expiringSingletonTokenCacheGet tokenclient.ExpiringSingletonTokenCacheGet,
 		) (func(stopCh <-chan struct{}) error, error) {
 			impersonatorFuncWasCalled++
 			r.Equal(8444, port)
 			r.NotNil(dynamicCertProvider)
 			r.NotNil(impersonationProxySignerCAProvider)
+			r.Equal(fakeExpiringSingletonTokenCacheGet, expiringSingletonTokenCacheGet)
 
 			if impersonatorFuncError != nil {
 				return nil, impersonatorFuncError
@@ -580,7 +585,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				impersonatorFunc,
 				mTLSClientCertCASecretName,
 				mTLSClientCertProvider,
-				plog.Logr(), //nolint:staticcheck  // old test with no log assertions
+				plog.Logr(), //nolint:staticcheck  // old test with no log assertions,
+				fakeExpiringSingletonTokenCacheGet,
 			)
 			controllerlib.TestWrap(t, subject, func(syncer controllerlib.Syncer) controllerlib.Syncer {
 				tlsServingCertDynamicCertProvider = syncer.(*impersonatorConfigController).tlsServingCertDynamicCertProvider

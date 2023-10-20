@@ -55,8 +55,10 @@ import (
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil/tlsserver"
+	"go.pinniped.dev/internal/tokenclient"
 )
 
+// TODO: add a test without a token?
 func TestImpersonator(t *testing.T) {
 	const (
 		priorityLevelConfigurationsVersion = "v1beta3"
@@ -84,24 +86,22 @@ func TestImpersonator(t *testing.T) {
 	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.APIPriorityAndFairness, false)()
 
 	tests := []struct {
-		name                               string
-		clientCert                         *clientCert
-		clientImpersonateUser              rest.ImpersonationConfig
-		clientMutateHeaders                func(http.Header)
-		clientNextProtos                   []string
-		kubeAPIServerClientBearerTokenFile string
-		kubeAPIServerStatusCode            int
-		kubeAPIServerHealthz               http.Handler
-		anonymousAuthDisabled              bool
-		wantKubeAPIServerRequestHeaders    http.Header
-		wantError                          string
-		wantConstructionError              string
-		wantAuthorizerAttributes           []authorizer.AttributesRecord
+		name                            string
+		clientCert                      *clientCert
+		clientImpersonateUser           rest.ImpersonationConfig
+		clientMutateHeaders             func(http.Header)
+		clientNextProtos                []string
+		kubeAPIServerStatusCode         int
+		kubeAPIServerHealthz            http.Handler
+		anonymousAuthDisabled           bool
+		wantKubeAPIServerRequestHeaders http.Header
+		wantError                       string
+		wantConstructionError           string
+		wantAuthorizerAttributes        []authorizer.AttributesRecord
 	}{
 		{
-			name:                               "happy path",
-			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"test-username"},
 				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
@@ -119,9 +119,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "happy path with forbidden healthz",
-			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path with forbidden healthz",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte("no healthz for you"))
@@ -143,9 +142,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "happy path with unauthorized healthz",
-			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path with unauthorized healthz",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte("no healthz for you"))
@@ -168,9 +166,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "happy path with upgrade",
-			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path with upgrade",
+			clientCert: newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
 			clientMutateHeaders: func(header http.Header) {
 				header.Add("Connection", "Upgrade")
 				header.Add("Upgrade", "spdy/3.1")
@@ -199,9 +196,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "happy path ignores forwarded header",
-			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path ignores forwarded header",
+			clientCert: newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
 			clientMutateHeaders: func(header http.Header) {
 				header.Add("X-Forwarded-For", "example.com")
 			},
@@ -222,9 +218,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "happy path ignores forwarded header canonicalization",
-			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "happy path ignores forwarded header canonicalization",
+			clientCert: newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
 			clientMutateHeaders: func(header http.Header) {
 				header["x-FORWARDED-for"] = append(header["x-FORWARDED-for"], "example.com")
 			},
@@ -245,11 +240,10 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "user is authenticated but the kube API request returns an error",
-			kubeAPIServerStatusCode:            http.StatusNotFound,
-			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          `the server could not find the requested resource (get namespaces)`,
+			name:                    "user is authenticated but the kube API request returns an error",
+			kubeAPIServerStatusCode: http.StatusNotFound,
+			clientCert:              newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			wantError:               `the server could not find the requested resource (get namespaces)`,
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"test-username"},
 				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
@@ -267,9 +261,8 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "when there is no client cert on request, it is an anonymous request",
-			clientCert:                         &clientCert{},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:       "when there is no client cert on request, it is an anonymous request",
+			clientCert: &clientCert{},
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"system:anonymous"},
 				"Impersonate-Group": {"system:unauthenticated"},
@@ -294,7 +287,6 @@ func TestImpersonator(t *testing.T) {
 				req := &http.Request{Header: header}
 				req.SetBasicAuth("foo", "bar")
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"system:anonymous"},
 				"Impersonate-Group": {"system:unauthenticated"},
@@ -313,17 +305,15 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                               "failed client cert authentication",
-			clientCert:                         newClientCert(t, unrelatedCA, "test-username", []string{"test-group1"}),
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Unauthorized",
-			wantAuthorizerAttributes:           nil,
+			name:                     "failed client cert authentication",
+			clientCert:               newClientCert(t, unrelatedCA, "test-username", []string{"test-group1"}),
+			wantError:                "Unauthorized",
+			wantAuthorizerAttributes: nil,
 		},
 		{
-			name:                               "nested impersonation by regular users calls delegating authorizer",
-			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			clientImpersonateUser:              rest.ImpersonationConfig{UserName: "some-other-username"},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			name:                  "nested impersonation by regular users calls delegating authorizer",
+			clientCert:            newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{UserName: "some-other-username"},
 			// this fails because the delegating authorizer in this test only allows system:masters and fails everything else
 			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
 				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
@@ -359,7 +349,6 @@ func TestImpersonator(t *testing.T) {
 					"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
 				},
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":                                                                {"fire"},
 				"Impersonate-Group":                                                               {"elements", "system:authenticated"},
@@ -477,8 +466,7 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["Impersonate-Uid"] = []string{"root"}
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
@@ -501,8 +489,7 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSoNaTE-uid"] = []string{"magic"}
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
@@ -529,8 +516,7 @@ func TestImpersonator(t *testing.T) {
 					"something.impersonation-proxy.concierge.pinniped.dev": {"bad data"},
 				},
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
@@ -569,8 +555,7 @@ func TestImpersonator(t *testing.T) {
 					"party~~time": {"danger"},
 				},
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
@@ -600,7 +585,6 @@ func TestImpersonator(t *testing.T) {
 					"ROAR": {"tiger"}, // by the time our code sees this key, it is lowercased to "roar"
 				},
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":       {"panda"},
 				"Impersonate-Group":      {"other-peeps", "system:authenticated"},
@@ -632,11 +616,6 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:                     "no bearer token file in Kube API server client config",
-			wantConstructionError:    "invalid impersonator loopback rest config has wrong bearer token semantics",
-			wantAuthorizerAttributes: nil,
-		},
-		{
 			name: "unexpected healthz response",
 			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -651,7 +630,6 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-USer"] = []string{"PANDA"}
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError: `users "PANDA" is forbidden: User "test-username" ` +
 				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
 				`decision made by impersonation-proxy.concierge.pinniped.dev`,
@@ -668,9 +646,8 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-uid"] = []string{"007"}
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
-			wantAuthorizerAttributes:           []authorizer.AttributesRecord{},
+			wantError:                `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: []authorizer.AttributesRecord{},
 		},
 		{
 			name:       "future UID header", // no longer future as it exists in Kube v1.22
@@ -678,9 +655,8 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["Impersonate-Uid"] = []string{"008"}
 			},
-			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
-			wantAuthorizerAttributes:           []authorizer.AttributesRecord{},
+			wantError:                `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: []authorizer.AttributesRecord{},
 		},
 	}
 	for _, tt := range tests {
@@ -830,11 +806,8 @@ func TestImpersonator(t *testing.T) {
 			// Create the client config that the impersonation server should use to talk to the Kube API server.
 			testKubeAPIServerKubeconfig := rest.Config{
 				Host:            testKubeAPIServer.URL,
-				BearerToken:     "some-service-account-token",
 				TLSClientConfig: rest.TLSClientConfig{CAData: tlsserver.TLSTestServerCA(testKubeAPIServer)},
-				BearerTokenFile: tt.kubeAPIServerClientBearerTokenFile,
 			}
-			clientOpts := []kubeclient.Option{kubeclient.WithConfig(&testKubeAPIServerKubeconfig)}
 
 			// Punch out just enough stuff to make New actually run without error.
 			recOpts := func(options *genericoptions.RecommendedOptions) {
@@ -873,7 +846,9 @@ func TestImpersonator(t *testing.T) {
 			}
 
 			// Create an impersonator.  Use an invalid port number to make sure our listener override works.
-			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, restConfigFunc, clientOpts, recOpts, recConfig)
+			cache := tokenclient.NewExpiringSingletonTokenCache()
+			cache.Set("some-service-account-token", 1*time.Hour)
+			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, restConfigFunc, cache, &testKubeAPIServerKubeconfig, recOpts, recConfig)
 			if len(tt.wantConstructionError) > 0 {
 				require.EqualError(t, constructionErr, tt.wantConstructionError)
 				require.Nil(t, runner)
@@ -922,7 +897,7 @@ func TestImpersonator(t *testing.T) {
 			client, err := kubeclient.New(kubeclient.WithConfig(clientKubeconfig))
 			require.NoError(t, err)
 
-			// The fake Kube API server knows how to to list namespaces, so make that request using the client
+			// The fake Kube API server knows how to list namespaces, so make that request using the client
 			// through the impersonator.
 			listResponse, err := client.Kubernetes.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 			if len(tt.wantError) > 0 {

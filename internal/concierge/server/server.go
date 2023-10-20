@@ -38,6 +38,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/credentialrequest"
+	"go.pinniped.dev/internal/tokenclient"
 )
 
 // App is an object that represents the pinniped-concierge application.
@@ -136,6 +137,8 @@ func (a *App) runServer(ctx context.Context) error {
 	// injected suffix).
 	scheme, loginGV, identityGV := conciergescheme.New(*cfg.APIGroupSuffix)
 
+	impersonationProxyTokenCache := tokenclient.NewExpiringSingletonTokenCache()
+
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
 	buildControllers, err := controllermanager.PrepareControllers(
@@ -154,6 +157,7 @@ func (a *App) runServer(ctx context.Context) error {
 			AuthenticatorCache:               authenticators,
 			// This port should be safe to cast because the config reader already validated it.
 			ImpersonationProxyServerPort: int(*cfg.ImpersonationProxyServerPort),
+			ImpersonationProxyTokenCache: impersonationProxyTokenCache,
 		},
 	)
 	if err != nil {
@@ -180,6 +184,23 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
 	}
+
+	// Configure a token client that retrieves relatively short-lived tokens from the API server.
+	// It uses a k8s client without leader election because all pods need tokens.
+	// This k8s client should not be reused for other purposes.
+	// The token client will retrieve tokens in the background for the lifetime of the concierge process,
+	// whether the impersonation proxy is enabled or not.
+	oneDayInSeconds := int64(24 * 60 * 60)
+	k8sClient, err := kubeclient.New()
+	if err != nil {
+		return fmt.Errorf("could not create default kubernetes client: %w", err)
+	}
+	aggregatedAPIServerConfig.ExtraConfig.TokenClient = tokenclient.New(
+		cfg.NamesConfig.ImpersonationProxyServiceAccount,
+		k8sClient.Kubernetes.CoreV1().ServiceAccounts(podInfo.Namespace),
+		impersonationProxyTokenCache.Set,
+		plog.New(),
+		tokenclient.WithExpirationSeconds(oneDayInSeconds))
 
 	// Complete the aggregated API server config and make a server instance.
 	server, err := aggregatedAPIServerConfig.Complete().New()

@@ -161,6 +161,12 @@ func validateNames(names *NamesConfigSpec) error {
 	if names.AgentServiceAccount == "" {
 		missingNames = append(missingNames, "agentServiceAccount")
 	}
+	if names.ImpersonationProxyServiceAccount == "" {
+		missingNames = append(missingNames, "impersonationProxyServiceAccount")
+	}
+	if names.ImpersonationProxyLegacySecret == "" {
+		missingNames = append(missingNames, "impersonationProxyLegacySecret")
+	}
 	if len(missingNames) > 0 {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
 	}

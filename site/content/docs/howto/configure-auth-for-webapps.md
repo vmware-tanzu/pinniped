@@ -46,11 +46,16 @@ framework (e.g. Spring, Rails, Django, etc.) to implement authentication. The Su
 - Clients must use `query` as the
   [response_mode](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest) at the authorization endpoint,
   or not specify the `response_mode` param, which defaults to `query`.
-- If the Supervisor's FederationDomain was configured with explicit `identityProviders` in its spec, then the
-  client must send an extra parameter on the initial authorization request to indicate which identity provider
-  the user would like to use when authenticating. This parameter is called `pinniped_idp_name` and the value
+- The client may optionally send an extra parameter on the initial authorization request to indicate which identity
+  provider the user would like to use when authenticating. This parameter is called `pinniped_idp_name` and the value
   of the parameter should be set to the `displayName` of the identity provider as it was configured on the
-  FederationDomain.
+  FederationDomain. When this parameter is not included, and when the FederationDomain was configured with explicit
+  `identityProviders` in its spec, then the user will be prompted to choose an identity provider from the list of
+  available identity providers by an interstitial web page during their login flow. The value of this parameter
+  should be considered a hint and not a hard requirement, since the user could choose to alter or remove this
+  query param from the authorization URL, and thus could use a different available identity provider from the
+  FederationDomain to log in. This is not a security concern, since any successful login using any available identity
+  provider from the FederationDomain's configuration is a valid and allowed user.
 
 Most web application frameworks offer all these capabilities in their OAuth2/OIDC libraries.
 

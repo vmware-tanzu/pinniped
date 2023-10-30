@@ -37,6 +37,7 @@ const (
 	AuthorizationEndpointPath = "/oauth2/authorize"
 	TokenEndpointPath         = "/oauth2/token" //nolint:gosec // ignore lint warning that this is a credential
 	CallbackEndpointPath      = "/callback"
+	ChooseIDPEndpointPath     = "/choose_identity_provider"
 	JWKSEndpointPath          = "/jwks.json"
 	PinnipedIDPsPathV1Alpha1  = "/v1alpha1/pinniped_identity_providers"
 	PinnipedLoginPath         = "/login"

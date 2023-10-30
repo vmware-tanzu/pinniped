@@ -15,6 +15,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/dynamiccodec"
 	"go.pinniped.dev/internal/federationdomain/endpoints/auth"
 	"go.pinniped.dev/internal/federationdomain/endpoints/callback"
+	"go.pinniped.dev/internal/federationdomain/endpoints/chooseidp"
 	"go.pinniped.dev/internal/federationdomain/endpoints/discovery"
 	"go.pinniped.dev/internal/federationdomain/endpoints/idpdiscovery"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
@@ -150,6 +151,11 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			upstreamStateEncoder,
 			csrfCookieEncoder,
 			issuerURL+oidc.CallbackEndpointPath,
+		)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.ChooseIDPEndpointPath)] = chooseidp.NewHandler(
+			issuerURL+oidc.AuthorizationEndpointPath,
+			idpLister,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(

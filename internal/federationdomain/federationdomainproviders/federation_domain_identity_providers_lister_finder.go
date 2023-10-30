@@ -36,6 +36,9 @@ type FederationDomainIdentityProvidersFinderI interface {
 		*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
 		error,
 	)
+
+	HasDefaultIDP() bool
+	IDPCount() int
 }
 
 type FederationDomainIdentityProvidersListerI interface {
@@ -71,8 +74,10 @@ type FederationDomainIdentityProvidersListerFinder struct {
 // federationDomainIssuer parameter's IdentityProviders() list must have a unique DisplayName.
 // Note that a single underlying IDP UID may be used by multiple FederationDomainIdentityProvider in the parameter.
 // The wrapped lister should contain all valid upstream providers that are defined in the Supervisor, and is expected to
-// be thread-safe and to change its contents over time. The FederationDomainIdentityProvidersListerFinder will filter out the
-// ones that don't apply to this federation domain.
+// be thread-safe and to change its contents over time. (Note that it should not contain any invalid or unready identity
+// providers because the controllers that fill this cache should not put invalid or unready providers into the cache.)
+// The FederationDomainIdentityProvidersListerFinder will filter out the ones that don't apply to this federation
+// domain.
 func NewFederationDomainIdentityProvidersListerFinder(
 	federationDomainIssuer *FederationDomainIssuer,
 	wrappedLister idplister.UpstreamIdentityProvidersLister,
@@ -97,6 +102,10 @@ func NewFederationDomainIdentityProvidersListerFinder(
 		idpDisplayNamesToResourceUIDsMap: idpDisplayNamesToResourceUIDsMap,
 		allowedIDPResourceUIDs:           allowedResourceUIDs,
 	}
+}
+
+func (u *FederationDomainIdentityProvidersListerFinder) IDPCount() int {
+	return len(u.GetOIDCIdentityProviders()) + len(u.GetLDAPIdentityProviders()) + len(u.GetActiveDirectoryIdentityProviders())
 }
 
 // FindUpstreamIDPByDisplayName selects either an OIDC, LDAP, or ActiveDirectory IDP, or returns an error.
@@ -131,6 +140,10 @@ func (u *FederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplay
 	return nil, nil, fmt.Errorf("identity provider not available: %q", upstreamIDPDisplayName)
 }
 
+func (u *FederationDomainIdentityProvidersListerFinder) HasDefaultIDP() bool {
+	return u.defaultIdentityProvider != nil
+}
+
 // FindDefaultIDP works like FindUpstreamIDPByDisplayName, but finds the default IDP instead of finding by name.
 // If there is no default IDP for this federation domain, then FindDefaultIDP will return an error.
 // This can be used to handle the backwards compatibility mode where an authorization request could be made
@@ -141,7 +154,7 @@ func (u *FederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (
 	*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
 	error,
 ) {
-	if u.defaultIdentityProvider == nil {
+	if !u.HasDefaultIDP() {
 		return nil, nil, fmt.Errorf("identity provider not found: this federation domain does not have a default identity provider")
 	}
 	return u.FindUpstreamIDPByDisplayName(u.defaultIdentityProvider.DisplayName)

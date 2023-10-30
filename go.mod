@@ -14,11 +14,11 @@ require (
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/coreos/go-semver v0.3.1
-	github.com/creack/pty v1.1.18
+	github.com/creack/pty v1.1.20
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.3
 	github.com/go-ldap/ldap/v3 v3.4.6
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.2.4
 	github.com/gofrs/flock v0.8.1
@@ -26,7 +26,7 @@ require (
 	github.com/google/cel-go v0.18.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.4.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
@@ -38,7 +38,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.19.10
+	github.com/tdewolff/minify/v2 v2.20.1
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/net v0.17.0
@@ -81,7 +81,7 @@ require (
 	github.com/ecordell/optgen v0.0.6 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
@@ -132,7 +132,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.6.8 // indirect
+	github.com/tdewolff/parse/v2 v2.7.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.9 // indirect

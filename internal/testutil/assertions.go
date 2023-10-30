@@ -99,6 +99,19 @@ func RequireSecurityHeadersWithLoginPageCSPs(t *testing.T, response *httptest.Re
 	requireSecurityHeaders(t, response)
 }
 
+func RequireSecurityHeadersWithIDPChooserPageCSPs(t *testing.T, response *httptest.ResponseRecorder) {
+	// Loosely confirm that the unique CSPs needed for the login page were used.
+	cspHeader := response.Header().Get("Content-Security-Policy")
+	require.Contains(t, cspHeader, "style-src '")  // loose assertion
+	require.Contains(t, cspHeader, "script-src '") // loose assertion
+	require.Contains(t, cspHeader, "style-src '")  // loose assertion
+	require.Contains(t, cspHeader, "img-src data:")
+	require.NotContains(t, cspHeader, "connect-src *") // only needed by form_post page
+
+	// Also require all the usual security headers.
+	requireSecurityHeaders(t, response)
+}
+
 func RequireSecurityHeadersWithoutCustomCSPs(t *testing.T, response *httptest.ResponseRecorder) {
 	// Confirm that the unique CSPs needed for the form_post or login page were NOT used.
 	cspHeader := response.Header().Get("Content-Security-Policy")

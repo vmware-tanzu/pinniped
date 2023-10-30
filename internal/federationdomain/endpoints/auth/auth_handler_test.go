@@ -732,6 +732,25 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
+			name: "with multiple IDPs available, request does not choose which IDP to use",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPath, // does not include pinniped_idp_name param
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            "", // there should not be a CSRF cookie set on the response
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/choose_identity_provider", happyGetRequestQueryMap),
+			wantUpstreamStateParamInLocationHeader: false, // it should copy the params of the original request, not add a new state param
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
 			name: "with multiple IDPs available, request chooses to use OIDC browser flow",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().
 				WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
@@ -3302,6 +3321,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: plainContentType,
 			wantBodyString:  `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. 'pinniped_idp_name' param error: did not find IDP with name 'some-ldap-idp'"}`,
+		},
+		{
+			name:                 "with multiple IDPs, when using browserless flow, when pinniped_idp_name param is not specified, should be an error (browerless flows do not use IDP chooser page)",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().WithAllowPasswordGrant(true).Build()),
+			method:               http.MethodGet,
+			path:                 happyGetRequestPath,
+			customUsernameHeader: ptr.To(oidcUpstreamUsername),
+			customPasswordHeader: ptr.To(oidcUpstreamPassword),
+			wantStatus:           http.StatusBadRequest,
+			wantContentType:      plainContentType,
+			wantBodyString:       `{"error":"invalid_request","error_description":"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. 'pinniped_idp_name' param error: identity provider not found: this federation domain does not have a default identity provider"}`,
 		},
 		{
 			name:            "post with invalid form in the body",

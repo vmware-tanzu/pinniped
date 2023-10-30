@@ -467,6 +467,14 @@ type TestFederationDomainIdentityProvidersListerFinder struct {
 	defaultIDPDisplayName                    string
 }
 
+func (t *TestFederationDomainIdentityProvidersListerFinder) HasDefaultIDP() bool {
+	return t.defaultIDPDisplayName != ""
+}
+
+func (t *TestFederationDomainIdentityProvidersListerFinder) IDPCount() int {
+	return len(t.upstreamOIDCIdentityProviders) + len(t.upstreamLDAPIdentityProviders) + len(t.upstreamActiveDirectoryIdentityProviders)
+}
+
 func (t *TestFederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider {
 	fdIDPs := make([]*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, len(t.upstreamOIDCIdentityProviders))
 	for i, testIDP := range t.upstreamOIDCIdentityProviders {

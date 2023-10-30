@@ -184,38 +184,38 @@ func (b *Browser) Title(t *testing.T) string {
 	return title
 }
 
-func (b *Browser) WaitForVisibleElements(t *testing.T, selectors ...string) {
+func (b *Browser) WaitForVisibleElements(t *testing.T, cssSelectors ...string) {
 	t.Helper()
-	for _, s := range selectors {
-		b.runWithTimeout(t, b.timeout(), chromedp.WaitVisible(s))
+	for _, s := range cssSelectors {
+		b.runWithTimeout(t, b.timeout(), chromedp.WaitVisible(s, chromedp.ByQuery))
 	}
 }
 
-func (b *Browser) TextOfFirstMatch(t *testing.T, selector string) string {
+func (b *Browser) TextOfFirstMatch(t *testing.T, cssSelector string) string {
 	t.Helper()
 	var text string
-	b.runWithTimeout(t, b.timeout(), chromedp.Text(selector, &text, chromedp.NodeVisible))
+	b.runWithTimeout(t, b.timeout(), chromedp.Text(cssSelector, &text, chromedp.NodeVisible, chromedp.ByQuery))
 	return text
 }
 
-func (b *Browser) AttrValueOfFirstMatch(t *testing.T, selector string, attributeName string) string {
+func (b *Browser) AttrValueOfFirstMatch(t *testing.T, cssSelector string, attributeName string) string {
 	t.Helper()
 	var value string
 	var ok bool
-	b.runWithTimeout(t, b.timeout(), chromedp.AttributeValue(selector, attributeName, &value, &ok))
-	require.Truef(t, ok, "did not find attribute named %q on first element returned by selector %q", attributeName, selector)
+	b.runWithTimeout(t, b.timeout(), chromedp.AttributeValue(cssSelector, attributeName, &value, &ok, chromedp.ByQuery))
+	require.Truef(t, ok, "did not find attribute named %q on first element returned by selector %q", attributeName, cssSelector)
 	return value
 }
 
-func (b *Browser) SendKeysToFirstMatch(t *testing.T, selector string, runesToType string) {
+func (b *Browser) SendKeysToFirstMatch(t *testing.T, cssSelector string, runesToType string) {
 	t.Helper()
-	b.runWithTimeout(t, b.timeout(), chromedp.SendKeys(selector, runesToType, chromedp.NodeVisible, chromedp.NodeEnabled))
+	b.runWithTimeout(t, b.timeout(), chromedp.SendKeys(cssSelector, runesToType, chromedp.NodeVisible, chromedp.NodeEnabled, chromedp.ByQuery))
 }
 
-func (b *Browser) ClickFirstMatch(t *testing.T, selector string) string {
+func (b *Browser) ClickFirstMatch(t *testing.T, cssSelector string) string {
 	t.Helper()
 	var text string
-	b.runWithTimeout(t, b.timeout(), chromedp.Click(selector, chromedp.NodeVisible, chromedp.NodeEnabled))
+	b.runWithTimeout(t, b.timeout(), chromedp.Click(cssSelector, chromedp.NodeVisible, chromedp.NodeEnabled, chromedp.ByQuery))
 	return text
 }
 

@@ -14,7 +14,7 @@ require (
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/coreos/go-semver v0.3.1
-	github.com/creack/pty v1.1.18
+	github.com/creack/pty v1.1.20
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.3
 	github.com/go-ldap/ldap/v3 v3.4.6

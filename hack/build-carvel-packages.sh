@@ -275,7 +275,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ${SECRET_NAME}""
+  name: "${SECRET_NAME}"
   namespace: "${NAMESPACE}"
 stringData:
   values.yml: |

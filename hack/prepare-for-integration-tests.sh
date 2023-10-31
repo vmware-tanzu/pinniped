@@ -571,6 +571,9 @@ log_note "You can rerun this script to redeploy local production code changes wh
 log_note
 log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
-# TODO: we should put an if statement around this line, and add the env var (PINNIPED_USE_LOCAL_KIND_REGISTRY=1) if necessary.
-log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
+  log_note "When you're finished, use 'PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/kind-down.sh' to tear down the cluster."
+else
+  log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
+fi
 log_note

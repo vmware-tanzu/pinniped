@@ -1,2 +1,3 @@
 config/
 schema-openapi.yml
+vendir.lock.yml

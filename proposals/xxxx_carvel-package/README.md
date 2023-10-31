@@ -100,9 +100,9 @@ spec:
       # Constraints may be used to specify an exact version of the package    
       constraints: "0.25.0"  
       # Alternatively, a constraint can be based on a semver range and can 
-      # specify multiple acceptible versions of the software.  In this case, 
+      # specify multiple acceptable versions of the software.  In this case, 
       # the Package will automatically upgrade to new versions when they become
-      # available, for example, when a new verison of the PackageRepository is 
+      # available, for example, when a new version of the PackageRepository is 
       # deployed containing new versions of the Packages.
       constraints: ">0.25.0"  
 ```
@@ -167,7 +167,7 @@ Optionally we can:
 
 #### New Dependencies
 
-The Carvel toolset is not strickly a dependency for Pinniped itself.  This proposal is an 
+The Carvel toolset is not strictly a dependency for Pinniped itself.  This proposal is an 
 optional method for delivering the Pinniped software to a kubernetes cluster.  Therefore, `kapp`, 
 `kapp-controller`, and the custom resources such as `PackageRepository`, `Package`, `PackageMetadata`,
 `PackageInstall` as well as `imgpkg`, `vendir` and `ytt` are all optional dependencies for a 
@@ -190,13 +190,13 @@ is very helpful when attempting to understand the state of a complex multi-compo
 #### Security Considerations
 
 Carvel is a toolset separate from Pinniped.  This feature is optional, users who choose to use 
-Carvel should assess Carvel for its risks and treadeoffs. 
+Carvel should assess Carvel for its risks and tradeoffs. 
 
 #### Usability Considerations
 
 As of today the `./deploy` directory of Pinniped is implemented via the use of a subset of the 
 Carvel toolchain, namely, `ytt`.  However, it is implemented in such a way that consumers of Pinniped
-have choice, they may opt-in to the use of the Carvel toolchain, or simply `kubectl apply -f` our 
+have choice, they may opt in to the use of the Carvel toolchain, or simply `kubectl apply -f` our 
 pre-rendered yaml files, there is no requirement to use the Carvel toolchain.
 
 This feature serves the community users who have deeply adopted Carvel into their management, such that

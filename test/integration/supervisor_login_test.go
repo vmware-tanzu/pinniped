@@ -235,7 +235,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		createIDP func(t *testing.T) string
 
 		// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
-		// Also return the displayName of the IDP that should be used during authentication.
+		// Also return the displayName of the IDP that should be used during authentication (or empty string for no IDP name in the auth request).
 		// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
 		federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
 
@@ -1427,6 +1427,51 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+		},
+		{
+			name:      "oidc upstream with downstream dynamic client happy path, requesting all scopes, using the IDP chooser page",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "my oidc idp"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: displayName,
+							ObjectRef: v1.TypedLocalObjectReference{
+								APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+								Kind:     "OIDCIdentityProvider",
+								Name:     idpName,
+							},
+						},
+					},
+					"" // return an empty string be used as the pinniped_idp_name param's value in the authorize request,
+				// which should cause the authorize endpoint to show the IDP chooser page
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.OIDCClientPhaseReady)
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDCWithIDPChooserPage,
+			wantDownstreamIDTokenSubjectToMatch: "^" +
+				regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer) +
+				regexp.QuoteMeta("?idpName="+url.QueryEscape("my oidc idp")) +
+				regexp.QuoteMeta("&sub=") + ".+" +
+				"$",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
@@ -2727,9 +2772,8 @@ func requestAuthorizationAndExpectImmediateRedirectToCallback(t *testing.T, _, d
 	browser.WaitForURL(t, callbackURLPattern)
 }
 
-func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+func openBrowserAndNavigateToAuthorizeURL(t *testing.T, downstreamAuthorizeURL string, httpClient *http.Client) *browsertest.Browser {
 	t.Helper()
-	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
 	defer cancelFunc()
@@ -2742,13 +2786,45 @@ func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstrea
 	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
 	browser.Navigate(t, downstreamAuthorizeURL)
 
+	return browser
+}
+
+func loginToUpstreamOIDCAndWaitForCallback(t *testing.T, b *browsertest.Browser, downstreamCallbackURL string) {
+	t.Helper()
+	env := testlib.IntegrationEnv(t)
+
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
+	browsertest.LoginToUpstreamOIDC(t, b, env.SupervisorUpstreamOIDC)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
-	browser.WaitForURL(t, callbackURLPattern)
+	b.WaitForURL(t, callbackURLPattern)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+	t.Helper()
+
+	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+
+	loginToUpstreamOIDCAndWaitForCallback(t, browser, downstreamCallbackURL)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowOIDCWithIDPChooserPage(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+	t.Helper()
+
+	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+
+	t.Log("waiting for redirect to IDP chooser page")
+	browser.WaitForURL(t, regexp.MustCompile(fmt.Sprintf(`\A%s/choose_identity_provider.*\z`, downstreamIssuer)))
+
+	t.Log("waiting for any IDP chooser button to be visible")
+	browser.WaitForVisibleElements(t, "button")
+
+	t.Log("clicking the first IDP chooser button")
+	browser.ClickFirstMatch(t, "button")
+
+	loginToUpstreamOIDCAndWaitForCallback(t, browser, downstreamCallbackURL)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowLDAP(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client) {

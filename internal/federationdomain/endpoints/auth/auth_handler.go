@@ -89,6 +89,19 @@ func NewHandler(
 		// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.
 		// The Pinniped CLI has been sending these params since v0.9.0.
 		idpNameQueryParamValue := r.Form.Get(oidcapi.AuthorizeUpstreamIDPNameParamName)
+
+		// Check if we are in a special case where we should inject an interstitial page to ask the user
+		// which IDP they would like to use.
+		if shouldShowIDPChooser(idpFinder, idpNameQueryParamValue, requestedBrowserlessFlow) {
+			// Redirect to the IDP chooser page with all the same query/form params. When the user chooses an IDP,
+			// it will redirect back to here with all the same params again, with the pinniped_idp_name param added.
+			http.Redirect(w, r,
+				fmt.Sprintf("%s%s?%s", downstreamIssuer, oidc.ChooseIDPEndpointPath, r.Form.Encode()),
+				http.StatusSeeOther,
+			)
+			return nil
+		}
+
 		oidcUpstream, ldapUpstream, err := chooseUpstreamIDP(idpNameQueryParamValue, idpFinder)
 		if err != nil {
 			oidc.WriteAuthorizeError(r, w,
@@ -151,6 +164,20 @@ func NewHandler(
 	// be used to post certain errors back to the CLI from this handler's response, so allow the form_post
 	// page's CSS and JS to run.
 	return securityheader.WrapWithCustomCSP(handler, formposthtml.ContentSecurityPolicy())
+}
+
+func shouldShowIDPChooser(
+	idpFinder federationdomainproviders.FederationDomainIdentityProvidersFinderI,
+	idpNameQueryParamValue string,
+	requestedBrowserlessFlow bool,
+) bool {
+	clientDidNotRequestSpecificIDP := len(idpNameQueryParamValue) == 0
+	clientRequestedBrowserBasedFlow := !requestedBrowserlessFlow
+	inBackwardsCompatMode := idpFinder.HasDefaultIDP()
+	federationDomainSpecHasSomeValidIDPs := idpFinder.IDPCount() > 0
+
+	return clientDidNotRequestSpecificIDP && clientRequestedBrowserBasedFlow &&
+		!inBackwardsCompatMode && federationDomainSpecHasSomeValidIDPs
 }
 
 func handleAuthRequestForLDAPUpstreamCLIFlow(

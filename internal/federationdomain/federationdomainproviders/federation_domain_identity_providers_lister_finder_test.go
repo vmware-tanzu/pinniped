@@ -99,7 +99,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	fdIssuerWithIDPwithLostUID, err := NewFederationDomainIssuer(fakeIssuerURL, []*FederationDomainIdentityProvider{
+	fdIssuerWithIDPWithLostUID, err := NewFederationDomainIssuer(fakeIssuerURL, []*FederationDomainIdentityProvider{
 		{DisplayName: "my-idp", UID: "you-cant-find-my-uid"},
 	})
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			findIDPByDisplayName: "my-idp",
 			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithIDPwithLostUID,
+			federationDomainIssuer: fdIssuerWithIDPWithLostUID,
 			wantError:              `identity provider not available: "my-idp"`,
 		},
 	}
@@ -263,10 +263,10 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			if tt.wantOIDCIDPByDisplayName != nil {
-				require.Equal(t, foundOIDCIDP, tt.wantOIDCIDPByDisplayName)
+				require.Equal(t, tt.wantOIDCIDPByDisplayName, foundOIDCIDP)
 			}
 			if tt.wantLDAPIDPByDisplayName != nil {
-				require.Equal(t, foundLDAPIDP, tt.wantLDAPIDPByDisplayName)
+				require.Equal(t, tt.wantLDAPIDPByDisplayName, foundLDAPIDP)
 			}
 		})
 	}
@@ -339,10 +339,10 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			if tt.wantDefaultOIDCIDP != nil {
-				require.Equal(t, foundOIDCIDP, tt.wantDefaultOIDCIDP)
+				require.Equal(t, tt.wantDefaultOIDCIDP, foundOIDCIDP)
 			}
 			if tt.wantDefaultLDAPIDP != nil {
-				require.Equal(t, foundLDAPIDP, tt.wantDefaultLDAPIDP)
+				require.Equal(t, tt.wantDefaultLDAPIDP, foundLDAPIDP)
 			}
 		})
 	}
@@ -406,7 +406,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
 			idps := subject.GetOIDCIdentityProviders()
 
-			require.Equal(t, idps, tt.wantIDPs)
+			require.Equal(t, tt.wantIDPs, idps)
 		})
 	}
 
@@ -467,7 +467,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
 			idps := subject.GetLDAPIdentityProviders()
 
-			require.Equal(t, idps, tt.wantIDPs)
+			require.Equal(t, tt.wantIDPs, idps)
 		})
 	}
 
@@ -529,7 +529,110 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
 			idps := subject.GetActiveDirectoryIdentityProviders()
 
-			require.Equal(t, idps, tt.wantIDPs)
+			require.Equal(t, tt.wantIDPs, idps)
+		})
+	}
+
+	testIDPCount := []struct {
+		name                   string
+		wrappedLister          idplister.UpstreamIdentityProvidersLister
+		federationDomainIssuer *FederationDomainIssuer
+		wantCount              int
+	}{
+		{
+			name: "IDPCount when there are none to be found",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			wantCount:              0,
+		},
+		{
+			name: "IDPCount when there are various types of IDP to be found",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(myOIDCIDP1).
+				WithOIDC(myOIDCIDP2).
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+					WithName("my-oidc-idp-that-isnt-in-fd-issuer").
+					WithResourceUID("my-oidc-idp-that-isnt-in-fd-issuer").
+					Build()).
+				WithLDAP(myLDAPIDP1).
+				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+					WithName("my-ldap-idp-that-isnt-in-fd-issuer").
+					WithResourceUID("my-ldap-idp-that-isnt-in-fd-issuer").
+					Build()).
+				WithActiveDirectory(myADIDP1).
+				WithActiveDirectory(myADIDP2).
+				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+					WithName("my-ad-idp-that-isnt-in-fd-issuer").
+					WithResourceUID("my-ad-idp-that-isnt-in-fd-issuer").
+					Build()).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			wantCount:              5,
+		},
+	}
+
+	for _, tt := range testIDPCount {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
+
+			require.Equal(t, tt.wantCount, subject.IDPCount())
+		})
+	}
+
+	testHasDefaultIDP := []struct {
+		name                   string
+		wrappedLister          idplister.UpstreamIdentityProvidersLister
+		federationDomainIssuer *FederationDomainIssuer
+		wantHasDefaultIDP      bool
+	}{
+		{
+			name: "HasDefaultIDP when there is an OIDC provider set as default",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(myDefaultOIDCIDP).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithDefaultOIDCIDP,
+			wantHasDefaultIDP:      true,
+		},
+		{
+			name: "HasDefaultIDP when there is an LDAP provider set as default",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithLDAP(myDefaultLDAPIDP).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithDefaultLDAPIDP,
+			wantHasDefaultIDP:      true,
+		},
+		{
+			name: "HasDefaultIDP when there is one set even if it cannot be found",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+					WithName("my-oidc-idp-that-isnt-in-fd-issuer").
+					WithResourceUID("my-oidc-idp-that-isnt-in-fd-issuer").
+					Build()).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithDefaultOIDCIDP,
+			wantHasDefaultIDP:      true,
+		},
+		{
+			name: "HasDefaultIDP when there is none set",
+			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			wantHasDefaultIDP:      false,
+		},
+	}
+
+	for _, tt := range testHasDefaultIDP {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
+
+			require.Equal(t, tt.wantHasDefaultIDP, subject.HasDefaultIDP())
 		})
 	}
 }

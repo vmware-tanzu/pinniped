@@ -123,6 +123,32 @@ func TestManager(t *testing.T) {
 			)
 		}
 
+		requirePinnipedIDPChooserRequestToBeHandled := func(requestIssuer string, expectedIDPNames []string) {
+			recorder := httptest.NewRecorder()
+
+			requiredParams := url.Values{
+				"client_id":     []string{"foo"},
+				"redirect_uri":  []string{"bar"},
+				"scope":         []string{"baz"},
+				"response_type": []string{"bat"},
+			}
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.ChooseIDPEndpointPath+"?"+requiredParams.Encode()))
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Minimal check to ensure that the right endpoint was called
+			r.Equal(http.StatusOK, recorder.Code, "unexpected response:", recorder)
+			r.Equal("text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
+			responseBody, err := io.ReadAll(recorder.Body)
+			r.NoError(err)
+			// Should have some buttons whose URLs include the pinniped_idp_name param.
+			r.Contains(string(responseBody), "<button ")
+			for _, expectedIDPName := range expectedIDPNames {
+				r.Contains(string(responseBody), fmt.Sprintf("pinniped_idp_name=%s", url.QueryEscape(expectedIDPName)))
+			}
+		}
+
 		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
 			recorder := httptest.NewRecorder()
 
@@ -376,6 +402,11 @@ func TestManager(t *testing.T) {
 			requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
+
+			requirePinnipedIDPChooserRequestToBeHandled(issuer1, []string{upstreamIDPDisplayName1, upstreamIDPDisplayName2})
+			requirePinnipedIDPChooserRequestToBeHandled(issuer2, []string{upstreamIDPDisplayName1, upstreamIDPDisplayName2})
+			requirePinnipedIDPChooserRequestToBeHandled(issuer1DifferentCaseHostname, []string{upstreamIDPDisplayName1, upstreamIDPDisplayName2})
+			requirePinnipedIDPChooserRequestToBeHandled(issuer2DifferentCaseHostname, []string{upstreamIDPDisplayName1, upstreamIDPDisplayName2})
 
 			authRequestParamsIDP1 := "?" + url.Values{
 				"pinniped_idp_name":     []string{upstreamIDPDisplayName1},

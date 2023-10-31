@@ -8,8 +8,7 @@ metadata:
 spec:
   refName: supervisor.pinniped.dev
   version: #@ data.values.version
-  releaseNotes: |
-        Initial release of the pinniped supervisor package, TODO: AUTOMATE THIS??
+  releaseNotes: #@ yaml.decode(data.values.releaseNotes)
   valuesSchema:
     openAPIv3: #@ yaml.decode(data.values.openapi)["components"]["schemas"]["dataValues"]
   template:

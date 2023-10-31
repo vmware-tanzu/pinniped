@@ -8,8 +8,7 @@ metadata:
 spec:
   refName: concierge.pinniped.dev
   version: #@ data.values.version
-  releaseNotes: |
-        Initial release of the pinniped concierge package, TODO: AUTOMATE THIS??
+  releaseNotes: #@ yaml.decode(data.values.releaseNotes)
   valuesSchema:
     openAPIv3: #@ yaml.decode(data.values.openapi)["components"]["schemas"]["dataValues"]
   template:

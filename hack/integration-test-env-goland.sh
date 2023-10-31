@@ -11,8 +11,7 @@ set -euo pipefail
 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-
-source "/tmp/integration-test-env"
+source /tmp/integration-test-env
 
 echo -n "PINNIPED_TEST_GOLAND_RUNNER=true;"
 

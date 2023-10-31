@@ -29,12 +29,12 @@ that:
 - Are pre-rendered into installable templates listed with each Pinniped release:
   - [v0.25.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0)
 - Can optionally be customized and rendered by a consumer of the Pinniped project by cloning down
-  the github repository, making changes to the `values.yaml` file and then rendered via `ytt`.
+  the Github repository, making changes to the `values.yaml` file and then rendering via `ytt`.
 
 
 ## Terminology / Concepts
 
-- `Carvel` is an open-source project that provides tools for managing software build, configuration
+- `Carvel` is an set of open-source projects that provide tools for managing software build, configuration
    and deployment on a Kubernetes cluster.  For more information [read the Carvel docs](https://carvel.dev/).
 - `kapp` is a Carvel provided CLI tool for deploying software onto a Kubernetes cluster. See 
    [the docs](https://carvel.dev/kapp/) for more information.

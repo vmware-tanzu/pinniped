@@ -122,7 +122,7 @@ do
     --file "${resource_config_destination_dir}" \
     --data-values-schema-inspect \
     --output openapi-v3 > \
-    "${resource_dir}/schema-openapi.yaml"
+    "${resource_dir}/schema-openapi.yml"
 
   log_note "Generating .imgpkg/images.yml for ${resource_name}..."
   mkdir -p "${resource_dir}/.imgpkg"

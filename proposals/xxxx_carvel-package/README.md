@@ -18,7 +18,7 @@ features described herein might have continued to evolve since.
 There are a number of tools available to the Kubernetes ecosystem for deploying complex software 
 to a Kubernetes cluster.  The Carvel toolchain provides a set of APIs, Custom Resources and CLI tools
 that can aid a user in the configuration and lifecycle management of software deployed to a cluster.
-We should enhance our deployment options by providing Carvel Packages for the `Suervisor` and `Concierge`
+We should enhance our deployment options by providing Carvel Packages for the Supervisor and Concierge
 that may be installed on a cluster configured with Carvel's `kapp-controller` to manage the software 
 on the cluster. 
 
@@ -26,7 +26,7 @@ on the cluster.
 
 The `./deploy` directory in the root of the Pinniped repository contains a set of `ytt` templates
 that:
-- Are pre-rendered into installable templates listed with each Pinniped relese:
+- Are pre-rendered into installable templates listed with each Pinniped release:
   - [v0.25.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.25.0)
 - Can optionally be customized and rendered by a consumer of the Pinniped project by cloning down
   the github repository, making changes to the `values.yaml` file and then rendered via `ytt`.
@@ -46,14 +46,14 @@ that:
   `Package`s on a cluster.  See [the docs](https://carvel.dev/kapp-controller/docs/v0.47.x/packaging/#package-repository)
    for more information.
 - `Package` is a custom resource that represents configuration in the form of metadata and OCI images
-   that may be used to deliver software onto a Kuberentes cluster. See [the docs](https://carvel.dev/kapp-controller/docs/v0.47.x/packaging/#package)
+   that may be used to deliver software onto a Kubernetes cluster. See [the docs](https://carvel.dev/kapp-controller/docs/v0.47.x/packaging/#package)
    for more information. 
 - `PackageMetadata` is a custom resource describing attributes for a `Package`.  See [the docs](https://carvel.dev/kapp-controller/docs/v0.47.x/packaging/#package-metadata)
    for more information.
 
 ## Proposal
 
-Allow Pinniped to be deployed onto a Kuberentes cluster through the mechanism of two Carvel `Packages`,
+Allow Pinniped to be deployed onto a Kubernetes cluster through the mechanism of two Carvel `Packages`,
 a Supervisor and a Concierge package. These may be delivered via a `PackageRepository` resource and installed
 via `PackageInstall` custom resources, and `Secret`s containing `Package` configuration.
 
@@ -68,7 +68,7 @@ kapp deploy --app pinniped-package-repository --file <pinniped-release-files>/pi
 
 Then developers responsible for deploying Supervisor and Concierge would create the 
 appropriate resources to successfully deploy the PackageInstall and Packages for both 
-`Supervisor` and `Concierge`:
+Supervisor and Concierge:
 
 ```bash 
 # create a Service account and RBAC for the PackageInstall 
@@ -88,7 +88,7 @@ The `PackageRepository` will contain a series of versions of each of the Package
 and Concierge.
 
 The `PackageInstall` files will contain `constraints` representing acceptable versions of both the 
-`Supervisor` and `Concierge. For example:
+Supervisor and Concierge. For example:
 
 ```yaml
 spec:  
@@ -129,11 +129,11 @@ method for deployment utilising Carvel APIs and tools.
 Upgrading Pinniped via the Carvel Package mechanism will look something like this:
 
 - We deliver a `PackageRepository` that lists:
-  - Pinniped `Supervisor` package at a number of versions (ex: 0.23.0,0.24.0,0.25.0, etc)
-  - Pinniped `Concierge` package at a number of versions (ex: 0.23.0,0.24.0,0.25.0, etc)
+  - Pinniped Supervisor package at a number of versions (ex: 0.23.0,0.24.0,0.25.0, etc)
+  - Pinniped Concierge package at a number of versions (ex: 0.23.0,0.24.0,0.25.0, etc)
 - The user installs the Pinniped `PackageRepository`.
 - The user creates:
-  - A `Supervisor` and `Concierge` `PackageInstall` Custom Resource (and `Secret`) with the following:
+  - A Supervisor and Concierge `PackageInstall` Custom Resource (and `Secret`) with the following:
 ```yaml
 spec:  
   packageRef:

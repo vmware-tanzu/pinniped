@@ -319,6 +319,9 @@ if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_aut
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null
+  # TODO: can we somehow not duplicate this code in the build-carvel.sh script as well?  Could this be read instead?
+  #  ytt --file ./<tmp_yaml_file> -- that could be shared???
+  # note we say this in the official docs:) https://pinniped.dev/docs/howto/install-concierge/
   ytt --file . \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" >"$manifest"
@@ -568,5 +571,6 @@ log_note "You can rerun this script to redeploy local production code changes wh
 log_note
 log_note "To delete the deployments, run:"
 log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
+# TODO: we should put an if statement around this line, and add the env var (PINNIPED_USE_LOCAL_KIND_REGISTRY=1) if necessary.
 log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
 log_note

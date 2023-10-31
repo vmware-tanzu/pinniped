@@ -275,7 +275,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: "${SECRET_NAME}"
+  name: ${SECRET_NAME}""
   namespace: "${NAMESPACE}"
 stringData:
   values.yml: |
@@ -283,23 +283,17 @@ stringData:
     image_repo: $registry_repo
     image_tag: $tag
 EOF
+# TODO: this could also be kubeclt create generic ${SECRET_NAME}" -n ${NAMESPACE} --from-file <templ file from integreation script>??
+#   the values.yml key may be a problem.  kubectl may use the file name as the key ("values.yaml")
+#   so if its created in a /tmp/concierge/values.yml file, then this could be fine.
+# if these are temp files
+# and if they are passed as arguments
+# then this duplication may go away!  we can likely loop and read the file and call it good.
+# kubectl create --file --dry-run | kubectl apply -f - => this may be necessary
 
 KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
 log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
 kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-
-test_username="test-username"
-test_groups="test-group-0,test-group-1"
-test_password="$(openssl rand -hex 16)"
-log_note "Creating test user '$test_username'..."
-kubectl create secret generic "$test_username" \
-  --namespace local-user-authenticator \
-  --from-literal=groups="$test_groups" \
-  --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
-  --dry-run=client \
-  --output yaml |
-  kubectl apply -f -
-
 
 
 # start concierge

@@ -3,7 +3,7 @@
 *0.0.0*
 
 # installation artifacts will be generated here
-deploy_carvel/deploy/
+deploy/
 
 # images.yml files contain specific SHAs of images
 concierge/.imgpkg/images.yml

@@ -298,7 +298,7 @@ EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
-    $alternate_deploy local-user-authenticator $tag $data_value_file
+    $alternate_deploy local-user-authenticator $tag $data_values_file
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null

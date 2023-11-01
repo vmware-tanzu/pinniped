@@ -63,7 +63,7 @@ alternate_deploy="undefined"
 alternate_deploy_supervisor="undefined"
 alternate_deploy_concierge="undefined"
 alternate_deploy_local_user_authenticator="undefined"
-post_install="undefined"
+pre_install="undefined"
 
 # supported variable style:
 #  --dockerfile-path ./foo.sh
@@ -149,13 +149,13 @@ while (("$#")); do
     alternate_deploy_local_user_authenticator=$1
     shift
     ;;
-  --post-install)
+  --pre-install)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
-      log_error "--post-install requires a script path to be specified"
+      log_error "--pre-install requires a script path to be specified"
       exit 1
     fi
-    post_install=$1
+    pre_install=$1
     shift
     ;;
   -*)
@@ -187,7 +187,7 @@ if [[ "$help" == "yes" ]]; then
   log_note "       --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
   log_note "       --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
   log_note "       --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
-  log_note "       --post-install:                                specify an post-install script"
+  log_note "       --pre-install:                                 specify an pre-install script such as a build script"
   exit 1
 fi
 
@@ -303,6 +303,19 @@ else
   log_note "Loading the app's container image into the kind cluster..."
   kind load docker-image "$registry_repo_tag" --name pinniped
 fi
+
+
+#
+# Call a pre-install script
+# simplifies passing the $tag which may be necessary if the current local build is to be
+# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
+# running it after the above also allows appending to the environment variable file
+if [ "$pre_install" != "undefined" ] ; then
+  log_note "The pre-install script will be called with $tag..."
+  $pre_install pre-install-script $tag
+fi
+
+
 #
 # Deploy local-user-authenticator
 #
@@ -432,15 +445,6 @@ else
   popd >/dev/null
 fi
 
-#
-# Call a post-install script
-# simplifies passing the $tag which may be necessary if the current local build is to be
-# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
-# running it after the above also allows appending to the environment variable file
-if [ "$post_install" != "undefined" ] ; then
-  log_note "The post-install script will be called with $tag..."
-  $post_install post-install-script $tag
-fi
 
 #
 # Test user for the authenticator

@@ -98,7 +98,7 @@ if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_u
 fi
 
 # Read the env vars output by hack/prepare-for-integration-tests.sh
-source "/tmp/integration-test-env"
+source /tmp/integration-test-env
 
 # Choose some filenames.
 root_ca_crt_path=root_ca.crt

@@ -29,7 +29,7 @@ fi
 
 
 use_kind_registry=""
-if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY}" != ""  ]]; then
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != ""  ]]; then
   echo "Adding local registry to Kind config."
   use_kind_registry="--file=${ROOT}/hack/lib/kind-config/kind-registry-overlay.yaml"
 fi
@@ -40,7 +40,7 @@ $(ytt ${use_kind_registry} ${use_contour_registry} --file=${ROOT}/hack/lib/kind-
 kind create cluster --config /tmp/kind-config.yaml --name pinniped
 
 
-if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY}" != "" ]]; then
+if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
   # connect the registry to the cluster network if not already connected
   if [ "$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")" = 'null' ]; then
     docker network connect "kind" "${reg_name}"

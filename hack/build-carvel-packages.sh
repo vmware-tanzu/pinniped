@@ -147,7 +147,7 @@ do
   ytt \
     --file "${resource_dir}/package-template.yml" \
     --data-value-file openapi="${resource_dir}/schema-openapi.yml" \
-    --data-value-file releaseNotes="release_notes.txt"
+    --data-value-file releaseNotes="deploy_carvel/release_notes.txt" \
     --data-value repo_host="${package_repo_prefix}-${resource_name}" \
     --data-value version="${pinniped_package_version}" > "${package_repository_dir}/${pinniped_package_version}.yml"
   cp "deploy_carvel/${resource_name}/metadata.yml" "${package_repository_dir}/metadata.yml"

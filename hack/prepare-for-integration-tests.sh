@@ -287,18 +287,21 @@ fi
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
+data_values_file="/tmp/pinniped-local-user-authenticator-ytt-config.yml"
+cat <<EOF > "$data_values_file"
+---
+image_repo: $registry_repo
+image_tag: $tag
+EOF
+
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
-    $alternate_deploy local-user-authenticator $tag
+    $alternate_deploy local-user-authenticator $tag $data_value_file
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null
-  # TODO: can we somehow not duplicate this code in the build-carvel.sh script as well?  Could this be read instead?
-  #  ytt --file ./<tmp_yaml_file> -- that could be shared???
-  # note we say this in the official docs:) https://pinniped.dev/docs/howto/install-concierge/
-  ytt --file . \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" >"$manifest"
+
+  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
 
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
@@ -338,24 +341,29 @@ service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
 
+data_values_file="/tmp/pinniped-supervisor-ytt-config.yml"
+cat <<EOF > "$data_values_file"
+---
+app_name: $supervisor_app_name
+namespace: $supervisor_namespace
+api_group_suffix: $api_group_suffix
+image_repo: $registry_repo
+image_tag: $tag
+log_level: $log_level
+custom_labels: $supervisor_custom_labels
+service_https_nodeport_port: $service_https_nodeport_port
+service_https_nodeport_nodeport: $service_https_nodeport_nodeport
+service_https_clusterip_port: $service_https_clusterip_port
+EOF
+
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
-    $alternate_deploy pinniped-supervisor $tag
+    $alternate_deploy pinniped-supervisor $tag $data_values_file
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
   pushd deploy/supervisor >/dev/null
-  ytt --file . \
-    --data-value "app_name=$supervisor_app_name" \
-    --data-value "namespace=$supervisor_namespace" \
-    --data-value "api_group_suffix=$api_group_suffix" \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" \
-    --data-value "log_level=$log_level" \
-    --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-    --data-value-yaml "service_https_nodeport_port=$service_https_nodeport_port" \
-    --data-value-yaml "service_https_nodeport_nodeport=$service_https_nodeport_nodeport" \
-    --data-value-yaml "service_https_clusterip_port=$service_https_clusterip_port" \
-    >"$manifest"
+
+  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
@@ -373,21 +381,27 @@ discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {p
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
 
+data_values_file="/tmp/pinniped-concierge-ytt-config.yml"
+cat <<EOF > "$data_values_file"
+---
+app_name: $concierge_app_name
+namespace: $concierge_namespace
+api_group_suffix: $api_group_suffix
+log_level: $log_level
+custom_labels: $concierge_custom_labels
+image_repo: $registry_repo
+image_tag: $tag
+discovery_url: $discovery_url
+EOF
+
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
-    $alternate_deploy pinniped-concierge $tag
+    $alternate_deploy pinniped-concierge $tag $data_values_file
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
   pushd deploy/concierge >/dev/null
-  ytt --file . \
-    --data-value "app_name=$concierge_app_name" \
-    --data-value "namespace=$concierge_namespace" \
-    --data-value "api_group_suffix=$api_group_suffix" \
-    --data-value "log_level=$log_level" \
-    --data-value-yaml "custom_labels=$concierge_custom_labels" \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" \
-    --data-value "discovery_url=$discovery_url" >"$manifest"
+
+  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
 
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.

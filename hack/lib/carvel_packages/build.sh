@@ -18,7 +18,7 @@
 #  hack/prepare-supervisor-on-kind.sh --oidc
 #
 # Example usage:
-#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_package/build.sh --alternate-deploy ./hack/lib/carvel_package/deploy.sh
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
 #
 set -euo pipefail
 
@@ -65,12 +65,12 @@ cd "${hack_lib_path}/../../" || exit 1
 app=${1:-"undefined"}
 tag=${2:-$(uuidgen)}
 
-# TODO: revise this note when done refactoring into two scripts
+
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
   log_error "Building the Carvel package requires configuring kind with a local registry."
   log_error "please set the environment variable PINNIPED_USE_LOCAL_KIND_REGISTRY"
   log_error "for example:"
-  log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh"
+  log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh"
   exit 1
 fi
 

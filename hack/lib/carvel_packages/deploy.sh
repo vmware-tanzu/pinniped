@@ -3,6 +3,23 @@
 # Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+#
+# This script can be used in conjunction with prepare-for-integration-tests.sh.
+# When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value,
+# the integration tests script will create a local docker registry and configure kind to use the registry
+# and will build the Pinniped binary and container image.
+# This script will then create Carvel Packages for supervisor,concierge and local-user-authenticator.
+# It will also create a Carvel PackageRepository.
+# The PackageRepository will be installed on the kind cluster, then PackageInstall resources
+# will be created to deploy an instance of each of the packages on the cluster.
+# Once this script has completed, Pinniped can be interacted with as if it had been deployed in the usual way,
+# for example by running tests or by preparing supervisor for manual interactions:
+#  source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration -run  /TestE2EFullIntegration_Browser
+#  hack/prepare-supervisor-on-kind.sh --oidc
+#
+# Example usage:
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
+#
 set -euo pipefail
 
 #
@@ -36,7 +53,8 @@ function check_dependency() {
   fi
 }
 
-
+# this script is best invoked from the root directory
+# it is designed to be passed as --pre-install flag to hack/prepare-for-integration-tests.sh
 hack_lib_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$hack_lib_path/../../" || exit 1
 
@@ -47,12 +65,12 @@ cd "$hack_lib_path/../../" || exit 1
 app=${1:-"undefined"}
 tag=${2:-$(uuidgen)}
 
-# TODO: revise this note when done refactoring into two scripts
+
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
   log_error "Building the Carvel package requires configuring kind with a local registry."
   log_error "please set the environment variable PINNIPED_USE_LOCAL_KIND_REGISTRY"
   log_error "for example:"
-  log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh"
+  log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh"
   exit 1
 fi
 

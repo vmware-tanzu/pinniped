@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -22,18 +22,41 @@ import (
 // contextKey type is unexported to prevent collisions.
 type contextKey int
 
-const zapOverridesKey contextKey = iota
+const testOverridesContextKey contextKey = iota
 
-func TestZapOverrides(ctx context.Context, t *testing.T, w io.Writer, f func(*zap.Config), opts ...zap.Option) context.Context {
+type testOverrides struct {
+	t         *testing.T
+	w         io.Writer
+	f         func(*zap.Config)
+	fakeClock *clocktesting.FakeClock
+	opts      []zap.Option
+}
+
+// AddZapOverridesToContext adds Zap (and klog/textlogger) overrides to the context.
+// This is done so that production code can read these values for test overrides.
+// Do not pass zap.WithClock in opts since that will be constructed for you from fakeClock.
+func AddZapOverridesToContext(
+	ctx context.Context,
+	t *testing.T,
+	w io.Writer,
+	f func(*zap.Config),
+	fakeClock *clocktesting.FakeClock,
+	opts ...zap.Option,
+) context.Context {
 	t.Helper() // discourage use outside of tests
+	require.NotNil(t, fakeClock, "fakeClock is required")
+
+	opts = append(opts, zap.WithClock(ZapClock(fakeClock)))
 
 	overrides := &testOverrides{
-		t:    t,
-		w:    w,
-		f:    f,
-		opts: opts,
+		t:         t,
+		w:         w,
+		f:         f,
+		fakeClock: fakeClock,
+		opts:      opts,
 	}
-	return context.WithValue(ctx, zapOverridesKey, overrides)
+
+	return context.WithValue(ctx, testOverridesContextKey, overrides)
 }
 
 func TestLogger(t *testing.T, w io.Writer) Logger {
@@ -53,7 +76,7 @@ func TestZapr(t *testing.T, w io.Writer) logr.Logger {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	ctx = TestZapOverrides(ctx, t, w,
+	ctx = AddZapOverridesToContext(ctx, t, w,
 		func(config *zap.Config) {
 			config.Level = zap.NewAtomicLevelAt(math.MinInt8) // log everything during tests
 
@@ -66,8 +89,8 @@ func TestZapr(t *testing.T, w io.Writer) logr.Logger {
 				enc.AppendString(trimmed + funcEncoder(caller))
 			}
 		},
-		zap.WithClock(ZapClock(clocktesting.NewFakeClock(now))), // have the clock be static during tests
-		zap.AddStacktrace(nopLevelEnabler{}),                    // do not log stacktraces
+		clocktesting.NewFakeClock(now),       // have the clock be static during tests
+		zap.AddStacktrace(nopLevelEnabler{}), // do not log stacktraces
 	)
 
 	// there is no buffering so we can ignore flush
@@ -111,10 +134,3 @@ var _ zapcore.LevelEnabler = nopLevelEnabler{}
 type nopLevelEnabler struct{}
 
 func (nopLevelEnabler) Enabled(_ zapcore.Level) bool { return false }
-
-type testOverrides struct {
-	t    *testing.T
-	w    io.Writer
-	f    func(*zap.Config)
-	opts []zap.Option
-}

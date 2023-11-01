@@ -18,7 +18,6 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 	clocktesting "k8s.io/utils/clock/testing"
 )
 
@@ -30,12 +29,12 @@ func TestFormat(t *testing.T) {
 
 	scanner := bufio.NewScanner(&buf)
 
-	now, err := time.Parse(time.RFC3339Nano, "2022-11-21T23:37:26.953313745Z")
+	fakeNow, err := time.Parse(time.RFC3339Nano, "2022-11-21T23:37:26.953313745Z")
 	require.NoError(t, err)
-	fakeClock := clocktesting.NewFakeClock(now)
-	nowStr := now.Local().Format(time.RFC1123)
+	fakeClock := clocktesting.NewFakeClock(fakeNow)
+	nowStr := fakeNow.Local().Format(time.RFC1123)
 
-	ctx = TestZapOverrides(ctx, t, &buf, nil, zap.WithClock(ZapClock(fakeClock)))
+	ctx = AddZapOverridesToContext(ctx, t, &buf, nil, fakeClock)
 
 	err = ValidateAndSetLogLevelAndFormatGlobally(ctx, LogSpec{Level: LevelDebug})
 	require.NoError(t, err)
@@ -112,7 +111,7 @@ func TestFormat(t *testing.T) {
 	Logr().V(klogLevelAll).Info("also should not be logged", "open", "close")
 	require.Empty(t, buf.String())
 
-	ctx = TestZapOverrides(ctx, t, &buf, nil, zap.WithClock(ZapClock(fakeClock)), zap.AddStacktrace(LevelInfo))
+	ctx = AddZapOverridesToContext(ctx, t, &buf, nil, fakeClock, zap.AddStacktrace(LevelInfo))
 
 	err = ValidateAndSetLogLevelAndFormatGlobally(ctx, LogSpec{Level: LevelDebug})
 	require.NoError(t, err)
@@ -141,7 +140,7 @@ testing.tRunner
 		),
 	), scanner.Text())
 
-	ctx = TestZapOverrides(ctx, t, &buf, nil, zap.WithClock(ZapClock(fakeClock)))
+	ctx = AddZapOverridesToContext(ctx, t, &buf, nil, fakeClock)
 
 	err = ValidateAndSetLogLevelAndFormatGlobally(ctx, LogSpec{Level: LevelDebug, Format: FormatCLI})
 	require.NoError(t, err)
@@ -157,14 +156,6 @@ testing.tRunner
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  burrito  plog/config_test.go:%d  wee  {"a": "b", "slightly less than a year": "363d", "slightly more than 2 years": "2y4d", "error": "invalid log level, valid choices are the empty string, info, debug, trace and all"}`,
 		getLineNumberOfCaller()-4), scanner.Text())
-
-	origTimeNow := textlogger.TimeNow
-	t.Cleanup(func() {
-		textlogger.TimeNow = origTimeNow
-	})
-	textlogger.TimeNow = func() time.Time {
-		return now
-	}
 
 	old := New().WithName("created before mode change").WithValues("is", "old")
 
@@ -187,13 +178,13 @@ testing.tRunner
 	Logr().WithName("panda").V(KlogLevelDebug).Info("are the best", "yes?", "yes.")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "panda: are the best" yes?="yes."`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "are the best" logger="panda" yes?="yes."`,
 		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	New().WithName("hi").WithName("there").WithValues("a", 1, "b", 2).Always("do it")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "hi/there: do it" a=1 b=2`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "do it" logger="hi.there" a=1 b=2`,
 		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	l := WithValues("x", 33, "z", 22)
@@ -211,7 +202,7 @@ testing.tRunner
 	old.Always("should be klog text format", "for", "sure")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: should be klog text format" is="old" for="sure"`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "should be klog text format" logger="created before mode change" is="old" for="sure"`,
 		pid, getLineNumberOfCaller()-4), scanner.Text())
 
 	// make sure child loggers do not share state
@@ -221,11 +212,11 @@ testing.tRunner
 	old2.Info("info")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change: warn" is="old" i am="old1" warning=true`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "warn" logger="created before mode change" is="old" i am="old1" warning=true`,
 		pid, getLineNumberOfCaller()-5), scanner.Text())
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "created before mode change/old2: info" is="old"`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "info" logger="created before mode change.old2" is="old"`,
 		pid, getLineNumberOfCaller()-8), scanner.Text())
 
 	Trace("should not be logged", "for", "sure")

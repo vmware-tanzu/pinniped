@@ -18,7 +18,7 @@
 #  hack/prepare-supervisor-on-kind.sh --oidc
 #
 # Example usage:
-#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_package/build.sh --alternate-deploy ./hack/lib/carvel_package/deploy.sh
 #
 set -euo pipefail
 
@@ -57,12 +57,12 @@ function check_dependency() {
 pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$pinniped_path" || exit 1
 
+
+
 # arguments provided to scripts called by hack/prepare-for-integration-tests.sh
-# - app: unimportant, but always first
 # - tag: uuidgen in hack/prepare-for-integration-tests.sh
 #        if this script is run standalone, then auto-fill with a unique value
-app=${1:-"undefined"}
-tag=${2:-$(uuidgen)}
+tag=${1:-$(uuidgen)}
 
 # TODO: revise this note when done refactoring into two scripts
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then

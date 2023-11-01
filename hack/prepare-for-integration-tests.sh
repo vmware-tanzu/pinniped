@@ -60,9 +60,6 @@ api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 dockerfile_path=""
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
 alternate_deploy="undefined"
-alternate_deploy_supervisor="undefined"
-alternate_deploy_concierge="undefined"
-alternate_deploy_local_user_authenticator="undefined"
 pre_install="undefined"
 
 # supported variable style:
@@ -122,33 +119,6 @@ while (("$#")); do
     alternate_deploy=$1
     shift
     ;;
-  --alternate-deploy-supervisor)
-    shift
-    if [[ "$#" == "0" || "$1" == -* ]]; then
-      log_error "--alternate-deploy-supervisor requires a script path to be specified"
-      exit 1
-    fi
-    alternate_deploy_supervisor=$1
-    shift
-    ;;
-  --alternate-deploy-concierge)
-    shift
-    if [[ "$#" == "0" || "$1" == -* ]]; then
-      log_error "--alternate-deploy-concierge requires a script path to be specified"
-      exit 1
-    fi
-    alternate_deploy_concierge=$1
-    shift
-    ;;
-  --alternate-deploy-local-user-authenticator)
-    shift
-    if [[ "$#" == "0" || "$1" == -* ]]; then
-      log_error "--alternate-deploy-local-user-authenticator requires a script path to be specified"
-      exit 1
-    fi
-    alternate_deploy_local_user_authenticator=$1
-    shift
-    ;;
   --pre-install)
     shift
     if [[ "$#" == "0" || "$1" == -* ]]; then
@@ -184,9 +154,6 @@ if [[ "$help" == "yes" ]]; then
   log_note "   -s, --skip-build:                                  reuse the most recently built image of the app instead of building"
   log_note "   -a, --get-active-directory-vars:                   specify a script that exports active directory environment variables"
   log_note "       --alternate-deploy:                            specify an alternate deploy script to install all components of Pinniped"
-  log_note "       --alternate-deploy-supervisor:                 specify an alternate deploy script to install Pinniped Supervisor"
-  log_note "       --alternate-deploy-concierge:                  specify an alternate deploy script to install Pinniped Concierge"
-  log_note "       --alternate-deploy-local-user-authenticator:   specify an alternate deploy script to install Pinniped local-user-authenticator"
   log_note "       --pre-install:                                 specify an pre-install script such as a build script"
   exit 1
 fi
@@ -320,15 +287,9 @@ fi
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_local_user_authenticator" != "undefined" ] ; then
-  if [ "$alternate_deploy" != "undefined" ]; then
+if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
     $alternate_deploy local-user-authenticator $tag
-  fi
-  if [ "$alternate_deploy_local_user_authenticator" != "undefined" ]; then
-    log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy_local_user_authenticator local-user-authenticator $tag..."
-    $alternate_deploy_local_user_authenticator local-user-authenticator $tag
-  fi
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null
@@ -377,15 +338,9 @@ service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
 
-if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_supervisor" != "undefined" ] ; then
-  if [ "$alternate_deploy" != "undefined" ]; then
+if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
     $alternate_deploy pinniped-supervisor $tag
-  fi
-  if [ "$alternate_deploy_supervisor" != "undefined" ]; then
-    log_note "The Pinniped Supervisor will be deployed with $alternate_deploy_supervisor pinniped-supervisor $tag..."
-    $alternate_deploy_supervisor pinniped-supervisor $tag
-  fi
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
   pushd deploy/supervisor >/dev/null
@@ -418,15 +373,9 @@ discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {p
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
 
-if [ "$alternate_deploy" != "undefined" ] || [ "$alternate_deploy_concierge" != "undefined" ] ; then
-  if [ "$alternate_deploy" != "undefined" ]; then
+if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
     $alternate_deploy pinniped-concierge $tag
-  fi
-  if [ "$alternate_deploy_concierge" != "undefined" ]; then
-    log_note "The Pinniped Concierge will be deployed with $alternate_deploy_concierge pinniped-concierge $tag..."
-    $alternate_deploy_concierge pinniped-concierge $tag
-  fi
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
   pushd deploy/concierge >/dev/null

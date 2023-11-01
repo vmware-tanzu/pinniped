@@ -287,7 +287,9 @@ fi
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-data_values_file="/tmp/pinniped-local-user-authenticator-ytt-config.yml"
+data_values_path="/tmp/local-user-authenticator"
+data_values_file="${data_values_path}/values.yml"
+mkdir -p "${data_values_path}"
 cat <<EOF > "$data_values_file"
 ---
 image_repo: $registry_repo
@@ -340,8 +342,9 @@ log_level="debug"
 service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
-
-data_values_file="/tmp/pinniped-supervisor-ytt-config.yml"
+data_values_path="/tmp/supervisor"
+data_values_file="${data_values_path}/values.yml"
+mkdir -p "${data_values_path}"
 cat <<EOF > "$data_values_file"
 ---
 app_name: $supervisor_app_name
@@ -380,8 +383,9 @@ webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authe
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
-
-data_values_file="/tmp/pinniped-concierge-ytt-config.yml"
+data_values_path="/tmp/concierge"
+data_values_file="${data_values_path}/values.yml"
+mkdir -p "${data_values_path}"
 cat <<EOF > "$data_values_file"
 ---
 app_name: $concierge_app_name

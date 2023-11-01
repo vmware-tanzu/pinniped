@@ -1,0 +1,4 @@
+Dummy Release Notes for Concierge
+- foo
+- bar
+- baz

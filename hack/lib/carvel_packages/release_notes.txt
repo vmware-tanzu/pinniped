@@ -1,3 +1,0 @@
-This is a fake release notes file.
-Replace this with actual release notes.
-This is an input to the package-template.yml file for each package.

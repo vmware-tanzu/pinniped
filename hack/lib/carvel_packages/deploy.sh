@@ -37,8 +37,8 @@ function check_dependency() {
 }
 
 
-pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$pinniped_path" || exit 1
+hack_lib_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$hack_lib_path/../../" || exit 1
 
 # arguments provided to scripts called by hack/prepare-for-integration-tests.sh
 # - app: unimportant, but always first
@@ -86,12 +86,12 @@ kapp deploy --app kapp-controller --file "https://github.com/vmware-tanzu/carvel
 log_note "Deploying Carvel Packages for Supervisor, Concierge & local-user-authenticator..."
 
 log_note "cleaning deploy artifacts..."
-rm -rf "deploy_carvel/deploy"
-mkdir "deploy_carvel/deploy"
+rm -rf "deploy_carvel/install"
+mkdir "deploy_carvel/install"
 
 log_note "deploying PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
-pinniped_package_repository_file="deploy_carvel/deploy/packagerepository.${pinniped_package_version}.yml"
+pinniped_package_repository_file="deploy_carvel/install/packagerepository.${pinniped_package_version}.yml"
 echo -n "" > "${pinniped_package_repository_file}"
 cat <<EOT >> "${pinniped_package_repository_file}"
 ---
@@ -116,7 +116,7 @@ do
 
   namespace="${resource_name}-install-ns"
   pinniped_package_rbac_prefix="pinniped-package-rbac-${resource_name}"
-  pinniped_package_rbac_file="deploy_carvel/deploy/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
+  pinniped_package_rbac_file="deploy_carvel/install/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
   echo -n "" > "${pinniped_package_rbac_file}"
 # TODO: will just a Role and RoleBinding work? Just for the target namespace.
 # - limit this to the LEAST privilege for each of the resources
@@ -169,7 +169,7 @@ resource_name="local-user-authenticator"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
@@ -220,7 +220,7 @@ resource_name="concierge"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 # from prepare-for-integration-tests.sh
@@ -278,7 +278,7 @@ resource_name="supervisor"
 NAMESPACE="${resource_name}-install-ns"
 PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
 RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-PACKAGE_INSTALL_FILE_NAME="deploy_carvel/deploy/${resource_name}-pkginstall.yml"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 # from prepare-for-integration-test.sh

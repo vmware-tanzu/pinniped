@@ -53,16 +53,17 @@ function check_dependency() {
   fi
 }
 
-
-pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$pinniped_path" || exit 1
-
-
+# this script is best invoked from the root directory
+# it is designed to be passed as --pre-install flag to hack/prepare-for-integration-tests.sh
+hack_lib_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${hack_lib_path}/../../" || exit 1
 
 # arguments provided to scripts called by hack/prepare-for-integration-tests.sh
+# - app: unimportant, but always first
 # - tag: uuidgen in hack/prepare-for-integration-tests.sh
 #        if this script is run standalone, then auto-fill with a unique value
-tag=${1:-$(uuidgen)}
+app=${1:-"undefined"}
+tag=${2:-$(uuidgen)}
 
 # TODO: revise this note when done refactoring into two scripts
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
@@ -94,6 +95,15 @@ package_repository_repo="pinniped-package-repository"
 package_repository_repo_tag="${registry_repo}/${package_repository_repo}:${tag}"
 
 
+dest_dir="deploy_carvel"
+carvel_package_src="hack/lib/carvel_packages"
+template_src_dir="${carvel_package_src}/tpl"
+
+
+# clean the root carvel package directory
+rm -rf "${dest_dir}"
+mkdir "${dest_dir}"
+
 # Generate the OpenAPI v3 Schema files, imgpkg images.yml files
 declare -a packages_to_build=("local-user-authenticator" "concierge" "supervisor")
 for resource_name in "${packages_to_build[@]}"
@@ -101,12 +111,19 @@ do
   resource_qualified_name="${resource_name}.${api_group_suffix}"
   package_repo_tag="${package_repo_prefix}-${resource_name}:${tag}"
 
-  resource_dir="deploy_carvel/${resource_name}"
-  resource_config_source_dir="deploy/${resource_name}"
-  resource_destination_dir="deploy_carvel/${resource_name}"
+  # sources
+  resource_package_template_source_dir="${template_src_dir}/${resource_name}"
+  resource_ytt_config_file_source_dir="deploy/${resource_name}" # copy from original ytt templates
+  # destinations
+  resource_destination_dir="${dest_dir}/${resource_name}"
   resource_config_destination_dir="${resource_destination_dir}/config"
 
-  # these must be real files, not symlinks
+  log_note "Copying static template files for ${resource_name}..."
+  mkdir "${resource_destination_dir}"
+  cp "${resource_package_template_source_dir}/metadata.yml" "${resource_destination_dir}/metadata.yml"
+  cp "${resource_package_template_source_dir}/build.yml" "${resource_destination_dir}/build.yml"
+  cp "${resource_package_template_source_dir}/vendir.yml" "${resource_destination_dir}/vendir.yml"
+  cp "${resource_package_template_source_dir}/release_notes.txt" "${resource_destination_dir}/release_notes.txt" # dummy
   log_note "Vendir sync deploy directory for ${resource_name} to package bundle..."
   pushd "${resource_destination_dir}" > /dev/null
     vendir sync
@@ -117,35 +134,32 @@ do
     --file "${resource_config_destination_dir}" \
     --data-values-schema-inspect \
     --output openapi-v3 > \
-    "${resource_dir}/schema-openapi.yml"
+    "${resource_destination_dir}/schema-openapi.yml"
 
   log_note "Generating .imgpkg/images.yml for ${resource_name}..."
-  mkdir -p "${resource_dir}/.imgpkg"
+  mkdir -p "${resource_destination_dir}/.imgpkg"
   ytt \
     --file "${resource_config_destination_dir}" | \
-    kbld -f- --imgpkg-lock-output "${resource_dir}/.imgpkg/images.yml"
-
+    kbld -f- --imgpkg-lock-output "${resource_destination_dir}/.imgpkg/images.yml"
 
   log_note "Pushing Pinniped ${resource_name} Package bundle..."
-  imgpkg push --bundle "${package_repo_tag}" --file "${resource_dir}"
-  # validation flag?
-  log_note "Validating ${resource_name} Package bundle not empty (/tmp/${package_repo_tag})..."
-  imgpkg pull --bundle "${package_repo_tag}" --output "/tmp/${package_repo_tag}"
-
+  imgpkg push --bundle "${package_repo_tag}" --file "${resource_destination_dir}"
 
   log_note "Generating PackageRepository Package entry for ${resource_name}"
   # publish package versions to package repository
-  package_repository_dir="deploy_carvel/package_repository/packages/${resource_qualified_name}"
+  packages_dir="deploy_carvel/package_repository/packages/"
+  package_repository_dir="${packages_dir}/${resource_qualified_name}"
+  mkdir -p "${packages_dir}"
   rm -rf "${package_repository_dir}"
   mkdir "${package_repository_dir}"
 
   ytt \
-    --file "${resource_dir}/package-template.yml" \
-    --data-value-file openapi="${resource_dir}/schema-openapi.yml" \
-    --data-value-file releaseNotes="deploy_carvel/release_notes.txt" \
+    --file "${resource_package_template_source_dir}/package-template.yml" \
+    --data-value-file openapi="${resource_destination_dir}/schema-openapi.yml" \
+    --data-value-file releaseNotes="${resource_destination_dir}/release_notes.txt" \
     --data-value repo_host="${package_repo_prefix}-${resource_name}" \
     --data-value version="${pinniped_package_version}" > "${package_repository_dir}/${pinniped_package_version}.yml"
-  cp "deploy_carvel/${resource_name}/metadata.yml" "${package_repository_dir}/metadata.yml"
+  cp "${resource_package_template_source_dir}/metadata.yml" "${package_repository_dir}/metadata.yml"
 done
 
 log_note "Generating .imgpkg/images.yml for  Pinniped PackageRepository bundle..."
@@ -158,6 +172,5 @@ imgpkg push --bundle "${package_repository_repo_tag}" --file "deploy_carvel/pack
 # validation flag?
 log_note "Validating Pinniped PackageRepository bundle not empty /tmp/${package_repo_tag}..."
 imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"
-
 
 log_note "Building Carvel Packages for Supervisor, Concierge & local-user-authenticator complete."

@@ -4,9 +4,9 @@
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
-  name: #@ "concierge.pinniped.dev." + data.values.version
+  name: #@ "pinniped-concierge.pinniped.dev." + data.values.version
 spec:
-  refName: concierge.pinniped.dev
+  refName: pinniped-concierge.pinniped.dev
   version: #@ data.values.version
   releaseNotes: #@ yaml.decode(data.values.releaseNotes)
   valuesSchema:

@@ -4,9 +4,9 @@
 apiVersion: data.packaging.carvel.dev/v1alpha1
 kind: Package
 metadata:
-  name: #@ "supervisor.pinniped.dev." + data.values.version
+  name: #@ "pinniped-supervisor.pinniped.dev." + data.values.version
 spec:
-  refName: supervisor.pinniped.dev
+  refName: pinniped-supervisor.pinniped.dev
   version: #@ data.values.version
   releaseNotes: #@ yaml.decode(data.values.releaseNotes)
   valuesSchema:

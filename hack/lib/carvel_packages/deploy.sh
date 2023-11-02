@@ -66,11 +66,12 @@ app=${1:-"undefined"}
 tag=${2:-$(uuidgen)}
 data_values_file=${3:-"error-no-file-provided"}
 
+log_note "Begin deploy of carvel package for ${app}..."
 
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
   log_error "Building the Carvel package requires configuring kind with a local registry."
-  log_error "please set the environment variable PINNIPED_USE_LOCAL_KIND_REGISTRY"
-  log_error "for example:"
+  log_error "Please set the environment variable PINNIPED_USE_LOCAL_KIND_REGISTRY."
+  log_error "For example:"
   log_error "    PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh"
   exit 1
 fi
@@ -101,14 +102,10 @@ log_note "Installing kapp-controller on cluster..."
 KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
 kapp deploy --app kapp-controller --file "https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml" -y
 
+# ensure this directory exists though this script will run several times
+mkdir -p "deploy_carvel/install"
 
-log_note "Deploying Carvel Packages for Supervisor, Concierge & local-user-authenticator..."
-
-log_note "cleaning deploy artifacts..."
-rm -rf "deploy_carvel/install"
-mkdir "deploy_carvel/install"
-
-log_note "deploying PackageRepository..."
+log_note "Deploying Pinniped PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
 pinniped_package_repository_file="deploy_carvel/install/packagerepository.${pinniped_package_version}.yml"
 echo -n "" > "${pinniped_package_repository_file}"
@@ -128,19 +125,19 @@ EOT
 kapp deploy --app "${pinniped_package_repository_name}" --file "${pinniped_package_repository_file}" -y
 kapp inspect --app "${pinniped_package_repository_name}" --tree
 
-declare -a packages_to_deploy=("local-user-authenticator" "concierge" "supervisor")
-for resource_name in "${packages_to_deploy[@]}"
-do
-  log_note "creating PackageInstall and RBAC for ${resource_name}..."
 
-  namespace="${resource_name}-install-ns"
-  pinniped_package_rbac_prefix="pinniped-package-rbac-${resource_name}"
-  pinniped_package_rbac_file="deploy_carvel/install/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
-  echo -n "" > "${pinniped_package_rbac_file}"
-# TODO: will just a Role and RoleBinding work? Just for the target namespace.
-# - limit this to the LEAST privilege for each of the resources
-# - and document this for each of the resources.
-# - and we may need to TEMPLATE the namespace, if pinniped is installed in alt namespaces?
+resource_name="${app}"
+
+log_note "Creating RBAC for ${resource_name} PackageInstall..."
+
+namespace="${resource_name}-install-ns"
+pinniped_package_rbac_prefix="pinniped-package-rbac-${resource_name}"
+pinniped_package_rbac_file="deploy_carvel/install/${pinniped_package_rbac_prefix}-${resource_name}-rbac.yml"
+echo -n "" > "${pinniped_package_rbac_file}"
+# NOTE: this script is for development purposes running on a local kind cluster.
+# For any other use case, the generated artifacts should be properly reviewed.
+# For example, the RBAC generated here should be adjusted to conform to the
+# principle of LEAST privilege.
 cat <<EOF >> "${pinniped_package_rbac_file}"
 ---
 apiVersion: v1
@@ -178,20 +175,18 @@ roleRef:
 
 EOF
 
-  kapp deploy --app "${pinniped_package_rbac_prefix}" --file "${pinniped_package_rbac_file}" -y
-done
+kapp deploy --app "${pinniped_package_rbac_prefix}" --file "${pinniped_package_rbac_file}" -y
 
-if [[ "${app}" == "local-user-authenticator" ]]; then
-  log_note "deploying local-user-authenticator PackageInstall resources..."
-  resource_name="local-user-authenticator"
-  NAMESPACE="${resource_name}-install-ns"
-  PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-  RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-  PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
-  SECRET_NAME="${resource_name}-package-install-secret"
 
-  log_note "generating ${PACKAGE_INSTALL_FILE_NAME}..."
-  cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+log_note "Creating ${resource_name} PackageInstall..."
+NAMESPACE="${resource_name}-install-ns"
+PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
+RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
+PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
+SECRET_NAME="${resource_name}-package-install-secret"
+
+log_note "Generating ${PACKAGE_INSTALL_FILE_NAME}..."
+cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageInstall
@@ -210,115 +205,25 @@ spec:
       name: "${SECRET_NAME}"
 EOF
 
-  log_note "creating secret ${SECRET_NAME} with ${data_values_file}..."
-  kubectl create secret generic "${SECRET_NAME}" --namespace "${NAMESPACE}" --from-file "${data_values_file}" --dry-run=client -o yaml | kubectl apply -f-
+log_note "Creating secret ${SECRET_NAME} with ${data_values_file}..."
+kubectl create secret generic "${SECRET_NAME}" --namespace "${NAMESPACE}" --from-file "${data_values_file}" --dry-run=client -o yaml | kubectl apply -f-
 
-  KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-  kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-fi
+KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
+log_note "Deploying ${KAPP_CONTROLLER_APP_NAME}..."
+kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
 
 
-if [[ "${app}" == "pinniped-concierge" ]]; then
-  log_note "deploying concierge PackageInstall resources..."
-  resource_name="concierge"
-  NAMESPACE="${resource_name}-install-ns"
-  PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-  RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-  PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
-  SECRET_NAME="${resource_name}-package-install-secret"
-
-  # from prepare-for-integration-tests.sh
-  concierge_app_name="pinniped-concierge"
-  concierge_namespace="concierge"
-  webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-  discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
-  concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
-  log_level="debug"
-
-  log_note "generating ${PACKAGE_INSTALL_FILE_NAME}..."
-  cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
----
-apiVersion: packaging.carvel.dev/v1alpha1
-kind: PackageInstall
-metadata:
-    # name, does not have to be versioned, versionSelection.constraints below will handle
-    name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"
-spec:
-  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  packageRef:
-    refName: "${RESOURCE_PACKAGE_VERSION}"
-    versionSelection:
-      constraints: "${pinniped_package_version}"
-  values:
-  - secretRef:
-      name: "${SECRET_NAME}"
-EOF
-
-  log_note "creating secret ${SECRET_NAME} with ${data_values_file}..."
-  kubectl create secret generic "${SECRET_NAME}" --namespace "${NAMESPACE}" --from-file "${data_values_file}" --dry-run=client -o yaml | kubectl apply -f-
-
-  KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-  kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-fi
-
-if [[ "${app}" == "pinniped-supervisor" ]]; then
-  log_note "deploying supervisor PackageInstall resources..."
-  resource_name="supervisor"
-  NAMESPACE="${resource_name}-install-ns"
-  PINNIPED_PACKAGE_RBAC_PREFIX="pinniped-package-rbac-${resource_name}"
-  RESOURCE_PACKAGE_VERSION="${resource_name}.pinniped.dev"
-  PACKAGE_INSTALL_FILE_NAME="deploy_carvel/install/${resource_name}-pkginstall.yml"
-  SECRET_NAME="${resource_name}-package-install-secret"
-
-  # from prepare-for-integration-test.sh
-  supervisor_app_name="pinniped-supervisor"
-  supervisor_namespace="supervisor"
-  supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
-  log_level="debug"
-  service_https_nodeport_port="443"
-  service_https_nodeport_nodeport="31243"
-  service_https_clusterip_port="443"
-
-  log_note "generating ${PACKAGE_INSTALL_FILE_NAME}..."
-  cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
----
-apiVersion: packaging.carvel.dev/v1alpha1
-kind: PackageInstall
-metadata:
-    # name, does not have to be versioned, versionSelection.constraints below will handle
-    name: "${resource_name}-package-install"
-    namespace: "${NAMESPACE}"
-spec:
-  serviceAccountName: "${PINNIPED_PACKAGE_RBAC_PREFIX}-sa-superadmin-dangerous"
-  packageRef:
-    refName: "${RESOURCE_PACKAGE_VERSION}"
-    versionSelection:
-      constraints: "${pinniped_package_version}"
-  values:
-  - secretRef:
-      name: "${SECRET_NAME}"
-EOF
-
-  log_note "creating secret ${SECRET_NAME} with ${data_values_file}..." # should be a full /tmp/<resource>/values.yml path?
-  kubectl create secret generic "${SECRET_NAME}" --namespace "${NAMESPACE}" --from-file "${data_values_file}" --dry-run=client -o yaml | kubectl apply -f-
-
-  KAPP_CONTROLLER_APP_NAME="${resource_name}-pkginstall"
-  log_note "deploying ${KAPP_CONTROLLER_APP_NAME}..."
-  kapp deploy --app "${KAPP_CONTROLLER_APP_NAME}" --file "${PACKAGE_INSTALL_FILE_NAME}" -y
-fi
-
-log_note "verifying PackageInstall resources..."
+log_note "Verifying PackageInstall resources..."
 kubectl get PackageInstall -A | grep pinniped
 kubectl get secret -A | grep pinniped
 
-log_note "listing all package resources (PackageRepository, Package, PackageInstall)..."
+log_note "Listing all package resources (PackageRepository, Package, PackageInstall)..."
 kubectl get pkgi && kubectl get pkgr && kubectl get pkg
 
-log_note "listing all kapp cli apps..."
+log_note "Listing all kapp cli apps..."
 kapp ls --all-namespaces
 
-log_note "listing all kapp-controller apps..."
+log_note "Listing all kapp-controller apps..."
 kubectl get app --all-namespaces
+
+log_note "Complete deploy of carvel package for ${app}..."

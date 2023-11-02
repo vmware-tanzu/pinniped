@@ -77,7 +77,7 @@ fi
 
 pinniped_package_version="${tag}" # ie, "0.25.0"
 
-# core pinniped binaries (concierge, supervisor, local-user-authenticator)
+# core pinniped binaries (pinniped-concierge, pinniped-supervisor, local-user-authenticator)
 # TODO: we can likely just pass in the whole registry_repo_tag from the parent script and be done.
 #    the duplication is unnecessary.  This script doesn't ever need to run standalone again.
 registry="kind-registry.local:5000"
@@ -87,7 +87,7 @@ registry_repo_tag="${registry_repo}:${tag}"
 
 api_group_suffix="pinniped.dev"
 
-# Package prefix for concierge, supervisor, local-user-authenticator
+# Package prefix for pinniped-concierge, pinniped-supervisor, local-user-authenticator
 package_repo_prefix="${registry_repo}/package" # + $resource_name + ":" + $tag
 
 # Pinniped Package repository
@@ -105,7 +105,7 @@ rm -rf "${dest_dir}"
 mkdir "${dest_dir}"
 
 # Generate the OpenAPI v3 Schema files, imgpkg images.yml files
-declare -a packages_to_build=("local-user-authenticator" "concierge" "supervisor")
+declare -a packages_to_build=("local-user-authenticator" "pinniped-concierge" "pinniped-supervisor")
 for resource_name in "${packages_to_build[@]}"
 do
   resource_qualified_name="${resource_name}.${api_group_suffix}"
@@ -169,8 +169,7 @@ kbld --file "deploy_carvel/package_repository/packages/" --imgpkg-lock-output "d
 log_note "Pushing Pinniped PackageRepository bundle.... "
 imgpkg push --bundle "${package_repository_repo_tag}" --file "deploy_carvel/package_repository"
 
-# validation flag?
-log_note "Validating Pinniped PackageRepository bundle not empty /tmp/${package_repo_tag}..."
-imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"
+# manually validate the package bundle by pulling it from the registry and examining its contents:
+# imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"
 
 log_note "Building Carvel Packages for Supervisor, Concierge & local-user-authenticator complete."

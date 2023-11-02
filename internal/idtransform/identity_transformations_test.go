@@ -13,7 +13,7 @@ import (
 
 type fakeNoopTransformer struct{}
 
-func (a fakeNoopTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeNoopTransformer) Evaluate(_ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      username,
 		Groups:                        groups,
@@ -28,7 +28,7 @@ func (a fakeNoopTransformer) Source() interface{} {
 
 type fakeNilGroupTransformer struct{}
 
-func (a fakeNilGroupTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeNilGroupTransformer) Evaluate(_ctx context.Context, username string, _groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      username,
 		Groups:                        nil,
@@ -43,7 +43,7 @@ func (a fakeNilGroupTransformer) Source() interface{} {
 
 type fakeAppendStringTransformer struct{}
 
-func (a fakeAppendStringTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeAppendStringTransformer) Evaluate(_ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	newGroups := []string{}
 	for _, group := range groups {
 		newGroups = append(newGroups, group+":transformed")
@@ -62,7 +62,7 @@ func (a fakeAppendStringTransformer) Source() interface{} {
 
 type fakeDeleteUsernameAndGroupsTransformer struct{}
 
-func (a fakeDeleteUsernameAndGroupsTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeDeleteUsernameAndGroupsTransformer) Evaluate(_ctx context.Context, _username string, _groups []string) (*TransformationResult, error) {
 	return &TransformationResult{
 		Username:                      "",
 		Groups:                        []string{},
@@ -77,7 +77,7 @@ func (a fakeDeleteUsernameAndGroupsTransformer) Source() interface{} {
 
 type fakeAuthenticationDisallowedTransformer struct{}
 
-func (a fakeAuthenticationDisallowedTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeAuthenticationDisallowedTransformer) Evaluate(_ctx context.Context, username string, groups []string) (*TransformationResult, error) {
 	newGroups := []string{}
 	for _, group := range groups {
 		newGroups = append(newGroups, group+":disallowed")
@@ -96,7 +96,7 @@ func (a fakeAuthenticationDisallowedTransformer) Source() interface{} {
 
 type fakeErrorTransformer struct{}
 
-func (a fakeErrorTransformer) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeErrorTransformer) Evaluate(_ctx context.Context, _username string, _groups []string) (*TransformationResult, error) {
 	return &TransformationResult{}, errors.New("unexpected catastrophic error")
 }
 
@@ -108,7 +108,7 @@ type fakeTransformerWithSource struct {
 	source string
 }
 
-func (a fakeTransformerWithSource) Evaluate(ctx context.Context, username string, groups []string) (*TransformationResult, error) {
+func (a fakeTransformerWithSource) Evaluate(_ctx context.Context, _username string, _groups []string) (*TransformationResult, error) {
 	return nil, nil // not needed for this test
 }
 

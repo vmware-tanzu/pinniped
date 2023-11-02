@@ -77,7 +77,7 @@ func (a *refreshTokenStorage) RevokeRefreshToken(ctx context.Context, requestID 
 	return a.storage.DeleteByLabel(ctx, fositestorage.StorageRequestIDLabelName, requestID)
 }
 
-func (a *refreshTokenStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
+func (a *refreshTokenStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, _signature string) error {
 	// We don't support a grace period, so always call the regular RevokeRefreshToken().
 	return a.RevokeRefreshToken(ctx, requestID)
 }

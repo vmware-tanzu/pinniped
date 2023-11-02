@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
@@ -153,6 +153,6 @@ func (p *provider) RunOnce(_ context.Context) error {
 	return nil // no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
 }
 
-func (p *provider) Run(_ context.Context, workers int) {
+func (p *provider) Run(_ context.Context, _workers int) {
 	// no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
 }

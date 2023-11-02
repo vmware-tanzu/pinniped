@@ -105,7 +105,7 @@ func (l logger) Info(level int, msg string, kvList ...interface{}) {
 	}
 }
 
-func (l logger) Enabled(level int) bool {
+func (l logger) Enabled(_level int) bool {
 	return true
 }
 
@@ -134,7 +134,7 @@ func (l logger) output(calldepth int, s string) {
 	}
 }
 
-func (l logger) V(level int) logr.LogSink {
+func (l logger) V(_level int) logr.LogSink {
 	return l.clone()
 }
 
@@ -142,27 +142,27 @@ func (l logger) V(level int) logr.LogSink {
 // uses '/' characters to separate name elements.  Callers should not pass '/'
 // in the provided name string, but this library does not actually enforce that.
 func (l logger) WithName(name string) logr.LogSink {
-	new := l.clone()
+	lgr := l.clone()
 	if len(l.prefix) > 0 {
-		new.prefix = l.prefix + "/"
+		lgr.prefix = l.prefix + "/"
 	}
-	new.prefix += name
-	return new
+	lgr.prefix += name
+	return lgr
 }
 
 // WithValues returns a new logr.Logger with the specified key-and-values
 // saved.
 func (l logger) WithValues(kvList ...interface{}) logr.LogSink {
-	new := l.clone()
-	new.values = append(new.values, kvList...)
-	return new
+	lgr := l.clone()
+	lgr.values = append(lgr.values, kvList...)
+	return lgr
 }
 
-func (l logger) WithCallDepth(depth int) logr.LogSink {
+func (l logger) WithCallDepth(_depth int) logr.LogSink {
 	return l.clone()
 }
 
 var _ logr.LogSink = logger{}
 var _ logr.CallDepthLogSink = logger{}
 
-func (l logger) Init(info logr.RuntimeInfo) {}
+func (l logger) Init(_info logr.RuntimeInfo) {}

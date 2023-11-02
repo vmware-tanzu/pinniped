@@ -118,7 +118,7 @@ func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client
 // known or the DB check failed and nil if the JTI is not known.
 //
 // This functionality is not supported by the ClientManager.
-func (*ClientManager) ClientAssertionJWTValid(ctx context.Context, jti string) error {
+func (*ClientManager) ClientAssertionJWTValid(_ctx context.Context, _jti string) error {
 	return fmt.Errorf("not implemented")
 }
 
@@ -128,7 +128,7 @@ func (*ClientManager) ClientAssertionJWTValid(ctx context.Context, jti string) e
 // not be replayed due to the expiry.
 //
 // This functionality is not supported by the ClientManager.
-func (*ClientManager) SetClientAssertionJWT(ctx context.Context, jti string, exp time.Time) error {
+func (*ClientManager) SetClientAssertionJWT(_ctx context.Context, _jti string, _exp time.Time) error {
 	return fmt.Errorf("not implemented")
 }
 

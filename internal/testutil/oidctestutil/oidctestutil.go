@@ -212,7 +212,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*authenticators.Response, bool, error) {
+func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string, _grantedScopes []string) (*authenticators.Response, bool, error) {
 	return u.AuthenticateFunc(ctx, username, password)
 }
 
@@ -220,7 +220,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes, idpDisplayName string) ([]string, error) {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes, _idpDisplayName string) ([]string, error) {
 	if u.performRefreshArgs == nil {
 		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
 	}

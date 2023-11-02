@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -15,7 +15,7 @@ import (
 )
 
 // defaultServerUrlFor was copied from k8s.io/client-go/rest/url_utils.go.
-func defaultServerUrlFor(config *restclient.Config) (*url.URL, string, error) { //nolint:revive
+func defaultServerUrlFor(config *restclient.Config) (*url.URL, string, error) {
 	hasCA := len(config.CAFile) != 0 || len(config.CAData) != 0
 	hasCert := len(config.CertFile) != 0 || len(config.CertData) != 0
 	defaultTLS := hasCA || hasCert || config.Insecure

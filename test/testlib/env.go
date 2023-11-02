@@ -101,7 +101,7 @@ type TestLDAPUpstream struct {
 	TestUserUniqueIDAttributeValue                  string   `json:"testUserUniqueIDAttributeValue"`
 	TestUserDirectGroupsCNs                         []string `json:"testUserDirectGroupsCNs"`
 	TestUserDirectPosixGroupsCNs                    []string `json:"testUserDirectPosixGroupsCNs"`
-	TestUserDirectGroupsDNs                         []string `json:"testUserDirectGroupsDNs"` //nolint:revive // this is "distinguished names", not "DNS"
+	TestUserDirectGroupsDNs                         []string `json:"testUserDirectGroupsDNs"`
 	TestUserSAMAccountNameValue                     string   `json:"testUserSAMAccountNameValue"`
 	TestUserPrincipalNameValue                      string   `json:"testUserPrincipalNameValue"`
 	TestUserIndirectGroupsSAMAccountNames           []string `json:"TestUserIndirectGroupsSAMAccountNames"`

@@ -62,9 +62,13 @@ cd "$hack_lib_path/../../" || exit 1
 # - app: unimportant, but always first
 # - tag: uuidgen in hack/prepare-for-integration-tests.sh
 #        if this script is run standalone, then auto-fill with a unique value
-app=${1:-"undefined"}
-tag=${2:-$(uuidgen)}
-data_values_file=${3:-"error-no-file-provided"}
+app=${1:-"app-argument-not-provided"}
+tag=${2:-"tag-argument-not-provided"}
+registry=${3:-"registry-argument-not-provided"}
+repo=${4:-"repo-argument-not-provided"}
+data_values_file=${5:-"ytt-data-values-file-argument-not-provided"}
+
+log_note "deploy.sh called with app: ${app} tag: ${tag} registry: ${registry} repo: ${repo} data_values_file: ${data_values_file}"
 
 log_note "Begin deploy of carvel package for ${app}..."
 
@@ -79,11 +83,6 @@ fi
 
 pinniped_package_version="${tag}" # ie, "0.25.0"
 
-# core pinniped binaries (concierge, supervisor, local-user-authenticator)
-# TODO: we can likely just pass in the whole registry_repo_tag from the parent script and be done.
-#    the duplication is unnecessary.  This script doesn't ever need to run standalone again.
-registry="kind-registry.local:5000"
-repo="test/build"
 registry_repo="$registry/$repo"
 registry_repo_tag="${registry_repo}:${tag}"
 

@@ -15,7 +15,7 @@
 # kbld tool requires a registry to resolve images to shas).
 #
 # Example usage:
-#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1  ./hack/prepare-for-integration-tests.sh --clean --alternate-deploy ./hack/noop.sh --post-install ./hack/build-carvel-packages.sh
+#   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
 #
 set -euo pipefail
 
@@ -279,7 +279,7 @@ fi
 # running it after the above also allows appending to the environment variable file
 if [ "$pre_install" != "undefined" ] ; then
   log_note "The pre-install script will be called with $tag..."
-  $pre_install pre-install-script $tag
+  $pre_install pre-install-script $tag $registry_with_port $repo
 fi
 
 
@@ -297,8 +297,7 @@ image_tag: $tag
 EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
-    log_note "The Pinniped local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag..."
-    $alternate_deploy local-user-authenticator $tag $data_values_file
+    $alternate_deploy local-user-authenticator $tag $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null
@@ -361,7 +360,7 @@ EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
-    $alternate_deploy pinniped-supervisor $tag $data_values_file
+    $alternate_deploy pinniped-supervisor $tag $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
   pushd deploy/supervisor >/dev/null
@@ -400,7 +399,7 @@ EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
     log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
-    $alternate_deploy pinniped-concierge $tag $data_values_file
+    $alternate_deploy pinniped-concierge $tag $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
   pushd deploy/concierge >/dev/null

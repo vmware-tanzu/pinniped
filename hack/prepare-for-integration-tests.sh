@@ -6,15 +6,13 @@
 #
 # This script can be used to prepare a kind cluster and deploy the app.
 # You can call this script again to redeploy the app.
-# It will also output instructions on how to run the integration.
+# It will also output instructions on how to run the integration tests.
 #
-# When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value,
-# the script will create a local docker registry and configure kind to use the registry.  When building
-# and installing Pinniped normally this is unnecessary. However, if an alternative build and install approach
-# is taken, such as via a Carvel packaging mechanism, a local registry might be needed (for example, the
-# kbld tool requires a registry to resolve images to shas).
-#
-# Example usage:
+# When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value, then
+# this script will create a local registry and configure kind to use that registry. This is normally unnecessary.
+# However, if an alternative build and deploy approach is used, such as via a Carvel packaging mechanism, then a local
+# registry could be needed (e.g. the kbld tool requires a registry to resolve images to shas).
+# For example, to alternatively build and deploy Pinniped as a Carvel package, use:
 #   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
 #
 set -euo pipefail
@@ -62,10 +60,6 @@ get_active_directory_vars="" # specify a filename for a script to get AD related
 alternate_deploy="undefined"
 pre_install="undefined"
 
-# supported variable style:
-#  --dockerfile-path ./foo.sh
-# unsupported variable style (using = will fail the script):
-#  --dockerfile-path=./foo.sh
 while (("$#")); do
   case "$1" in
   -h | --help)
@@ -148,13 +142,13 @@ if [[ "$help" == "yes" ]]; then
   log_note "   $me [flags]"
   log_note
   log_note "Flags:"
-  log_note "   -h, --help:                                        print this usage"
-  log_note "   -c, --clean:                                       destroy the current kind cluster and make a new one"
-  log_note "   -g, --api-group-suffix:                            deploy Pinniped with an alternate API group suffix"
-  log_note "   -s, --skip-build:                                  reuse the most recently built image of the app instead of building"
-  log_note "   -a, --get-active-directory-vars:                   specify a script that exports active directory environment variables"
-  log_note "       --alternate-deploy:                            specify an alternate deploy script to install all components of Pinniped"
-  log_note "       --pre-install:                                 specify an pre-install script such as a build script"
+  log_note "   -h, --help:                      print this usage"
+  log_note "   -c, --clean:                     destroy the current kind cluster and make a new one"
+  log_note "   -g, --api-group-suffix:          deploy Pinniped with an alternate API group suffix"
+  log_note "   -s, --skip-build:                reuse the most recently built image of the app instead of building"
+  log_note "   -a, --get-active-directory-vars: specify a script that exports active directory environment variables"
+  log_note "       --alternate-deploy:          specify an alternate deploy script to install all components of Pinniped"
+  log_note "       --pre-install:               specify an pre-install script such as a build script"
   exit 1
 fi
 
@@ -217,7 +211,6 @@ repo="test/build"
 registry_repo="$registry_with_port/$repo"
 tag="0.0.0-$(uuidgen)" # always a new tag to force K8s to reload the image on redeploy
 
-
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
   etc_hosts_local_registry_missing=no
   if ! grep -q "$registry" /etc/hosts; then
@@ -251,7 +244,7 @@ registry_repo_tag="${registry_repo}:${tag}"
 if [[ "$do_build" == "yes" ]]; then
   # Rebuild the code
   testing_version="${KUBE_GIT_VERSION:-}"
-  if [[ "$dockerfile_path"  != "" ]]; then
+  if [[ "$dockerfile_path" != "" ]]; then
     log_note "Docker building the app with dockerfile $dockerfile_path and KUBE_GIT_VERSION='$testing_version'"
     DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag" --file "$dockerfile_path" --build-arg "KUBE_GIT_VERSION=$testing_version"
   else
@@ -262,51 +255,40 @@ if [[ "$do_build" == "yes" ]]; then
 fi
 
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
-  # if registry used, push to the registry
+  # If registry used, push to the registry.
   log_note "Loading the app's container image into the local registry ($registry_with_port)..."
   docker push "$registry_repo_tag"
 else
-  # otherwise side-load directly
+  # Otherwise, side-load directly.
   log_note "Loading the app's container image into the kind cluster..."
   kind load docker-image "$registry_repo_tag" --name pinniped
 fi
 
-
-#
-# Call a pre-install script
-# simplifies passing the $tag which may be necessary if the current local build is to be
-# referenced, for example, deploying via a Carvel package rather than our ytt mechanism
-# running it after the above also allows appending to the environment variable file
-if [ "$pre_install" != "undefined" ] ; then
-  log_note "The pre-install script will be called with $tag..."
-  $pre_install pre-install-script $tag $registry_with_port $repo
+if [ "$pre_install" != "undefined" ]; then
+  log_note "Calling the pre-install script with args: $tag $registry_with_port $repo ..."
+  $pre_install pre-install-script "$tag" $registry_with_port $repo
 fi
-
 
 #
 # Deploy local-user-authenticator
 #
 manifest=/tmp/pinniped-local-user-authenticator.yaml
-data_values_path="/tmp/local-user-authenticator"
-data_values_file="${data_values_path}/values.yml"
-mkdir -p "${data_values_path}"
-cat <<EOF > "$data_values_file"
+data_values_file=/tmp/local-user-authenticator-values.yml
+cat <<EOF >"$data_values_file"
 ---
 image_repo: $registry_repo
 image_tag: $tag
 EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
-    $alternate_deploy local-user-authenticator $tag $registry_with_port $repo $data_values_file
+  log_note "The local-user-authenticator will be deployed with $alternate_deploy local-user-authenticator $tag $registry_with_port $repo $data_values_file ..."
+  $alternate_deploy local-user-authenticator "$tag" $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the local-user-authenticator app to the cluster using kapp..."
   pushd deploy/local-user-authenticator >/dev/null
-
-  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
-
+  ytt --file . --data-values-file "$data_values_file" >"$manifest"
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-
   popd >/dev/null
 fi
 
@@ -324,16 +306,15 @@ ytt --file . \
   --data-value "pinny_ldap_password=$ldap_test_password" \
   --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
   >"$manifest"
-
 kapp deploy --yes --app tools --diff-changes --file "$manifest"
 kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-
 popd >/dev/null
 
 #
 # Deploy the Pinniped Supervisor
 #
 manifest=/tmp/pinniped-supervisor.yaml
+data_values_file=/tmp/supervisor-values.yml
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
 supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
@@ -341,10 +322,7 @@ log_level="debug"
 service_https_nodeport_port="443"
 service_https_nodeport_nodeport="31243"
 service_https_clusterip_port="443"
-data_values_path="/tmp/supervisor"
-data_values_file="${data_values_path}/values.yml"
-mkdir -p "${data_values_path}"
-cat <<EOF > "$data_values_file"
+cat <<EOF >"$data_values_file"
 ---
 app_name: $supervisor_app_name
 namespace: $supervisor_namespace
@@ -359,14 +337,12 @@ service_https_clusterip_port: $service_https_clusterip_port
 EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
-    log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag..."
-    $alternate_deploy pinniped-supervisor $tag $registry_with_port $repo $data_values_file
+  log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag $registry_with_port $repo $data_values_file ..."
+  $alternate_deploy pinniped-supervisor "$tag" $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the Pinniped Supervisor app to the cluster using kapp..."
   pushd deploy/supervisor >/dev/null
-
-  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
-
+  ytt --file . --data-values-file "$data_values_file" >"$manifest"
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   popd >/dev/null
@@ -376,16 +352,14 @@ fi
 # Deploy the Pinniped Concierge
 #
 manifest=/tmp/pinniped-concierge.yaml
+data_values_file=/tmp/concierge-values.yml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
-data_values_path="/tmp/concierge"
-data_values_file="${data_values_path}/values.yml"
-mkdir -p "${data_values_path}"
-cat <<EOF > "$data_values_file"
+cat <<EOF >"$data_values_file"
 ---
 app_name: $concierge_app_name
 namespace: $concierge_namespace
@@ -398,23 +372,19 @@ discovery_url: $discovery_url
 EOF
 
 if [ "$alternate_deploy" != "undefined" ]; then
-    log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag..."
-    $alternate_deploy pinniped-concierge $tag $registry_with_port $repo $data_values_file
+  log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag $registry_with_port $repo $data_values_file ..."
+  $alternate_deploy pinniped-concierge "$tag" $registry_with_port $repo $data_values_file
 else
   log_note "Deploying the Pinniped Concierge app to the cluster using kapp..."
   pushd deploy/concierge >/dev/null
-
-  ytt --file . --data-values-file "$data_values_file"  >"$manifest"
-
+  ytt --file . --data-values-file "$data_values_file" >"$manifest"
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   popd >/dev/null
 fi
 
-
 #
-# Test user for the authenticator
-# the authenticator may be deployed in alternative ways (ex. carvel package) but regardless we need a test user.
+# Create a test user in the local-user-authenticator and get its CA bundle.
 #
 log_note "Creating test user for local-user-authenticator..."
 test_username="test-username"
@@ -429,9 +399,6 @@ kubectl create secret generic "$test_username" \
   --output yaml |
   kubectl apply -f -
 
-#
-# Regardless of how the local-user-authenticator is installed, we need the webhook bundle in the environment file.
-#
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 
 #
@@ -450,9 +417,7 @@ test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
-env_file_name="/tmp/integration-test-env"
-
-cat <<EOF >"$env_file_name"
+cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
 export PINNIPED_TEST_TOOLS_NAMESPACE="tools"
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
@@ -524,7 +489,6 @@ PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF
 export PINNIPED_TEST_CLUSTER_CAPABILITY_YAML
 EOF
 
-
 #
 # Print instructions for next steps.
 #
@@ -532,7 +496,7 @@ log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
 log_note "    ulimit -n 512"
-log_note "    source $env_file_name && go test -v -race -count 1 -timeout 0 ./test/integration"
+log_note '    source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration'
 log_note
 log_note "Using GoLand? Paste the result of this command into GoLand's run configuration \"Environment\"."
 log_note "    hack/integration-test-env-goland.sh | pbcopy"
@@ -546,4 +510,3 @@ if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
 else
   log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
 fi
-log_note

@@ -3,7 +3,6 @@
 
 #@data/values-schema
 ---
-
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
 image_repo: projects.registry.vmware.com/pinniped/pinniped-server
 #@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."

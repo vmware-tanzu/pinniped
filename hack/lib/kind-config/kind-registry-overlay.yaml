@@ -2,7 +2,7 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:overlay", "overlay")
-#@overlay/match by=overlay.all
+#@overlay/match by=overlay.subset({"kind": "Cluster"}), expects=1
 ---
 #@overlay/match missing_ok=True
 containerdConfigPatches:

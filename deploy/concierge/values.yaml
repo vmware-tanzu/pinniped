@@ -1,9 +1,9 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values-schema
 ---
-#@schema/desc "Name of pinniped-concierge."
+#@schema/desc "Used to help determine the names of various resources and labels."
 app_name: pinniped-concierge
 
 #@schema/desc "Creates a new namespace statically in yaml with the given name and installs the app into that namespace."
@@ -57,13 +57,14 @@ image_pull_dockerconfigjson: "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm
 #@schema/nullable
 discovery_url: https://example.com
 
-
 #@ api_serving_certificate_desc = "Specify the duration and renewal interval for the API serving certificate. \
 #@ The defaults are set to expire the cert about every 30 days, and to rotate it \
-#@ about every 25 days."
+#@ about every 25 days. Specify this as an integer or as a string which contains an integer value."
 #@schema/desc api_serving_certificate_desc
+#@schema/type any=True
 api_serving_certificate_duration_seconds: 2592000
 #@schema/desc api_serving_certificate_desc
+#@schema/type any=True
 api_serving_certificate_renew_before_seconds: 2160000
 
 #! Specify the verbosity of logging: info ("nice to know" information), debug (developer information), trace (timing information),
@@ -89,7 +90,6 @@ run_as_group: 65532
 #@ Pinniped API groups will look like foo.tuna.io. authentication.concierge.tuna.io, etc."
 #@schema/desc api_group_suffix_desc
 api_group_suffix: pinniped.dev
-
 
 #@schema/desc "Customize CredentialIssuer.spec.impersonationProxy to change how the concierge handles impersonation."
 impersonation_proxy_spec:
@@ -117,10 +117,8 @@ impersonation_proxy_spec:
     #! None does not provision either and assumes that you have set the external_endpoint
     #! and set up your own ingress to connect to the impersonation proxy.
     #@schema/desc "Options are 'LoadBalancer', 'ClusterIP' and 'None'."
-    #@schema/nullable
     type: LoadBalancer
     #@schema/desc "The annotations that should be set on the ClusterIP or LoadBalancer Service."
-    #@schema/nullable
     annotations:
       {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}
     #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP."

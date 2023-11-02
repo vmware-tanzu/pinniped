@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
 # This script can be used in conjunction with prepare-for-integration-tests.sh.
 # When invoked with the PINNIPED_USE_LOCAL_KIND_REGISTRY environment variable set to a non-empty value,
-# the integration tests script will create a local docker registry and configure kind to use the registry
-# and will build the Pinniped binary and container image.
-# This script will then create Carvel Packages for supervisor,concierge and local-user-authenticator.
+# the prepare-for-integration-tests.sh script will create a local docker registry and configure kind to use the registry.
+# This script will build the Pinniped binary and container image.
+# This script will then create Carvel Packages for supervisor, concierge, and local-user-authenticator.
 # It will also create a Carvel PackageRepository.
-# The PackageRepository will be installed on the kind cluster, then PackageInstall resources
-# will be created to deploy an instance of each of the packages on the cluster.
-# Once this script has completed, Pinniped can be interacted with as if it had been deployed in the usual way,
-# for example by running tests or by preparing supervisor for manual interactions:
-#  source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration -run  /TestE2EFullIntegration_Browser
-#  hack/prepare-supervisor-on-kind.sh --oidc
+# The PackageRepository will be installed on the kind cluster.
 #
 # Example usage:
 #   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
@@ -53,15 +48,17 @@ function check_dependency() {
   fi
 }
 
-# this script is best invoked from the root directory
-# it is designed to be passed as --pre-install flag to hack/prepare-for-integration-tests.sh
+# This script is best invoked from the root directory.
+# It is designed to be passed as --pre-install flag to hack/prepare-for-integration-tests.sh.
 hack_lib_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${hack_lib_path}/../../" || exit 1
 
-# arguments provided to scripts called by hack/prepare-for-integration-tests.sh
-# - app: unimportant, but always first
-# - tag: uuidgen in hack/prepare-for-integration-tests.sh
-#        if this script is run standalone, then auto-fill with a unique value
+# Check for dependencies
+check_dependency kbld "Please install kbld. e.g. 'brew tap vmware-tanzu/carvel && brew install kbld' for MacOS"
+check_dependency imgpkg "Please install imgpkg. e.g. 'brew tap vmware-tanzu/carvel && brew install imgpkg' for MacOS"
+check_dependency vendir "Please install vendir. e.g. 'brew tap vmware-tanzu/carvel && brew install vendir' for MacOS"
+
+# Expected arguments.
 app=${1:-"app-argument-not-provided"}
 tag=${2:-"tag-argument-not-provided"}
 registry=${3:-"registry-argument-not-provided"}
@@ -77,10 +74,8 @@ if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" == "" ]]; then
   exit 1
 fi
 
-
 pinniped_package_version="${tag}" # ie, "0.25.0"
 registry_repo="$registry/$repo"
-registry_repo_tag="${registry_repo}:${tag}"
 
 api_group_suffix="pinniped.dev"
 
@@ -91,15 +86,13 @@ package_repo_prefix="${registry_repo}/package" # + $resource_name + ":" + $tag
 package_repository_repo="pinniped-package-repository"
 package_repository_repo_tag="${registry_repo}/${package_repository_repo}:${tag}"
 
-
-dest_dir="deploy_carvel"
 carvel_package_src="hack/lib/carvel_packages"
-template_src_dir="${carvel_package_src}/tpl"
+template_src_dir="${carvel_package_src}/templates"
 
-
+dest_dir="deploy_carvel_tmp"
 # clean the root carvel package directory
 rm -rf "${dest_dir}"
-mkdir "${dest_dir}"
+mkdir -p "${dest_dir}"
 
 # Generate the OpenAPI v3 Schema files, imgpkg images.yml files
 declare -a packages_to_build=("local-user-authenticator" "pinniped-concierge" "pinniped-supervisor")
@@ -110,7 +103,6 @@ do
 
   # sources
   resource_package_template_source_dir="${template_src_dir}/${resource_name}"
-  resource_ytt_config_file_source_dir="deploy/${resource_name}" # copy from original ytt templates
   # destinations
   resource_destination_dir="${dest_dir}/${resource_name}"
   resource_config_destination_dir="${resource_destination_dir}/config"
@@ -143,8 +135,8 @@ do
   imgpkg push --bundle "${package_repo_tag}" --file "${resource_destination_dir}"
 
   log_note "Generating PackageRepository Package entry for ${resource_name}"
-  # publish package versions to package repository
-  packages_dir="deploy_carvel/package_repository/packages/"
+  # Publish package versions to package repository.
+  packages_dir="${dest_dir}/package_repository/packages/"
   package_repository_dir="${packages_dir}/${resource_qualified_name}"
   mkdir -p "${packages_dir}"
   rm -rf "${package_repository_dir}"
@@ -160,11 +152,11 @@ do
 done
 
 log_note "Generating .imgpkg/images.yml for  Pinniped PackageRepository bundle..."
-mkdir -p "deploy_carvel/package_repository/.imgpkg"
-kbld --file "deploy_carvel/package_repository/packages/" --imgpkg-lock-output "deploy_carvel/package_repository/.imgpkg/images.yml"
+mkdir -p "${dest_dir}/package_repository/.imgpkg"
+kbld --file "${dest_dir}/package_repository/packages/" --imgpkg-lock-output "${dest_dir}/package_repository/.imgpkg/images.yml"
 
 log_note "Pushing Pinniped PackageRepository bundle.... "
-imgpkg push --bundle "${package_repository_repo_tag}" --file "deploy_carvel/package_repository"
+imgpkg push --bundle "${package_repository_repo_tag}" --file "${dest_dir}/package_repository"
 
 # manually validate the package bundle by pulling it from the registry and examining its contents:
 # imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"

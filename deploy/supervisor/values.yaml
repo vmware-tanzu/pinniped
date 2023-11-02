@@ -1,9 +1,9 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values-schema
 ---
-#@schema/desc "Name of pinniped-supervisor."
+#@schema/desc "Used to help determine the names of various resources and labels."
 app_name: pinniped-supervisor
 
 #@schema/desc "Creates a new namespace statically in yaml with the given name and installs the app into that namespace."
@@ -18,9 +18,9 @@ into_namespace: my-preexisting-namespace
 #@ by controllers at runtime will be labelled with `app: $app_name` and also with the labels \
 #@ specified here. The value of `custom_labels` must be a map of string keys to string values. \
 #@ The app can be uninstalled either by: \
-#@ 1. Deleting the static install-time yaml resources including the static namespace, which will cascade and also delete \
-#@    resources that were dynamically created by controllers at runtime \
-#@ 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace."
+#@ 1.) deleting the static install-time yaml resources including the static namespace, which will cascade and also delete \
+#@ resources that were dynamically created by controllers at runtime, \
+#@ or, 2.) deleting all resources by label, which does not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
 #@schema/type any=True
 custom_labels: {} #! {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
@@ -61,19 +61,19 @@ deprecated_service_http_nodeport_nodeport: 31234
 #@schema/desc "will be removed in a future release; when specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`"
 #@schema/nullable
 deprecated_service_http_loadbalancer_port: 8443
-#@schema/desc "#! will be removed in a future release; when specified, creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`"
+#@schema/desc "will be removed in a future release; when specified, creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`"
 #@schema/nullable
 deprecated_service_http_clusterip_port: 8443
-#@schema/desc "#! when specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`"
+#@schema/desc "when specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/nullable
 service_https_nodeport_port: 31243
-#@schema/desc "#! the `nodePort` value of the NodePort Service, optional when `service_https_nodeport_port` is specified"
+#@schema/desc "the `nodePort` value of the NodePort Service, optional when `service_https_nodeport_port` is specified"
 #@schema/nullable
 service_https_nodeport_nodeport: 31243
-#@schema/desc "#! when specified, creates a LoadBalancer Service with this `port` value, with port 8443 as its `targetPort`"
+#@schema/desc "when specified, creates a LoadBalancer Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/nullable
 service_https_loadbalancer_port: 8443
-#@schema/desc "#! when specified, creates a ClusterIP Service with this `port` value, with port 8443 as its `targetPort`"
+#@schema/desc "when specified, creates a ClusterIP Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/nullable
 service_https_clusterip_port: 8443
 #@ service_loadbalancer_ip_desc="The `loadBalancerIP` value of the LoadBalancer Service. \
@@ -94,9 +94,9 @@ log_level: info
 #@schema/nullable
 deprecated_log_format: json
 
-#@schema/desc "run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+#@schema/desc "specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice"
 run_as_user: 65532
-#@schema/desc "run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+#@schema/desc "specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice"
 run_as_group: 65532
 
 #@ api_group_suffix_desc = "Specify the API group suffix for all Pinniped API groups. By default, this is set to \
@@ -114,8 +114,8 @@ api_group_suffix: pinniped.dev
 #@schema/desc https_proxy_desc
 #@schema/nullable
 https_proxy: http://proxy.example.com
-#@schema/desc "do not proxy Kubernetes endpoints"
-no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local"
+#@schema/desc "Endpoints that should not use the proxy."
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
 
 #! Control the HTTP and HTTPS listeners of the Supervisor.
 #!

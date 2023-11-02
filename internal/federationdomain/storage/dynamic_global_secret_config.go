@@ -51,13 +51,13 @@ func (d *DynamicGlobalSecretConfig) GetHMACHasher(ctx context.Context) func() ha
 	return d.fositeConfig.GetHMACHasher(ctx)
 }
 
-func (d *DynamicGlobalSecretConfig) GetGlobalSecret(ctx context.Context) ([]byte, error) {
+func (d *DynamicGlobalSecretConfig) GetGlobalSecret(_ctx context.Context) ([]byte, error) {
 	// Always call keyFunc() without ever caching its value, because that is the whole point
 	// of this type. We want the global secret to be dynamic.
 	return d.keyFunc(), nil
 }
 
-func (d *DynamicGlobalSecretConfig) GetRotatedGlobalSecrets(ctx context.Context) ([][]byte, error) {
+func (d *DynamicGlobalSecretConfig) GetRotatedGlobalSecrets(_ctx context.Context) ([][]byte, error) {
 	// We don't support having multiple global secrets yet, but when we do we will need to implement this.
 	return nil, nil
 }

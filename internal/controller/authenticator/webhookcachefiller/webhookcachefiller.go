@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package webhookcachefiller implements a controller for filling an authncache.Cache with each added/updated WebhookAuthenticator.
@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-logr/logr"
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/net"
@@ -25,17 +24,22 @@ import (
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
-func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
+func New(
+	cache *authncache.Cache,
+	webhooks authinformers.WebhookAuthenticatorInformer,
+	logger plog.Logger,
+) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "webhookcachefiller-controller",
-			Syncer: &controller{
+			Syncer: &config{
 				cache:    cache,
 				webhooks: webhooks,
-				log:      log.WithName("webhookcachefiller-controller"),
+				logger:   logger.WithName("webhookcachefiller-controller"),
 			},
 		},
 		controllerlib.WithInformer(
@@ -46,49 +50,48 @@ func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInf
 	)
 }
 
-type controller struct {
+type config struct {
 	cache    *authncache.Cache
 	webhooks authinformers.WebhookAuthenticatorInformer
-	log      logr.Logger
+	logger   plog.Logger
 }
 
-// Sync implements controllerlib.Syncer.
-func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
-	if err != nil && errors.IsNotFound(err) {
-		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
-		return nil
-	}
+func (c *config) Sync(ctx controllerlib.Context) error {
+	webhookAuthenticator, err := c.webhooks.Lister().Get(ctx.Key.Name)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			c.logger.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
+			return nil
+		}
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
-	webhookAuthenticator, err := newWebhookAuthenticator(&obj.Spec, os.CreateTemp, clientcmd.WriteToFile)
+	webhookTokenAuthenticator, err := newWebhookTokenAuthenticator(&webhookAuthenticator.Spec, os.CreateTemp, clientcmd.WriteToFile)
 	if err != nil {
 		return fmt.Errorf("failed to build webhook config: %w", err)
 	}
 
 	c.cache.Store(authncache.Key{
 		APIGroup: auth1alpha1.GroupName,
-		Kind:     "WebhookAuthenticator",
+		Kind:     webhookAuthenticator.Kind,
 		Name:     ctx.Key.Name,
-	}, webhookAuthenticator)
-	c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
+	}, webhookTokenAuthenticator)
+	c.logger.WithValues("webhook", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).Info("added new webhook authenticator")
 	return nil
 }
 
-// newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
+// newWebhookTokenAuthenticator creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
-func newWebhookAuthenticator(
+func newWebhookTokenAuthenticator(
 	spec *auth1alpha1.WebhookAuthenticatorSpec,
 	tempfileFunc func(string, string) (*os.File, error),
 	marshalFunc func(clientcmdapi.Config, string) error,
 ) (*webhook.WebhookTokenAuthenticator, error) {
-	temp, err := tempfileFunc("", "pinniped-webhook-kubeconfig-*")
+	tempFile, err := tempfileFunc("", "pinniped-webhook-kubeconfig-*")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create temporary file: %w", err)
 	}
-	defer func() { _ = os.Remove(temp.Name()) }()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	cluster := &clientcmdapi.Cluster{Server: spec.Endpoint}
 	_, cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
@@ -101,7 +104,7 @@ func newWebhookAuthenticator(
 	kubeconfig.Contexts["anonymous"] = &clientcmdapi.Context{Cluster: "anonymous-cluster"}
 	kubeconfig.CurrentContext = "anonymous"
 
-	if err := marshalFunc(*kubeconfig, temp.Name()); err != nil {
+	if err := marshalFunc(*kubeconfig, tempFile.Name()); err != nil {
 		return nil, fmt.Errorf("unable to marshal kubeconfig: %w", err)
 	}
 
@@ -134,7 +137,7 @@ func newWebhookAuthenticator(
 	//  client, err := kubeclient.New(kubeclient.WithConfig(restConfig), kubeclient.WithTLSConfigFunc(ptls.Default))
 	//  ...
 	//  then use client.JSONConfig as clientConfig
-	clientConfig, err := webhookutil.LoadKubeconfig(temp.Name(), customDial)
+	clientConfig, err := webhookutil.LoadKubeconfig(tempFile.Name(), customDial)
 	if err != nil {
 		return nil, err
 	}

@@ -232,7 +232,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				plog.New(),
 			),
 			singletonWorker,
 		).

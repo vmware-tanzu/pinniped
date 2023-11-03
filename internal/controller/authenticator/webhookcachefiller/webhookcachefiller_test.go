@@ -1,9 +1,10 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package webhookcachefiller
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -23,8 +24,8 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestController(t *testing.T) {
@@ -35,15 +36,13 @@ func TestController(t *testing.T) {
 		syncKey          controllerlib.Key
 		webhooks         []runtime.Object
 		wantErr          string
-		wantLogs         []string
+		wantLog          string
 		wantCacheEntries int
 	}{
 		{
 			name:    "not found",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantLogs: []string{
-				`webhookcachefiller-controller "level"=0 "msg"="Sync() found that the WebhookAuthenticator does not exist yet or was deleted"`,
-			},
+			wantLog: "Sync() found that the WebhookAuthenticator does not exist yet or was deleted",
 		},
 		{
 			name:    "invalid webhook",
@@ -62,11 +61,14 @@ func TestController(t *testing.T) {
 		},
 		{
 			name:    "valid webhook",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "other-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
+					TypeMeta: metav1.TypeMeta{
+						Kind: "WebhookAuthenticatorKind",
+					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name: "other-name",
 					},
 					Spec: auth1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: "https://example.com",
@@ -74,9 +76,7 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []string{
-				`webhookcachefiller-controller "level"=0 "msg"="added new webhook authenticator" "endpoint"="https://example.com" "webhook"={"name":"test-name"}`,
-			},
+			wantLog:          `"message":"added new webhook authenticator","webhook":{"name":"other-name"},"endpoint":"https://example.com"`,
 			wantCacheEntries: 1,
 		},
 	}
@@ -88,9 +88,13 @@ func TestController(t *testing.T) {
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
-			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 
-			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog.Logger)
+			var log bytes.Buffer
+			controller := New(
+				cache,
+				informers.Authentication().V1alpha1().WebhookAuthenticators(),
+				plog.TestLogger(t, &log),
+			)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -105,8 +109,16 @@ func TestController(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, tt.wantLogs, testLog.Lines())
+			require.Contains(t, log.String(), tt.wantLog)
 			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()))
+			if len(cache.Keys()) > 0 {
+				cacheKey := authncache.Key{
+					APIGroup: "authentication.concierge.pinniped.dev",
+					Kind:     tt.webhooks[0].GetObjectKind().GroupVersionKind().Kind,
+					Name:     tt.syncKey.Name,
+				}
+				require.NotNil(t, cache.Get(cacheKey))
+			}
 		})
 	}
 }
@@ -114,20 +126,20 @@ func TestController(t *testing.T) {
 func TestNewWebhookAuthenticator(t *testing.T) {
 	t.Run("temp file failure", func(t *testing.T) {
 		brokenTempFile := func(_ string, _ string) (*os.File, error) { return nil, fmt.Errorf("some temp file error") }
-		res, err := newWebhookAuthenticator(nil, brokenTempFile, clientcmd.WriteToFile)
+		res, err := newWebhookTokenAuthenticator(nil, brokenTempFile, clientcmd.WriteToFile)
 		require.Nil(t, res)
 		require.EqualError(t, err, "unable to create temporary file: some temp file error")
 	})
 
 	t.Run("marshal failure", func(t *testing.T) {
 		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, os.CreateTemp, marshalError)
+		res, err := newWebhookTokenAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, os.CreateTemp, marshalError)
 		require.Nil(t, res)
 		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
 	})
 
 	t.Run("invalid base64", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
+		res, err := newWebhookTokenAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
 		}, os.CreateTemp, clientcmd.WriteToFile)
@@ -136,7 +148,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	})
 
 	t.Run("invalid pem data", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
+		res, err := newWebhookTokenAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("bad data"))},
 		}, os.CreateTemp, clientcmd.WriteToFile)
@@ -145,7 +157,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	})
 
 	t.Run("valid config with no TLS spec", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
+		res, err := newWebhookTokenAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 		}, os.CreateTemp, clientcmd.WriteToFile)
 		require.NotNil(t, res)
@@ -166,7 +178,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),
 			},
 		}
-		res, err := newWebhookAuthenticator(spec, os.CreateTemp, clientcmd.WriteToFile)
+		res, err := newWebhookTokenAuthenticator(spec, os.CreateTemp, clientcmd.WriteToFile)
 		require.NoError(t, err)
 		require.NotNil(t, res)
 

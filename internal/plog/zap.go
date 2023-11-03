@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -25,19 +25,27 @@ import (
 )
 
 func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.Logger, func(), error) {
+	overrides, hasOverrides := ctx.Value(testOverridesContextKey).(*testOverrides)
+
 	if encoding == "text" {
 		var w io.Writer = os.Stderr
 		flush := func() { _ = os.Stderr.Sync() }
 
-		// allow tests to override klog config (but cheat and re-use the zap override key)
-		if overrides, ok := ctx.Value(zapOverridesKey).(*testOverrides); ok {
+		var textloggerOptions []textlogger.ConfigOption
+
+		if hasOverrides {
 			if overrides.w != nil {
 				w = newSink(overrides.w) // make sure the value is safe for concurrent use
 				flush = func() {}
 			}
+			textloggerOptions = append(textloggerOptions, textlogger.FixedTime(overrides.fakeClock.Now()))
 		}
 
-		return textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(int(klogLevel)), textlogger.Output(w))), flush, nil
+		textloggerOptions = append(textloggerOptions,
+			textlogger.Verbosity(int(klogLevel)),
+			textlogger.Output(w))
+
+		return textlogger.NewLogger(textlogger.NewConfig(textloggerOptions...)), flush, nil
 	}
 
 	path := "stderr" // this is how zap refers to os.Stderr
@@ -51,8 +59,7 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 	}
 	var opts []zap.Option
 
-	// allow tests to override zap config
-	if overrides, ok := ctx.Value(zapOverridesKey).(*testOverrides); ok {
+	if hasOverrides {
 		if overrides.w != nil {
 			// use a per invocation random string as the key into the global map
 			testKey := "/" + base64.RawURLEncoding.EncodeToString([]byte(rand.String(32)))
@@ -78,9 +85,7 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 		if overrides.f != nil {
 			f = overrides.f
 		}
-		if overrides.opts != nil {
-			opts = overrides.opts
-		}
+		opts = append(opts, overrides.opts...)
 	}
 
 	// when using the trace or all log levels, an error log will contain the full stack.

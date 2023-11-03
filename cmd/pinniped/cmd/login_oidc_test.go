@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -531,12 +530,9 @@ func TestLoginOIDCCommand(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			fakeClock := clocktesting.NewFakeClock(now)
-			ctx := plog.TestZapOverrides(context.Background(), t, &buf, nil, zap.WithClock(plog.ZapClock(fakeClock)))
+			ctx := plog.AddZapOverridesToContext(context.Background(), t, &buf, nil, clocktesting.NewFakeClock(now))
 
-			var (
-				gotOptions []oidcclient.Option
-			)
+			var gotOptions []oidcclient.Option
 			cmd := oidcLoginCommand(oidcLoginCommandDeps{
 				lookupEnv: func(s string) (string, bool) {
 					v, ok := tt.env[s]

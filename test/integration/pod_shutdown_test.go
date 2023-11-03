@@ -112,7 +112,7 @@ func testShutdownAllPodsOfApp(t *testing.T, env *testlib.TestEnv, namespace stri
 		// process was performed successfully and without being blocked.
 		require.Containsf(t, pl.logsBuf.String(), `"[graceful-termination] shutdown event","name":"ShutdownInitiated"`,
 			"did not find expected message in pod log for pod %q", pl.pod.Name)
-		require.Containsf(t, pl.logsBuf.String(), `"[graceful-termination] apiserver is exiting\n"`,
+		require.Containsf(t, pl.logsBuf.String(), `[graceful-termination] apiserver is exiting`,
 			"did not find expected message in pod log for pod %q", pl.pod.Name)
 		t.Logf("found expected graceful-termination messages in the logs of pod %q", pl.pod.Name)
 	}

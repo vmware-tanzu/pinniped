@@ -5,11 +5,13 @@
 package webhookcachefiller
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	webhookutil "k8s.io/apiserver/pkg/util/webhook"
@@ -19,13 +21,29 @@ import (
 	"k8s.io/klog/v2"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controller/conditionsutil"
+	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/plog"
 )
+
+func (c *config) updateWebhookAuthStatus(ctx context.Context, upstream *auth1alpha1.WebhookAuthenticator, conditions []*metav1.Condition) {
+	var client conciergeclientset.Interface
+
+	toUpdate := upstream.DeepCopy()
+
+	_ = conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &toUpdate.Status.Conditions, c.logger)
+
+	_, err := client.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, toUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		c.logger.Error(fmt.Sprintf("unable to update %s with name %s", toUpdate.TypeMeta.Kind, toUpdate.ObjectMeta.Name), err)
+	}
+}
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
@@ -56,18 +74,41 @@ type config struct {
 	logger   plog.Logger
 }
 
-func (c *config) Sync(ctx controllerlib.Context) error {
+func buildCondition(err error) []*metav1.Condition {
+	if err == nil {
+		return []*metav1.Condition{
+			{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+				Reason: upstreamwatchers.ReasonSuccess,
+			},
+		}
+	}
+
+	return []*metav1.Condition{
+		{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "Error",
+			Message: err.Error(),
+		},
+	}
+}
+
+func (c *config) Sync(ctx controllerlib.Context) (err error) {
 	webhookAuthenticator, err := c.webhooks.Lister().Get(ctx.Key.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			c.logger.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 			return nil
 		}
+		c.updateWebhookAuthStatus(ctx.Context, webhookAuthenticator, buildCondition(err))
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
 	webhookTokenAuthenticator, err := newWebhookTokenAuthenticator(&webhookAuthenticator.Spec, os.CreateTemp, clientcmd.WriteToFile)
 	if err != nil {
+		c.updateWebhookAuthStatus(ctx.Context, webhookAuthenticator, buildCondition(err))
 		return fmt.Errorf("failed to build webhook config: %w", err)
 	}
 
@@ -77,6 +118,7 @@ func (c *config) Sync(ctx controllerlib.Context) error {
 		Name:     ctx.Key.Name,
 	}, webhookTokenAuthenticator)
 	c.logger.WithValues("webhook", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).Info("added new webhook authenticator")
+	c.updateWebhookAuthStatus(ctx.Context, webhookAuthenticator, buildCondition(err))
 	return nil
 }
 

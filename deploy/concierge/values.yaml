@@ -3,135 +3,207 @@
 
 #@data/values-schema
 ---
+#@schema/title "App name"
 #@schema/desc "Used to help determine the names of various resources and labels."
+#@schema/validation min_len=1
 app_name: pinniped-concierge
 
+#@schema/title "Namespace"
 #@schema/desc "Creates a new namespace statically in yaml with the given name and installs the app into that namespace."
+#@schema/validation min_len=1
 namespace: pinniped-concierge
+
+#@schema/title "Into namespace"
 #@ into_namespace_desc = "If specified, assumes that a namespace of the given name already exists and installs the app into that namespace. \
 #@ If both `namespace` and `into_namespace` are specified, then only `into_namespace` is used."
 #@schema/desc into_namespace_desc
+#@schema/examples ("The name of an existing namespace", "my-preexisting-namespace")
 #@schema/nullable
-into_namespace: my-preexisting-namespace
+#@schema/validation min_len=1
+into_namespace: ""
 
+#@schema/title "Custom labels"
 #@ custom_labels_desc = "All resources created statically by yaml at install-time and all resources created dynamically \
-#@ by controllers at runtime will be labelled with `app: $app_name` and also with the labels \
-#@ specified here. The value of `custom_labels` must be a map of string keys to string values. \
-#@ The app can be uninstalled either by: \
-#@ 1. Deleting the static install-time yaml resources including the static namespace, which will cascade and also delete \
-#@    resources that were dynamically created by controllers at runtime \
-#@ 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace."
+#@ by controllers at runtime will be labelled with `app: $app_name` and also with the labels specified here. The value of \
+#@ `custom_labels` must be a map of string keys to string values. The app can be uninstalled either by: 1.) deleting the \
+#@ static install-time yaml resources including the static namespace, which will cascade and also delete \
+#@ resources that were dynamically created by controllers at runtime, or 2.) deleting all resources by label, which does \
+#@ not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
+#@schema/examples ("Example set of labels", {"myCustomLabelName": "myCustomLabelValue", "otherCustomLabelName": "otherCustomLabelValue"})
 #@schema/type any=True
-custom_labels: {} #! {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
+#@schema/validation ("a map of keys and values", lambda v: type(v) in ["yamlfragment"])
+custom_labels: {}
 
+#@schema/title "Replicas"
 #@schema/desc "Specify how many replicas of the Pinniped server to run."
 replicas: 2
 
-#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
+#@schema/title "Image repo"
+#@schema/desc "The repository for the Concierge container image."
+#@schema/validation min_len=1
 image_repo: projects.registry.vmware.com/pinniped/pinniped-server
-#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
+
+#@schema/title "Image digest"
+#@schema/desc "The image digest for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
+#@schema/examples ("Digest", "sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8")
 #@schema/nullable
-image_digest: sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
-#@schema/desc "Specify either an image_digest or an image_tag. If both are given, only image_digest will be used."
+#@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_tag"] == None
+image_digest: ""
+
+#@schema/title "Image tag"
+#@schema/desc "The image tag for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
+#@schema/examples ("Tag", "v0.25.0")
+#@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_digest"] == None
 image_tag: latest
 
+#@schema/title "Kube Cert Agent image"
 #@ kube_cert_agent_image = "Optionally specify a different image for the 'kube-cert-agent' pod which is scheduled \
 #@ on the control plane. This image needs only to include `sleep` and `cat` binaries. \
 #@ By default, the same image specified for image_repo/image_digest/image_tag will be re-used."
 #@schema/desc kube_cert_agent_image
+#@schema/examples ("Image including tag or digest", "projects.registry.vmware.com/pinniped/pinniped-server:latest")
 #@schema/nullable
-kube_cert_agent_image: projects.registry.vmware.com/pinniped/pinniped-server
+#@schema/validation min_len=1
+kube_cert_agent_image: ""
 
-#@ image_pull_dockerconfigjson_desc = "Specifies a secret to be used when pulling the above `image_repo` container image. \
-#@ Can be used when the above image_repo is a private registry. \
-#@ Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username=\"USERNAME\" --docker-password=\"PASSWORD\" --dry-run=client -o json | jq -r '.data[\".dockerconfigjson\"]' \
-#@ Optional."
-#! base64 encoded: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
-#! result: eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ==
+#@schema/title "Image pull dockerconfigjson"
+#@ image_pull_dockerconfigjson_desc = "A base64 encoded secret to be used when pulling the `image_repo` container image. \
+#@ Can be used when the image_repo is a private registry. Typically, the value would be the output of: \
+#@ kubectl create secret docker-registry x --docker-server=https://example.io --docker-username='USERNAME' --docker-password='PASSWORD' --dry-run=client -o json | jq -r '.data[\".dockerconfigjson\"]'"
 #@schema/desc image_pull_dockerconfigjson_desc
+#@ example_desc = 'base64 encoding of: {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}'
+#@ example_value = "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
+#@schema/examples (example_desc, example_value)
 #@schema/nullable
-image_pull_dockerconfigjson: "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
+#@schema/validation min_len=1
+image_pull_dockerconfigjson: ""
 
+#@schema/title "Discovery URL"
 #@schema/desc "Pinniped will try to guess the right K8s API URL for sharing that information with potential clients. This setting allows the guess to be overridden."
+#@schema/examples ("Kubernetes API URL","https://example.com")
 #@schema/nullable
-discovery_url: https://example.com
+#@schema/validation min_len=1
+discovery_url: ""
 
-#@ api_serving_certificate_desc = "Specify the duration and renewal interval for the API serving certificate. \
-#@ The defaults are set to expire the cert about every 30 days, and to rotate it \
-#@ about every 25 days. Specify this as an integer or as a string which contains an integer value."
-#@schema/desc api_serving_certificate_desc
+#@schema/title "API serving certificate duration seconds"
+#@ api_serving_certificate_duration_seconds_desc = "Specify the duration for the API serving certificate. \
+#@ The default is set to expire the cert about every 30 days. \
+#@ Specify this as an integer or as a string which contains an integer value."
+#@schema/desc api_serving_certificate_duration_seconds_desc
 #@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 api_serving_certificate_duration_seconds: 2592000
-#@schema/desc api_serving_certificate_desc
+
+#@schema/title "API serving certificate renew before seconds"
+#@ api_serving_certificate_renew_before_seconds_desc = "Specify the renewal interval for the API serving certificate. \
+#@ The default is set to rotate it about every 25 days. \
+#@ Specify this as an integer or as a string which contains an integer value."
+#@schema/desc api_serving_certificate_renew_before_seconds_desc
 #@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 api_serving_certificate_renew_before_seconds: 2160000
 
-#! Specify the verbosity of logging: info ("nice to know" information), debug (developer information), trace (timing information),
-#! or all (kitchen sink). Do not use trace or all on production systems, as credentials may get logged.
-#@schema/desc "default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs."
+#@schema/title "Log level"
+#@ log_level_desc = "Specify the verbosity of logging: info (\"nice to know\" information), debug (developer information), trace (timing information), \
+#@ or all (kitchen sink). Do not use trace or all on production systems, as credentials may get logged. \
+#@ When this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs."
+#@schema/desc log_level_desc
+#@schema/examples ("Developer logging information","debug")
 #@schema/nullable
-log_level: info
+#@schema/validation one_of=["info", "debug", "trace", "all"]
+log_level: ""
+
+#@schema/title "Log format"
 #@ deprecated_log_format_desc = "Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs). \
 #@ By default, when this value is left unset, logs are formatted in json. \
 #@ This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
 #@schema/desc deprecated_log_format_desc
+#@schema/examples ("Set logs to JSON format","json")
 #@schema/nullable
-deprecated_log_format: json
+#@schema/validation one_of=["json", "text"]
+#@schema/deprecated "This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
+deprecated_log_format: ""
 
-#@schema/desc "run_as_user specifies the user ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+#@schema/title "Run as user"
+#@schema/desc "The user ID that will own the process."
+#! See the Dockerfile for the reasoning behind this default value.
 run_as_user: 65532
-#@schema/desc "run_as_group specifies the group ID that will own the process, see the Dockerfile for the reasoning behind this choice"
+
+#@schema/title "Run as group"
+#@schema/desc "The group ID that will own the process."
+#! See the Dockerfile for the reasoning behind this default value.
 run_as_group: 65532
 
+#@schema/title "API group suffix"
 #@ api_group_suffix_desc = "Specify the API group suffix for all Pinniped API groups. By default, this is set to \
 #@ pinniped.dev, so Pinniped API groups will look like foo.pinniped.dev, \
 #@ authentication.concierge.pinniped.dev, etc. As an example, if this is set to tuna.io, then \
 #@ Pinniped API groups will look like foo.tuna.io. authentication.concierge.tuna.io, etc."
 #@schema/desc api_group_suffix_desc
+#@schema/validation min_len=1
 api_group_suffix: pinniped.dev
 
+#@schema/title "Impersonation proxy spec"
 #@schema/desc "Customize CredentialIssuer.spec.impersonationProxy to change how the concierge handles impersonation."
 impersonation_proxy_spec:
-  #! options are "auto", "disabled" or "enabled".
-  #! If auto, the impersonation proxy will run only if the cluster signing key is not available
-  #! and the other strategy does not work.
-  #! If disabled, the impersonation proxy will never run, which could mean that the concierge
-  #! doesn't work at all.
-  #! If enabled, the impersonation proxy will always run regardless of other strategies available.
-  #@schema/desc "If enabled, the impersonation proxy will always run regardless of other strategies available."
+
+  #@schema/title "Mode"
+  #@ impersonation_mode_desc = "If enabled, the impersonation proxy will always run regardless of other strategies available. \
+  #@ Options are 'auto', 'disabled' or 'enabled'. If auto, the impersonation proxy will run only if the cluster signing key is \
+  #@ not available and the other strategy does not work. If disabled, the impersonation proxy will never run, which could mean \
+  #@ that the concierge doesn't work at all."
+  #@schema/desc impersonation_mode_desc
+  #@schema/examples ("Always run, regardless of available strategies", "enabled"),("Detect if cluster signing key is available for use","auto")
   mode: auto
+
+  #@schema/title "External endpoint"
   #@ external_endpoint_desc = "The endpoint which the client should use to connect to the impersonation proxy. \
   #@ If left unset, the client will default to connecting based on the ClusterIP or LoadBalancer endpoint."
   #@schema/desc external_endpoint_desc
+  #@schema/examples ("Specified impersonation proxy endpoint", "1.2.3.4:5678")
   #@schema/nullable
-  external_endpoint: 1.2.3.4:5678
+  #@schema/validation min_len=1
+  external_endpoint: ""
+
+  #@schema/title "Service"
   #@schema/desc "The impersonation proxy service configuration"
   service:
-    #! Options are "LoadBalancer", "ClusterIP" and "None".
-    #! LoadBalancer automatically provisions a Service of type LoadBalancer pointing at
-    #! the impersonation proxy. Some cloud providers will allocate
-    #! a public IP address by default even on private clusters.
-    #! ClusterIP automatically provisions a Service of type ClusterIP pointing at the
-    #! impersonation proxy.
-    #! None does not provision either and assumes that you have set the external_endpoint
-    #! and set up your own ingress to connect to the impersonation proxy.
-    #@schema/desc "Options are 'LoadBalancer', 'ClusterIP' and 'None'."
+
+    #@schema/title "Type"
+    #@ impersonation_service_type_desc = "Service backing the impersonation proxy. Options are 'LoadBalancer', 'ClusterIP' \
+    #@ and 'None'. LoadBalancer automatically provisions a Service of type LoadBalancer pointing at the impersonation \
+    #@ proxy. Some cloud providers will allocate a public IP address by default even on private clusters. ClusterIP \
+    #@ automatically provisions a Service of type ClusterIP pointing at the impersonation proxy. None does not provision \
+    #@ either and assumes that you have set the external_endpoint and set up your own ingress to connect to the impersonation proxy."
+    #@schema/desc impersonation_service_type_desc
+    #@schema/examples ("Fall back to ClusterIP", "ClusterIP")
+    #@schema/validation one_of=["LoadBalancer", "ClusterIP", "None"]
     type: LoadBalancer
+
+    #@schema/title "Annotations"
     #@schema/desc "The annotations that should be set on the ClusterIP or LoadBalancer Service."
     annotations:
       {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}
-    #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP."
-    #@schema/nullable
-    load_balancer_ip: 1.2.3.4:5678
 
+    #@schema/title "Load balancer IP"
+    #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP."
+    #@schema/examples ("Specified IP with port", "1.2.3.4:5678")
+    #@schema/nullable
+    #@schema/validation min_len=1
+    load_balancer_ip: ""
+
+#@schema/title "HTTPS proxy"
 #@ https_proxy_desc = "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. \
 #@ These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS, \
 #@ e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider. \
 #@ The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY. \
 #@ Optional."
 #@schema/desc https_proxy_desc
+#@schema/examples ("Provide a proxy endpoint","http://proxy.example.com")
 #@schema/nullable
-https_proxy: http://proxy.example.com
-#@schema/desc "do not proxy Kubernetes endpoints"
+https_proxy: ""
+
+#@schema/title "No proxy"
+#@schema/desc "Endpoints that should not be proxied. Defaults to some sensible known values on public cloud providers."
 no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints

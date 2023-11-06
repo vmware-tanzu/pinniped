@@ -20,7 +20,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/stdr v1.2.2
-	github.com/go-logr/zapr v1.2.4
+	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/google/cel-go v0.18.1

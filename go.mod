@@ -16,7 +16,7 @@ require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.20
 	github.com/davecgh/go-spew v1.1.1
-	github.com/felixge/httpsnoop v1.0.3
+	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/stdr v1.2.2

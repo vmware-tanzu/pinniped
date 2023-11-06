@@ -28,7 +28,7 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.4.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorilla/websocket v1.5.0
+	github.com/gorilla/websocket v1.5.1
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/ory/fosite v0.44.0

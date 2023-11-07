@@ -78,7 +78,6 @@ image_tag: latest
 #@ example_value = "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
 #@schema/examples (example_desc, example_value)
 #@schema/nullable
-#@schema/validation min_len=1
 image_pull_dockerconfigjson: ""
 
 #@schema/title "Deprecated service HTTP nodeport port"
@@ -233,7 +232,26 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@schema/desc endpoints_desc
 #@schema/examples ("Example matching default settings", '{"https":{"network":"tcp","address":":8443"},"http":"disabled"}')
 #@schema/type any=True
-#@schema/validation ("a map of keys and values", lambda v: type(v) in ["yamlfragment"])
+#@ def validate_endpoint(endpoint):
+#@   if(type(endpoint) not in ["yamlfragment", "string"]):
+#@     return False
+#@   end
+#@   if(type(endpoint) in ["string"]):
+#@     if (endpoint != "disabled"):
+#@        return False
+#@     end
+#@   end
+#@   return True
+#@ end
+#@ def validate_endpoints(endpoints):
+#@   """
+#@   Returns True if endpoints fulfill the expected structure
+#@   """
+#@   http_val = endpoints["http"]
+#@   https_val = endpoints["https"]
+#@   return validate_endpoint(http_val) and validate_endpoint(https_val)
+#@ end
+#@schema/validation ("a map with keys 'http' and 'https', both having keys 'network' and 'address' or set to 'disabled'", validate_endpoints)
 #@schema/nullable
 endpoints: {}
 

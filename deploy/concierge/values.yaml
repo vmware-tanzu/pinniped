@@ -88,7 +88,6 @@ kube_cert_agent_image: ""
 #@ example_value = "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
 #@schema/examples (example_desc, example_value)
 #@schema/nullable
-#@schema/validation min_len=1
 image_pull_dockerconfigjson: ""
 
 #@schema/title "Discovery URL"

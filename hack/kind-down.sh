@@ -18,7 +18,7 @@ if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
       docker network disconnect "kind" "${reg_name}" >/dev/null
     fi
 
-    echo "Stopping container $reg_name ..."
+    log_note "Stopping container $reg_name ..."
     docker stop "${reg_name}" >/dev/null
 
     # Delete it.

@@ -37,15 +37,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-function log_error() {
-  RED='\033[0;31m'
-  NC='\033[0m'
-  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
-    echo -e "🙁${RED} Error: $* ${NC}"
-  else
-    echo ":( Error: $*"
-  fi
-}
+source hack/lib/helpers.sh
+
 
 use_oidc_upstream=no
 use_ldap_upstream=no

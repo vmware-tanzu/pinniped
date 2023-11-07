@@ -17,36 +17,10 @@
 #
 set -euo pipefail
 
-#
-# Helper functions
-#
-function log_note() {
-  GREEN='\033[0;32m'
-  NC='\033[0m'
-  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
-    echo -e "${GREEN}$*${NC}"
-  else
-    echo "$*"
-  fi
-}
+pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$pinniped_path" || exit 1
 
-function log_error() {
-  RED='\033[0;31m'
-  NC='\033[0m'
-  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
-    echo -e "🙁${RED} Error: $* ${NC}"
-  else
-    echo ":( Error: $*"
-  fi
-}
-
-function check_dependency() {
-  if ! command -v "$1" >/dev/null; then
-    log_error "Missing dependency..."
-    log_error "$2"
-    exit 1
-  fi
-}
+source hack/lib/helpers.sh
 
 #
 # Handle argument parsing and help message
@@ -151,9 +125,6 @@ if [[ "$help" == "yes" ]]; then
   log_note "       --pre-install:               specify an pre-install script such as a build script"
   exit 1
 fi
-
-pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$pinniped_path" || exit 1
 
 #
 # Check for dependencies

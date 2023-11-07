@@ -8,12 +8,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
+source hack/lib/helpers.sh
+
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
   # Create registry container unless it already exists.
   reg_name='kind-registry.local'
   reg_port='5000'
   if [ "$(docker inspect -f '{{.State.Running}}' "${reg_name}" 2>/dev/null || true)" != 'true' ]; then
-    echo "Running the registry:2 docker image..."
+    log_note "Running the registry:2 docker image..."
     docker run \
       --detach \
       --restart=always \
@@ -25,13 +27,13 @@ fi
 
 use_contour_registry=""
 if [[ "${PINNIPED_USE_CONTOUR:-}" != "" ]]; then
-  echo "Adding Contour port mapping to Kind config."
+  log_note "Adding Contour port mapping to Kind config."
   use_contour_registry="--file=${ROOT}/hack/lib/kind-config/contour-overlay.yaml"
 fi
 
 use_kind_registry=""
 if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
-  echo "Adding local registry to Kind config."
+  log_note "Adding local registry to Kind config."
   use_kind_registry="--file=${ROOT}/hack/lib/kind-config/kind-registry-overlay.yaml"
 fi
 

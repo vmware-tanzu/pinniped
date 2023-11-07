@@ -85,6 +85,8 @@ image_pull_dockerconfigjson: ""
 #@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`"
 #@schema/examples ("Specify port","31234")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
 deprecated_service_http_nodeport_port: ""
 
@@ -92,6 +94,8 @@ deprecated_service_http_nodeport_port: ""
 #@schema/desc "The `nodePort` value of the NodePort Service, optional when `deprecated_service_http_nodeport_port` is specified"
 #@schema/examples ("Specify port","31234")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
 deprecated_service_http_nodeport_nodeport: ""
 
@@ -99,6 +103,8 @@ deprecated_service_http_nodeport_nodeport: ""
 #@schema/desc "When specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`"
 #@schema/examples ("Specify port","8443")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
 deprecated_service_http_loadbalancer_port: ""
 
@@ -106,6 +112,8 @@ deprecated_service_http_loadbalancer_port: ""
 #@schema/desc "Creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`"
 #@schema/examples ("Specify port","8443")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
 deprecated_service_http_clusterip_port: ""
 
@@ -113,24 +121,32 @@ deprecated_service_http_clusterip_port: ""
 #@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/examples ("Specify port","31243")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 service_https_nodeport_port: ""
 
 #@schema/title "Service https nodeport nodeport"
 #@schema/desc "The `nodePort` value of the NodePort Service, optional when `service_https_nodeport_port` is specified"
 #@schema/examples ("Specify port","31243")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 service_https_nodeport_nodeport: ""
 
 #@schema/title "Service https loadbalancer port"
 #@schema/desc "When specified, creates a LoadBalancer Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/examples ("Specify port","8443")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 service_https_loadbalancer_port: ""
 
 #@schema/title "Service https clusterip port"
 #@schema/desc "When specified, creates a ClusterIP Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/examples ("Specify port","8443")
 #@schema/nullable
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 service_https_clusterip_port: ""
 
 #@schema/title "Service loadbalancer ip"

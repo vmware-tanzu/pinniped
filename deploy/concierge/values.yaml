@@ -31,8 +31,20 @@ into_namespace: ""
 #@ not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
 #@schema/examples ("Example set of labels", {"myCustomLabelName": "myCustomLabelValue", "otherCustomLabelName": "otherCustomLabelValue"})
+#@ def validate_labels(labels):
+#@   """
+#@   Returns True if labels is an associative data structure string→string,
+#@   and False otherwise.
+#@   """
+#@   for label in labels:
+#@     if type(label) != "string" or type(labels[label]) != "string":
+#@       return False
+#@     end
+#@   end
+#@   return True
+#@ end
 #@schema/type any=True
-#@schema/validation ("a map of keys and values", lambda v: type(v) in ["yamlfragment"])
+#@schema/validation ("a map of keys and values", validate_labels)
 custom_labels: {}
 
 #@schema/title "Replicas"

@@ -192,8 +192,8 @@ https_proxy: ""
 
 #@schema/title "No proxy"
 #@schema/desc "Endpoints that should not be proxied. Defaults to some sensible known values on public cloud providers."
-#@schema/validation min_len=1
 no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
+
 
 #@schema/title "Endpoints"
 #@ endpoints_desc = "Control the HTTP and HTTPS listeners of the Supervisor.  The current defaults are: \

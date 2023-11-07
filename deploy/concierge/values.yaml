@@ -139,11 +139,15 @@ deprecated_log_format: ""
 
 #@schema/title "Run as user"
 #@schema/desc "The user ID that will own the process."
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_user: 65532
 
 #@schema/title "Run as group"
 #@schema/desc "The group ID that will own the process."
+#@schema/type any=True
+#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_group: 65532
 

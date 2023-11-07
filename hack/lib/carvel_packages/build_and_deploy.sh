@@ -132,4 +132,36 @@ imgpkg push --bundle "${package_repository_repo_tag}" --file "${dest_dir}/packag
 # manually validate the package bundle by pulling it from the registry and examining its contents:
 # imgpkg pull --bundle "${package_repository_repo_tag}" --output "/tmp/${package_repository_repo_tag}"
 
+
+log_note "Deploying PackageRepository & Packages to kind cluster..."
+
+# Deploy kapp-controller onto kind cluster.
+log_note "Installing kapp-controller on cluster..."
+KAPP_CONTROLLER_GLOBAL_NAMESPACE="kapp-controller-packaging-global"
+kapp deploy --app kapp-controller --file "https://github.com/vmware-tanzu/carvel-kapp-controller/releases/latest/download/release.yml" -y
+
+# Ensure this directory exists though this script will run several times.
+mkdir -p "${dest_dir}/install"
+
+log_note "Deploying Pinniped PackageRepository..."
+pinniped_package_repository_name="pinniped-package-repository"
+pinniped_package_repository_file="${dest_dir}/install/packagerepository.${pinniped_package_version}.yml"
+cat <<EOT > "${pinniped_package_repository_file}"
+---
+apiVersion: packaging.carvel.dev/v1alpha1
+kind: PackageRepository
+metadata:
+  name: "${pinniped_package_repository_name}"
+  namespace: "${KAPP_CONTROLLER_GLOBAL_NAMESPACE}"
+spec:
+  fetch:
+    imgpkgBundle:
+      image: "${package_repository_repo_tag}"
+EOT
+
+kapp deploy --app "${pinniped_package_repository_name}" --file "${pinniped_package_repository_file}" -y
+kapp inspect --app "${pinniped_package_repository_name}" --tree
+
+resource_name="${app}"
+
 log_note "Building Carvel Packages for Supervisor, Concierge & local-user-authenticator complete."

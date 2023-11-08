@@ -50,8 +50,8 @@ if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
     docker network connect "kind" "${reg_name}"
   fi
 
-  # Configure kind to use the local registry.
-  # https://github.com/kubernetes/enhancements/tree/master/keps/sig-cluster-lifecycle/generic/1755-communicating-a-local-registry
+  # Document the local registry.
+  # See https://github.com/kubernetes/enhancements/tree/master/keps/sig-cluster-lifecycle/generic/1755-communicating-a-local-registry
   cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap

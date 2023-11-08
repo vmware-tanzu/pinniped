@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -106,7 +106,7 @@ function cleanup() {
   kubectl delete webhookauthenticator local-user-authenticator
   log_note "Stopping kubectl port-forward and exiting..."
   # It may have already shut down, so ignore errors.
-  kill -9 $port_forward_pid &> /dev/null || true
+  kill -9 $port_forward_pid &>/dev/null || true
 }
 trap cleanup EXIT
 

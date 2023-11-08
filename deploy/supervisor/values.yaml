@@ -1,6 +1,16 @@
 #! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
+#@ def validate_strings_map(obj):
+#@   # Returns True if obj is an associative data structure string→string, and False otherwise.
+#@   for key in obj:
+#@     if type(key) != "string" or type(obj[key]) != "string":
+#@       return False
+#@     end
+#@   end
+#@   return True
+#@ end
+
 #@data/values-schema
 ---
 #@schema/title "App name"
@@ -31,40 +41,28 @@ into_namespace: ""
 #@ not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
 #@schema/examples ("Example set of labels", {"myCustomLabelName": "myCustomLabelValue", "otherCustomLabelName": "otherCustomLabelValue"})
-#@ def validate_labels(labels):
-#@   """
-#@   Returns True if labels is an associative data structure string→string,
-#@   and False otherwise.
-#@   """
-#@   for label in labels:
-#@     if type(label) != "string" or type(labels[label]) != "string":
-#@       return False
-#@     end
-#@   end
-#@   return True
-#@ end
 #@schema/type any=True
-#@schema/validation ("a map of keys and values", validate_labels)
-custom_labels: {}
+#@schema/validation ("a map of keys and values", validate_strings_map)
+custom_labels: { }
 
 #@schema/title "Replicas"
 #@schema/desc "Specify how many replicas of the Pinniped server to run."
 replicas: 2
 
 #@schema/title "Image repo"
-#@schema/desc "The repository for the Concierge container image."
+#@schema/desc "The repository for the Supervisor container image."
 #@schema/validation min_len=1
 image_repo: projects.registry.vmware.com/pinniped/pinniped-server
 
 #@schema/title "Image digest"
-#@schema/desc "The image digest for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
+#@schema/desc "The image digest for the Supervisor container image. If both image_digest or an image_tag are given, only image_digest will be used."
 #@schema/examples ("Digest", "sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8")
 #@schema/nullable
 #@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_tag"] == None
 image_digest: ""
 
 #@schema/title "Image tag"
-#@schema/desc "The image tag for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
+#@schema/desc "The image tag for the Supervisor container image. If both image_digest or an image_tag are given, only image_digest will be used."
 #@schema/examples ("Tag", "v0.25.0")
 #@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_digest"] == None
 image_tag: latest
@@ -78,75 +76,60 @@ image_tag: latest
 #@ example_value = "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
 #@schema/examples (example_desc, example_value)
 #@schema/nullable
+#@schema/validation min_len=1
 image_pull_dockerconfigjson: ""
 
 #@schema/title "Deprecated service HTTP nodeport port"
 #@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port","31234")
+#@schema/examples ("Specify port",31234)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_nodeport_port: ""
+deprecated_service_http_nodeport_port: 0
 
 #@schema/title "Deprecated service http nodeport nodeport"
 #@schema/desc "The `nodePort` value of the NodePort Service, optional when `deprecated_service_http_nodeport_port` is specified"
-#@schema/examples ("Specify port","31234")
+#@schema/examples ("Specify port",31234)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_nodeport_nodeport: ""
+deprecated_service_http_nodeport_nodeport: 0
 
 #@schema/title "Deprecated service http loadbalancer port"
 #@schema/desc "When specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port","8443")
+#@schema/examples ("Specify port",8443)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_loadbalancer_port: ""
+deprecated_service_http_loadbalancer_port: 0
 
 #@schema/title "Deprecated service http clusterip port"
 #@schema/desc "Creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port","8443")
+#@schema/examples ("Specify port",8443)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_clusterip_port: ""
+deprecated_service_http_clusterip_port: 0
 
 #@schema/title "Service https nodeport port"
 #@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`"
-#@schema/examples ("Specify port","31243")
+#@schema/examples ("Specify port",31243)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
-service_https_nodeport_port: ""
+service_https_nodeport_port: 0
 
 #@schema/title "Service https nodeport nodeport"
 #@schema/desc "The `nodePort` value of the NodePort Service, optional when `service_https_nodeport_port` is specified"
-#@schema/examples ("Specify port","31243")
+#@schema/examples ("Specify port",31243)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
-service_https_nodeport_nodeport: ""
+service_https_nodeport_nodeport: 0
 
 #@schema/title "Service https loadbalancer port"
 #@schema/desc "When specified, creates a LoadBalancer Service with this `port` value, with port 8443 as its `targetPort`"
-#@schema/examples ("Specify port","8443")
+#@schema/examples ("Specify port",8443)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
-service_https_loadbalancer_port: ""
+service_https_loadbalancer_port: 0
 
 #@schema/title "Service https clusterip port"
 #@schema/desc "When specified, creates a ClusterIP Service with this `port` value, with port 8443 as its `targetPort`"
-#@schema/examples ("Specify port","8443")
+#@schema/examples ("Specify port",8443)
 #@schema/nullable
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
-service_https_clusterip_port: ""
+service_https_clusterip_port: 0
 
 #@schema/title "Service loadbalancer ip"
 #@schema/desc "The `loadBalancerIP` value of the LoadBalancer Service. Ignored unless service_https_loadbalancer_port is provided."
@@ -177,23 +160,19 @@ deprecated_log_format: ""
 
 #@schema/title "Run as user"
 #@schema/desc "The user ID that will own the process."
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_user: 65532
 
 #@schema/title "Run as group"
 #@schema/desc "The group ID that will own the process."
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_group: 65532
 
 #@schema/title "API group suffix"
 #@ api_group_suffix_desc = "Specify the API group suffix for all Pinniped API groups. By default, this is set to \
 #@ pinniped.dev, so Pinniped API groups will look like foo.pinniped.dev, \
-#@ authentication.concierge.pinniped.dev, etc. As an example, if this is set to tuna.io, then \
-#@ Pinniped API groups will look like foo.tuna.io. authentication.concierge.tuna.io, etc."
+#@ config.supervisor.pinniped.dev, etc. As an example, if this is set to tuna.io, then \
+#@ Pinniped API groups will look like foo.tuna.io. config.supervisor.tuna.io, etc."
 #@schema/desc api_group_suffix_desc
 #@schema/validation min_len=1
 api_group_suffix: pinniped.dev
@@ -202,25 +181,26 @@ api_group_suffix: pinniped.dev
 #@ https_proxy_desc = "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. \
 #@ These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS, \
 #@ e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider. \
-#@ The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY. \
-#@ Optional."
+#@ The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY."
 #@schema/desc https_proxy_desc
-#@schema/examples ("Provide a proxy endpoint","http://proxy.example.com")
+#@schema/examples ("Providing a proxy endpoint","http://proxy.example.com")
 #@schema/nullable
+#@schema/validation min_len=1
 https_proxy: ""
 
 #@schema/title "No proxy"
-#@schema/desc "Endpoints that should not be proxied. Defaults to some sensible known values on public cloud providers."
-no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
-
+#@ no_proxy_desc = "Endpoints that should not be proxied. Defaults to not proxying internal Kubernetes endpoints, \
+#@ localhost endpoints, and the known instance metadata IP address for public cloud providers."
+#@schema/desc no_proxy_desc
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local"
 
 #@schema/title "Endpoints"
 #@ endpoints_desc = "Control the HTTP and HTTPS listeners of the Supervisor.  The current defaults are: \
 #@ {\"https\":{\"network\":\"tcp\",\"address\":\":8443\"},\"http\":\"disabled\"}. \
-#@ These defaults mean: 1.) For HTTPS listening, bind to all interfaces using TCP on port 8443 and \
-#@ 2.) Disable HTTP listening by default. \
+#@ These defaults mean: 1.) for HTTPS listening, bind to all interfaces using TCP on port 8443 and \
+#@ 2.) disable HTTP listening by default. \
 #@ The schema of this config is as follows: \
-#@ {'https':{'network':'tcp | unix | disabled','address':'host:port when network=tcp or /pinniped_socket/socketfile.sock when network=unix'},'http':{'network':'tcp | unix | disabled','address':'same as https, except that when network=tcp then the address is only allowed to bind to loopback interfaces'}} \
+#@ {\"https\":{\"network\":\"tcp | unix | disabled\",\"address\":\"host:port when network=tcp or /pinniped_socket/socketfile.sock when network=unix\"},\"http\":{\"network\":\"tcp | unix | disabled\",\"address\":\"same as https, except that when network=tcp then the address is only allowed to bind to loopback interfaces\"}} \
 #@ The HTTP listener can only be bound to loopback interfaces. This allows the listener to accept \
 #@ traffic from within the pod, e.g. from a service mesh sidecar. The HTTP listener should not be \
 #@ used to accept traffic from outside the pod, since that would mean that the network traffic could be \
@@ -241,6 +221,14 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@        return False
 #@     end
 #@   end
+#@   if(type(endpoint) in ["yamlfragment"]):
+#@     if (endpoint["network"] not in ["tcp", "unix", "disabled"]):
+#@        return False
+#@     end
+#@     if (type(endpoint["address"]) not in ["string"]):
+#@        return False
+#@     end
+#@   end
 #@   return True
 #@ end
 #@ def validate_endpoints(endpoints):
@@ -251,9 +239,9 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@   https_val = endpoints["https"]
 #@   return validate_endpoint(http_val) and validate_endpoint(https_val)
 #@ end
-#@schema/validation ("a map with keys 'http' and 'https', both having keys 'network' and 'address' or set to 'disabled'", validate_endpoints)
 #@schema/nullable
-endpoints: {}
+#@schema/validation ("a map with keys 'http' and 'https', whose values are either the string 'disabled' or a map having keys 'network' and 'address', and the value of 'network' must be one of the allowed values", validate_endpoints)
+endpoints: { }
 
 #@ deprecated_insecure_accept_external_unencrypted_http_requests_desc = "Optionally override the validation on the endpoints.http \
 #@ value which checks that only loopback interfaces are used. \

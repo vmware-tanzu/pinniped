@@ -1,6 +1,16 @@
 #! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
+#@ def validate_strings_map(obj):
+#@   # Returns True if obj is an associative data structure string→string, and False otherwise.
+#@   for key in obj:
+#@     if type(key) != "string" or type(obj[key]) != "string":
+#@       return False
+#@     end
+#@   end
+#@   return True
+#@ end
+
 #@data/values-schema
 ---
 #@schema/title "App name"
@@ -31,21 +41,9 @@ into_namespace: ""
 #@ not assume that there was a static install-time yaml namespace."
 #@schema/desc custom_labels_desc
 #@schema/examples ("Example set of labels", {"myCustomLabelName": "myCustomLabelValue", "otherCustomLabelName": "otherCustomLabelValue"})
-#@ def validate_labels(labels):
-#@   """
-#@   Returns True if labels is an associative data structure string→string,
-#@   and False otherwise.
-#@   """
-#@   for label in labels:
-#@     if type(label) != "string" or type(labels[label]) != "string":
-#@       return False
-#@     end
-#@   end
-#@   return True
-#@ end
 #@schema/type any=True
-#@schema/validation ("a map of keys and values", validate_labels)
-custom_labels: {}
+#@schema/validation ("a map of string keys and string values", validate_strings_map)
+custom_labels: { }
 
 #@schema/title "Replicas"
 #@schema/desc "Specify how many replicas of the Pinniped server to run."
@@ -58,14 +56,14 @@ image_repo: projects.registry.vmware.com/pinniped/pinniped-server
 
 #@schema/title "Image digest"
 #@schema/desc "The image digest for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
-#@schema/examples ("Digest", "sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8")
+#@schema/examples ("Providing a digest", "sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8")
 #@schema/nullable
 #@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_tag"] == None
 image_digest: ""
 
 #@schema/title "Image tag"
 #@schema/desc "The image tag for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
-#@schema/examples ("Tag", "v0.25.0")
+#@schema/examples ("Providing a tag", "v0.25.0")
 #@schema/validation min_len=1, when=lambda _, ctx: ctx.parent["image_digest"] == None
 image_tag: latest
 
@@ -88,6 +86,7 @@ kube_cert_agent_image: ""
 #@ example_value = "eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUuaW8iOnsidXNlcm5hbWUiOiJVU0VSTkFNRSIsInBhc3N3b3JkIjoiUEFTU1dPUkQiLCJhdXRoIjoiVlZORlVrNUJUVVU2VUVGVFUxZFBVa1E9In19fQ=="
 #@schema/examples (example_desc, example_value)
 #@schema/nullable
+#@schema/validation min_len=1
 image_pull_dockerconfigjson: ""
 
 #@schema/title "Discovery URL"
@@ -103,7 +102,7 @@ discovery_url: ""
 #@ Specify this as an integer or as a string which contains an integer value."
 #@schema/desc api_serving_certificate_duration_seconds_desc
 #@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
+#@schema/validation ("an int or string which contains an integer value", lambda v: type(v) in ["int", "string"])
 api_serving_certificate_duration_seconds: 2592000
 
 #@schema/title "API serving certificate renew before seconds"
@@ -112,7 +111,7 @@ api_serving_certificate_duration_seconds: 2592000
 #@ Specify this as an integer or as a string which contains an integer value."
 #@schema/desc api_serving_certificate_renew_before_seconds_desc
 #@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
+#@schema/validation ("an int or string which contains an integer value", lambda v: type(v) in ["int", "string"])
 api_serving_certificate_renew_before_seconds: 2160000
 
 #@schema/title "Log level"
@@ -138,15 +137,11 @@ deprecated_log_format: ""
 
 #@schema/title "Run as user"
 #@schema/desc "The user ID that will own the process."
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_user: 65532
 
 #@schema/title "Run as group"
 #@schema/desc "The group ID that will own the process."
-#@schema/type any=True
-#@schema/validation ("an int or string", lambda v: type(v) in ["int", "string"])
 #! See the Dockerfile for the reasoning behind this default value.
 run_as_group: 65532
 
@@ -164,19 +159,21 @@ api_group_suffix: pinniped.dev
 impersonation_proxy_spec:
 
   #@schema/title "Mode"
-  #@ impersonation_mode_desc = "If enabled, the impersonation proxy will always run regardless of other strategies available. \
-  #@ Options are 'auto', 'disabled' or 'enabled'. If auto, the impersonation proxy will run only if the cluster signing key is \
-  #@ not available and the other strategy does not work. If disabled, the impersonation proxy will never run, which could mean \
+  #@ impersonation_mode_desc = "Enables or disables the impersonation proxy. Options are 'auto', 'disabled' or 'enabled'. \
+  #@ If auto, the impersonation proxy will run only if the cluster signing key is \
+  #@ not available and the other strategy does not work. \
+  #@ If enabled, the impersonation proxy will always run regardless of other strategies available. \
+  #@ If disabled, the impersonation proxy will never run, which could mean \
   #@ that the concierge doesn't work at all."
   #@schema/desc impersonation_mode_desc
-  #@schema/examples ("Always run, regardless of available strategies", "enabled"),("Detect if cluster signing key is available for use","auto")
+  #@schema/validation one_of=["auto", "disabled", "enabled"]
   mode: auto
 
   #@schema/title "External endpoint"
   #@ external_endpoint_desc = "The endpoint which the client should use to connect to the impersonation proxy. \
   #@ If left unset, the client will default to connecting based on the ClusterIP or LoadBalancer endpoint."
   #@schema/desc external_endpoint_desc
-  #@schema/examples ("Specified impersonation proxy endpoint", "1.2.3.4:5678")
+  #@schema/examples ("Specified impersonation proxy endpoint", "https://1.2.3.4:5678")
   #@schema/nullable
   #@schema/validation min_len=1
   external_endpoint: ""
@@ -192,33 +189,39 @@ impersonation_proxy_spec:
     #@ automatically provisions a Service of type ClusterIP pointing at the impersonation proxy. None does not provision \
     #@ either and assumes that you have set the external_endpoint and set up your own ingress to connect to the impersonation proxy."
     #@schema/desc impersonation_service_type_desc
-    #@schema/examples ("Fall back to ClusterIP", "ClusterIP")
     #@schema/validation one_of=["LoadBalancer", "ClusterIP", "None"]
     type: LoadBalancer
 
     #@schema/title "Annotations"
-    #@schema/desc "The annotations that should be set on the ClusterIP or LoadBalancer Service."
+    #@ annotations_desc = "The annotations that should be set on the ClusterIP or LoadBalancer Service. The default includes \
+    #@ a value for the AWS-specific service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout annotation, which will \
+    #@ be ignored except when using AWS to provide load balancer Services."
+    #@schema/desc annotations_desc
+    #@schema/nullable
+    #@schema/type any=True
+    #@schema/validation ("a map of string keys and string values", validate_strings_map)
     annotations:
-      {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}
 
     #@schema/title "Load balancer IP"
-    #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP."
-    #@schema/examples ("Specified IP with port", "1.2.3.4:5678")
+    #@schema/desc "When mode LoadBalancer is set, this will set the LoadBalancer Service's spec.loadBalancerIP."
+    #@schema/examples ("Specifying an IP", "1.2.3.4")
     #@schema/nullable
     #@schema/validation min_len=1
     load_balancer_ip: ""
 
 #@schema/title "HTTPS proxy"
-#@ https_proxy_desc = "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers. \
-#@ These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS, \
-#@ e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider. \
-#@ The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY. \
-#@ Optional."
+#@ https_proxy_desc = "Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Concierge containers. \
+#@ These will be used when the Concierge makes backend-to-backend calls to authenticators using HTTPS, \
+#@ e.g. when the Concierge fetches discovery documents and JWKS keys for JWTAuthenticators and POSTs to webhooks for WebhookAuthenticators. \
+#@ The Concierge never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY."
 #@schema/desc https_proxy_desc
-#@schema/examples ("Provide a proxy endpoint","http://proxy.example.com")
+#@schema/examples ("Providing a proxy endpoint","http://proxy.example.com")
 #@schema/nullable
+#@schema/validation min_len=1
 https_proxy: ""
 
 #@schema/title "No proxy"
-#@schema/desc "Endpoints that should not be proxied. Defaults to some sensible known values on public cloud providers."
-no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints
+#@ no_proxy_desc = "Endpoints that should not be proxied. Defaults to not proxying internal Kubernetes endpoints, \
+#@ localhost endpoints, and the known instance metadata IP address for public cloud providers."
+#@schema/desc no_proxy_desc
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local"

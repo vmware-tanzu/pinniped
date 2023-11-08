@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -25,6 +25,8 @@ LOCAL_HOST="127.0.0.1:${LOCAL_PORT}"
 # Change working directory to the top of the repo.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+source hack/lib/helpers.sh
 
 # Build the CLI for use later in the script.
 go build ./cmd/pinniped
@@ -85,10 +87,10 @@ EOF
 # Wait for the CredentialIssuer's impersonator status to update to be successful.
 while [[ -z "$(kubectl get credentialissuer pinniped-concierge-config -o json |
   jq '.status.strategies[] | select((.type=="ImpersonationProxy") and (.status=="Success"))')" ]]; do
-  echo "Waiting for a successful ImpersonationProxy strategy on CredentialIssuer..."
+  log_note "Waiting for a successful ImpersonationProxy strategy on CredentialIssuer..."
   sleep 2
 done
-echo "Impersonator is available on https://${LOCAL_HOST}"
+log_note "Impersonator is available on https://${LOCAL_HOST}"
 
 # Make the impersonation proxy's port from the inside the cluster available locally.
 kubectl port-forward -n $CONCIERGE_NAMESPACE deployment/$CONCIERGE_DEPLOYMENT ${LOCAL_PORT}:${IMPERSONATION_PROXY_PORT} &
@@ -97,14 +99,14 @@ port_forward_pid=$!
 # Kill the kubectl port-forward command whenever the script is control-c cancelled or otherwise ends.
 function cleanup() {
   echo
-  echo "Cleaning up cluster resources..."
+  log_note "Cleaning up cluster resources..."
   kubectl delete secret -n $LOCAL_USER_AUTHENTICATOR_NAMESPACE pinny-the-seal
   kubectl delete configmap -n $CONCIERGE_NAMESPACE pinniped-concierge-impersonation-proxy-config
   kubectl delete clusterrolebinding pinny-the-seal-can-edit
   kubectl delete webhookauthenticator local-user-authenticator
-  echo "Stopping kubectl port-forward and exiting..."
+  log_note "Stopping kubectl port-forward and exiting..."
   # It may have already shut down, so ignore errors.
-  kill -9 $port_forward_pid &> /dev/null || true
+  kill -9 $port_forward_pid &>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -113,7 +115,7 @@ trap cleanup EXIT
   --static-token "pinny-the-seal:password123" \
   --concierge-mode ImpersonationProxy >/tmp/kubeconfig
 
-echo
-echo 'Ready. In another tab, use "kubectl --kubeconfig /tmp/kubeconfig <cmd>" to make requests through the impersonation proxy.'
-echo "When done, cancel with ctrl-C to clean up."
+log_note
+log_note 'Ready. In another tab, use "kubectl --kubeconfig /tmp/kubeconfig <cmd>" to make requests through the impersonation proxy.'
+log_note "When done, cancel with ctrl-C to clean up."
 wait $port_forward_pid

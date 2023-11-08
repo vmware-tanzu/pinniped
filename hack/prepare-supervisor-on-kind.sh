@@ -37,15 +37,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-function log_error() {
-  RED='\033[0;31m'
-  NC='\033[0m'
-  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
-    echo -e "🙁${RED} Error: $* ${NC}"
-  else
-    echo ":( Error: $*"
-  fi
-}
+source hack/lib/helpers.sh
 
 use_oidc_upstream=no
 use_ldap_upstream=no
@@ -122,8 +114,8 @@ if [[ "${PINNIPED_USE_CONTOUR:-}" != "" ]]; then
 
   # Wait for its pods to be ready.
   echo "Waiting for Contour to be ready..."
-  kubectl wait --for 'jsonpath={.status.phase}=Succeeded' pods -l 'app=contour-certgen'  -n projectcontour --timeout 60s
-  kubectl wait --for 'jsonpath={.status.phase}=Running' pods -l 'app!=contour-certgen'  -n projectcontour --timeout 60s
+  kubectl wait --for 'jsonpath={.status.phase}=Succeeded' pods -l 'app=contour-certgen' -n projectcontour --timeout 60s
+  kubectl wait --for 'jsonpath={.status.phase}=Running' pods -l 'app!=contour-certgen' -n projectcontour --timeout 60s
 
   # Create an ingress for the Supervisor which uses TLS passthrough to allow the Supervisor to terminate TLS.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
@@ -320,7 +312,7 @@ kubectl create secret tls -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" my-federation
 
 # Make a FederationDomain using the TLS Secret and identity providers from above in a temp file.
 fd_file="/tmp/federationdomain.yaml"
-cat << EOF > $fd_file
+cat <<EOF >$fd_file
 apiVersion: config.supervisor.pinniped.dev/v1alpha1
 kind: FederationDomain
 metadata:
@@ -334,7 +326,7 @@ EOF
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  cat << EOF >> $fd_file
+  cat <<EOF >>$fd_file
 
     - displayName: "My OIDC IDP 🚀"
       objectRef:
@@ -358,7 +350,7 @@ fi
 
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  cat << EOF >> $fd_file
+  cat <<EOF >>$fd_file
 
     - displayName: "My LDAP IDP 🚀"
       objectRef:
@@ -412,7 +404,7 @@ fi
 
 if [[ "$use_ad_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
-  cat << EOF >> $fd_file
+  cat <<EOF >>$fd_file
 
     - displayName: "My AD IDP"
       objectRef:

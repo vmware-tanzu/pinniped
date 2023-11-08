@@ -1,0 +1,11 @@
+#! Copyright 2023 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:overlay", "overlay")
+#@overlay/match by=overlay.subset({"kind": "Cluster"}), expects=1
+---
+#@overlay/match missing_ok=True
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."kind-registry.local:5000"]
+    endpoint = ["http://kind-registry.local:5000"]

@@ -21,7 +21,6 @@ cd "$hack_lib_path/../../" || exit 1
 
 source hack/lib/helpers.sh
 
-
 # Expected arguments.
 app=${1:-"app-argument-not-provided"}
 tag=${2:-"tag-argument-not-provided"}
@@ -62,7 +61,7 @@ mkdir -p "${dest_dir}/install"
 log_note "Deploying Pinniped PackageRepository..."
 pinniped_package_repository_name="pinniped-package-repository"
 pinniped_package_repository_file="${dest_dir}/install/packagerepository.${pinniped_package_version}.yml"
-cat <<EOT > "${pinniped_package_repository_file}"
+cat <<EOT >"${pinniped_package_repository_file}"
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageRepository
@@ -89,7 +88,7 @@ pinniped_package_rbac_file="${dest_dir}/install/${pinniped_package_rbac_prefix}-
 # For any other use case, the generated artifacts should be properly reviewed.
 # For example, the RBAC generated here should be adjusted to conform to the
 # principle of LEAST privilege.
-cat <<EOF > "${pinniped_package_rbac_file}"
+cat <<EOF >"${pinniped_package_rbac_file}"
 ---
 apiVersion: v1
 kind: Namespace
@@ -136,7 +135,7 @@ PACKAGE_INSTALL_FILE_NAME="${dest_dir}/install/${resource_name}-pkginstall.yml"
 SECRET_NAME="${resource_name}-package-install-secret"
 
 log_note "Generating ${PACKAGE_INSTALL_FILE_NAME}..."
-cat > "${PACKAGE_INSTALL_FILE_NAME}" << EOF
+cat >"${PACKAGE_INSTALL_FILE_NAME}" <<EOF
 ---
 apiVersion: packaging.carvel.dev/v1alpha1
 kind: PackageInstall

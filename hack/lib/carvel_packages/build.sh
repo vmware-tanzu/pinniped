@@ -67,8 +67,7 @@ mkdir -p "${dest_dir}"
 
 # Generate the OpenAPI v3 Schema files, imgpkg images.yml files
 declare -a packages_to_build=("local-user-authenticator" "pinniped-concierge" "pinniped-supervisor")
-for resource_name in "${packages_to_build[@]}"
-do
+for resource_name in "${packages_to_build[@]}"; do
   resource_qualified_name="${resource_name}.${api_group_suffix}"
   package_repo_tag="${package_repo_prefix}-${resource_name}:${tag}"
 
@@ -85,9 +84,10 @@ do
   cp "${resource_package_template_source_dir}/vendir.yml" "${resource_destination_dir}/vendir.yml"
   cp "${resource_package_template_source_dir}/release_notes.txt" "${resource_destination_dir}/release_notes.txt" # dummy
   log_note "Vendir sync deploy directory for ${resource_name} to package bundle..."
-  pushd "${resource_destination_dir}" > /dev/null
-    vendir sync
-  popd > /dev/null
+
+  pushd "${resource_destination_dir}" >/dev/null
+  vendir sync
+  popd >/dev/null
 
   log_note "Generating OpenAPI v3 schema for ${resource_name}..."
   ytt \
@@ -99,7 +99,7 @@ do
   log_note "Generating .imgpkg/images.yml for ${resource_name}..."
   mkdir -p "${resource_destination_dir}/.imgpkg"
   ytt \
-    --file "${resource_config_destination_dir}" | \
+    --file "${resource_config_destination_dir}" |
     kbld -f- --imgpkg-lock-output "${resource_destination_dir}/.imgpkg/images.yml"
 
   log_note "Pushing Pinniped ${resource_name} Package bundle..."
@@ -118,7 +118,7 @@ do
     --data-value-file openapi="${resource_destination_dir}/schema-openapi.yml" \
     --data-value-file releaseNotes="${resource_destination_dir}/release_notes.txt" \
     --data-value repo_host="${package_repo_prefix}-${resource_name}" \
-    --data-value version="${pinniped_package_version}" > "${package_repository_dir}/${pinniped_package_version}.yml"
+    --data-value version="${pinniped_package_version}" >"${package_repository_dir}/${pinniped_package_version}.yml"
   cp "${resource_package_template_source_dir}/metadata.yml" "${package_repository_dir}/metadata.yml"
 done
 

@@ -10,7 +10,7 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20231108195835-5de19437760b
+	github.com/chromedp/cdproto v0.0.0-20231112213822-7d5b36658e55
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/coreos/go-semver v0.3.1
@@ -23,7 +23,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
-	github.com/google/cel-go v0.18.1
+	github.com/google/cel-go v0.18.2
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.4.0

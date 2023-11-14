@@ -31,6 +31,7 @@ func init() {
 
 type whoamiFlags struct {
 	outputFormat string // e.g., yaml, json, text
+	timeout      time.Duration
 
 	kubeconfigPath            string
 	kubeconfigContextOverride string
@@ -58,6 +59,7 @@ func newWhoamiCommand(getClientset getConciergeClientsetFunc) *cobra.Command {
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.StringVar(&flags.apiGroupSuffix, "api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	f.DurationVar(&flags.timeout, "timeout", 0, "Timeout for the WhoAmI API request (default: 0, meaning no timeout)")
 
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		return runWhoami(cmd.OutOrStdout(), getClientset, flags)
@@ -78,8 +80,22 @@ func runWhoami(output io.Writer, getClientset getConciergeClientsetFunc, flags *
 		return fmt.Errorf("could not get current cluster info: %w", err)
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
-	defer cancelFunc()
+	// Making the WhoAmI request may cause client-go to invoke the credential plugin, which may
+	// ask the user to interactively authenticate. The time that the user takes to authenticate
+	// is included in the timeout time, but their authentication is not cancelled by exceeding
+	// this timeout. Only the subsequent whoami API request is cancelled. Using a short timeout
+	// causes the odd behavior of a successful login immediately followed by a whoami request failure
+	// due to timeout. For comparison, kubectl uses an infinite timeout by default on API requests
+	// but also allows the user to adjust this timeout with the `--request-timeout` CLI option,
+	// so we will take a similar approach. Note that kubectl has the same behavior when a client-go
+	// credential plugin is invoked and the user takes longer then the timeout to authenticate.
+	ctx := context.Background()
+	if flags.timeout > 0 {
+		var cancelFunc context.CancelFunc
+		ctx, cancelFunc = context.WithTimeout(ctx, flags.timeout)
+		defer cancelFunc()
+	}
+
 	whoAmI, err := clientset.IdentityV1alpha1().WhoAmIRequests().Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	if err != nil {
 		hint := ""

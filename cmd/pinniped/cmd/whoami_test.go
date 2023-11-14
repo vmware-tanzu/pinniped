@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -45,6 +45,7 @@ func TestWhoami(t *testing.T) {
 				      --kubeconfig string           Path to kubeconfig file
 				      --kubeconfig-context string   Kubeconfig context name (default: current active context)
 				  -o, --output string               Output format (e.g., 'yaml', 'json', 'text') (default "text")
+				      --timeout duration            Timeout for the WhoAmI API request (default: 0, meaning no timeout)
 			`),
 		},
 		{
@@ -312,7 +313,12 @@ func TestWhoami(t *testing.T) {
 			stdout, stderr := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 			cmd.SetOut(stdout)
 			cmd.SetErr(stderr)
-			cmd.SetArgs(test.args)
+			if test.args == nil {
+				// cobra uses os.Args[1:] when SetArgs is called with nil, so avoid using nil for tests.
+				cmd.SetArgs([]string{})
+			} else {
+				cmd.SetArgs(test.args)
+			}
 
 			err := cmd.Execute()
 			if test.wantError {

@@ -3,7 +3,7 @@
 # Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-ARG BUILD_IMAGE=golang:1.21.4
+ARG BUILD_IMAGE=golang:1.21.4@sha256:81cd210ae58a6529d832af2892db822b30d84f817a671b8e1c15cff0b271a3db
 ARG BASE_IMAGE=gcr.io/distroless/static@sha256:91ca4720011393f4d4cab3a01fa5814ee2714b7d40e6c74f2505f74168398ca9
 
 # Prepare to cross-compile by always running the build stage in the build platform, not the target platform.

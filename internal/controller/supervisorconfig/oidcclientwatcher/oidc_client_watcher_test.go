@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -62,7 +62,7 @@ func TestOIDCClientWatcherControllerFilterSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -131,7 +131,7 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -961,7 +961,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			fakePinnipedClientForInformers := pinnipedfake.NewSimpleClientset(tt.inputObjects...)
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClientForInformers, 0)
 			fakeKubeClient := kubernetesfake.NewSimpleClientset(tt.inputSecrets...)
-			kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(fakeKubeClient, 0)
+			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(fakeKubeClient, 0)
 
 			controller := NewOIDCClientWatcherController(
 				fakePinnipedClient,

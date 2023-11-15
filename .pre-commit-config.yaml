@@ -3,7 +3,7 @@
 exclude: '^(site|generated)/'
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v3.2.0
+  rev: v4.5.0
   hooks:
   # TODO: find a version of this to validate ytt templates?
   # - id: check-yaml

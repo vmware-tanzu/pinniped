@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -37,7 +37,7 @@ const (
 // get the validation error for that case. It returns a bool to indicate if the client is valid,
 // along with a slice of conditions containing more details, and the list of client secrets in the
 // case that the client was valid.
-func Validate(oidcClient *v1alpha1.OIDCClient, secret *v1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string) {
+func Validate(oidcClient *v1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string) {
 	conds := make([]*metav1.Condition, 0, 3)
 
 	conds, clientSecrets := validateSecret(secret, conds, minBcryptCost)
@@ -132,7 +132,7 @@ func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*me
 
 // validateSecret checks if the client secret storage Secret is valid and contains at least one client secret.
 // It returns the updated conditions slice along with the client secrets found in that case that it is valid.
-func validateSecret(secret *v1.Secret, conditions []*metav1.Condition, minBcryptCost int) ([]*metav1.Condition, []string) {
+func validateSecret(secret *corev1.Secret, conditions []*metav1.Condition, minBcryptCost int) ([]*metav1.Condition, []string) {
 	emptyList := []string{}
 
 	if secret == nil {

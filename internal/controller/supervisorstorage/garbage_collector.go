@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -55,7 +55,7 @@ func GarbageCollectorController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	isSecretWithGCAnnotation := func(obj metav1.Object) bool {
-		secret, ok := obj.(*v1.Secret)
+		secret, ok := obj.(*corev1.Secret)
 		if !ok {
 			return false
 		}
@@ -169,7 +169,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Context, storageType string, secret *v1.Secret) error {
+func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Context, storageType string, secret *corev1.Secret) error {
 	// All downstream session storage types hold upstream tokens when the upstream IDP is an OIDC provider.
 	// However, some of them will be outdated because they are not updated by fosite after creation.
 	// Our goal below is to always revoke the latest upstream refresh token that we are holding for the
@@ -238,7 +238,7 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 	}
 }
 
-func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Context, customSessionData *psession.CustomSessionData, secret *v1.Secret) error {
+func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Context, customSessionData *psession.CustomSessionData, secret *corev1.Secret) error {
 	// When session was for another upstream IDP type, e.g. LDAP, there is no upstream OIDC token involved.
 	if customSessionData.ProviderType != psession.ProviderTypeOIDC {
 		return nil
@@ -279,7 +279,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	return nil
 }
 
-func logKV(secret *v1.Secret) []interface{} {
+func logKV(secret *corev1.Secret) []interface{} {
 	return []interface{}{
 		"secretName", secret.Name,
 		"secretNamespace", secret.Namespace,

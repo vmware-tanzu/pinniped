@@ -30,7 +30,7 @@ import (
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -38,9 +38,9 @@ import (
 	"k8s.io/utils/clock"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/supervisor"
@@ -138,10 +138,10 @@ func prepareControllers(
 	secretCache *secret.Cache,
 	supervisorDeployment *appsv1.Deployment,
 	kubeClient kubernetes.Interface,
-	pinnipedClient pinnipedclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	aggregatorClient aggregatorclient.Interface,
-	kubeInformers kubeinformers.SharedInformerFactory,
-	pinnipedInformers pinnipedinformers.SharedInformerFactory,
+	kubeInformers k8sinformers.SharedInformerFactory,
+	pinnipedInformers supervisorinformers.SharedInformerFactory,
 	leaderElector controllerinit.RunnerWrapper,
 	podInfo *downward.PodInfo,
 ) controllerinit.RunnerBuilder {
@@ -419,16 +419,16 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		return fmt.Errorf("cannot create k8s client without leader election: %w", err)
 	}
 
-	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
+	kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
 		client.Kubernetes,
 		defaultResyncInterval,
-		kubeinformers.WithNamespace(serverInstallationNamespace),
+		k8sinformers.WithNamespace(serverInstallationNamespace),
 	)
 
-	pinnipedInformers := pinnipedinformers.NewSharedInformerFactoryWithOptions(
+	pinnipedInformers := supervisorinformers.NewSharedInformerFactoryWithOptions(
 		client.PinnipedSupervisor,
 		defaultResyncInterval,
-		pinnipedinformers.WithNamespace(serverInstallationNamespace),
+		supervisorinformers.WithNamespace(serverInstallationNamespace),
 	)
 
 	// Serve the /healthz endpoint and make all other paths result in 404.

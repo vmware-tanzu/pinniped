@@ -7,22 +7,22 @@ import (
 	"sort"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/plog"
 )
 
 // MergeIDPConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func MergeIDPConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger) bool {
+func MergeIDPConditions(conditions []*metav1.Condition, observedGeneration int64, conditionsToUpdate *[]metav1.Condition, log plog.MinLogger) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
-		cond.LastTransitionTime = v1.Now()
+		cond.LastTransitionTime = metav1.Now()
 		cond.ObservedGeneration = observedGeneration
 		if mergeIDPCondition(conditionsToUpdate, cond) {
 			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
 		}
-		if cond.Status == v1.ConditionFalse {
+		if cond.Status == metav1.ConditionFalse {
 			hadErrorCondition = true
 		}
 	}
@@ -32,11 +32,11 @@ func MergeIDPConditions(conditions []*v1.Condition, observedGeneration int64, co
 	return hadErrorCondition
 }
 
-// mergeIDPCondition merges a new v1.Condition into a slice of existing conditions. It returns true
+// mergeIDPCondition merges a new metav1.Condition into a slice of existing conditions. It returns true
 // if the condition has meaningfully changed.
-func mergeIDPCondition(existing *[]v1.Condition, new *v1.Condition) bool {
+func mergeIDPCondition(existing *[]metav1.Condition, new *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *v1.Condition
+	var old *metav1.Condition
 	for i := range *existing {
 		if (*existing)[i].Type == new.Type {
 			old = &(*existing)[i]
@@ -67,7 +67,7 @@ func mergeIDPCondition(existing *[]v1.Condition, new *v1.Condition) bool {
 }
 
 // MergeConfigConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
-func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64, conditionsToUpdate *[]v1.Condition, log plog.MinLogger, now v1.Time) bool {
+func MergeConfigConditions(conditions []*metav1.Condition, observedGeneration int64, conditionsToUpdate *[]metav1.Condition, log plog.MinLogger, now metav1.Time) bool {
 	hadErrorCondition := false
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
@@ -76,7 +76,7 @@ func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64,
 		if mergeConfigCondition(conditionsToUpdate, cond) {
 			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
 		}
-		if cond.Status == v1.ConditionFalse {
+		if cond.Status == metav1.ConditionFalse {
 			hadErrorCondition = true
 		}
 	}
@@ -86,11 +86,11 @@ func MergeConfigConditions(conditions []*v1.Condition, observedGeneration int64,
 	return hadErrorCondition
 }
 
-// mergeConfigCondition merges a new v1.Condition into a slice of existing conditions. It returns true
+// mergeConfigCondition merges a new metav1.Condition into a slice of existing conditions. It returns true
 // if the condition has meaningfully changed.
-func mergeConfigCondition(existing *[]v1.Condition, new *v1.Condition) bool {
+func mergeConfigCondition(existing *[]metav1.Condition, new *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *v1.Condition
+	var old *metav1.Condition
 	for i := range *existing {
 		if (*existing)[i].Type == new.Type {
 			old = &(*existing)[i]

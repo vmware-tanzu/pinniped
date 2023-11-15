@@ -27,7 +27,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -126,7 +126,7 @@ func (c *lruValidatorCache) cacheKey(spec *v1alpha1.OIDCIdentityProviderSpec) in
 type oidcWatcherController struct {
 	cache                        UpstreamOIDCIdentityProviderICache
 	log                          logr.Logger
-	client                       pinnipedclientset.Interface
+	client                       supervisorclientset.Interface
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
 	validatorCache               interface {
@@ -138,7 +138,7 @@ type oidcWatcherController struct {
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamOIDCIdentityProviderICache.
 func New(
 	idpCache UpstreamOIDCIdentityProviderICache,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
 	log logr.Logger,

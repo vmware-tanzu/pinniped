@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -51,7 +51,7 @@ func NewTLSCertObserverController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(v1.SecretTypeTLS, nil),
+			pinnipedcontroller.MatchAnySecretOfTypeFilter(corev1.SecretTypeTLS, nil),
 			controllerlib.InformerOption{},
 		),
 		withInformer(

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ory/fosite/handler/openid"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	testing2 "k8s.io/client-go/testing"
 
@@ -40,9 +40,9 @@ func NewFakePinnipedSession() *psession.PinnipedSession {
 }
 
 func LogActualJSONFromCreateAction(t *testing.T, client *fake.Clientset, actionIndex int) {
-	t.Log("actual value of CreateAction secret data", string(client.Actions()[actionIndex].(testing2.CreateActionImpl).Object.(*v1.Secret).Data["pinniped-storage-data"]))
+	t.Log("actual value of CreateAction secret data", string(client.Actions()[actionIndex].(testing2.CreateActionImpl).Object.(*corev1.Secret).Data["pinniped-storage-data"]))
 }
 
 func LogActualJSONFromUpdateAction(t *testing.T, client *fake.Clientset, actionIndex int) {
-	t.Log("actual value of UpdateAction secret data", string(client.Actions()[actionIndex].(testing2.UpdateActionImpl).Object.(*v1.Secret).Data["pinniped-storage-data"]))
+	t.Log("actual value of UpdateAction secret data", string(client.Actions()[actionIndex].(testing2.UpdateActionImpl).Object.(*corev1.Secret).Data["pinniped-storage-data"]))
 }

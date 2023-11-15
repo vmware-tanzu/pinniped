@@ -4,7 +4,7 @@
 package controller
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/controllerlib"
@@ -43,9 +43,9 @@ func SimpleFilter(match func(metav1.Object) bool, parentFunc controllerlib.Paren
 	}
 }
 
-func MatchAnySecretOfTypeFilter(secretType v1.SecretType, parentFunc controllerlib.ParentFunc) controllerlib.Filter {
+func MatchAnySecretOfTypeFilter(secretType corev1.SecretType, parentFunc controllerlib.ParentFunc) controllerlib.Filter {
 	isSecretOfType := func(obj metav1.Object) bool {
-		secret, ok := obj.(*v1.Secret)
+		secret, ok := obj.(*corev1.Secret)
 		if !ok {
 			return false
 		}

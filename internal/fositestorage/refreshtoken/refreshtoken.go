@@ -10,7 +10,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -57,7 +57,7 @@ func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionSt
 }
 
 // ReadFromSecret reads the contents of a Secret as a Session.
-func ReadFromSecret(secret *v1.Secret) (*Session, error) {
+func ReadFromSecret(secret *corev1.Secret) (*Session, error) {
 	session := newValidEmptyRefreshTokenSession()
 	err := crud.FromSecret(TypeLabelValue, secret, session)
 	if err != nil {

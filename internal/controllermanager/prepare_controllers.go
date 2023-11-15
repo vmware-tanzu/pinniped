@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
 
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/config/concierge"
@@ -320,14 +320,14 @@ type informers struct {
 	kubePublicNamespaceK8s   k8sinformers.SharedInformerFactory
 	kubeSystemNamespaceK8s   k8sinformers.SharedInformerFactory
 	installationNamespaceK8s k8sinformers.SharedInformerFactory
-	pinniped                 pinnipedinformers.SharedInformerFactory
+	pinniped                 conciergeinformers.SharedInformerFactory
 }
 
 // Create the informers that will be used by the controllers.
 func createInformers(
 	serverInstallationNamespace string,
 	k8sClient kubernetes.Interface,
-	pinnipedClient pinnipedclientset.Interface,
+	pinnipedClient conciergeclientset.Interface,
 ) *informers {
 	return &informers{
 		kubePublicNamespaceK8s: k8sinformers.NewSharedInformerFactoryWithOptions(
@@ -345,7 +345,7 @@ func createInformers(
 			defaultResyncInterval,
 			k8sinformers.WithNamespace(serverInstallationNamespace),
 		),
-		pinniped: pinnipedinformers.NewSharedInformerFactoryWithOptions(
+		pinniped: conciergeinformers.NewSharedInformerFactoryWithOptions(
 			pinnipedClient,
 			defaultResyncInterval,
 		),

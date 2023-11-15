@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ptls
@@ -13,7 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -104,7 +104,7 @@ func secureClient(opts *options.RecommendedOptions, f RestConfigFunc) error {
 	opts.ExtraAdmissionInitializers = func(c *genericapiserver.RecommendedConfig) ([]admission.PluginInitializer, error) {
 		// abuse this closure to rewrite how we load admission plugins
 		c.ClientConfig = inClusterConfig
-		c.SharedInformerFactory = kubeinformers.NewSharedInformerFactory(inClusterClient, 0)
+		c.SharedInformerFactory = k8sinformers.NewSharedInformerFactory(inClusterClient, 0)
 
 		// abuse this closure to rewrite our loopback config
 		// this is mostly future proofing for post start hooks

@@ -10,7 +10,7 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20231112213822-7d5b36658e55
+	github.com/chromedp/cdproto v0.0.0-20231114014204-3e458d5176f9
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.7.0
 	github.com/coreos/go-semver v0.3.1
@@ -56,7 +56,7 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kube-aggregator v0.28.3
-	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
+	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/yaml v1.4.0
 )

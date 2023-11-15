@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"context"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
@@ -41,7 +41,7 @@ func (s *kubeClientPodCommandExecutor) Exec(ctx context.Context, podNamespace st
 		Resource("pods").
 		Name(podName).
 		SubResource("exec").
-		VersionedParams(&v1.PodExecOptions{
+		VersionedParams(&corev1.PodExecOptions{
 			Stdin:     false,
 			Stdout:    true,
 			Stderr:    false,

@@ -37,7 +37,6 @@ import (
 	certificatesv1 "k8s.io/api/certificates/v1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1795,9 +1794,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			"external-tls-cert-secret-name",
 			corev1.SecretTypeTLS,
 			map[string]string{
-				"ca.crt":            string(externallyProvidedCA.Bundle()),
-				v1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM),
-				v1.TLSPrivateKeyKey: string(externallyProvidedTLSServingKeyPEM),
+				"ca.crt":                string(externallyProvidedCA.Bundle()),
+				corev1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM),
+				corev1.TLSPrivateKeyKey: string(externallyProvidedTLSServingKeyPEM),
 			})
 
 		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
@@ -1867,9 +1866,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			"external-tls-cert-secret-name-integration-tests",
 			corev1.SecretTypeTLS,
 			map[string][]byte{
-				"ca.crt":            externallyProvidedCA.Bundle(),
-				v1.TLSCertKey:       externallyProvidedTLSServingCertPEM,
-				v1.TLSPrivateKeyKey: externallyProvidedTLSServingKeyPEM,
+				"ca.crt":                externallyProvidedCA.Bundle(),
+				corev1.TLSCertKey:       externallyProvidedTLSServingCertPEM,
+				corev1.TLSPrivateKeyKey: externallyProvidedTLSServingKeyPEM,
 			})
 
 		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)

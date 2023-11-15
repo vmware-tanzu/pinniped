@@ -27,7 +27,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/here"
@@ -364,7 +364,7 @@ func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 	t *testing.T,
 	ns string,
 	defaultTLSCertSecretName string,
-	pinnipedClient pinnipedclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	kubeClient kubernetes.Interface,
 ) {
 	// Temporarily remove any existing FederationDomains from the cluster so we can test from a clean slate.
@@ -485,7 +485,7 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	t *testing.T,
 	supervisorScheme, supervisorAddress, supervisorCABundle string,
 	issuerName string,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 ) (*v1alpha1.FederationDomain, *ExpectedJWKSResponseFormat) {
 	t.Helper()
 	newFederationDomain := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuerName}, v1alpha1.FederationDomainPhaseReady)
@@ -503,7 +503,7 @@ func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervi
 func requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(
 	t *testing.T,
 	existingFederationDomain *v1alpha1.FederationDomain,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 	ns string,
 	supervisorScheme, supervisorAddress, supervisorCABundle string,
 	issuerName string,
@@ -628,7 +628,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 func editFederationDomainIssuerName(
 	t *testing.T,
 	existingFederationDomain *v1alpha1.FederationDomain,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 	ns string,
 	newIssuerName string,
 ) *v1alpha1.FederationDomain {
@@ -649,7 +649,7 @@ func editFederationDomainIssuerName(
 	return updated
 }
 
-func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
+func requireDelete(t *testing.T, client supervisorclientset.Interface, ns, name string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -685,7 +685,7 @@ func withFalseConditions(falseConditionTypes []string) map[string]metav1.Conditi
 	return c
 }
 
-func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, wantPhase v1alpha1.FederationDomainPhase, wantConditionTypeToStatus map[string]metav1.ConditionStatus) {
+func requireStatus(t *testing.T, client supervisorclientset.Interface, ns, name string, wantPhase v1alpha1.FederationDomainPhase, wantConditionTypeToStatus map[string]metav1.ConditionStatus) {
 	t.Helper()
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {

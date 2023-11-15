@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -14,7 +14,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -36,7 +36,7 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
+			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewJWKSObserverController(
 				nil,
@@ -128,7 +128,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			pinnipedInformerClient  *pinnipedfake.Clientset
 			kubeInformerClient      *kubernetesfake.Clientset
 			pinnipedInformers       pinnipedinformers.SharedInformerFactory
-			kubeInformers           kubeinformers.SharedInformerFactory
+			kubeInformers           k8sinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
 			syncContext             *controllerlib.Context
@@ -168,7 +168,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
+			kubeInformers = k8sinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
 			pinnipedInformers = pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 			issuerToJWKSSetter = &fakeIssuerToJWKSMapSetter{}

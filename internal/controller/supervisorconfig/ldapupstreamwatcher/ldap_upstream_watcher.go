@@ -14,7 +14,7 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
@@ -140,7 +140,7 @@ type ldapWatcherController struct {
 	cache                        UpstreamLDAPIdentityProviderICache
 	validatedSettingsCache       upstreamwatchers.ValidatedSettingsCacheI
 	ldapDialer                   upstreamldap.LDAPDialer
-	client                       pinnipedclientset.Interface
+	client                       supervisorclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
 }
@@ -148,7 +148,7 @@ type ldapWatcherController struct {
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
 func New(
 	idpCache UpstreamLDAPIdentityProviderICache,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -171,7 +171,7 @@ func newInternal(
 	idpCache UpstreamLDAPIdentityProviderICache,
 	validatedSettingsCache upstreamwatchers.ValidatedSettingsCacheI,
 	ldapDialer upstreamldap.LDAPDialer,
-	client pinnipedclientset.Interface,
+	client supervisorclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,

@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -68,7 +68,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			pinnipedInformerFactory := pinnipedinformers.NewSharedInformerFactory(nil, 0)
-			sharedInformerFactory := kubeinformers.NewSharedInformerFactory(nil, 0)
+			sharedInformerFactory := k8sinformers.NewSharedInformerFactory(nil, 0)
 			credIssuerInformer := pinnipedInformerFactory.Config().V1alpha1().CredentialIssuers()
 			servicesInformer := sharedInformerFactory.Core().V1().Services()
 			secretsInformer := sharedInformerFactory.Core().V1().Secrets()
@@ -282,7 +282,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var pinnipedInformerClient *pinnipedfake.Clientset
 		var pinnipedInformers pinnipedinformers.SharedInformerFactory
 		var kubeInformerClient *kubernetesfake.Clientset
-		var kubeInformers kubeinformers.SharedInformerFactory
+		var kubeInformers k8sinformers.SharedInformerFactory
 		var cancelContext context.Context
 		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
@@ -1121,8 +1121,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			pinnipedInformers = pinnipedinformers.NewSharedInformerFactoryWithOptions(pinnipedInformerClient, 0)
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactoryWithOptions(kubeInformerClient, 0,
-				kubeinformers.WithNamespace(installedInNamespace),
+			kubeInformers = k8sinformers.NewSharedInformerFactoryWithOptions(kubeInformerClient, 0,
+				k8sinformers.WithNamespace(installedInNamespace),
 			)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()

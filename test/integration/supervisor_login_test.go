@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
@@ -73,13 +73,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		}
 	}
 
-	createActiveDirectoryIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec)) (*idpv1alpha1.ActiveDirectoryIdentityProvider, *v1.Secret) {
+	createActiveDirectoryIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec)) (*idpv1alpha1.ActiveDirectoryIdentityProvider, *corev1.Secret) {
 		t.Helper()
 
-		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", corev1.SecretTypeBasicAuth,
 			map[string]string{
-				v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-				v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
 			},
 		)
 
@@ -109,13 +109,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		return adIDP, secret
 	}
 
-	createLDAPIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.LDAPIdentityProviderSpec)) (*idpv1alpha1.LDAPIdentityProvider, *v1.Secret) {
+	createLDAPIdentityProvider := func(t *testing.T, edit func(spec *idpv1alpha1.LDAPIdentityProviderSpec)) (*idpv1alpha1.LDAPIdentityProvider, *corev1.Secret) {
 		t.Helper()
 
-		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+		secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
 			map[string]string{
-				v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-				v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 			},
 		)
 
@@ -875,15 +875,15 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				// create the secret again
 				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
 				defer recreateCancel()
-				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
+				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      secret.Name,
 						Namespace: env.SupervisorNamespace,
 					},
-					Type: v1.SecretTypeBasicAuth,
+					Type: corev1.SecretTypeBasicAuth,
 					StringData: map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+						corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 					},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -1110,15 +1110,15 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				// create the secret again
 				recreateCtx, recreateCancel := context.WithTimeout(context.Background(), time.Minute)
 				defer recreateCancel()
-				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &v1.Secret{
+				recreatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Create(recreateCtx, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      secret.Name,
 						Namespace: env.SupervisorNamespace,
 					},
-					Type: v1.SecretTypeBasicAuth,
+					Type: corev1.SecretTypeBasicAuth,
 					StringData: map[string]string{
-						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
-						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+						corev1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						corev1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
 					},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -1449,7 +1449,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: displayName,
-							ObjectRef: v1.TypedLocalObjectReference{
+							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 								Kind:     "OIDCIdentityProvider",
 								Name:     idpName,
@@ -1823,7 +1823,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
-						ObjectRef: v1.TypedLocalObjectReference{
+						ObjectRef: corev1.TypedLocalObjectReference{
 							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "OIDCIdentityProvider",
 							Name:     idpName,
@@ -1884,7 +1884,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
-						ObjectRef: v1.TypedLocalObjectReference{
+						ObjectRef: corev1.TypedLocalObjectReference{
 							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "LDAPIdentityProvider",
 							Name:     idpName,
@@ -1951,7 +1951,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
-						ObjectRef: v1.TypedLocalObjectReference{
+						ObjectRef: corev1.TypedLocalObjectReference{
 							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "LDAPIdentityProvider",
 							Name:     idpName,
@@ -2015,7 +2015,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
-						ObjectRef: v1.TypedLocalObjectReference{
+						ObjectRef: corev1.TypedLocalObjectReference{
 							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "ActiveDirectoryIdentityProvider",
 							Name:     idpName,
@@ -2084,7 +2084,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return []configv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
-						ObjectRef: v1.TypedLocalObjectReference{
+						ObjectRef: corev1.TypedLocalObjectReference{
 							APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 							Kind:     "ActiveDirectoryIdentityProvider",
 							Name:     idpName,
@@ -2376,7 +2376,7 @@ func testSupervisorLogin(
 	certSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
-		v1.SecretTypeTLS,
+		corev1.SecretTypeTLS,
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 

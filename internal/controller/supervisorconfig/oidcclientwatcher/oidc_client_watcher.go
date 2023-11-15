@@ -16,7 +16,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configInformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
@@ -32,7 +32,7 @@ const (
 )
 
 type oidcClientWatcherController struct {
-	pinnipedClient     pinnipedclientset.Interface
+	pinnipedClient     supervisorclientset.Interface
 	oidcClientInformer configInformers.OIDCClientInformer
 	secretInformer     corev1informers.SecretInformer
 }
@@ -40,7 +40,7 @@ type oidcClientWatcherController struct {
 // NewOIDCClientWatcherController returns a controllerlib.Controller that watches OIDCClients and updates
 // their status with validation errors.
 func NewOIDCClientWatcherController(
-	pinnipedClient pinnipedclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
 	oidcClientInformer configInformers.OIDCClientInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,

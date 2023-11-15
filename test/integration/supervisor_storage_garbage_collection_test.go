@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -67,7 +67,7 @@ func TestStorageGarbageCollection_Parallel(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func updateSecretEveryTwoSeconds(stopCh chan struct{}, errCh chan error, secrets corev1client.SecretInterface, secret *v1.Secret) {
+func updateSecretEveryTwoSeconds(stopCh chan struct{}, errCh chan error, secrets corev1client.SecretInterface, secret *corev1.Secret) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -112,7 +112,7 @@ func updateSecretEveryTwoSeconds(stopCh chan struct{}, errCh chan error, secrets
 	}
 }
 
-func createSecret(ctx context.Context, t *testing.T, secrets corev1client.SecretInterface, name string, expiresAt time.Time) *v1.Secret {
+func createSecret(ctx context.Context, t *testing.T, secrets corev1client.SecretInterface, name string, expiresAt time.Time) *corev1.Secret {
 	secret, err := secrets.Create(ctx, newSecret("pinniped-storage-gc-integration-test-"+name+"-", expiresAt), metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -131,13 +131,13 @@ func createSecret(ctx context.Context, t *testing.T, secrets corev1client.Secret
 	return secret
 }
 
-func newSecret(namePrefix string, expiresAt time.Time) *v1.Secret {
+func newSecret(namePrefix string, expiresAt time.Time) *corev1.Secret {
 	annotations := map[string]string{}
 	if !expiresAt.Equal(time.Time{}) {
 		// Mark the secret for garbage collection.
 		annotations[crud.SecretLifetimeAnnotationKey] = expiresAt.UTC().Format(time.RFC3339)
 	}
-	return &v1.Secret{
+	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: namePrefix,
 			Annotations:  annotations,

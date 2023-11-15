@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clusterhost
@@ -8,20 +8,18 @@ import (
 	"errors"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
-
-	v1 "k8s.io/api/core/v1"
 )
 
 func TestHasControlPlaneNodes(t *testing.T) {
 	tests := []struct {
 		name            string
-		nodes           []*v1.Node
+		nodes           []*corev1.Node
 		listNodesErr    error
 		wantErr         error
 		wantReturnValue bool
@@ -33,12 +31,12 @@ func TestHasControlPlaneNodes(t *testing.T) {
 		},
 		{
 			name:    "Fetching nodes returns an empty array",
-			nodes:   []*v1.Node{},
+			nodes:   []*corev1.Node{},
 			wantErr: errors.New("no nodes found"),
 		},
 		{
 			name: "Nodes found, but not control plane nodes",
-			nodes: []*v1.Node{
+			nodes: []*corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "node-1",
@@ -59,7 +57,7 @@ func TestHasControlPlaneNodes(t *testing.T) {
 		},
 		{
 			name: "Nodes found, including a control-plane role in node-role.kubernetes.io/<role> format",
-			nodes: []*v1.Node{
+			nodes: []*corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "node-1",
@@ -80,7 +78,7 @@ func TestHasControlPlaneNodes(t *testing.T) {
 		},
 		{
 			name: "Nodes found, including a master role in node-role.kubernetes.io/<role> format",
-			nodes: []*v1.Node{
+			nodes: []*corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "node-1",
@@ -101,7 +99,7 @@ func TestHasControlPlaneNodes(t *testing.T) {
 		},
 		{
 			name: "Nodes found, including a control-plane role in kubernetes.io/node-role=<role> format",
-			nodes: []*v1.Node{
+			nodes: []*corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "node-1",
@@ -122,7 +120,7 @@ func TestHasControlPlaneNodes(t *testing.T) {
 		},
 		{
 			name: "Nodes found, including a master role in kubernetes.io/node-role=<role> format",
-			nodes: []*v1.Node{
+			nodes: []*corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   "node-1",

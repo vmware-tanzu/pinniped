@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package generator
@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
@@ -180,7 +180,7 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 				func(cacheKey string, cacheValue []byte) {},
 			)
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -243,7 +243,7 @@ func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T
 				func(cacheKey string, cacheValue []byte) {},
 			)
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -656,7 +656,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				test.client(pinnipedAPIClient, kubeAPIClient)
 			}
 
-			kubeInformers := kubeinformers.NewSharedInformerFactory(
+			kubeInformers := k8sinformers.NewSharedInformerFactory(
 				kubeInformerClient,
 				0,
 			)

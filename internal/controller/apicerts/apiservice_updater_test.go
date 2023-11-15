@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -38,7 +38,7 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
+			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewAPIServiceUpdaterController(
 				installedInNamespace,
 				certsSecretResourceName,
@@ -110,7 +110,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 		var subject controllerlib.Controller
 		var aggregatorAPIClient *aggregatorfake.Clientset
 		var kubeInformerClient *kubernetesfake.Clientset
-		var kubeInformers kubeinformers.SharedInformerFactory
+		var kubeInformers k8sinformers.SharedInformerFactory
 		var cancelContext context.Context
 		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
@@ -149,7 +149,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
+			kubeInformers = k8sinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			aggregatorAPIClient = aggregatorfake.NewSimpleClientset()
 		})
 

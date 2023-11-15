@@ -1,10 +1,10 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidctypes provides core data types for OIDC token structures.
 package oidctypes
 
-import v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // AccessToken is an OAuth2 access token.
 type AccessToken struct {
@@ -15,7 +15,7 @@ type AccessToken struct {
 	Type string `json:"type,omitempty"`
 
 	// Expiry is the optional expiration time of the access token.
-	Expiry v1.Time `json:"expiryTimestamp,omitempty"`
+	Expiry metav1.Time `json:"expiryTimestamp,omitempty"`
 }
 
 // RefreshToken is an OAuth2 refresh token.
@@ -30,7 +30,7 @@ type IDToken struct {
 	Token string `json:"token"`
 
 	// Expiry is the optional expiration time of the ID token.
-	Expiry v1.Time `json:"expiryTimestamp,omitempty"`
+	Expiry metav1.Time `json:"expiryTimestamp,omitempty"`
 
 	// Claims are the claims expressed by the Token.
 	Claims map[string]interface{} `json:"claims,omitempty"`

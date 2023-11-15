@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -62,7 +62,7 @@ func TestControllerInitPrepare_Parallel(t *testing.T) {
 	})
 }
 
-func buildBrokenInformer(t *testing.T) kubeinformers.SharedInformerFactory {
+func buildBrokenInformer(t *testing.T) k8sinformers.SharedInformerFactory {
 	t.Helper()
 
 	config := testlib.NewClientConfig(t)
@@ -71,7 +71,7 @@ func buildBrokenInformer(t *testing.T) kubeinformers.SharedInformerFactory {
 
 	client := kubernetes.NewForConfigOrDie(config)
 
-	informers := kubeinformers.NewSharedInformerFactoryWithOptions(client, 0)
+	informers := k8sinformers.NewSharedInformerFactoryWithOptions(client, 0)
 
 	// make sure some informers gets lazily loaded
 	_ = informers.Core().V1().Nodes().Informer()

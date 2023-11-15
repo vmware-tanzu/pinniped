@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package localuserauthenticator provides a authentication webhook program.
@@ -29,7 +29,7 @@ import (
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -283,7 +283,7 @@ func startControllers(
 	ctx context.Context,
 	dynamicCertProvider dynamiccert.Private,
 	kubeClient kubernetes.Interface,
-	kubeInformers kubeinformers.SharedInformerFactory,
+	kubeInformers k8sinformers.SharedInformerFactory,
 ) {
 	aVeryLongTime := time.Hour * 24 * 365 * 100
 
@@ -346,10 +346,10 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}
 
-	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
+	kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
 		client.Kubernetes,
 		defaultResyncInterval,
-		kubeinformers.WithNamespace(namespace),
+		k8sinformers.WithNamespace(namespace),
 	)
 
 	dynamicCertProvider := dynamiccert.NewServingCert("local-user-authenticator-tls-serving-certificate")

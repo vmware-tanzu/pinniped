@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package localuserauthenticator
@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -433,7 +433,7 @@ func TestWebhook(t *testing.T) {
 func createSecretInformer(ctx context.Context, t *testing.T, kubeClient kubernetes.Interface) corev1informers.SecretInformer {
 	t.Helper()
 
-	kubeInformers := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
+	kubeInformers := k8sinformers.NewSharedInformerFactory(kubeClient, 0)
 
 	secretInformer := kubeInformers.Core().V1().Secrets()
 

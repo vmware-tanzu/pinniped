@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
@@ -171,7 +171,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -225,7 +225,7 @@ func TestJWKSWriterControllerFilterFederationDomain(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			secretInformer := kubeinformers.NewSharedInformerFactory(
+			secretInformer := k8sinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
@@ -696,7 +696,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				test.configPinnipedClient(pinnipedAPIClient)
 			}
 
-			kubeInformers := kubeinformers.NewSharedInformerFactory(
+			kubeInformers := k8sinformers.NewSharedInformerFactory(
 				kubeInformerClient,
 				0,
 			)

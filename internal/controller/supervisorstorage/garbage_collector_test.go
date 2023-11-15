@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	kubeinformers "k8s.io/client-go/informers"
+	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/utils/clock"
@@ -47,7 +47,7 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
+			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = GarbageCollectorController(
 				nil,
 				clock.RealClock{},
@@ -128,7 +128,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			subject                 controllerlib.Controller
 			kubeInformerClient      *kubernetesfake.Clientset
 			kubeClient              *kubernetesfake.Clientset
-			kubeInformers           kubeinformers.SharedInformerFactory
+			kubeInformers           k8sinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
 			syncContext             *controllerlib.Context
@@ -171,7 +171,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
+			kubeInformers = k8sinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			frozenNow = time.Now().UTC()
 			fakeClock = clocktesting.NewFakeClock(frozenNow)
 

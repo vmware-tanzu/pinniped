@@ -13,7 +13,7 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -107,7 +107,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	require.Equal(t, map[string]string{"storage.pinniped.dev/type": "authcode"}, initialSecret.Labels)
 
 	// check that the Secret got the right type
-	require.Equal(t, v1.SecretType("storage.pinniped.dev/authcode"), initialSecret.Type)
+	require.Equal(t, corev1.SecretType("storage.pinniped.dev/authcode"), initialSecret.Type)
 
 	// we should be able to get the session now and the request should be the same as what we put in
 	request, err := storage.GetAuthorizeCodeSession(ctx, signature, nil)

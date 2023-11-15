@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
@@ -60,7 +60,7 @@ func generateECKey(r io.Reader) (interface{}, error) {
 // secrets, both via a cache and via the API.
 type jwksWriterController struct {
 	jwksSecretLabels         map[string]string
-	pinnipedClient           pinnipedclientset.Interface
+	pinnipedClient           supervisorclientset.Interface
 	kubeClient               kubernetes.Interface
 	federationDomainInformer configinformers.FederationDomainInformer
 	secretInformer           corev1informers.SecretInformer
@@ -71,7 +71,7 @@ type jwksWriterController struct {
 func NewJWKSWriterController(
 	jwksSecretLabels map[string]string,
 	kubeClient kubernetes.Interface,
-	pinnipedClient pinnipedclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
 	federationDomainInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,

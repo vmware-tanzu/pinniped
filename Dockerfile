@@ -3,8 +3,11 @@
 # Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+ARG BUILD_IMAGE=golang:1.21.4
+ARG BASE_IMAGE=gcr.io/distroless/static@sha256:91ca4720011393f4d4cab3a01fa5814ee2714b7d40e6c74f2505f74168398ca9
+
 # Prepare to cross-compile by always running the build stage in the build platform, not the target platform.
-FROM --platform=$BUILDPLATFORM golang:1.21.4 as build-env
+FROM --platform=$BUILDPLATFORM $BUILD_IMAGE as build-env
 
 WORKDIR /work
 
@@ -36,7 +39,7 @@ RUN \
 # Note that we are not using --platform here, so it will choose the base image for the target platform, not the build platform.
 # By using "distroless/static" instead of "distroless/static-debianXX" we can float on the latest stable version of debian.
 # See https://github.com/GoogleContainerTools/distroless#base-operating-system
-FROM gcr.io/distroless/static:nonroot@sha256:2a9e2b4fa771d31fe3346a873be845bfc2159695b9f90ca08e950497006ccc2e
+FROM $BASE_IMAGE
 
 # Copy the server binary from the build-env stage.
 COPY --from=build-env /usr/local/bin /usr/local/bin

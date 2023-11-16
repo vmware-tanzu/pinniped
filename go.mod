@@ -2,10 +2,10 @@ module go.pinniped.dev
 
 go 1.20
 
-// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.2/go.mod#L14
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod#L14
 replace github.com/google/cel-go => github.com/google/cel-go v0.16.1
 
-// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.2/go.mod#L50
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod#L50
 replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
 
 require (

@@ -205,3 +205,69 @@ func TestFetchToken(t *testing.T) {
 		})
 	}
 }
+
+func TestStart_HappyPath(t *testing.T) {
+	mockClient := fake.NewSimpleClientset()
+	now := time.Now()
+	var log bytes.Buffer
+
+	type receivedToken struct {
+		token string
+		ttl   time.Duration
+	}
+
+	var receivedTokens []receivedToken
+
+	tokenClient := New(
+		"service-account-name",
+		mockClient.CoreV1().ServiceAccounts("any-namespace-works"),
+		func(token string, ttl time.Duration) {
+			t.Logf("received token %q with ttl %q", token, ttl)
+			receivedTokens = append(receivedTokens, receivedToken{
+				token: token,
+				ttl:   ttl,
+			})
+		},
+		plog.TestLogger(t, &log),
+	)
+
+	type reactionResponse struct {
+		status authenticationv1.TokenRequestStatus
+		err    error
+	}
+
+	var reactionResponses []reactionResponse
+
+	for i := int64(0); i < 1000; i++ {
+		ttl := time.Duration((1 + i) * 50 * int64(time.Millisecond))
+		reactionResponses = append(reactionResponses, reactionResponse{
+			status: authenticationv1.TokenRequestStatus{
+				Token:               fmt.Sprintf("token-%d-ttl-%s", i, ttl),
+				ExpirationTimestamp: metav1.Time{Time: now.Add(ttl)},
+			},
+		})
+	}
+
+	callCount := 0
+	mockClient.PrependReactor(verb, resource, func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+		i := callCount
+		callCount++
+		response := &authenticationv1.TokenRequest{
+			Status: reactionResponses[i].status,
+		}
+		return true, response, reactionResponses[i].err
+	})
+
+	defer func() {
+		expected := int((10 * time.Second) / (50 * time.Millisecond))
+		require.GreaterOrEqual(t, len(receivedTokens), expected*9/10)
+		require.LessOrEqual(t, len(receivedTokens), expected*11/10)
+		//require.Equal(t, "some expected logs", log.String())
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(10*time.Second, cancel)
+	go tokenClient.Start(ctx)
+
+	<-ctx.Done()
+}

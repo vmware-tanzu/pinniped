@@ -10,9 +10,9 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20231114014204-3e458d5176f9
+	github.com/chromedp/cdproto v0.0.0-20231126232103-8e31ff06e23b
 	github.com/chromedp/chromedp v0.9.3
-	github.com/coreos/go-oidc/v3 v3.7.0
+	github.com/coreos/go-oidc/v3 v3.8.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1
@@ -40,11 +40,11 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify/v2 v2.20.7
 	go.uber.org/zap v1.26.0
-	golang.org/x/crypto v0.15.0
-	golang.org/x/net v0.18.0
-	golang.org/x/oauth2 v0.14.0
+	golang.org/x/crypto v0.16.0
+	golang.org/x/net v0.19.0
+	golang.org/x/oauth2 v0.15.0
 	golang.org/x/sync v0.5.0
-	golang.org/x/term v0.14.0
+	golang.org/x/term v0.15.0
 	golang.org/x/text v0.14.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.28.4
@@ -57,7 +57,7 @@ require (
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kube-aggregator v0.28.4
 	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -149,7 +149,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.8.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect

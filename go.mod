@@ -12,7 +12,7 @@ require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20231114014204-3e458d5176f9
 	github.com/chromedp/chromedp v0.9.3
-	github.com/coreos/go-oidc/v3 v3.7.0
+	github.com/coreos/go-oidc/v3 v3.8.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1

@@ -4,11 +4,13 @@
 package impersonator
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/tokenclient"
 )
 
@@ -25,10 +27,17 @@ func (rt *authorizationRoundTripper) WrappedRoundTripper() http.RoundTripper {
 
 func (rt *authorizationRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = utilnet.CloneRequest(req)
+
 	token := rt.cache.Get()
+
 	if token == "" {
-		return nil, fmt.Errorf("no token available")
+		plog.Error("could not RoundTrip impersonation proxy request to API server",
+			errors.New("no service account token available in in-memory cache"))
+
+		return nil, fmt.Errorf("no impersonator service account token available")
 	}
+
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
 	return rt.base.RoundTrip(req)
 }

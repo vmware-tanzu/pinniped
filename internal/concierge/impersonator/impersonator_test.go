@@ -58,7 +58,6 @@ import (
 	"go.pinniped.dev/internal/tokenclient"
 )
 
-// TODO: add a test without a token?
 func TestImpersonator(t *testing.T) {
 	const (
 		priorityLevelConfigurationsVersion = "v1beta3"
@@ -94,6 +93,7 @@ func TestImpersonator(t *testing.T) {
 		kubeAPIServerStatusCode         int
 		kubeAPIServerHealthz            http.Handler
 		anonymousAuthDisabled           bool
+		noServiceAcctTokenInCache       bool // when true, no available service account token for the impersonator to use
 		wantKubeAPIServerRequestHeaders http.Header
 		wantError                       string
 		wantConstructionError           string
@@ -658,6 +658,19 @@ func TestImpersonator(t *testing.T) {
 			wantError:                `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{},
 		},
+		{
+			name:                            "when there is no service account token cached for the impersonator to use to call the KAS",
+			clientCert:                      newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			noServiceAcctTokenInCache:       true,
+			wantKubeAPIServerRequestHeaders: nil, // no request should have been made to the KAS on behalf of the user
+			wantError:                       `an error on the server ("") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: []authorizer.AttributesRecord{
+				{
+					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
+					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -673,7 +686,9 @@ func TestImpersonator(t *testing.T) {
 			require.NoError(t, err)
 
 			// After failing to start and after shutdown, the impersonator port should be available again.
-			defer requireCanBindToPort(t, port)
+			t.Cleanup(func() {
+				requireCanBindToPort(t, port)
+			})
 
 			if tt.kubeAPIServerStatusCode == 0 {
 				tt.kubeAPIServerStatusCode = http.StatusOK
@@ -845,10 +860,13 @@ func TestImpersonator(t *testing.T) {
 				return kubeclient.Secure(config)
 			}
 
+			serviceTokenCache := tokenclient.NewExpiringSingletonTokenCache()
+			if !tt.noServiceAcctTokenInCache {
+				serviceTokenCache.Set("some-service-account-token", 1*time.Hour)
+			}
+
 			// Create an impersonator.  Use an invalid port number to make sure our listener override works.
-			cache := tokenclient.NewExpiringSingletonTokenCache()
-			cache.Set("some-service-account-token", 1*time.Hour)
-			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, restConfigFunc, cache, &testKubeAPIServerKubeconfig, recOpts, recConfig)
+			runner, constructionErr := newInternal(-1000, certKeyContent, caContent, restConfigFunc, serviceTokenCache, &testKubeAPIServerKubeconfig, recOpts, recConfig)
 			if len(tt.wantConstructionError) > 0 {
 				require.EqualError(t, constructionErr, tt.wantConstructionError)
 				require.Nil(t, runner)
@@ -865,6 +883,13 @@ func TestImpersonator(t *testing.T) {
 				stopErr := runner(stopCh)
 				errCh <- stopErr
 			}()
+
+			// Stop the impersonator server at the end of the test, even if it fails.
+			t.Cleanup(func() {
+				close(stopCh)
+				exitErr := <-errCh
+				require.NoError(t, exitErr)
+			})
 
 			// Create a kubeconfig to talk to the impersonator as a client.
 			clientKubeconfig := &rest.Config{
@@ -918,6 +943,12 @@ func TestImpersonator(t *testing.T) {
 			// If the impersonator proxied the request to the fake Kube API server, we should see the headers
 			// of the original request mutated by the impersonator.  Otherwise the headers should be nil.
 			require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
+
+			// The rest of the test doesn't make sense for when there is no service account token available in the cache.
+			// In this case, the impersonator cannot make any calls to the Kube API server on behalf of any user.
+			if tt.noServiceAcctTokenInCache {
+				return
+			}
 
 			// these authorization checks are caused by the anonymous auth checks below
 			tt.wantAuthorizerAttributes = append(tt.wantAuthorizerAttributes,
@@ -1021,11 +1052,6 @@ func TestImpersonator(t *testing.T) {
 			_, errBadCert := tcrBadCert.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{}, metav1.CreateOptions{})
 			require.True(t, errors.IsUnauthorized(errBadCert), errBadCert)
 			require.EqualError(t, errBadCert, "Unauthorized")
-
-			// Stop the impersonator server.
-			close(stopCh)
-			exitErr := <-errCh
-			require.NoError(t, exitErr)
 		})
 	}
 }

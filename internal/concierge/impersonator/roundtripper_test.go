@@ -69,7 +69,7 @@ func TestRoundTrip(t *testing.T) {
 		{
 			name:      "no token available",
 			token:     "", // since the cache always returns a non-pointer string, this indicates empty
-			wantError: "no token available",
+			wantError: "no impersonator service account token available",
 		},
 	} {
 		tt := tt

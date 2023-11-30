@@ -2050,7 +2050,6 @@ func createServiceAccountToken(ctx context.Context, t *testing.T, adminClient ku
 			Delete(context.Background(), serviceAccount.Name, metav1.DeleteOptions{}))
 	})
 
-	// TODO: What is this used for?
 	secret, err := adminClient.CoreV1().Secrets(namespaceName).Create(ctx, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "int-test-service-account-token-",

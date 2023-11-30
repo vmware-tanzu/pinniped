@@ -274,7 +274,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const httpsPort = ":443"
 		const fakeServerResponseBody = "hello, world!"
 		const externallyProvidedTLSSecretName = "external-tls-secret" //nolint:gosec // this is not a credential
-		fakeExpiringSingletonTokenCacheGet := *new(tokenclient.ExpiringSingletonTokenCacheGet)
+		var fakeExpiringSingletonTokenCacheGet = tokenclient.NewExpiringSingletonTokenCache()
 		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions

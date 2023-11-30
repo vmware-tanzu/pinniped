@@ -132,6 +132,8 @@ func TestSync(t *testing.T) {
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			kubeAPIClient, kubeInformers := setupKubernetes(t, tt.namespace)
 			if tt.addReactors != nil {
 				tt.addReactors(kubeAPIClient)

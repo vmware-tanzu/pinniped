@@ -5,7 +5,6 @@ package tokenclient
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -58,43 +57,50 @@ func New(
 	return client
 }
 
-func (tokenClient TokenClient) Start(ctx context.Context) {
+func (tc TokenClient) Start(ctx context.Context) {
 	sleeper := make(chan time.Time, 1)
+
 	// Make sure that the <-sleeper below gets run once immediately.
 	sleeper <- time.Now()
+
 	for {
 		select {
 		case <-ctx.Done():
-			tokenClient.logger.Info("TokenClient was cancelled and is stopping")
+			tc.logger.Info("TokenClient was cancelled and is stopping")
 			return
 		case <-sleeper:
 			var tokenTTL time.Duration
+
 			err := backoff.WithContext(ctx, &backoff.InfiniteBackoff{
 				Duration:    10 * time.Millisecond,
-				MaxDuration: 5 * time.Second,
+				MaxDuration: 10 * time.Second,
 				Factor:      2.0,
 			}, func(ctx context.Context) (bool, error) {
 				var (
 					err   error
 					token string
 				)
-				token, tokenTTL, err = tokenClient.fetchToken(ctx)
 
+				token, tokenTTL, err = tc.fetchToken(ctx)
 				if err != nil {
-					tokenClient.logger.Warning(fmt.Sprintf("Could not fetch token: %s\n", err))
-					// We got an error. Swallow it and ask for retry.
+					// We got an error. Log it, swallow it, and ask for retry by returning false.
+					tc.logger.Error("TokenClient could not fetch short-lived service account token (will retry)", err,
+						"serviceAccountName", tc.serviceAccountName)
 					return false, nil
 				}
 
-				tokenClient.whatToDoWithToken(token, tokenTTL)
-				// We got a token. Stop backing off.
+				// We got a new token, so invoke the callback.
+				tc.whatToDoWithToken(token, tokenTTL)
+				// Stop backing off.
 				return true, nil
 			})
+
 			if err != nil {
 				// We were cancelled during our WithContext. We know it was not due to some other
 				// error because our last argument to WithContext above never returns any errors.
 				return
 			}
+
 			// Schedule ourselves to wake up in the future.
 			time.AfterFunc(tokenTTL*4/5, func() {
 				sleeper <- time.Now()
@@ -103,19 +109,15 @@ func (tokenClient TokenClient) Start(ctx context.Context) {
 	}
 }
 
-func (tokenClient TokenClient) fetchToken(ctx context.Context) (token string, ttl time.Duration, _ error) {
-	tokenClient.logger.Debug(fmt.Sprintf("refreshing cache at time=%s\n", tokenClient.clock.Now().Format(time.RFC3339)))
-
-	tokenRequestInput := &authenticationv1.TokenRequest{
-		Spec: authenticationv1.TokenRequestSpec{
-			ExpirationSeconds: &tokenClient.expirationSeconds,
+func (tc TokenClient) fetchToken(ctx context.Context) (token string, ttl time.Duration, _ error) {
+	tc.logger.Debug("TokenClient calling CreateToken to fetch a short-lived service account token")
+	tokenResponse, err := tc.serviceAccountClient.CreateToken(ctx,
+		tc.serviceAccountName,
+		&authenticationv1.TokenRequest{
+			Spec: authenticationv1.TokenRequestSpec{
+				ExpirationSeconds: &tc.expirationSeconds,
+			},
 		},
-	}
-
-	tokenResponse, err := tokenClient.serviceAccountClient.CreateToken(
-		ctx,
-		tokenClient.serviceAccountName,
-		tokenRequestInput,
 		metav1.CreateOptions{},
 	)
 
@@ -124,10 +126,10 @@ func (tokenClient TokenClient) fetchToken(ctx context.Context) (token string, tt
 	}
 
 	if tokenResponse == nil {
-		return "", 0, errors.New("tokenRequest is nil after request")
+		return "", 0, errors.New("got nil CreateToken response")
 	}
 
 	return tokenResponse.Status.Token,
-		tokenResponse.Status.ExpirationTimestamp.Sub(tokenClient.clock.Now()),
+		tokenResponse.Status.ExpirationTimestamp.Sub(tc.clock.Now()),
 		nil
 }

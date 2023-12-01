@@ -45,8 +45,9 @@ metadata:
   annotations:
     #! we need to create this service account before we create the secret
     kapp.k14s.io/change-group: "impersonation-proxy.concierge.pinniped.dev/serviceaccount"
-secrets: #! make sure the token controller does not create any other secrets
-- name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+    kubernetes.io/enforce-mountable-secrets: "true"
+secrets: [] #! make sure the token controller does not create any secrets
+automountServiceAccountToken: false
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -77,6 +78,8 @@ data:
       impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
       impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
       agentServiceAccount: (@= defaultResourceNameWithSuffix("kube-cert-agent") @)
+      impersonationProxyServiceAccount: (@= defaultResourceNameWithSuffix("impersonation-proxy") @)
+      impersonationProxyLegacySecret: (@= defaultResourceNameWithSuffix("impersonation-proxy") @)
     labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:
       namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
@@ -182,9 +185,6 @@ spec:
             - name: podinfo
               mountPath: /etc/podinfo
               readOnly: true
-            - name: impersonation-proxy
-              mountPath: /var/run/secrets/impersonation-proxy.concierge.pinniped.dev/serviceaccount
-              readOnly: true
           env:
             #@ if data.values.https_proxy:
             - name: HTTPS_PROXY
@@ -220,12 +220,6 @@ spec:
         - name: config-volume
           configMap:
             name: #@ defaultResourceNameWithSuffix("config")
-        - name: impersonation-proxy
-          secret:
-            secretName: #@ defaultResourceNameWithSuffix("impersonation-proxy")
-            items: #! make sure our pod does not start until the token controller has a chance to populate the secret
-              - key: token
-                path: token
         - name: podinfo
           downwardAPI:
             items:
@@ -353,16 +347,3 @@ spec:
       #@ else:
       annotations: #@ data.values.impersonation_proxy_spec.service.annotations
       #@ end
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
-  namespace: #@ namespace()
-  labels: #@ labels()
-  annotations:
-    #! wait until the SA exists to create this secret so that the token controller does not delete it
-    #! we have this secret at the end so that kubectl will create the service account first
-    kapp.k14s.io/change-rule: "upsert after upserting impersonation-proxy.concierge.pinniped.dev/serviceaccount"
-    kubernetes.io/service-account.name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
-type: kubernetes.io/service-account-token

@@ -32,11 +32,24 @@ func TestPodShutdown_Disruptive(t *testing.T) {
 	env := testlib.IntegrationEnv(t, testlib.SkipPodRestartAssertions()).
 		WithKubeDistribution(testlib.KindDistro)
 
-	testShutdownAllPodsOfApp(t, env, env.ConciergeNamespace, env.ConciergeAppName, "-kube-cert-agent-")
-	testShutdownAllPodsOfApp(t, env, env.SupervisorNamespace, env.SupervisorAppName, "")
+	shutdownAllPodsOfApp(t, env, env.ConciergeNamespace, env.ConciergeAppName, true)
+	shutdownAllPodsOfApp(t, env, env.SupervisorNamespace, env.SupervisorAppName, false)
 }
 
-func testShutdownAllPodsOfApp(t *testing.T, env *testlib.TestEnv, namespace string, appName string, ignorePodsWithNameSubstring string) {
+func shutdownAllPodsOfApp(
+	t *testing.T,
+	env *testlib.TestEnv,
+	namespace string,
+	appName string,
+	isConcierge bool,
+) {
+	t.Helper()
+
+	ignorePodsWithNameSubstring := ""
+	if isConcierge {
+		ignorePodsWithNameSubstring = "-kube-cert-agent-"
+	}
+
 	// Precondition: the app should have some pods running initially.
 	initialPods := getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
 	require.Greater(t, len(initialPods), 0)
@@ -114,6 +127,12 @@ func testShutdownAllPodsOfApp(t *testing.T, env *testlib.TestEnv, namespace stri
 			"did not find expected message in pod log for pod %q", pl.pod.Name)
 		require.Containsf(t, pl.logsBuf.String(), `[graceful-termination] apiserver is exiting`,
 			"did not find expected message in pod log for pod %q", pl.pod.Name)
+
+		if isConcierge {
+			require.Containsf(t, pl.logsBuf.String(), `fetch-impersonation-proxy-tokens start hook's background goroutine has finished`,
+				"did not find expected message in pod log for pod %q", pl.pod.Name)
+		}
+
 		t.Logf("found expected graceful-termination messages in the logs of pod %q", pl.pod.Name)
 	}
 

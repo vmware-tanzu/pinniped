@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
 	"go.pinniped.dev/internal/controller/impersonatorconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
+	"go.pinniped.dev/internal/controller/serviceaccounttokencleanup"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
@@ -34,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/tokenclient"
 )
 
 const (
@@ -80,6 +82,9 @@ type Config struct {
 	// When the impersonation proxy is not running, the getter will return nil cert and nil key.
 	// (Note that the impersonation proxy also accepts client certs signed by the Kube API server's cert.)
 	ImpersonationSigningCertProvider dynamiccert.Provider
+
+	// ImpersonationProxyTokenCache holds short-lived tokens for the impersonation proxy service account.
+	ImpersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
@@ -276,6 +281,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
 				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				c.ImpersonationProxyTokenCache,
 			),
 			singletonWorker,
 		).
@@ -303,6 +309,17 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				controllerlib.WithInformer,
 				365*24*time.Hour-time.Hour, // 1 year minus 1 hour hard coded value (i.e. wait until the last moment to break the signer)
 				apicerts.CACertificateSecretKey,
+				plog.New(),
+			),
+			singletonWorker,
+		).
+		WithController(
+			serviceaccounttokencleanup.NewLegacyServiceAccountTokenCleanupController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationProxyLegacySecret,
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
 				plog.New(),
 			),
 			singletonWorker,

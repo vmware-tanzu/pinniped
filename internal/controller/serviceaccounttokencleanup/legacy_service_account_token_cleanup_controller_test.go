@@ -30,7 +30,7 @@ func TestNewServiceAccountTokenCleanupController(t *testing.T) {
 	secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 
 	var log bytes.Buffer
-	_ = NewServiceAccountTokenCleanupController(
+	_ = NewLegacyServiceAccountTokenCleanupController(
 		namespace,
 		legacySecretName,
 		nil, // not needed for this test
@@ -140,7 +140,7 @@ func TestSync(t *testing.T) {
 			}
 
 			var log bytes.Buffer
-			controller := NewServiceAccountTokenCleanupController(
+			controller := NewLegacyServiceAccountTokenCleanupController(
 				tt.namespace,
 				tt.secretNameToDelete,
 				kubeAPIClient,

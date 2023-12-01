@@ -314,7 +314,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			singletonWorker,
 		).
 		WithController(
-			serviceaccounttokencleanup.NewServiceAccountTokenCleanupController(
+			serviceaccounttokencleanup.NewLegacyServiceAccountTokenCleanupController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ImpersonationProxyLegacySecret,
 				client.Kubernetes,

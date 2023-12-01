@@ -17,7 +17,14 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewServiceAccountTokenCleanupController(
+// NewLegacyServiceAccountTokenCleanupController creates a controller whose purpose is to delete a legacy Secret
+// that was created by installation of older versions of the Pinniped Concierge which is no longer needed.
+// This Secret was used to request and to hold a long-lived service account token which was used by the Concierge
+// impersonation proxy. It has been replaced by a goroutine which requests short-lived service account tokens
+// by making calls to the Kubernetes API server, without any need to read or write the tokens to a Secret.
+// Since the old Secret contains a long-lived token, we try to delete it here. That Secret may not exist if the user
+// never installed an old version of the Concierge, in which case this controller should do pretty much nothing.
+func NewLegacyServiceAccountTokenCleanupController(
 	namespace string,
 	legacySecretName string,
 	k8sClient kubernetes.Interface,
@@ -25,7 +32,7 @@ func NewServiceAccountTokenCleanupController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	logger plog.Logger,
 ) controllerlib.Controller {
-	name := "service-account-token-cleanup-controller"
+	name := "legacy-service-account-token-cleanup-controller"
 	return controllerlib.New(controllerlib.Config{
 		Name: name,
 		Syncer: &serviceAccountTokenCleanupController{
@@ -65,7 +72,6 @@ func (c serviceAccountTokenCleanupController) Sync(syncCtx controllerlib.Context
 	if err != nil {
 		return fmt.Errorf("unable to list all secrets in namespace %s: %w", c.namespace, err)
 	}
-	c.logger.Info(fmt.Sprintf("You have now arrived in the %s controller, found %d secrets", c.name, len(secrets)))
 
 	foundSecret := false
 	for _, secret := range secrets {
@@ -74,18 +80,27 @@ func (c serviceAccountTokenCleanupController) Sync(syncCtx controllerlib.Context
 		}
 	}
 
-	c.logger.Info(fmt.Sprintf(
-		"The %s controller has found a secret of name %s to delete with type %s",
-		c.name,
-		c.legacySecretName,
-		corev1.SecretTypeServiceAccountToken,
-	))
+	c.logger.Debug(
+		fmt.Sprintf("%s controller checked for legacy secret", c.name),
+		"secretName", c.legacySecretName,
+		"secretNamespace", c.namespace,
+		"secretType", corev1.SecretTypeServiceAccountToken,
+		"foundSecret", foundSecret,
+	)
 
 	if foundSecret {
 		err = c.k8sClient.CoreV1().Secrets(c.namespace).Delete(syncCtx.Context, c.legacySecretName, metav1.DeleteOptions{})
+
 		if err != nil {
 			return fmt.Errorf("unable to delete secret %s in namespace %s: %w", c.legacySecretName, c.namespace, err)
 		}
+
+		c.logger.Debug(
+			fmt.Sprintf("%s controller succcessfully deleted legacy secret", c.name),
+			"secretName", c.legacySecretName,
+			"secretNamespace", c.namespace,
+			"secretType", corev1.SecretTypeServiceAccountToken,
+		)
 	}
 
 	return nil

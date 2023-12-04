@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/go-jose/go-jose/v3"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sinformers "k8s.io/client-go/informers"

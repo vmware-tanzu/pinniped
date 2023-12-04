@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-jose/go-jose/v3"
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/square/go-jose.v2"
 	"k8s.io/client-go/kubernetes/fake"
 
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"

@@ -17,6 +17,7 @@ require (
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.4
+	github.com/go-jose/go-jose/v3 v3.0.1
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/stdr v1.2.2
@@ -46,7 +47,7 @@ require (
 	golang.org/x/sync v0.5.0
 	golang.org/x/term v0.15.0
 	golang.org/x/text v0.14.0
-	gopkg.in/square/go-jose.v2 v2.6.0
+	gopkg.in/square/go-jose.v2 v2.6.0 // this deprecated pkg is still used by fosite - we need it as a direct dep for one test
 	k8s.io/api v0.28.4
 	k8s.io/apiextensions-apiserver v0.28.4
 	k8s.io/apimachinery v0.28.4
@@ -83,7 +84,6 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
-	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect

@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-jose/go-jose/v3"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/square/go-jose.v2"
 
 	"go.pinniped.dev/internal/here"
 )

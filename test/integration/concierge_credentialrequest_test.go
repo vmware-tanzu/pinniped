@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/stretchr/testify/require"
-	jwtpkg "gopkg.in/square/go-jose.v2/jwt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -209,10 +209,10 @@ func safeDerefStringPtr(s *string) string {
 	return *s
 }
 
-func getJWTSubAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
+func getJWTSubAndGroupsClaims(t *testing.T, jwtToken string) (string, []string) {
 	t.Helper()
 
-	token, err := jwtpkg.ParseSigned(jwt)
+	token, err := jwt.ParseSigned(jwtToken)
 	require.NoError(t, err)
 
 	var claims struct {

@@ -22,7 +22,7 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/square/go-jose.v2"
+	deprecatedjose "gopkg.in/square/go-jose.v2" // fosite still uses the deprecated jose library (replaced by github.com/go-jose/go-jose/v3), but since this test wants to fuzz values of fosite objects, it needs to use the same package that fosite uses
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -321,7 +321,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		},
 		// JWK contains an interface{} Key that we need to handle
 		// this is safe because JWK explicitly implements JSON marshalling and unmarshalling
-		func(jwk *jose.JSONWebKey, c fuzz.Continue) {
+		func(jwk *deprecatedjose.JSONWebKey, c fuzz.Continue) {
 			key, _, err := ed25519.GenerateKey(c)
 			require.NoError(t, err)
 			jwk.Key = key

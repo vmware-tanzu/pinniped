@@ -38,7 +38,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.20.7
+	github.com/tdewolff/minify/v2 v2.20.9
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.16.0
 	golang.org/x/net v0.19.0
@@ -132,7 +132,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.7.5 // indirect
+	github.com/tdewolff/parse/v2 v2.7.6 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.9 // indirect

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package jwtcachefiller implements a controller for filling an authncache.Cache with each
@@ -13,8 +13,8 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-jose/go-jose/v3"
 	"github.com/go-logr/logr"
-	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"

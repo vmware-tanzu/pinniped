@@ -17,6 +17,7 @@ require (
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.4
+	github.com/go-jose/go-jose/v3 v3.0.1
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/stdr v1.2.2
@@ -38,7 +39,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.20.7
+	github.com/tdewolff/minify/v2 v2.20.9
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.16.0
 	golang.org/x/net v0.19.0
@@ -46,7 +47,7 @@ require (
 	golang.org/x/sync v0.5.0
 	golang.org/x/term v0.15.0
 	golang.org/x/text v0.14.0
-	gopkg.in/square/go-jose.v2 v2.6.0
+	gopkg.in/square/go-jose.v2 v2.6.0 // this deprecated pkg is still used by fosite - we need it as a direct dep for one test
 	k8s.io/api v0.28.4
 	k8s.io/apiextensions-apiserver v0.28.4
 	k8s.io/apimachinery v0.28.4
@@ -56,7 +57,7 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kube-aggregator v0.28.4
-	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e
+	k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -83,7 +84,6 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
-	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
@@ -132,7 +132,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
-	github.com/tdewolff/parse/v2 v2.7.5 // indirect
+	github.com/tdewolff/parse/v2 v2.7.6 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.9 // indirect

@@ -231,55 +231,19 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "LHMZ29A64WecPQSLotS8hfZ2mae0SR17CtPdnMDP7ZI",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					},
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "1PwKrC4qDe8cabzGTdA0NjuMJhAZAw7Bu7Tj9z2Y4pE",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					},
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "j4b-Vld5buh_2KIpjjaDRJ8OY7l7d6XAumvDtVTT9BI",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					}
 				]
 			},

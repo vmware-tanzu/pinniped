@@ -241,7 +241,7 @@ func TestStart(t *testing.T) {
 				{token: "t4", ttl: time.Hour},
 			},
 			want: &wanted{
-				timeFudgeFactor: 30 * time.Millisecond, // lots of fudge for busy CI workers
+				timeFudgeFactor: 80 * time.Millisecond, // sadly, lots of fudge needed for busy CI workers
 				receivedTokens: []receivedToken{
 					{token: "t1", ttl: 200 * time.Millisecond},
 					{token: "t2", ttl: 400 * time.Millisecond},
@@ -271,7 +271,7 @@ func TestStart(t *testing.T) {
 				{token: "t4", ttl: time.Hour},
 			},
 			want: &wanted{
-				timeFudgeFactor: 30 * time.Millisecond, // lots of fudge for busy CI workers
+				timeFudgeFactor: 80 * time.Millisecond, // sadly, lots of fudge needed for busy CI workers
 				receivedTokens: []receivedToken{
 					{token: "t1", ttl: 100 * time.Millisecond},
 					{token: "t2", ttl: 200 * time.Millisecond},
@@ -304,7 +304,7 @@ func TestStart(t *testing.T) {
 				{token: "t3", ttl: time.Hour},
 			},
 			want: &wanted{
-				timeFudgeFactor: 30 * time.Millisecond, // lots of fudge for busy CI workers
+				timeFudgeFactor: 80 * time.Millisecond, // sadly, lots of fudge needed for busy CI workers
 				receivedTokens: []receivedToken{
 					{token: "t1", ttl: 100 * time.Millisecond},
 					{token: "t2", ttl: 200 * time.Millisecond},

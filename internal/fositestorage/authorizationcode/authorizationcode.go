@@ -33,7 +33,8 @@ const (
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
-	authorizeCodeStorageVersion = "5"
+	// Version 6 is when we upgraded fosite in Dec 2023.
+	authorizeCodeStorageVersion = "6"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -380,5 +381,5 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			"d鞕ȸ腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2"
 		]
 	},
-	"version": "5"
+	"version": "6"
 }`

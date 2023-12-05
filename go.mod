@@ -13,7 +13,6 @@ replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361
 // https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod. Wherever they clash, replace
 // with the version which is more consistent with kubernetes/apiserver.
 replace (
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.35.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.35.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.1
 	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.10.0
@@ -23,12 +22,11 @@ replace (
 	go.opentelemetry.io/otel/exporters/zipkin => go.opentelemetry.io/otel/exporters/zipkin v1.10.0
 	go.opentelemetry.io/otel/metric => go.opentelemetry.io/otel/metric v0.31.0
 	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.10.0
-	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.10.0
 )
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20231126232103-8e31ff06e23b
+	github.com/chromedp/cdproto v0.0.0-20231205062650-00455a960d61
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.8.0
 	github.com/coreos/go-semver v0.3.1
@@ -50,7 +48,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.0.0-20231113125121-dfa2c0a1b63c
+	github.com/ory/fosite v0.44.1-0.20231113125121-dfa2c0a1b63c
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0

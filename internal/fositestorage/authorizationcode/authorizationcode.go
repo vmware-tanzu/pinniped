@@ -33,7 +33,8 @@ const (
 	// Version 3 is when we added the Username field to the psession.CustomSessionData.
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
-	authorizeCodeStorageVersion = "5"
+	// Version 6 is when we upgraded fosite in Dec 2023.
+	authorizeCodeStorageVersion = "6"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -231,55 +232,19 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "LHMZ29A64WecPQSLotS8hfZ2mae0SR17CtPdnMDP7ZI",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					},
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "1PwKrC4qDe8cabzGTdA0NjuMJhAZAw7Bu7Tj9z2Y4pE",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					},
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "j4b-Vld5buh_2KIpjjaDRJ8OY7l7d6XAumvDtVTT9BI",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"OmitHost": false,
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
+						"x5u": "https://x5u.example.com"
 					}
 				]
 			},
@@ -416,5 +381,5 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			"d鞕ȸ腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2"
 		]
 	},
-	"version": "5"
+	"version": "6"
 }`

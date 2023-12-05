@@ -11,8 +11,11 @@ ROOT_DIR="$SCRIPT_DIR/../.."
 GO_MOD="${ROOT_DIR}/go.mod"
 
 pushd "${SCRIPT_DIR}" > /dev/null
-  script=$(go run . "${GO_MOD}")
+  script=$(go run . "${GO_MOD}" overrides.conf)
 popd > /dev/null
+
+# Print to screen for debugging purposes.
+echo "$script"
 
 pushd "${ROOT_DIR}" > /dev/null
   eval "$script"

@@ -143,6 +143,15 @@ if [[ -z "$LDAP_GROUP_SEARCH_ATTRIBUTES_GROUPNAME" ]]; then
   LDAP_GROUP_SEARCH_ATTRIBUTES_GROUPNAME="dn"
 fi
 
+# LDAP filters must be surrounded by parens. Pinniped will automatically add
+# the missing parens, if needed, as a convenience, so do that here too.
+if [[ "$LDAP_USER_SEARCH_FILTER" != "("* ]]; then
+  LDAP_USER_SEARCH_FILTER="(${LDAP_USER_SEARCH_FILTER})"
+fi
+if [[ "$LDAP_GROUP_SEARCH_FILTER" != "("* ]]; then
+  LDAP_GROUP_SEARCH_FILTER="(${LDAP_GROUP_SEARCH_FILTER})"
+fi
+
 LDAP_BIND_SECRET_FILE=$(mktemp)
 trap "rm $LDAP_BIND_SECRET_FILE" EXIT
 
@@ -180,19 +189,19 @@ find_user_cmd+=("-z" "1") # limit one result
 find_user_cmd+=("-s" "sub")
 find_user_cmd+=("'${LDAP_USER_SEARCH_FILTER//\{\}/"$username"}'")
 
-log_note "The following commands are provided to aid in debugging."
-log_note "Copy and paste these commands into a bash shell to run them."
+log_note "# The following commands are provided to aid in debugging."
+log_note "# Copy and paste these commands into a bash shell to run them."
 
 echo
-log_note "Use the following command to search for the user's LDAP record."
-log_note "The value of the \"$LDAP_USER_SEARCH_ATTRIBUTES_USERNAME\" attribute will be their Kubernetes username,"
-log_note "(not including any configured transformations on the FederationDomain),"
-log_note "and the value of the \"$LDAP_USER_SEARCH_ATTRIBUTES_UID\" attribute will be their Supervisor UID."
+log_note "# Use the following command to search for the user's LDAP record."
+log_note "# The value of the \"$LDAP_USER_SEARCH_ATTRIBUTES_USERNAME\" attribute will be their Kubernetes username"
+log_note "# (not including any configured transformations on the FederationDomain),"
+log_note "# and the value of the \"$LDAP_USER_SEARCH_ATTRIBUTES_UID\" attribute will be their Supervisor UID."
 echo "${find_user_cmd[*]}"
 
 if [[ -z "$LDAP_GROUP_SEARCH_BASE" ]]; then
   echo
-  log_note "Group search is not enabled because spec.groupSearch.base is empty."
+  log_note "# Group search is not enabled because spec.groupSearch.base is empty."
   exit
 fi
 
@@ -212,12 +221,12 @@ find_groups_cmd+=("|" "grep" "-E" "'^${LDAP_GROUP_SEARCH_ATTRIBUTES_GROUPNAME}: 
 find_groups_cmd+=("|" "sed" "'s/^${LDAP_GROUP_SEARCH_ATTRIBUTES_GROUPNAME}: //'")
 
 echo
-log_note "Use the following three commands to search for the user's group memberships."
-log_note "The third command should result in their list of group names for Kubernetes"
-log_note "(not including any configured transformations on the FederationDomain)."
+log_note "# Use the following three commands to search for the user's group memberships."
+log_note "# The third command should result in their list of group names for Kubernetes"
+log_note "# (not including any configured transformations on the FederationDomain)."
 echo "LDAP_GROUP_SEARCH_FILTER=\"${LDAP_GROUP_SEARCH_FILTER}\""
 echo
-echo "GROUP_SEARCH_KEY=\$( ${find_user_cmd[*]} )"
+echo "GROUP_SEARCH_KEY=\$( ${find_user_cmd[*]} ) && echo \$GROUP_SEARCH_KEY"
 echo
 echo "${find_groups_cmd[*]}"
 echo

@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
+	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/rest"
@@ -27,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/config/concierge"
+	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllermanager"
@@ -103,6 +105,9 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 // Boot the aggregated API server, which will in turn boot the controllers.
 // In practice, the ctx passed in should be one which will be cancelled when the process receives SIGTERM or SIGINT.
 func (a *App) runServer(ctx context.Context) error {
+	// Enable the feature gate from https://github.com/kubernetes/kubernetes/pull/121120.
+	featuregates.EnableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
+
 	// Read the server config file.
 	cfg, err := concierge.FromPath(ctx, a.configPath)
 	if err != nil {

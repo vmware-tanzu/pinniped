@@ -28,6 +28,7 @@ import (
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
+	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	k8sinformers "k8s.io/client-go/informers"
@@ -43,6 +44,7 @@ import (
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
 	"go.pinniped.dev/internal/apiserviceref"
+	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
@@ -386,6 +388,9 @@ func prepareControllers(
 // and start serving the health endpoint and the endpoints of the configured FederationDomains.
 // In practice, the ctx passed in should be one which will be cancelled when the process receives SIGTERM or SIGINT.
 func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error { //nolint:funlen
+	// Enable the feature gate from https://github.com/kubernetes/kubernetes/pull/121120.
+	featuregates.EnableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
+
 	serverInstallationNamespace := podInfo.Namespace
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
 
@@ -526,6 +531,10 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		c := ptls.Default(nil)
+		// Remove "h2" from the list for now, until we have a better idea of how to mitigate
+		// potential http2 rapid reset vulnerabilities. This disables serving requests using http2.
+		c.NextProtos = []string{"http/1.1"}
+
 		c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
 			foundServerNameCert := cert != nil

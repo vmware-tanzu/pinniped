@@ -531,10 +531,6 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		c := ptls.Default(nil)
-		// Remove "h2" from the list for now, until we have a better idea of how to mitigate
-		// potential http2 rapid reset vulnerabilities. This disables serving requests using http2.
-		c.NextProtos = []string{"http/1.1"}
-
 		c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
 			foundServerNameCert := cert != nil

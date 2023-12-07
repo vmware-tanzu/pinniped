@@ -8,10 +8,14 @@ replace github.com/google/cel-go => github.com/google/cel-go v0.16.1
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod#L50
 replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
 
-// Unfortuntely, fostite depends on ory/x which depends on very recent versions of opentelemetry.
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod#L40
+replace google.golang.org/grpc => google.golang.org/grpc v1.56.3
+
+// Fostite depends on ory/x which depends on more recent versions of opentelemetry.
 // We need to use the older versions of opentelemetry which are the direct dependencies of
 // https://github.com/kubernetes/apiserver/blob/v0.28.4/go.mod. Wherever they clash, replace
-// with the version which is more consistent with kubernetes/apiserver.
+// with the version which is more consistent with kubernetes/apiserver. We will update these
+// when kubernetes/apiserver v0.29.x is released and it bumps these dependencies.
 replace (
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.35.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.1
@@ -72,7 +76,7 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/kube-aggregator v0.28.4
-	k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a
+	k8s.io/kube-openapi v0.0.0-20231206194836-bf4651e18aa8
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -174,7 +178,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
+	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect

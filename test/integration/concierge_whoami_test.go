@@ -41,7 +41,7 @@ func TestWhoAmI_Kubeadm_Parallel(t *testing.T) {
 
 	whoAmI, err := testlib.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	// this user info is based off of the bootstrap cert user created by kubeadm
 	require.Equal(t,
@@ -221,7 +221,7 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 
 	whoAmITokenReq, err := testlib.NewKubeclient(t, saTokenReqConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	// new service account tokens include the pod info in the extra fields
 	require.Equal(t,
@@ -341,7 +341,7 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 
 	whoAmI, err := testlib.NewKubeclient(t, csrConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
@@ -373,7 +373,7 @@ func TestWhoAmI_Anonymous_Parallel(t *testing.T) {
 
 	whoAmI, err := testlib.NewKubeclient(t, anonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	// this also asserts that all users, even unauthenticated ones, can call this API when anonymous is enabled
 	require.Equal(t,
@@ -413,7 +413,7 @@ func TestWhoAmI_ImpersonateDirectly_Parallel(t *testing.T) {
 
 	whoAmI, err := testlib.NewKubeclient(t, impersonationConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
@@ -445,7 +445,7 @@ func TestWhoAmI_ImpersonateDirectly_Parallel(t *testing.T) {
 
 	whoAmIAnonymous, err := testlib.NewKubeclient(t, impersonationAnonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{

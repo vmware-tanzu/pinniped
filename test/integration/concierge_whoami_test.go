@@ -39,9 +39,20 @@ func TestWhoAmI_Kubeadm_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
+	adminClient := testlib.NewKubernetesClientset(t)
+
 	whoAmI, err := testlib.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err, testlib.Sdump(err))
+
+	var wantGroups []string
+	if testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 28) {
+		wantGroups = []string{"system:masters", "system:authenticated"}
+	} else {
+		// See https://github.com/kubernetes/enhancements/issues/4214. Admin kubeconfigs from kubeadm
+		// which previously had system:masters now have kubeadm:cluster-admins instead.
+		wantGroups = []string{"kubeadm:cluster-admins", "system:authenticated"}
+	}
 
 	// this user info is based off of the bootstrap cert user created by kubeadm
 	require.Equal(t,
@@ -50,10 +61,7 @@ func TestWhoAmI_Kubeadm_Parallel(t *testing.T) {
 				KubernetesUserInfo: identityv1alpha1.KubernetesUserInfo{
 					User: identityv1alpha1.UserInfo{
 						Username: "kubernetes-admin",
-						Groups: []string{
-							"system:masters",
-							"system:authenticated",
-						},
+						Groups:   wantGroups,
 					},
 				},
 			},

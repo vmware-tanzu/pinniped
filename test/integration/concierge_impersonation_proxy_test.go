@@ -644,7 +644,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil).
 				PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 
 			// The WhoAmI API is lossy:
 			// - It drops UID
@@ -695,7 +695,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// check that we impersonated the correct user and that the original user is retained in the extra
 			whoAmI, err := nestedImpersonationClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
 					"other-user-to-impersonate",
@@ -851,7 +851,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			whoAmI, err := nestedImpersonationClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
 					"system:serviceaccount:kube-system:root-ca-cert-publisher",
@@ -875,7 +875,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			).PinnipedConcierge
 			whoAmI, err := impersonationProxyPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 			expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
 			expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
 			expectedGroups = append(expectedGroups, "system:authenticated")
@@ -897,7 +897,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// we expect the impersonation proxy to match the behavior of KAS in regards to anonymous requests
 			if env.HasCapability(testlib.AnonymousAuthenticationSupported) {
-				require.NoError(t, err)
+				require.NoError(t, err, testlib.Sdump(err))
 				require.Equal(t,
 					expectedWhoAmIRequestResponse(
 						"system:anonymous",
@@ -918,7 +918,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				impersonationProxyURL, impersonationProxyCACertPEM, nil).PinnipedConcierge
 			whoAmI, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
 					serviceaccount.MakeUsername(namespaceName, saName),
@@ -997,7 +997,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			whoAmITokenReq, err := impersonationProxySAClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 
 			// new service account tokens include the pod info in the extra fields
 			require.Equal(t,
@@ -1444,7 +1444,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-					require.NoError(t, err)
+					require.NoError(t, err, testlib.Sdump(err))
 					require.Equal(t,
 						expectedWhoAmIRequestResponse(
 							"system:anonymous",
@@ -1978,7 +1978,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// Note that library.CreateTokenCredentialRequest makes an unauthenticated request, so we can't meaningfully
 			// perform this part of the test on a cluster which does not allow anonymous authentication.
 			tokenCredentialRequestResponse, err := testlib.CreateTokenCredentialRequest(ctx, t, credentialRequestSpecWithWorkingCredentials)
-			require.NoError(t, err)
+			require.NoError(t, err, testlib.Sdump(err))
 
 			require.NotNil(t, tokenCredentialRequestResponse.Status.Message, "expected an error message but got nil")
 			require.Equal(t, "authentication failed", *tokenCredentialRequestResponse.Status.Message)

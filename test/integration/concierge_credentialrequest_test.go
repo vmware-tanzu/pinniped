@@ -39,7 +39,7 @@ func TestUnsuccessfulCredentialRequest_Parallel(t *testing.T) {
 			},
 		},
 	)
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 	require.Nil(t, response.Status.Credential)
 	require.NotNil(t, response.Status.Message)
 	require.Equal(t, "authentication failed", *response.Status.Message)
@@ -147,7 +147,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
 	)
 
-	require.NoError(t, err)
+	require.NoError(t, err, testlib.Sdump(err))
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
@@ -170,7 +170,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken_Parallel(t *
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)
-	require.True(t, isStatus)
+	require.True(t, isStatus, testlib.Sdump(err))
 
 	require.Equal(t, 1, len(statusError.ErrStatus.Details.Causes))
 	cause := statusError.ErrStatus.Details.Causes[0]

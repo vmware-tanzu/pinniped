@@ -28,7 +28,6 @@ import (
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
-	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	k8sinformers "k8s.io/client-go/informers"
@@ -44,7 +43,6 @@ import (
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
 	"go.pinniped.dev/internal/apiserviceref"
-	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
@@ -388,8 +386,10 @@ func prepareControllers(
 // and start serving the health endpoint and the endpoints of the configured FederationDomains.
 // In practice, the ctx passed in should be one which will be cancelled when the process receives SIGTERM or SIGINT.
 func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervisor.Config) error { //nolint:funlen
-	// Enable the feature gate from https://github.com/kubernetes/kubernetes/pull/121120.
-	featuregates.EnableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
+	// We tried to enable the feature gate from https://github.com/kubernetes/kubernetes/pull/121120,
+	// but it causes errors when there are lots of parallel anonymous requests for our aggregated API endpoints.
+	// We will need to figure out if that is a bug in Kubernetes before we enable this again.
+	// featuregates.EnableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
 
 	serverInstallationNamespace := podInfo.Namespace
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)

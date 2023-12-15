@@ -358,6 +358,7 @@ pinniped whoami [flags]
       --kubeconfig string           Path to kubeconfig file
       --kubeconfig-context string   Kubeconfig context name (default: current active context)
   -o, --output string               Output format (e.g., 'yaml', 'json', 'text') (default "text")
+      --timeout duration            Timeout for the WhoAmI API request (default: 0, meaning no timeout)
 ```
 
 ### SEE ALSO

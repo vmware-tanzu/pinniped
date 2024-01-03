@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package celtransformer
@@ -732,9 +732,12 @@ func TestTransformer(t *testing.T) {
 			username: "ryan",
 			groups:   []string{"admins", "developers", "other"},
 			transforms: []CELTransformation{
-				&GroupsTransformation{Expression: `groups.map(g, {"admins": dyn(1), "developers":"a"}[g])`},
+				&GroupsTransformation{Expression: `groups.map(g, {"admins": dyn(1), "developers": "a"}[g])`},
 			},
-			wantCompileErr: `CEL expression should return type "list(string)" but returns type "list(dyn)"`,
+			wantCompileErr: here.Doc(`
+				CEL expression compile error: ERROR: <input>:1:48: expected type 'dyn' but found 'string'
+				 | groups.map(g, {"admins": dyn(1), "developers": "a"}[g])
+				 | ...............................................^`),
 		},
 		{
 			name:     "using string constants which were not were provided",

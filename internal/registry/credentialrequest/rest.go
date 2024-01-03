@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package credentialrequest provides REST functionality for the CredentialRequest resource.
@@ -151,7 +151,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	if options != nil {
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(t, "dryRun not supported")
-			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
+			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, []string(nil))}
 			return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
 	}

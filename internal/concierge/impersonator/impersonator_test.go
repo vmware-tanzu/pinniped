@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -35,14 +35,11 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -80,9 +77,6 @@ func TestImpersonator(t *testing.T) {
 
 	unrelatedCA, err := certauthority.New("ca", time.Hour)
 	require.NoError(t, err)
-
-	// turn off this code path for all tests because it does not handle the config we remove correctly
-	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.APIPriorityAndFairness, false)()
 
 	tests := []struct {
 		name                            string
@@ -830,6 +824,9 @@ func TestImpersonator(t *testing.T) {
 				options.Authorization.RemoteKubeConfigFileOptional = true
 				options.Admission = nil
 				options.SecureServing.Listener = listener // use our listener with the dynamic port
+
+				// turn off this code path for all tests because it does not handle the config we remove correctly
+				options.Features.EnablePriorityAndFairness = false
 			}
 
 			recorder := &attributeRecorder{}
@@ -2066,6 +2063,8 @@ func Test_withBearerTokenPreservation(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			inputReq := (&http.Request{Header: tt.headers}).WithContext(context.Background())
 			inputReqCopy := inputReq.Clone(inputReq.Context())
 

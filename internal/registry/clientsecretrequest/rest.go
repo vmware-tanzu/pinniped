@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package clientsecretrequest provides REST functionality for the CredentialRequest resource.
@@ -279,7 +279,7 @@ func (r *REST) validateRequest(
 	if options != nil {
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(tracer, "dryRun not supported")
-			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
+			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, []string(nil))}
 			return nil, apierrors.NewInvalid(kindFromContext(ctx), clientSecretRequest.Name, errs)
 		}
 	}

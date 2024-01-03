@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -121,7 +121,8 @@ func newInternal(
 		// secure TLS for connections coming from external clients and going to the Kube API server
 		// this is best effort because not all options provide the right hooks to override TLS config
 		// since any client could connect to the impersonation proxy, this uses the default TLS config
-		if err := ptls.DefaultRecommendedOptions(recommendedOptions, restConfigFunc); err != nil {
+		prepareServerConfigFunc, err := ptls.DefaultRecommendedOptions(recommendedOptions, restConfigFunc)
+		if err != nil {
 			return nil, fmt.Errorf("failed to secure recommended options: %w", err)
 		}
 
@@ -148,6 +149,10 @@ func newInternal(
 		}
 
 		serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+
+		// Get ready to call recommendedOptions.ApplyTo(serverConfig) by preparing the
+		// serverConfig using the function returned by the ptls package above.
+		prepareServerConfigFunc(serverConfig)
 
 		// Note that ApplyTo is going to create a network listener and bind to the requested port.
 		// It puts this listener into serverConfig.SecureServing.Listener.

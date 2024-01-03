@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ptls
@@ -61,12 +61,23 @@ func Merge(tlsConfigFunc ConfigFunc, tlsConfig *tls.Config) {
 // RestConfigFunc allows this package to not depend on the kubeclient package.
 type RestConfigFunc func(*rest.Config) (kubernetes.Interface, *rest.Config, error)
 
-func DefaultRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFunc) error {
+// PrepareServerConfigFunc is a function that can prepare a RecommendedConfig before the use of RecommendedOptions.ApplyTo().
+type PrepareServerConfigFunc func(c *genericapiserver.RecommendedConfig)
+
+// DefaultRecommendedOptions configures the RecommendedOptions for a server to use the appropriate cipher suites,
+// min TLS version, and client configuration options for servers that need to accept incoming connections from
+// arbitrary clients (like the impersonation proxy).
+// It returns a PrepareServerConfigFunc which must be used on a RecommendedConfig before passing it to RecommendedOptions.ApplyTo().
+func DefaultRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFunc) (PrepareServerConfigFunc, error) {
 	defaultServing(opts.SecureServing)
 	return secureClient(opts, f)
 }
 
-func SecureRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFunc) error {
+// SecureRecommendedOptions configures the RecommendedOptions for a server to use the appropriate cipher suites,
+// min TLS version, and client configuration options for servers that only need to accept incoming connections from
+// certain well known clients which we expect will always use modern TLS settings (like the Kube API server).
+// It returns a PrepareServerConfigFunc which must be used on a RecommendedConfig before passing it to RecommendedOptions.ApplyTo().
+func SecureRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFunc) (PrepareServerConfigFunc, error) {
 	secureServing(opts.SecureServing)
 	return secureClient(opts, f)
 }
@@ -82,14 +93,14 @@ func defaultServing(opts *options.SecureServingOptionsWithLoopback) {
 	opts.MinTLSVersion = defaultServingOptionsMinTLSVersion
 }
 
-func secureClient(opts *options.RecommendedOptions, f RestConfigFunc) error {
+func secureClient(opts *options.RecommendedOptions, f RestConfigFunc) (PrepareServerConfigFunc, error) {
 	inClusterClient, inClusterConfig, err := f(nil)
 	if err != nil {
-		return fmt.Errorf("failed to build in cluster client: %w", err)
+		return nil, fmt.Errorf("failed to build in cluster client: %w", err)
 	}
 
 	if n, z := opts.Authentication.RemoteKubeConfigFile, opts.Authorization.RemoteKubeConfigFile; len(n) > 0 || len(z) > 0 {
-		return fmt.Errorf("delgating auth is not using in-cluster config:\nauthentication=%s\nauthorization=%s", n, z)
+		return nil, fmt.Errorf("delgating auth is not using in-cluster config:\nauthentication=%s\nauthorization=%s", n, z)
 	}
 
 	// delegated authn and authz provide easy hooks for us to set the TLS config.
@@ -99,25 +110,31 @@ func secureClient(opts *options.RecommendedOptions, f RestConfigFunc) error {
 	opts.Authentication.CustomRoundTripperFn = wrapperFunc
 	opts.Authorization.CustomRoundTripperFn = wrapperFunc
 
-	opts.CoreAPI = nil // set this to nil to make sure our ExtraAdmissionInitializers is used
+	// Set this to nil to because it would normally set up c.ClientConfig and c.SharedInformerFactory, but we want to
+	// do that ourselves instead by calling the func returned below before we call RecommendedOptions.ApplyTo().
+	opts.CoreAPI = nil
+
 	baseExtraAdmissionInitializers := opts.ExtraAdmissionInitializers
 	opts.ExtraAdmissionInitializers = func(c *genericapiserver.RecommendedConfig) ([]admission.PluginInitializer, error) {
-		// abuse this closure to rewrite how we load admission plugins
-		c.ClientConfig = inClusterConfig
-		c.SharedInformerFactory = k8sinformers.NewSharedInformerFactory(inClusterClient, 0)
-
-		// abuse this closure to rewrite our loopback config
-		// this is mostly future proofing for post start hooks
+		// Abuse this closure to rewrite our loopback config. This is mostly future proofing for post start hooks.
+		// Note that c.LoopbackClientConfig has already been set up inside RecommendedOptions.ApplyTo() before this
+		// ExtraAdmissionInitializers function is invoked, so it is okay to use it here.
 		_, loopbackConfig, err := f(c.LoopbackClientConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build loopback config: %w", err)
 		}
 		c.LoopbackClientConfig = loopbackConfig
-
 		return baseExtraAdmissionInitializers(c)
 	}
 
-	return nil
+	// This returned function is intended to be called before RecommendedOptions.ApplyTo(). Is is intended
+	// that the above setting of opts.CoreAPI to nil will make the below function the only thing that sets
+	// the c.ClientConfig and c.SharedInformerFactory, although this is highly dependent on the implementation
+	// details ofRecommendedOptions.ApplyTo() and all its helpers that it invokes.
+	return func(c *genericapiserver.RecommendedConfig) {
+		c.ClientConfig = inClusterConfig
+		c.SharedInformerFactory = k8sinformers.NewSharedInformerFactory(inClusterClient, 0)
+	}, nil
 }
 
 func wrapTransportOnce(f transport.WrapperFunc) transport.WrapperFunc {

@@ -1070,8 +1070,8 @@ github.com/openzipkin/zipkin-go v0.4.1 h1:kNd/ST2yLLWhaWrkgchya40TJabe8Hioj9udfP
 github.com/openzipkin/zipkin-go v0.4.1/go.mod h1:qY0VqDSN1pOBN94dBc6w2GJlWLiovAyg7Qt6/I9HecM=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde h1:x0TT0RDC7UhAVbbWWBzr41ElhJx5tXPWkIHA2HWPRuw=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
-github.com/ory/fosite v0.44.1-0.20231113125121-dfa2c0a1b63c h1:F44CFBukG42RKXwuBLmbADDQI9rFhTZJQEsedOmuYaA=
-github.com/ory/fosite v0.44.1-0.20231113125121-dfa2c0a1b63c/go.mod h1:fkMPsnm/UjiefE9dE9CdZQGOH48TWJLIzUcdGIXg8Kk=
+github.com/ory/fosite v0.45.0 h1:WFCFHTmVik4MYpXxfxgxBFaDsyKD5b2yw0Uu6i9tQEk=
+github.com/ory/fosite v0.45.0/go.mod h1:fkMPsnm/UjiefE9dE9CdZQGOH48TWJLIzUcdGIXg8Kk=
 github.com/ory/go-acc v0.2.9-0.20230103102148-6b1c9a70dbbe h1:rvu4obdvqR0fkSIJ8IfgzKOWwZ5kOT2UNfLq81Qk7rc=
 github.com/ory/go-acc v0.2.9-0.20230103102148-6b1c9a70dbbe/go.mod h1:z4n3u6as84LbV4YmgjHhnwtccQqzf4cZlSk9f1FhygI=
 github.com/ory/go-convenience v0.1.0 h1:zouLKfF2GoSGnJwGq+PE/nJAE6dj2Zj5QlTgmMTsTS8=

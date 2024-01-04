@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package server is the command line entry point for pinniped-concierge.
@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
+	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/rest"
@@ -27,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/config/concierge"
+	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllermanager"
@@ -105,8 +107,8 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 func (a *App) runServer(ctx context.Context) error {
 	// We tried to enable the feature gate from https://github.com/kubernetes/kubernetes/pull/121120,
 	// but it causes errors when there are lots of parallel anonymous requests for our aggregated API endpoints.
-	// We will need to figure out if that is a bug in Kubernetes before we enable this again.
-	// featuregates.EnableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
+	// Make sure https://github.com/kubernetes/kubernetes/issues/122308 is resolved before enabling this.
+	featuregates.DisableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
 
 	// Read the server config file.
 	cfg, err := concierge.FromPath(ctx, a.configPath)
@@ -248,7 +250,8 @@ func getAggregatedAPIServerConfig(
 	// secure TLS for connections coming from and going to the Kube API server
 	// this is best effort because not all options provide the right hooks to override TLS config
 	// since our only client is the Kube API server, this uses the most secure TLS config
-	if err := ptls.SecureRecommendedOptions(recommendedOptions, kubeclient.Secure); err != nil {
+	prepareServerConfigFunc, err := ptls.SecureRecommendedOptions(recommendedOptions, kubeclient.Secure)
+	if err != nil {
 		return nil, fmt.Errorf("failed to secure recommended options: %w", err)
 	}
 
@@ -261,6 +264,11 @@ func getAggregatedAPIServerConfig(
 	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(
 		conciergeopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(scheme))
 	// serverConfig.OpenAPIV3Config.Info.InfoProps.Title = "Pinniped Concierge"
+
+	// Get ready to call recommendedOptions.ApplyTo(serverConfig) by preparing the
+	// serverConfig using the function returned by the ptls package above.
+	prepareServerConfigFunc(serverConfig)
+
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`

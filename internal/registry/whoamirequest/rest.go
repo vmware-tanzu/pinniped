@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package whoamirequest
@@ -90,7 +90,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {
 		if len(options.DryRun) != 0 {
-			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
+			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, []string(nil))}
 			return nil, apierrors.NewInvalid(identityapi.Kind(whoAmIRequest.Kind), whoAmIRequest.Name, errs)
 		}
 	}

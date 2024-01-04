@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package jwtcachefiller implements a controller for filling an authncache.Cache with each
@@ -16,9 +16,11 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
@@ -192,11 +194,23 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 		return nil, fmt.Errorf("issuer %q does not have jwks_uri set", spec.Issuer)
 	}
 	oidcAuthenticator, err := oidc.New(oidc.Options{
-		IssuerURL:            spec.Issuer,
+		JWTAuthenticator: apiserver.JWTAuthenticator{
+			Issuer: apiserver.Issuer{
+				URL:       spec.Issuer,
+				Audiences: []string{spec.Audience},
+			},
+			ClaimMappings: apiserver.ClaimMappings{
+				Username: apiserver.PrefixedClaimOrExpression{
+					Claim:  usernameClaim,
+					Prefix: ptr.To(""),
+				},
+				Groups: apiserver.PrefixedClaimOrExpression{
+					Claim:  groupsClaim,
+					Prefix: ptr.To(""),
+				},
+			},
+		},
 		KeySet:               coreosoidc.NewRemoteKeySet(ctx, providerJSON.JWKSURL),
-		ClientID:             spec.Audience,
-		UsernameClaim:        usernameClaim,
-		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
 		Client:               client,
 	})

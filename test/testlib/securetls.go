@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 func RunNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
@@ -51,9 +51,8 @@ func RunNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 }
 
 func GetExpectedCiphers(config *tls.Config) string {
-	secureConfig := ptls.Secure(nil)
-
 	skip12 := config.MinVersion == tls.VersionTLS13
+	skip13 := config.MaxVersion == tls.VersionTLS12
 
 	var tls12Bit, tls13Bit string
 
@@ -90,12 +89,15 @@ func GetExpectedCiphers(config *tls.Config) string {
 		tls12Bit = fmt.Sprintf(tls12Base, s.String(), cipherSuitePreference)
 	}
 
-	skip13 := config.MaxVersion == tls.VersionTLS12
 	if !skip13 {
 		var s strings.Builder
-		for i, id := range secureConfig.CipherSuites {
-			s.WriteString(fmt.Sprintf(tls13Item, strings.Replace(tls.CipherSuiteName(id), "TLS_", "TLS_AKE_WITH_", 1)))
-			if i == len(secureConfig.CipherSuites)-1 {
+		tls13CipherSuites := tlsserver.GetExpectedTLS13Ciphers()
+		for i, id := range tls13CipherSuites {
+			s.WriteString(fmt.Sprintf(tls13Item,
+				strings.Replace(tls.CipherSuiteName(id), "TLS_", "TLS_AKE_WITH_", 1),
+				tlsserver.GetExpectedTLS13CipherNMapKeyExchangeInfoValue(id)),
+			)
+			if i == len(tls13CipherSuites)-1 {
 				break
 			}
 			s.WriteString("\n")
@@ -114,7 +116,7 @@ const (
 
 Nmap done: 1 IP address (1 host up) scanned in`
 
-	// cipher preference is a variable because in FIPs mode it is server
+	// cipher preference is a variable because in FIPS mode it is server
 	// but in normal mode it is client.
 	tls12Base = `
 |   TLSv1.2: 
@@ -138,5 +140,5 @@ Nmap done: 1 IP address (1 host up) scanned in`
 	// For the RSA ciphers, we expect this output to be RSA 2048.
 	rsa2048 = "rsa 2048"
 
-	tls13Item = `|       %s (ecdh_x25519) - A`
+	tls13Item = `|       %s (%s) - A`
 )

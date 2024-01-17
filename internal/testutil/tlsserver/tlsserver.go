@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package tlsserver
@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/crypto/ptls"
 )
@@ -66,7 +67,7 @@ func RecordTLSHello(server *httptest.Server) {
 	}
 }
 
-func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
+func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFunc) {
 	t.Helper()
 
 	m, ok := getCtxMap(r.Context())
@@ -75,33 +76,53 @@ func AssertTLS(t *testing.T, r *http.Request, tlsConfigFunc ptls.ConfigFunc) {
 	h, ok := m.Load(helloKey)
 	require.True(t, ok)
 
-	info, ok := h.(*tls.ClientHelloInfo)
+	actualClientHello, ok := h.(*tls.ClientHelloInfo)
 	require.True(t, ok)
 
-	tlsConfig := tlsConfigFunc(nil)
+	clientTLSConfig := clientTLSConfigFunc(nil)
 
-	supportedVersions := []uint16{tlsConfig.MinVersion}
-	ciphers := tlsConfig.CipherSuites
+	var wantClientSupportedVersions []uint16
+	var wantClientSupportedCiphers []uint16
 
-	if secureTLSConfig := ptls.Secure(nil); tlsConfig.MinVersion != secureTLSConfig.MinVersion {
-		supportedVersions = append([]uint16{secureTLSConfig.MinVersion}, supportedVersions...)
-		ciphers = append(ciphers, secureTLSConfig.CipherSuites...)
+	switch {
+	// When the provided config only supports TLS 1.3, then set up the expected values for TLS 1.3.
+	case clientTLSConfig.MinVersion == tls.VersionTLS13:
+		wantClientSupportedVersions = []uint16{tls.VersionTLS13}
+		wantClientSupportedCiphers = GetExpectedTLS13Ciphers()
+	// When the provided config supports both TLS 1.2 and 1.3, then set up the expected values for both.
+	case clientTLSConfig.MinVersion == tls.VersionTLS12 && (clientTLSConfig.MaxVersion == 0 || clientTLSConfig.MaxVersion == tls.VersionTLS13):
+		wantClientSupportedVersions = []uint16{tls.VersionTLS13, tls.VersionTLS12}
+		wantClientSupportedCiphers = appendIfNotAlreadyIncluded(clientTLSConfig.CipherSuites, GetExpectedTLS13Ciphers())
+	default:
+		require.Fail(t, "incorrect test setup: clientTLSConfig supports an unexpected combination of TLS versions")
 	}
 
-	protos := tlsConfig.NextProtos
+	wantClientProtos := clientTLSConfig.NextProtos
 	if httpstream.IsUpgradeRequest(r) {
-		protos = tlsConfig.NextProtos[1:]
+		wantClientProtos = clientTLSConfig.NextProtos[1:]
 	}
 
 	// use assert instead of require to not break the http.Handler with a panic
-	ok1 := assert.Equal(t, supportedVersions, info.SupportedVersions)
-	ok2 := assert.Equal(t, cipherSuiteIDsToStrings(ciphers), cipherSuiteIDsToStrings(info.CipherSuites))
-	ok3 := assert.Equal(t, protos, info.SupportedProtos)
+	ok1 := assert.Equal(t, wantClientSupportedVersions, actualClientHello.SupportedVersions)
+	ok2 := assert.Equal(t, cipherSuiteIDsToStrings(wantClientSupportedCiphers), cipherSuiteIDsToStrings(actualClientHello.CipherSuites))
+	ok3 := assert.Equal(t, wantClientProtos, actualClientHello.SupportedProtos)
 
 	if all := ok1 && ok2 && ok3; !all {
-		t.Errorf("insecure TLS detected for %q %q %q upgrade=%v supportedVersions=%v ciphers=%v protos=%v",
+		t.Errorf("insecure TLS detected for %q %q %q upgrade=%v wantClientSupportedVersions=%v wantClientSupportedCiphers=%v wantClientProtos=%v",
 			r.Proto, r.Method, r.URL.String(), httpstream.IsUpgradeRequest(r), ok1, ok2, ok3)
 	}
+}
+
+// appendIfNotAlreadyIncluded only adds the newItems to the list if they are not already included
+// in this list. It returns the potentially updated list.
+func appendIfNotAlreadyIncluded(list []uint16, newItems []uint16) []uint16 {
+	originals := sets.New(list...)
+	for _, newItem := range newItems {
+		if !originals.Has(newItem) {
+			list = append(list, newItem)
+		}
+	}
+	return list
 }
 
 func cipherSuiteIDsToStrings(ids []uint16) []string {

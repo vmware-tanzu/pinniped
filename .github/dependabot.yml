@@ -2,11 +2,6 @@
 
 version: 2
 updates:
-  - package-ecosystem: "gomod"
-    open-pull-requests-limit: 100
-    directory: "/"
-    schedule:
-      interval: "daily"
 
   - package-ecosystem: "gomod"
     open-pull-requests-limit: 2
@@ -14,12 +9,21 @@ updates:
     schedule:
       interval: "daily"
 
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "daily"
+# Our own CI job is responsible for updating this go.mod file now.
+#  - package-ecosystem: "gomod"
+#    open-pull-requests-limit: 100
+#    directory: "/"
+#    schedule:
+#      interval: "daily"
 
-  - package-ecosystem: "docker"
-    directory: "/hack"  # this should keep the FIPS dockerfile updated per https://github.com/dependabot/feedback/issues/145#issuecomment-414738498
-    schedule:
-      interval: "daily"
+# Our own CI job is responsible for updating this Docker file now.
+#  - package-ecosystem: "docker"
+#    directory: "/"
+#    schedule:
+#      interval: "daily"
+
+# Our own CI job is responsible for updating this Docker file now.
+#  - package-ecosystem: "docker"
+#    directory: "/hack"  # this should keep the FIPS dockerfile updated per https://github.com/dependabot/feedback/issues/145#issuecomment-414738498
+#    schedule:
+#      interval: "daily"

@@ -154,7 +154,7 @@ To destroy the local Kubernetes cluster, run `./hack/kind-down.sh`.
 
 ### Observing Tests on the Continuous Integration Environment
 
-[CI](https://hush-house.pivotal.io/teams/tanzu-user-auth/pipelines/pinniped-pull-requests)
+[CI](https://ci.pinniped.dev/teams/main/pipelines/pull-requests)
 will not be triggered on a pull request until the pull request is reviewed and
 approved for CI by a project [maintainer](MAINTAINERS.md). Once CI is triggered,
 the progress and results will appear on the Github page for that

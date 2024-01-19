@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ptls
@@ -53,7 +53,7 @@ func TestMerge(t *testing.T) {
 		want          *tls.Config
 	}{
 		{
-			name:          "default no protos",
+			name:          "default without NextProtos",
 			tlsConfigFunc: Default,
 			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
@@ -73,7 +73,7 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:          "default with protos",
+			name:          "default with NextProtos",
 			tlsConfigFunc: Default,
 			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "a different thing for passthrough",
@@ -94,42 +94,34 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:          "secure no protos",
+			name:          "secure without NextProtos",
 			tlsConfigFunc: Secure,
 			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{
-				ServerName: "something-to-check-passthrough",
-				MinVersion: tls.VersionTLS13,
-				CipherSuites: []uint16{
-					tls.TLS_AES_128_GCM_SHA256,
-					tls.TLS_AES_256_GCM_SHA384,
-					tls.TLS_CHACHA20_POLY1305_SHA256,
-				},
-				NextProtos: []string{"h2", "http/1.1"},
+				ServerName:   "something-to-check-passthrough",
+				MinVersion:   tls.VersionTLS13,
+				CipherSuites: nil,
+				NextProtos:   []string{"h2", "http/1.1"},
 			},
 		},
 		{
-			name:          "secure with protos",
+			name:          "secure with NextProtos",
 			tlsConfigFunc: Secure,
 			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "a different thing for passthrough",
 				NextProtos: []string{"panda"},
 			},
 			want: &tls.Config{
-				ServerName: "a different thing for passthrough",
-				MinVersion: tls.VersionTLS13,
-				CipherSuites: []uint16{
-					tls.TLS_AES_128_GCM_SHA256,
-					tls.TLS_AES_256_GCM_SHA384,
-					tls.TLS_CHACHA20_POLY1305_SHA256,
-				},
-				NextProtos: []string{"panda"},
+				ServerName:   "a different thing for passthrough",
+				MinVersion:   tls.VersionTLS13,
+				CipherSuites: nil,
+				NextProtos:   []string{"panda"},
 			},
 		},
 		{
-			name:          "default ldap no protos",
+			name:          "default ldap without NextProtos",
 			tlsConfigFunc: DefaultLDAP,
 			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "something-to-check-passthrough",
@@ -153,7 +145,7 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:          "default ldap with protos",
+			name:          "default ldap with NextProtos",
 			tlsConfigFunc: DefaultLDAP,
 			tlsConfig: &tls.Config{
 				ServerName: "a different thing for passthrough",
@@ -178,7 +170,7 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:          "legacy no protos",
+			name:          "legacy without NextProtos",
 			tlsConfigFunc: Legacy,
 			tlsConfig: &tls.Config{
 				ServerName: "something-to-check-passthrough",
@@ -209,7 +201,7 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:          "legacy with protos",
+			name:          "legacy with NextProtos",
 			tlsConfigFunc: Legacy,
 			tlsConfig: &tls.Config{
 				ServerName: "a different thing for passthrough",

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -25,8 +25,8 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// pinniped CLI uses ptls.Secure when talking to KAS
-		// in FIPs mode the distinction doesn't matter much because
-		// each of the configs is a wrapper for the same base FIPs config
+		// in FIPS mode the distinction doesn't matter much because
+		// each of the configs is a wrapper for the same base FIPS config
 		tlsserver.AssertTLS(t, r, ptls.Secure)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"kind":"TokenCredentialRequest","apiVersion":"login.concierge.pinniped.dev/v1alpha1",`+
@@ -59,8 +59,8 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 
 	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// pinniped CLI uses ptls.Default when talking to supervisor
-		// in FIPs mode the distinction doesn't matter much because
-		// each of the configs is a wrapper for the same base FIPs config
+		// in FIPS mode the distinction doesn't matter much because
+		// each of the configs is a wrapper for the same base FIPS config
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		w.Header().Set("content-type", "application/json")
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
@@ -101,17 +101,34 @@ func TestSecureTLSConciergeAggregatedAPI_Parallel(t *testing.T) {
 	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil)), "stdout:\n%s", stdout)
 }
 
-func TestSecureTLSSupervisor(t *testing.T) { // does not run in parallel because of the createSupervisorDefaultTLSCertificateSecretIfNeeded call
+// TLS checks safe to run in parallel with serial tests, see main_test.go.
+func TestSecureTLSSupervisorAggregatedAPI_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	startKubectlPortForward(cancelCtx, t, "10447", "443", env.SupervisorAppName+"-api", env.SupervisorNamespace)
+
+	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10447)
+
+	require.Empty(t, stderr)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil)), "stdout:\n%s", stdout)
+}
+
+func TestSecureTLSSupervisor(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	startKubectlPortForward(ctx, t, "10447", "443", env.SupervisorAppName+"-nodeport", env.SupervisorNamespace)
+	startKubectlPortForward(ctx, t, "10448", "443", env.SupervisorAppName+"-nodeport", env.SupervisorNamespace)
 
-	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10447)
+	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10448)
 
-	// supervisor's cert is ECDSA
+	// The Supervisor's auto-generated bootstrap TLS cert is ECDSA, so we think that only the ECDSA ciphers
+	// will be available on the server for TLS 1.2. Therefore, filter the list of expected ciphers to only
+	// include the ECDSA ciphers.
 	defaultECDSAOnly := ptls.Default(nil)
 	ciphers := make([]uint16, 0, len(defaultECDSAOnly.CipherSuites)/2)
 	for _, id := range defaultECDSAOnly.CipherSuites {

@@ -1,7 +1,5 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-
-//go:build !fips_strict
 
 package ptls
 
@@ -34,13 +32,7 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// https://ssl-config.mozilla.org/#server=go&version=1.17.2&config=modern&guideline=5.6
 	c := Default(rootCAs)
 	c.MinVersion = SecureTLSConfigMinTLSVersion // max out the security
-	c.CipherSuites = []uint16{
-		// TLS 1.3 ciphers are not configurable, but we need to explicitly set them here to make our client hello behave correctly
-		// See https://github.com/golang/go/pull/49293
-		tls.TLS_AES_128_GCM_SHA256,
-		tls.TLS_AES_256_GCM_SHA384,
-		tls.TLS_CHACHA20_POLY1305_SHA256,
-	}
+	c.CipherSuites = nil                        // TLS 1.3 ciphers are not configurable
 	return c
 }
 

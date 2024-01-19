@@ -24,7 +24,7 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.op
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240102194822-c006b26f21c7
+	github.com/chromedp/cdproto v0.0.0-20240116100315-4a0ec5e4c400
 	github.com/chromedp/chromedp v0.9.3
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/coreos/go-semver v0.3.1
@@ -38,7 +38,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
-	github.com/google/cel-go v0.18.2
+	github.com/google/cel-go v0.19.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.5.0
@@ -61,16 +61,16 @@ require (
 	golang.org/x/sync v0.6.0
 	golang.org/x/term v0.16.0
 	golang.org/x/text v0.14.0
-	k8s.io/api v0.29.0
-	k8s.io/apiextensions-apiserver v0.29.0
-	k8s.io/apimachinery v0.29.0
-	k8s.io/apiserver v0.29.0
-	k8s.io/client-go v0.29.0
-	k8s.io/component-base v0.29.0
+	k8s.io/api v0.29.1
+	k8s.io/apiextensions-apiserver v0.29.1
+	k8s.io/apimachinery v0.29.1
+	k8s.io/apiserver v0.29.1
+	k8s.io/client-go v0.29.1
+	k8s.io/component-base v0.29.1
 	k8s.io/gengo v0.0.0-20240110203215-22eea95d1e7a
-	k8s.io/klog/v2 v2.120.0
-	k8s.io/kube-aggregator v0.29.0
-	k8s.io/kube-openapi v0.0.0-20240105020646-a37d4de58910
+	k8s.io/klog/v2 v2.120.1
+	k8s.io/kube-aggregator v0.29.1
+	k8s.io/kube-openapi v0.0.0-20240117194847-208609032b15
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -173,10 +173,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.12.0 // indirect
+	golang.org/x/tools v0.16.1 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
@@ -189,7 +189,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.29.0 // indirect
+	k8s.io/kms v0.29.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

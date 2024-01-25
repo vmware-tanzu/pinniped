@@ -236,6 +236,8 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		WithController(
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
+				// TODO (BEN): add the client here for next story
+				// client.PinnipedConcierge.AuthenticationV1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),
@@ -244,8 +246,10 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		WithController(
 			jwtcachefiller.New(
 				c.AuthenticatorCache,
+				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				clock.RealClock{},
+				plog.New(),
 			),
 			singletonWorker,
 		).

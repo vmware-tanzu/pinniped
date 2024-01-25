@@ -180,6 +180,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              phase:
+                default: Pending
+                description: Phase summarizes the overall status of the JWTAuthenticator.
+                enum:
+                - Pending
+                - Ready
+                - Error
+                type: string
             type: object
         required:
         - spec

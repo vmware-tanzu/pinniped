@@ -21,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/endpoints/tokenexchange"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
+	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
 	"go.pinniped.dev/internal/federationdomain/strategy"
 	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -102,24 +103,150 @@ type UpstreamStateParamData struct {
 	FormatVersion string              `json:"v"`
 }
 
-// Get the defaults for the Supervisor server.
+// DefaultOIDCTimeoutsConfiguration returns the default timeouts for the Supervisor server.
 func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
-	accessTokenLifespan := 2 * time.Minute
+	// Note: The maximum time that users can access Kubernetes clusters without
+	// needing to do a Supervisor refresh is the sum of the access token lifetime,
+	// the ID token lifetime, and the Concierge's mTLS client cert lifetime.
+	// This is because a client can exchange the access token just before it expires
+	// for a new cluster-scoped ID token, and use that just before it expires to get
+	// a new mTLS client cert, which grants access to the cluster until it expires.
+	//
+	// Note that the Concierge's mTLS client cert lifetime is 5 minutes, which can
+	// be seen in its source at credentialrequest/rest.go.
+	//
+	// This maximum total time is important because it represents the longest possible
+	// time that a user could continue to use a cluster based on their original login
+	// (or most recent refresh) after an administrator of an external identity provider
+	// removes the user, revokes their session, changes their group membership,
+	// or otherwise makes any type of change to the user's account in the external
+	// identity provider that should be noticed by the Supervisor during an upstream
+	// refresh.
+	//
+	// Given the timeouts specified below:
+	// For sessions started using a GitHub PAT, this is 8 + 2 + 5 = 15 minutes.
+	// For sessions started any other way, this is 2 + 2 + 5 = 9 minutes.
+	//
+	// The CLI will use a cached mTLS client cert until it expires. For a session
+	// started using a GitHub PAT, when first mTLS client cert has expired, the CLI
+	// will be able to fetch a second one without performing a refresh for 3 more minutes.
+	// If the client is actively making Kubernetes API requests during this time, this
+	// should give at least 10 minutes of cluster access (two mTLS client cert lifetimes).
+	// For any other session type, when the first mTLS client cert expires, the CLI will
+	// need to perform a refresh before it can get a second client cert.
+
+	// Give a generous amount of time for an authorized client to be able to exchange
+	// its authcode for tokens.
 	authorizationCodeLifespan := 10 * time.Minute
+
+	// This is intended to give a very short amount of time to allow the client to
+	// use the access token to exchange for cluster-scoped ID token(s). After this
+	// time runs out, they will need to perform a refresh to get a new tokens,
+	// ensuring the Supervisor has a chance to revalidate their session often.
+	accessTokenLifespan := 2 * time.Minute
+
+	// The ID token can have the same lifespan as the access token. It does not grant
+	// access to anything in a typical Pinniped setup.
+	idTokenLifespan := accessTokenLifespan
+
+	// This is just long enough to cover a typical work day, giving the end user an
+	// experience of logging in once per day to access all their Kubernetes clusters.
 	refreshTokenLifespan := 9 * time.Hour
 
+	// Give a little extra time for some storage lifetimes, to avoid the possibility
+	// that the storage be garbage collected in the middle of trying to look up the token.
+	storageExtraLifetime := time.Minute
+
+	// This is longer than the 5-minute lifetime of mTLS client certs issued by the Concierge,
+	// so this should allow a user to fetch another client cert after the first one expires,
+	// without needing to refresh their Supervisor session.
+	gitHubPATBasedAccessTokenLifespan := 8 * time.Minute
+
+	// Previous versions of the Pinniped CLI would only skip refresh when there is at least
+	// 10 minutes left for the cached ID token, so having a short lifetime here will cause those
+	// older CLIs to never skip attempting refresh. Refreshes are not allowed for GitHub PAT-based
+	// sessions, so those older CLIs will always get a refresh failure and then automatically start
+	// a new session. This is unfortunate because it uses more of a user's GitHub API rate limit
+	// per hour, and it uses more Supervisor session storage (more new sessions). However, we don't
+	// want to make this lifetime long because this is also the lifetime of cluster-scoped ID tokens,
+	// which can grant access to clusters, so we will have to live with this. Users can avoid it by
+	// upgrading their CLI because newer CLIs will look at the lifespan of the access token (not the
+	// ID token) when deciding if a refresh is needed before requesting a new cluster-scoped ID token.
+	gitHubPATBasedIDTokenLifespan := idTokenLifespan
+
+	// Give a little extra time for some storage lifetimes, to avoid the possibility
+	// that the storage be garbage collected in the middle of trying to look up the token.
+	gitHubPATBasedTokenStorageExtraLife := 5 * time.Second
+
 	return timeouts.Configuration{
-		UpstreamStateParamLifespan:              90 * time.Minute,
-		AuthorizeCodeLifespan:                   authorizationCodeLifespan,
-		AccessTokenLifespan:                     accessTokenLifespan,
-		IDTokenLifespan:                         accessTokenLifespan,
-		RefreshTokenLifespan:                    refreshTokenLifespan,
-		AuthorizationCodeSessionStorageLifetime: authorizationCodeLifespan + refreshTokenLifespan,
-		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		AccessTokenSessionStorageLifetime:       refreshTokenLifespan + accessTokenLifespan,
-		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,
+		// Give enough time for someone to start an interactive authorization flow, go eat lunch,
+		// and then finish the authorization afterward.
+		UpstreamStateParamLifespan: 90 * time.Minute,
+
+		AuthorizeCodeLifespan: authorizationCodeLifespan,
+
+		AccessTokenLifespan: accessTokenLifespan,
+		OverrideDefaultAccessTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+			if isGitHubSessionBasedOnPAT(accessRequest) {
+				return true, gitHubPATBasedAccessTokenLifespan
+			}
+			return false, 0
+		},
+
+		IDTokenLifespan: idTokenLifespan,
+		OverrideDefaultIDTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+			if isGitHubSessionBasedOnPAT(accessRequest) {
+				return true, gitHubPATBasedIDTokenLifespan
+			}
+			return false, 0
+		},
+
+		RefreshTokenLifespan: refreshTokenLifespan,
+
+		AuthorizationCodeSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			if isGitHubSessionBasedOnPAT(requester) {
+				// When refresh is not available, this only needs to live as long as the access token.
+				return gitHubPATBasedAccessTokenLifespan + gitHubPATBasedTokenStorageExtraLife
+			}
+			return authorizationCodeLifespan + refreshTokenLifespan
+		},
+
+		PKCESessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+			return authorizationCodeLifespan + storageExtraLifetime
+		},
+
+		OIDCSessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+			return authorizationCodeLifespan + storageExtraLifetime
+		},
+
+		AccessTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			if isGitHubSessionBasedOnPAT(requester) {
+				// When refresh is not available, this only needs to live as long as the access token.
+				return gitHubPATBasedAccessTokenLifespan + gitHubPATBasedTokenStorageExtraLife
+			}
+			return refreshTokenLifespan + accessTokenLifespan
+		},
+
+		RefreshTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			if isGitHubSessionBasedOnPAT(requester) {
+				// When refresh is not intended to be available, we don't need to keep this around.
+				// Keeping it would allow the refresh flow to lookup the session and give a nice error
+				// message about how that session's type does not support refreshes, but only
+				// the Pinniped CLI is allowed to start sessions of this type, so in practice nobody
+				// would see those error messages anyway.
+				return gitHubPATBasedTokenStorageExtraLife
+			}
+			return refreshTokenLifespan + accessTokenLifespan
+		},
 	}
+}
+
+func isGitHubSessionBasedOnPAT(requester fosite.Requester) bool {
+	// TODO: only return true for GitHub sessions that were started by the piniped-cli client using a Personal Access Token.
+	//  Using LDAP sessions here as a temporary stand-in because GitHub auth is not implemented yet.
+	isPinnipedCLIClient := requester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI
+	isLDAPSession := requester.GetSession().(*psession.PinnipedSession).Custom.ProviderType == psession.ProviderTypeLDAP
+	return isPinnipedCLIClient && isLDAPSession
 }
 
 func FositeOauth2Helper(
@@ -170,7 +297,8 @@ func FositeOauth2Helper(
 		},
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
-		compose.OpenIDConnectExplicitFactory,
+		// use a custom factory here, so we can allow selective overrides of the ID token lifespan
+		idtokenlifespan.OpenIDConnectExplicitFactory,
 		compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 		tokenexchange.HandlerFactory, // handle the "urn:ietf:params:oauth:grant-type:token-exchange" grant type

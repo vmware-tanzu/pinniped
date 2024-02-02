@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -40,7 +40,7 @@ const (
 )
 
 type Storage interface {
-	Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (resourceVersion string, err error)
+	Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference, lifetime time.Duration) (resourceVersion string, err error)
 	Get(ctx context.Context, signature string, data JSON) (resourceVersion string, err error)
 	Update(ctx context.Context, signature, resourceVersion string, data JSON) (newResourceVersion string, err error)
 	Delete(ctx context.Context, signature string) error
@@ -50,13 +50,12 @@ type Storage interface {
 
 type JSON interface{} // document that we need valid JSON types
 
-func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time, lifetime time.Duration) Storage {
+func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time) Storage {
 	return &secretsStorage{
 		resource:   resource,
 		secretType: secretType(resource),
 		secrets:    secrets,
 		clock:      clock,
-		lifetime:   lifetime,
 	}
 }
 
@@ -65,11 +64,10 @@ type secretsStorage struct {
 	secretType corev1.SecretType
 	secrets    corev1client.SecretInterface
 	clock      func() time.Time
-	lifetime   time.Duration
 }
 
-func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (string, error) {
-	secret, err := s.toSecret(signature, "", data, additionalLabels, ownerReferences)
+func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference, lifetime time.Duration) (string, error) {
+	secret, err := s.toSecret(signature, "", data, additionalLabels, ownerReferences, lifetime)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +94,7 @@ func (s *secretsStorage) Get(ctx context.Context, signature string, data JSON) (
 // Update takes a resourceVersion because it assumes Get has been recently called to obtain the latest resource version.
 // This is to ensure that concurrent edits are treated as conflict errors (only one will win).
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
-	secret, err := s.toSecret(signature, resourceVersion, data, nil, nil)
+	secret, err := s.toSecret(signature, resourceVersion, data, nil, nil, 0)
 	if err != nil {
 		return "", err
 	}
@@ -189,7 +187,7 @@ func (s *secretsStorage) GetName(signature string) string {
 	return fmt.Sprintf(secretNameFormat, s.resource, signatureAsValidName)
 }
 
-func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference) (*corev1.Secret, error) {
+func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string, ownerReferences []metav1.OwnerReference, lifetime time.Duration) (*corev1.Secret, error) {
 	buf, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.GetName(signature), err)
@@ -202,9 +200,9 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 	labelsToAdd[SecretLabelKey] = s.resource // make it easier to find this stuff via kubectl
 
 	var annotations map[string]string
-	if s.lifetime > 0 {
+	if lifetime > 0 {
 		annotations = map[string]string{
-			SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
+			SecretLifetimeAnnotationKey: s.clock().Add(lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
 		}
 	}
 

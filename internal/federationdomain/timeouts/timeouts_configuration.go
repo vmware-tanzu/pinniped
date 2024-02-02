@@ -3,7 +3,18 @@
 
 package timeouts
 
-import "time"
+import (
+	"time"
+
+	"github.com/ory/fosite"
+)
+
+// StorageLifetime is a function that can, given a request, decide how long it should live in session storage.
+type StorageLifetime func(requester fosite.Requester) time.Duration
+
+// OverrideLifespan is a function that, given a request, can suggest to override the default lifespan
+// by returning true along with a new lifespan. When false is returned, the returned duration should be ignored.
+type OverrideLifespan func(accessRequest fosite.AccessRequester) (bool, time.Duration)
 
 type Configuration struct {
 	// The length of time that our state param that we encrypt and pass to the upstream OIDC IDP should be considered
@@ -22,10 +33,16 @@ type Configuration struct {
 	// be fairly short-lived.
 	AccessTokenLifespan time.Duration
 
+	// Optionally override the default AccessTokenLifespan depending on the specific request.
+	OverrideDefaultAccessTokenLifespan OverrideLifespan
+
 	// The lifetime of an downstream ID token issued by the token endpoint. This should generally be the same
 	// as the AccessTokenLifespan, or longer if it would be useful for the user's proof of identity to be valid
 	// for longer than their proof of authorization.
 	IDTokenLifespan time.Duration
+
+	// Optionally override the default IDTokenLifespan depending on the specific request.
+	OverrideDefaultIDTokenLifespan OverrideLifespan
 
 	// The lifetime of an downstream refresh token issued by the token endpoint. This should generally be
 	// significantly longer than the access token lifetime, so it can be used to refresh the access token
@@ -40,7 +57,7 @@ type Configuration struct {
 	// include revoking the access and refresh tokens associated with the session. Therefore, this should be
 	// significantly longer than the AuthorizeCodeLifespan, and there is probably no reason to make it longer than
 	// the sum of the AuthorizeCodeLifespan and the RefreshTokenLifespan.
-	AuthorizationCodeSessionStorageLifetime time.Duration
+	AuthorizationCodeSessionStorageLifetime StorageLifetime
 
 	// PKCESessionStorageLifetime is the length of time after which PKCE data is allowed to be garbage collected from
 	// storage. PKCE sessions are closely related to authorization code sessions. After the authcode is successfully
@@ -48,19 +65,19 @@ type Configuration struct {
 	// but it is not explicitly deleted. Therefore, this can be just slightly longer than the AuthorizeCodeLifespan. We'll
 	// avoid making it exactly the same as AuthorizeCodeLifespan to avoid any chance of the garbage collector deleting it
 	// while it is being used.
-	PKCESessionStorageLifetime time.Duration
+	PKCESessionStorageLifetime StorageLifetime
 
 	// OIDCSessionStorageLifetime is the length of time after which the OIDC session data related to an authcode
 	// is allowed to be garbage collected from storage. After the authcode is successfully redeemed, the OIDC session is
 	// explicitly deleted. Similar to the PKCE session, they are not needed anymore after the corresponding authcode has expired.
 	// Therefore, this can be just slightly longer than the AuthorizeCodeLifespan. We'll avoid making it exactly the same
 	// as AuthorizeCodeLifespan to avoid any chance of the garbage collector deleting it while it is being used.
-	OIDCSessionStorageLifetime time.Duration
+	OIDCSessionStorageLifetime StorageLifetime
 
 	// AccessTokenSessionStorageLifetime is the length of time after which an access token's session data is allowed
 	// to be garbage collected from storage.  These must exist in storage for as long as the refresh token is valid
 	// or else the refresh flow will not work properly. So this must be longer than RefreshTokenLifespan.
-	AccessTokenSessionStorageLifetime time.Duration
+	AccessTokenSessionStorageLifetime StorageLifetime
 
 	// RefreshTokenSessionStorageLifetime is the length of time after which a refresh token's session data is allowed
 	// to be garbage collected from storage. These must exist in storage for as long as the refresh token is valid.
@@ -70,5 +87,5 @@ type Configuration struct {
 	// error message telling them that the token is expired, rather than a more generic error that is returned
 	// when the token does not exist. If this is desirable, then the RefreshTokenSessionStorageLifetime can be made
 	// to be significantly larger than RefreshTokenLifespan, at the cost of slower cleanup.
-	RefreshTokenSessionStorageLifetime time.Duration
+	RefreshTokenSessionStorageLifetime StorageLifetime
 }

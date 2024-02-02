@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/psession"
 )
@@ -40,7 +41,8 @@ const (
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
 
 type authorizeCodeStorage struct {
-	storage crud.Storage
+	storage  crud.Storage
+	lifetime timeouts.StorageLifetime
 }
 
 type Session struct {
@@ -49,8 +51,8 @@ type Session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) oauth2.AuthorizeCodeStorage {
-	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime timeouts.StorageLifetime) oauth2.AuthorizeCodeStorage {
+	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock), lifetime: sessionStorageLifetime}
 }
 
 // ReadFromSecret reads the contents of a Secret as a Session.
@@ -92,7 +94,13 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	//      of the consent authorization request. It is used to identify the session.
 	//  signature for lookup in the DB
 
-	_, err = a.storage.Create(ctx, signature, &Session{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil, nil)
+	_, err = a.storage.Create(ctx,
+		signature,
+		&Session{Active: true, Request: request, Version: authorizeCodeStorageVersion},
+		nil,
+		nil,
+		a.lifetime(requester),
+	)
 	return err
 }
 

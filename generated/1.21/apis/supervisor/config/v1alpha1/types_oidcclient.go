@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -71,6 +71,28 @@ type OIDCClientSpec struct {
 	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	AllowedScopes []Scope `json:"allowedScopes"`
+
+	// tokenLifetimes are the optional overrides of token lifetimes for an OIDCClient.
+	// +optional
+	TokenLifetimes OIDCClientTokenLifetimes `json:"tokenLifetimes,omitempty"`
+}
+
+// OIDCClientTokenLifetimes describes the optional overrides of token lifetimes for an OIDCClient.
+type OIDCClientTokenLifetimes struct {
+	// idTokenSeconds is the lifetime of ID tokens issued to this client, in seconds. This will choose the lifetime of
+	// ID tokens returned by the authorization flow and the refresh grant. It will not influence the lifetime of the ID
+	// tokens returned by RFC8693 token exchange. When null, a short-lived default value will be used.
+	// This value must be between 120 and 1,800 seconds (30 minutes), inclusive. It is recommended to make these tokens
+	// short-lived to force the client to perform the refresh grant often, because the refresh grant will check with the
+	// external identity provider to decide if it is acceptable for the end user to continue their session, and will
+	// update the end user's group memberships from the external identity provider. Giving these tokens a long life is
+	// will allow the end user to continue to use a token while avoiding these updates from the external identity
+	// provider. However, some web applications may have reasons specific to the design of that application to prefer
+	// longer lifetimes.
+	// +kubebuilder:validation:Minimum=120
+	// +kubebuilder:validation:Maximum=1800
+	// +optional
+	IDTokenSeconds *int32 `json:"idTokenSeconds,omitempty"`
 }
 
 // OIDCClientStatus is a struct that describes the actual state of an OIDCClient.

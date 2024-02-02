@@ -7,8 +7,10 @@ package oidc
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/felixge/httpsnoop"
@@ -17,10 +19,12 @@ import (
 	errorsx "github.com/pkg/errors"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/endpoints/tokenexchange"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
+	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
 	"go.pinniped.dev/internal/federationdomain/strategy"
 	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -102,23 +106,121 @@ type UpstreamStateParamData struct {
 	FormatVersion string              `json:"v"`
 }
 
-// Get the defaults for the Supervisor server.
+// DefaultOIDCTimeoutsConfiguration returns the default timeouts for the Supervisor server.
 func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
-	accessTokenLifespan := 2 * time.Minute
+	// Note: The maximum time that users can access Kubernetes clusters without
+	// needing to do a Supervisor refresh is the sum of the access token lifetime,
+	// the ID token lifetime, and the Concierge's mTLS client cert lifetime.
+	// This is because a client can exchange the access token just before it expires
+	// for a new cluster-scoped ID token, and use that just before it expires to get
+	// a new mTLS client cert, which grants access to the cluster until it expires.
+	//
+	// Note that the Concierge's mTLS client cert lifetime is 5 minutes, which can
+	// be seen in its source at credentialrequest/rest.go.
+	//
+	// This maximum total time is important because it represents the longest possible
+	// time that a user could continue to use a cluster based on their original login
+	// (or most recent refresh) after an administrator of an external identity provider
+	// removes the user, revokes their session, changes their group membership,
+	// or otherwise makes any type of change to the user's account in the external
+	// identity provider that should be noticed by the Supervisor during an upstream
+	// refresh.
+	//
+	// Given the timeouts specified below, this is: 2 + 2 + 5 = 9 minutes.
+	// Note that this may be different if an OIDCClient's configuration has changed
+	// the lifetime of the ID tokens issued to that client, but usually will not be
+	// different because that configuration does not change the lifetime of the
+	// cluster-scoped ID tokens. The only case where that configuration would change
+	// it is if the admin configured a cluster to accept the initial ID token's
+	// audience instead of the cluster-scoped ID token's audience.
+	//
+	// The CLI will use a cached mTLS client cert until it expires.
+	// Because of the default timeouts, when the first mTLS client cert expires after
+	// five minutes, the CLI will need to perform a refresh before it can get a second
+	// client cert, due to the original access token and cluster-scoped ID token having
+	// already expired by that time (after two minutes).
+
+	// Give a generous amount of time for an authorized client to be able to exchange
+	// its authcode for tokens.
 	authorizationCodeLifespan := 10 * time.Minute
+
+	// This is intended to give a very short amount of time to allow the client to
+	// use the access token to exchange for cluster-scoped ID token(s). After this
+	// time runs out, they will need to perform a refresh to get a new tokens,
+	// ensuring the Supervisor has a chance to revalidate their session often.
+	accessTokenLifespan := 2 * time.Minute
+
+	// The ID token will have the same default lifespan as the access token for a
+	// similar reason. This is the default lifespan for ID tokens issued by the
+	// authcode flow, the refresh flow, and the cluster-scoped token exchange.
+	// The cluster-scoped ID token can be exchanged for an mTLS client cert, so
+	// limit the window of opportunity to make that exchange to be small.
+	idTokenLifespan := accessTokenLifespan
+
+	// This is just long enough to cover a typical work day, giving the end user an
+	// experience of logging in once per day to access all their Kubernetes clusters.
 	refreshTokenLifespan := 9 * time.Hour
 
+	// Give a little extra time for some storage lifetimes, to avoid the possibility
+	// that the storage be garbage collected in the middle of trying to look up the token.
+	storageExtraLifetime := time.Minute
+
 	return timeouts.Configuration{
-		UpstreamStateParamLifespan:              90 * time.Minute,
-		AuthorizeCodeLifespan:                   authorizationCodeLifespan,
-		AccessTokenLifespan:                     accessTokenLifespan,
-		IDTokenLifespan:                         accessTokenLifespan,
-		RefreshTokenLifespan:                    refreshTokenLifespan,
-		AuthorizationCodeSessionStorageLifetime: authorizationCodeLifespan + refreshTokenLifespan,
-		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		AccessTokenSessionStorageLifetime:       refreshTokenLifespan + accessTokenLifespan,
-		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,
+		// Give enough time for someone to start an interactive authorization flow, go eat lunch,
+		// and then finish the authorization afterward.
+		UpstreamStateParamLifespan: 90 * time.Minute,
+
+		AuthorizeCodeLifespan: authorizationCodeLifespan,
+
+		AccessTokenLifespan: accessTokenLifespan,
+		OverrideDefaultAccessTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+			// Not currently overriding the defaults.
+			return false, 0
+		},
+
+		IDTokenLifespan: idTokenLifespan,
+		OverrideDefaultIDTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+			client := accessRequest.GetClient()
+			// Don't allow OIDCClients to override the default lifetime for ID tokens returned
+			// by RFC8693 token exchange. This is not user configurable for now.
+			if !accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange) {
+				if castClient, ok := client.(*clientregistry.Client); !ok {
+					// All clients returned by our client registry implement clientregistry.Client,
+					// so this should be a safe cast in practice.
+					plog.Error("could not check if client overrides token lifetimes",
+						errors.New("could not cast client to *clientregistry.Client"),
+						"clientID", client.GetID(), "clientType", reflect.TypeOf(client))
+				} else if castClient.IDTokenLifetimeConfiguration > 0 {
+					// An OIDCClient resource has provided an override, so use it.
+					// Note that the pinniped-cli client never overrides this value.
+					return true, castClient.IDTokenLifetimeConfiguration
+				}
+			}
+			// Otherwise, do not override the defaults.
+			return false, 0
+		},
+
+		RefreshTokenLifespan: refreshTokenLifespan,
+
+		AuthorizationCodeSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			return authorizationCodeLifespan + refreshTokenLifespan
+		},
+
+		PKCESessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+			return authorizationCodeLifespan + storageExtraLifetime
+		},
+
+		OIDCSessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+			return authorizationCodeLifespan + storageExtraLifetime
+		},
+
+		AccessTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			return refreshTokenLifespan + accessTokenLifespan
+		},
+
+		RefreshTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+			return refreshTokenLifespan + accessTokenLifespan
+		},
 	}
 }
 
@@ -170,8 +272,10 @@ func FositeOauth2Helper(
 		},
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
-		compose.OpenIDConnectExplicitFactory,
-		compose.OpenIDConnectRefreshFactory,
+		// Use a custom factory to allow selective overrides of the ID token lifespan during authcode exchange.
+		idtokenlifespan.OpenIDConnectExplicitFactory,
+		// Use a custom factory to allow selective overrides of the ID token lifespan during refresh.
+		idtokenlifespan.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 		tokenexchange.HandlerFactory, // handle the "urn:ietf:params:oauth:grant-type:token-exchange" grant type
 	)
@@ -341,8 +445,8 @@ func rewriteStatusSeeOtherToStatusFoundForBrowserless(w http.ResponseWriter) htt
 	// https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
 	// Safari has the bad behavior in the case of http.StatusFound and not just http.StatusTemporaryRedirect.
 	//
-	// in the browserless flows, the OAuth client is the pinniped CLI and it already has access to the user's
-	// password.  Thus there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
+	// In the browserless flows, the OAuth client is the pinniped CLI, and it already has access to the user's
+	// password.  Thus, there is no security issue with using http.StatusFound vs. http.StatusSeeOther.
 	return httpsnoop.Wrap(w, httpsnoop.Hooks{
 		WriteHeader: func(delegate httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
 			return func(code int) {

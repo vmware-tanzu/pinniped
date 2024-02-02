@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package endpointsmanager
@@ -161,6 +161,8 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
 			idpLister,
 			oauthHelperWithKubeStorage,
+			timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
+			timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/ory/fosite"
 	errorsx "github.com/pkg/errors"
@@ -19,8 +20,10 @@ import (
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
+	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/plog"
@@ -30,6 +33,8 @@ import (
 func NewHandler(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
+	overrideAccessTokenLifespan timeouts.OverrideLifespan,
+	overrideIDTokenLifespan timeouts.OverrideLifespan,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		session := psession.NewPinnipedSession()
@@ -66,7 +71,17 @@ func NewHandler(
 			}
 		}
 
-		accessResponse, err := oauthHelper.NewAccessResponse(r.Context(), accessRequest)
+		// Lifetimes of the access and refresh tokens are determined by the above call to NewAccessRequest.
+		// Depending on the request, sometimes override the default access token lifespan.
+		maybeOverrideDefaultAccessTokenLifetime(overrideAccessTokenLifespan, accessRequest)
+
+		// Create the token response.
+		// The lifetime of the ID token will be determined inside the call NewAccessResponse.
+		// Depending on the request, sometimes override the default ID token lifespan by putting
+		// the override value onto the context.
+		accessResponse, err := oauthHelper.NewAccessResponse(
+			maybeOverrideDefaultIDTokenLifetime(r.Context(), overrideIDTokenLifespan, accessRequest),
+			accessRequest)
 		if err != nil {
 			plog.Info("token response error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
@@ -77,6 +92,19 @@ func NewHandler(
 
 		return nil
 	})
+}
+
+func maybeOverrideDefaultAccessTokenLifetime(overrideAccessTokenLifespan timeouts.OverrideLifespan, accessRequest fosite.AccessRequester) {
+	if doOverride, newLifespan := overrideAccessTokenLifespan(accessRequest); doOverride {
+		accessRequest.GetSession().SetExpiresAt(fosite.AccessToken, time.Now().UTC().Add(newLifespan).Round(time.Second))
+	}
+}
+
+func maybeOverrideDefaultIDTokenLifetime(baseCtx context.Context, overrideIDTokenLifespan timeouts.OverrideLifespan, accessRequest fosite.AccessRequester) context.Context {
+	if doOverride, newLifespan := overrideIDTokenLifespan(accessRequest); doOverride {
+		return idtokenlifespan.OverrideIDTokenLifespanInContext(baseCtx, newLifespan)
+	}
+	return baseCtx
 }
 
 func errMissingUpstreamSessionInternalError() *fosite.RFC6749Error {

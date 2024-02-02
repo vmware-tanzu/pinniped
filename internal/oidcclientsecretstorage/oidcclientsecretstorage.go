@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientsecretstorage
@@ -45,7 +45,7 @@ type storedClientSecret struct {
 
 func New(secrets corev1client.SecretInterface) *OIDCClientSecretStorage {
 	return &OIDCClientSecretStorage{
-		storage: crud.New(TypeLabelValue, secrets, nil, 0), // can use nil clock because we are using infinite lifetime
+		storage: crud.New(TypeLabelValue, secrets, nil), // can use nil clock because we are using infinite lifetime for creates
 		secrets: secrets,
 	}
 }
@@ -91,7 +91,7 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidc
 			Controller:         nil, // doesn't seem to matter, and there is no particular controller owning this
 			BlockOwnerDeletion: nil,
 		}}
-		if _, err := s.storage.Create(ctx, name, secret, nil, ownerReferences); err != nil {
+		if _, err := s.storage.Create(ctx, name, secret, nil, ownerReferences, 0); err != nil { // 0 is infinite lifetime
 			return fmt.Errorf("failed to create client secret for uid %s: %w", oidcClientUID, err)
 		}
 		return nil

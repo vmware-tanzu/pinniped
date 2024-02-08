@@ -11,10 +11,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPlog(t *testing.T) {
+	runtimeVersion := runtime.Version()
+	if strings.HasPrefix(runtimeVersion, "go") {
+		runtimeVersion, _ = strings.CutPrefix(runtimeVersion, "go")
+	}
+	runtimeVersionSemver, err := semver.NewVersion(runtimeVersion)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name string
 		run  func(Logger)
@@ -298,10 +306,17 @@ func TestPlog(t *testing.T) {
 {"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"all","panda":2}
 {"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestPlog.%[1]s","message":"always","panda":2}
 `, func() string {
-				if strings.Contains(runtime.Version(), "1.21") {
+				switch {
+				case runtimeVersionSemver.Major == 1 && runtimeVersionSemver.Minor == 21:
+					// Format of string for Go 1.21
 					return "func13.TestPlog.func13.1.func2"
+				case runtimeVersionSemver.Major == 1 && runtimeVersionSemver.Minor >= 22:
+					// Format of string for Go 1.22+
+					return "func13.TestPlog.func13.1.2"
+				default:
+					// Format of string for Go 1.20 and below.
+					return "func13.1.1"
 				}
-				return "func13.1.1"
 			}()),
 		},
 		{

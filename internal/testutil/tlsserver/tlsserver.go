@@ -85,6 +85,10 @@ func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFun
 	var wantClientSupportedCiphers []uint16
 
 	switch {
+	// When the provided config only supports TLS 1.2, then set up the expected values for TLS 1.2.
+	case clientTLSConfig.MinVersion == tls.VersionTLS12 && clientTLSConfig.MaxVersion == tls.VersionTLS12:
+		wantClientSupportedVersions = []uint16{tls.VersionTLS12}
+		wantClientSupportedCiphers = clientTLSConfig.CipherSuites
 	// When the provided config only supports TLS 1.3, then set up the expected values for TLS 1.3.
 	case clientTLSConfig.MinVersion == tls.VersionTLS13:
 		wantClientSupportedVersions = []uint16{tls.VersionTLS13}

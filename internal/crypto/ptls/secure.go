@@ -1,6 +1,8 @@
 // Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build !fips_strict
+
 package ptls
 
 import (

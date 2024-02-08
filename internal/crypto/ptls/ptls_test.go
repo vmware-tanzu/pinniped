@@ -5,8 +5,11 @@ package ptls
 
 import (
 	"crypto/tls"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apiserver/pkg/server/options"
 )
@@ -45,6 +48,13 @@ func TestSecureServing(t *testing.T) {
 
 func TestMerge(t *testing.T) {
 	t.Parallel()
+
+	runtimeVersion := runtime.Version()
+	if strings.HasPrefix(runtimeVersion, "go") {
+		runtimeVersion, _ = strings.CutPrefix(runtimeVersion, "go")
+	}
+	runtimeVersionSemver, err := semver.NewVersion(runtimeVersion)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name          string
@@ -176,60 +186,24 @@ func TestMerge(t *testing.T) {
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{
-				ServerName: "something-to-check-passthrough",
-				MinVersion: tls.VersionTLS12,
-				CipherSuites: []uint16{
-					tls.TLS_RSA_WITH_AES_128_CBC_SHA, //nolint:gosec  // yeah, I know it is a bad cipher, this is the legacy config
-					tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_AES_128_GCM_SHA256,
-					tls.TLS_AES_256_GCM_SHA384,
-					tls.TLS_CHACHA20_POLY1305_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-				},
-				NextProtos: []string{"h2", "http/1.1"},
+				ServerName:   "something-to-check-passthrough",
+				MinVersion:   tls.VersionTLS12,
+				CipherSuites: wantLegacyCipherSuites(runtimeVersionSemver),
+				NextProtos:   []string{"h2", "http/1.1"},
 			},
 		},
 		{
 			name:          "legacy with NextProtos",
 			tlsConfigFunc: Legacy,
-			tlsConfig: &tls.Config{
+			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
 				ServerName: "a different thing for passthrough",
 				NextProtos: []string{"panda"},
 			},
 			want: &tls.Config{
-				ServerName: "a different thing for passthrough",
-				MinVersion: tls.VersionTLS12,
-				CipherSuites: []uint16{
-					tls.TLS_RSA_WITH_AES_128_CBC_SHA, //nolint:gosec  // yeah, I know it is a bad cipher, this is the legacy config
-					tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_AES_128_GCM_SHA256,
-					tls.TLS_AES_256_GCM_SHA384,
-					tls.TLS_CHACHA20_POLY1305_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-				},
-				NextProtos: []string{"panda"},
+				ServerName:   "a different thing for passthrough",
+				MinVersion:   tls.VersionTLS12,
+				CipherSuites: wantLegacyCipherSuites(runtimeVersionSemver),
+				NextProtos:   []string{"panda"},
 			},
 		},
 	}
@@ -242,4 +216,32 @@ func TestMerge(t *testing.T) {
 			require.Equal(t, tt.want, tt.tlsConfig)
 		})
 	}
+}
+
+func wantLegacyCipherSuites(runtime *semver.Version) []uint16 {
+	var ciphers []uint16
+	if runtime.Major == 1 && runtime.Minor < 22 {
+		ciphers = append(ciphers, []uint16{
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		}...)
+	}
+	ciphers = append(ciphers, []uint16{
+		tls.TLS_AES_128_GCM_SHA256,
+		tls.TLS_AES_256_GCM_SHA384,
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	}...)
+	return ciphers
 }

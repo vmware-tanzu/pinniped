@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclient
@@ -458,8 +458,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return WithSessionCache(cache)(h)
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
-			wantErr:  "could not perform OIDC discovery for \"" + errorServer.URL + "\": 500 Internal Server Error: some discovery error\n",
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + errorServer.URL + `"`},
+			wantErr: `could not perform OIDC discovery for "` + errorServer.URL + `": 500 Internal Server Error: some discovery error
+`,
 		},
 		{
 			name:     "session cache hit with valid token",
@@ -480,7 +481,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return WithSessionCache(cache)(h)
 				}
 			},
-			wantLogs:  []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\""},
+			wantLogs:  []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`},
 			wantToken: &testToken,
 		},
 		{
@@ -492,7 +493,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   errorServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + errorServer.URL + `"`},
 			wantErr:  fmt.Sprintf("could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
 		},
 		{
@@ -504,7 +505,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   brokenResponseModeServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenResponseModeServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + brokenResponseModeServer.URL + `"`},
 			wantErr:  fmt.Sprintf("could not decode response_modes_supported in OIDC discovery from %q: json: cannot unmarshal string into Go struct field .response_modes_supported of type []string", brokenResponseModeServer.URL),
 		},
 		{
@@ -552,8 +553,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Refreshing cached token.\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Refreshing cached token."`},
 			wantToken: &testToken,
 		},
 		{
@@ -594,8 +595,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Refreshing cached token.\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Refreshing cached token."`},
 			wantErr: "some validation error",
 		},
 		{
@@ -804,7 +805,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^" +
 				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
 				regexp.QuoteMeta("    https://127.0.0.1:") +
@@ -835,7 +836,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^" +
 				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
 				regexp.QuoteMeta("    https://127.0.0.1:") +
@@ -906,7 +907,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^" +
 				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
 				regexp.QuoteMeta("    https://127.0.0.1:") +
@@ -978,7 +979,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   formPostSuccessServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + formPostSuccessServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + formPostSuccessServer.URL + `"`},
 			wantStdErr: "^" +
 				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
 				regexp.QuoteMeta("    https://127.0.0.1:") +
@@ -1053,7 +1054,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^" +
 				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
 				regexp.QuoteMeta("    https://127.0.0.1:") +
@@ -1081,7 +1082,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    "error prompting for username: some prompt error",
 		},
@@ -1096,7 +1097,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    "error prompting for password: some prompt error",
 		},
@@ -1140,7 +1141,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr:  `discovered authorize URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
 		},
 		{
@@ -1152,7 +1153,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr: `authorization response error: Get "https://` + successServer.Listener.Addr().String() +
 				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=` + testCodeChallenge +
@@ -1169,7 +1170,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    `error getting authorization: expected to be redirected, but response status was 502 Bad Gateway`,
 		},
@@ -1187,7 +1188,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    `login failed with code "access_denied": optional-error-description`,
 		},
@@ -1205,7 +1206,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    `error getting authorization: redirected to the wrong location: http://other-server.example.com/callback?code=foo&state=test-state`,
 		},
@@ -1223,7 +1224,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    `login failed with code "access_denied"`,
 		},
@@ -1239,7 +1240,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    `missing or invalid state parameter in authorization response: http://127.0.0.1:0/callback?code=foo&state=wrong-state`,
 		},
@@ -1267,7 +1268,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantErr:    "could not complete authorization code exchange: some authcode exchange or token validation error",
 		},
@@ -1366,7 +1367,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			issuer:     successServer.URL,
-			wantLogs:   []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantToken:  &testToken,
 		},
@@ -1469,9 +1470,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer: successServer.URL,
 			wantLogs: []string{
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Read username from environment variable\"  \"name\"=\"PINNIPED_USERNAME\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Read password from environment variable\"  \"name\"=\"PINNIPED_PASSWORD\"",
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Read username from environment variable"  "name"="PINNIPED_USERNAME"`,
+				`"level"=4 "msg"="Pinniped: Read password from environment variable"  "name"="PINNIPED_PASSWORD"`,
 			},
 			wantToken: &testToken,
 		},
@@ -1578,9 +1579,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer: successServer.URL,
 			wantLogs: []string{
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Read username from environment variable\"  \"name\"=\"PINNIPED_USERNAME\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Read password from environment variable\"  \"name\"=\"PINNIPED_PASSWORD\"",
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Read username from environment variable"  "name"="PINNIPED_USERNAME"`,
+				`"level"=4 "msg"="Pinniped: Read password from environment variable"  "name"="PINNIPED_PASSWORD"`,
 			},
 			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
 			wantToken:  &testToken,
@@ -1607,9 +1608,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="cluster-1234"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + errorServer.URL + `"`},
 			wantErr: fmt.Sprintf("failed to exchange token: could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
 		},
 		{
@@ -1634,9 +1635,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + insecureTokenURLServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="cluster-1234"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + insecureTokenURLServer.URL + `"`},
 			wantErr: `failed to exchange token: discovered token URL from issuer must be an https URL, but had scheme "http" instead`,
 		},
 		{
@@ -1661,9 +1662,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"cluster-1234\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenTokenURLServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="cluster-1234"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + brokenTokenURLServer.URL + `"`},
 			wantErr: `failed to exchange token: discovered token URL from issuer is not a valid URL: parse "%": invalid URL escape "%"`,
 		},
 		{
@@ -1688,9 +1689,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-http-response\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-http-response"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: fmt.Sprintf(`failed to exchange token: Post "%s/token": failed to parse Location header "%%": parse "%%": invalid URL escape "%%"`, successServer.URL),
 		},
 		{
@@ -1715,9 +1716,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-http-400\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-http-400"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: unexpected HTTP response status 400`,
 		},
 		{
@@ -1742,9 +1743,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-content-type\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-content-type"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: failed to decode content-type header: mime: invalid media parameter`,
 		},
 		{
@@ -1769,9 +1770,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-wrong-content-type\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-wrong-content-type"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: unexpected HTTP response content type "invalid"`,
 		},
 		{
@@ -1796,9 +1797,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-json\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-json"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: failed to decode response: unexpected EOF`,
 		},
 		{
@@ -1823,9 +1824,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-tokentype\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-tokentype"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: got unexpected token_type "invalid"`,
 		},
 		{
@@ -1850,9 +1851,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-issuedtokentype\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-issuedtokentype"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: got unexpected issued_token_type "invalid"`,
 		},
 		{
@@ -1877,9 +1878,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience-produce-invalid-jwt\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience-produce-invalid-jwt"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantErr: `failed to exchange token: received invalid JWT: oidc: malformed jwt: oidc: malformed jwt, expected 3 parts got 1`,
 		},
 		{
@@ -1910,9 +1911,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Found unexpired cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience"`,
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
 			wantToken: &testExchangedToken,
 		},
 		{
@@ -1969,9 +1970,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			wantLogs: []string{
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Refreshing cached token.\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requestedAudience\"=\"test-audience\"",
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Refreshing cached token."`,
+				`"level"=4 "msg"="Pinniped: Performing RFC8693 token exchange"  "requestedAudience"="test-audience"`,
 			},
 			wantToken: &testExchangedToken,
 		},

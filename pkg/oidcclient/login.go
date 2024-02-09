@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcclient implements a CLI OIDC login flow.
@@ -44,9 +44,15 @@ import (
 
 const (
 	// minIDTokenValidity is the minimum amount of time that a cached ID token must be still be valid to be considered.
-	// This is non-zero to ensure that most of the time, your ID token won't expire in the middle of a multi-step k8s
+	// This is non-zero to ensure that most of the time, your ID token won't expire in the middle of a multistep k8s
 	// API operation.
 	minIDTokenValidity = 10 * time.Minute
+
+	// minAccessTokenValidity is the minimum amount of time that a cached access token must be still be valid
+	// to be considered.
+	// This is non-zero to ensure that most of the time, your access token won't expire before we submit it for
+	// RFC8693 token exchange.
+	minAccessTokenValidity = 10 * time.Second
 
 	// httpRequestTimeout is the timeout for operations that involve one (or a few) non-interactive HTTPS requests.
 	// Since these don't involve any user interaction, they should always be roughly as fast as network latency.
@@ -328,22 +334,53 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 	}
 
 	// Do the basic login to get an access and ID token issued to our main client ID.
-	baseToken, err := h.baseLogin()
+	token, err := h.baseLogin()
 	if err != nil {
 		return nil, err
 	}
 
-	// If there is no requested audience, or the requested audience matches the one we got, we're done.
-	if h.requestedAudience == "" || (baseToken.IDToken != nil && h.requestedAudience == baseToken.IDToken.Claims["aud"]) {
-		return baseToken, err
+	// Perform the RFC8693 token exchange, if needed. Note that the new ID token returned by this exchange
+	// does not need to be cached because the new ID token is intended to be a very short-lived token.
+	if h.needRFC8693TokenExchange(token) {
+		token, err = h.tokenExchangeRFC8693(token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to exchange token: %w", err)
+		}
 	}
 
-	// Perform the RFC8693 token exchange.
-	exchangedToken, err := h.tokenExchangeRFC8693(baseToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange token: %w", err)
+	return token, nil
+}
+
+func (h *handlerState) needRFC8693TokenExchange(token *oidctypes.Token) bool {
+	// Need a new ID token if there is a requested audience value and any of the following are true...
+	return h.requestedAudience != "" &&
+		// we don't have an ID token
+		(token.IDToken == nil ||
+			// or, our current ID token has expired or is close to expiring
+			idTokenExpiredOrCloseToExpiring(token.IDToken) ||
+			// or, our current ID token has a different audience
+			(h.requestedAudience != token.IDToken.Claims["aud"]))
+}
+
+func (h *handlerState) tokenValidForNearFuture(token *oidctypes.Token) (bool, string) {
+	if token == nil {
+		return false, ""
 	}
-	return exchangedToken, nil
+	// If we plan to do an RFC8693 token exchange, then we need an access token that will still be valid when we do the
+	// exchange (which will happen momentarily). Otherwise, we need an ID token that will be valid for a little while
+	// (long enough for multistep k8s API operations).
+	if h.needRFC8693TokenExchange(token) {
+		return !accessTokenExpiredOrCloseToExpiring(token.AccessToken), "access_token"
+	}
+	return !idTokenExpiredOrCloseToExpiring(token.IDToken), "id_token"
+}
+
+func accessTokenExpiredOrCloseToExpiring(accessToken *oidctypes.AccessToken) bool {
+	return accessToken == nil || time.Until(accessToken.Expiry.Time) <= minAccessTokenValidity
+}
+
+func idTokenExpiredOrCloseToExpiring(idToken *oidctypes.IDToken) bool {
+	return idToken == nil || time.Until(idToken.Expiry.Time) <= minIDTokenValidity
 }
 
 func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
@@ -360,10 +397,11 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		UpstreamProviderName: h.upstreamIdentityProviderName,
 	}
 
-	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
+	// If the cached tokens include the token type that we need, and that token is still valid for a bit,
+	// return the cached tokens immediately and skip the rest of the flow.
 	cached := h.cache.GetToken(cacheKey)
-	if cached != nil && cached.IDToken != nil && time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Found unexpired cached token.")
+	if valid, whichTokenWasValid := h.tokenValidForNearFuture(cached); valid {
+		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Found unexpired cached token.", "type", whichTokenWasValid)
 		return cached, nil
 	}
 
@@ -378,13 +416,14 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		if err != nil {
 			return nil, err
 		}
-		// If we got a fresh token, we can update the cache and return it. Otherwise we fall through to the full refresh flow.
+		// If we got a fresh token, update the cache and return it. Otherwise, fall through to the full login flow.
 		if freshToken != nil {
 			h.cache.PutToken(cacheKey, freshToken)
 			return freshToken, nil
 		}
 	}
 
+	// We couldn't refresh, so now we need to perform a fresh login attempt.
 	// Prepare the common options for the authorization URL. We don't have the redirect URL yet though.
 	authorizeOptions := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
@@ -833,7 +872,7 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
-	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Refreshing cached token.")
+	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Refreshing cached tokens.")
 	upstreamOIDCIdentityProvider := h.getProvider(h.oauth2Config, h.provider, h.httpClient)
 
 	refreshed, err := upstreamOIDCIdentityProvider.PerformRefresh(ctx, refreshToken.Token)

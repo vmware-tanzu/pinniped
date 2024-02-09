@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -209,12 +209,14 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		err = os.Remove(credentialCachePath)
 		require.NoError(t, err)
 
-		// wait for the existing tokens to expire, triggering the refresh flow.
-		ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Minute)
-		defer cancel2()
+		// The cached access token is valid for 2 minutes, and can be used to perform the token exchange again
+		// during that time. Remove it to force the refresh flow to happen on the next kubectl invocation,
+		// without needing to wait for the access token to expire first.
+		token.AccessToken = nil
+		cache.PutToken(sessionCacheKey, token)
 
 		// 	Run kubectl, which should work without any prompting for authentication.
-		kubectlCmd2 := exec.CommandContext(ctx2, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
@@ -253,7 +255,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		expectedUsername, password := testlib.CreateFreshADTestUser(t, env)
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
-		setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
+		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
 		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -309,6 +311,24 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
+		cache := filesession.New(sessionCachePath, filesession.WithErrorReporter(func(err error) {
+			require.NoError(t, err)
+		}))
+
+		// construct the cache key
+		downstreamScopes := []string{"offline_access", "openid", "pinniped:request-audience", "groups"}
+		sort.Strings(downstreamScopes)
+		sessionCacheKey := oidcclient.SessionCacheKey{
+			Issuer:               downstream.Spec.Issuer,
+			ClientID:             "pinniped-cli",
+			Scopes:               downstreamScopes,
+			RedirectURI:          "http://localhost:0/callback",
+			UpstreamProviderName: createdProvider.Name,
+		}
+		// use it to get the cache entry
+		token := cache.GetToken(sessionCacheKey)
+		require.NotNil(t, token)
+
 		// create an active directory group, and add our user to it.
 		groupName := testlib.CreateFreshADTestGroup(t, env)
 		testlib.AddTestUserToGroup(t, env, groupName, expectedUsername)
@@ -317,11 +337,14 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		err = os.Remove(credentialCachePath)
 		require.NoError(t, err)
 
-		ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Minute)
-		defer cancel2()
+		// The cached access token is valid for 2 minutes, and can be used to perform the token exchange again
+		// during that time. Remove it to force the refresh flow to happen on the next kubectl invocation,
+		// without needing to wait for the access token to expire first.
+		token.AccessToken = nil
+		cache.PutToken(sessionCacheKey, token)
 
 		// Run kubectl, which should work without any prompting for authentication.
-		kubectlCmd2 := exec.CommandContext(ctx2, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
@@ -520,12 +543,14 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		err = os.Remove(credentialCachePath)
 		require.NoError(t, err)
 
-		// wait for the existing tokens to expire, triggering the refresh flow.
-		ctx2, cancel2 := context.WithTimeout(ctx, 1*time.Minute)
-		defer cancel2()
+		// The cached access token is valid for 2 minutes, and can be used to perform the token exchange again
+		// during that time. Remove it to force the refresh flow to happen on the next kubectl invocation,
+		// without needing to wait for the access token to expire first.
+		token.AccessToken = nil
+		cache.PutToken(sessionCacheKey, token)
 
 		// 	Run kubectl, which should work without any prompting for authentication.
-		kubectlCmd2 := exec.CommandContext(ctx2, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser

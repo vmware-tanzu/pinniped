@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -133,7 +133,7 @@ func runStaticLogin(cmd *cobra.Command, deps staticLoginDeps, flags staticLoginP
 			return fmt.Errorf("--token-env variable %q is empty", flags.staticTokenEnvName)
 		}
 	}
-	cred := tokenCredential(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: token}})
+	cred := tokenCredential(&oidctypes.IDToken{Token: token})
 
 	// Look up cached credentials based on a hash of all the CLI arguments, the current token value, and the cluster info.
 	cacheKey := struct {

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -241,12 +241,12 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	}
 
 	pLogger.Debug("Performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
-	// Do the basic login to get an OIDC token.
+	// Do the basic login to get an OIDC token. Although this can return several tokens, we only need the ID token here.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
 		return fmt.Errorf("could not complete Pinniped login: %w", err)
 	}
-	cred := tokenCredential(token)
+	cred := tokenCredential(token.IDToken)
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
@@ -344,18 +344,18 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 	return phttp.Default(pool), nil
 }
 
-func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
+func tokenCredential(idToken *oidctypes.IDToken) *clientauthv1beta1.ExecCredential {
 	cred := clientauthv1beta1.ExecCredential{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExecCredential",
 			APIVersion: "client.authentication.k8s.io/v1beta1",
 		},
 		Status: &clientauthv1beta1.ExecCredentialStatus{
-			Token: token.IDToken.Token,
+			Token: idToken.Token,
 		},
 	}
-	if !token.IDToken.Expiry.IsZero() {
-		cred.Status.ExpirationTimestamp = &token.IDToken.Expiry
+	if !idToken.Expiry.IsZero() {
+		cred.Status.ExpirationTimestamp = &idToken.Expiry
 	}
 	return &cred
 }

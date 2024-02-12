@@ -209,9 +209,9 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	requeue := false
 	validatedUpstreams := make([]upstreamprovider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
-		valid, requestedRequeue := c.validateUpstream(ctx.Context, upstream)
-		if valid != nil {
-			validatedUpstreams = append(validatedUpstreams, valid)
+		validProvider, requestedRequeue := c.validateUpstream(ctx.Context, upstream)
+		if validProvider != nil {
+			validatedUpstreams = append(validatedUpstreams, validProvider)
 		}
 		if requestedRequeue {
 			requeue = true

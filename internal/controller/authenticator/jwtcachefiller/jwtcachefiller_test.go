@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +41,7 @@ import (
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/status"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -446,31 +446,9 @@ func TestController(t *testing.T) {
 	// }
 	// sadJWKSURLValidResponse := func() metav1.Condition {}
 
-	// TODO: extract to a helper since copied from FederationDomain
-	sortConditionsByType := func(c []metav1.Condition) []metav1.Condition {
-		cp := make([]metav1.Condition, len(c))
-		copy(cp, c)
-		sort.SliceStable(cp, func(i, j int) bool {
-			return cp[i].Type < cp[j].Type
-		})
-		return cp
-	}
-
-	replaceConditions := func(conditions []metav1.Condition, sadConditions []metav1.Condition) []metav1.Condition {
-		for _, sadReplaceCondition := range sadConditions {
-			for origIndex, origCondition := range conditions {
-				if origCondition.Type == sadReplaceCondition.Type {
-					conditions[origIndex] = sadReplaceCondition
-					break
-				}
-			}
-		}
-		return conditions
-	}
-
 	// condition collections
 	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []metav1.Condition {
-		return sortConditionsByType([]metav1.Condition{
+		return status.SortConditionsByType([]metav1.Condition{
 			happyAuthenticatorValid(time, observedGeneration),
 			happyDiscoveryURLValid(time, observedGeneration),
 			happyIssuerURLValid(issuer, time, observedGeneration),
@@ -732,7 +710,7 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -758,7 +736,7 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config that
 			// isn't incorrect due to mistyping or other issues
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -781,7 +759,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -803,7 +781,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -825,7 +803,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(someOtherLocalhostIssuer, frozenMetav1Now, 0),
@@ -853,7 +831,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(badIssuerInvalidJWKSURI, frozenMetav1Now, 0),
@@ -875,7 +853,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: replaceConditions(
+			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(badIssuerInvalidJWKSURIScheme, frozenMetav1Now, 0),

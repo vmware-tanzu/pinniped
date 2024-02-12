@@ -50,7 +50,6 @@ const (
 	typeIssuerURLValid        = "IssuerURLValid"
 	typeDiscoveryValid        = "DiscoveryURLValid"
 	typeJWKSURLValid          = "JWKSURLValid"
-	typeJWKSURLValidResponse  = "JWKSURLValidResponse"
 	typeAuthenticatorValid    = "AuthenticatorValid"
 
 	reasonSuccess                      = "Success"
@@ -60,7 +59,6 @@ const (
 	reasonInvalidIssuerURLScheme       = "InvalidIssuerURLScheme"
 	reasonInvalidProviderJWKSURL       = "InvalidProviderJWKSURL"
 	reasonInvalidProviderJWKSURLScheme = "InvalidProviderJWKSURLScheme"
-	reasonInvalidProviderJWKResponse   = "InvalidProviderJWKResponse"
 	reasonInvalidTLSConfiguration      = "InvalidTLSConfiguration"
 	reasonInvalidDiscoveryProbe        = "InvalidDiscoveryProbe"
 	reasonInvalidAuthenticator         = "InvalidAuthenticator"
@@ -199,10 +197,10 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	errs = append(errs, err)
 
 	// sync loop errors:
-	// - should not be configuration errors.  config errors a user must correct belong on the .Status
-	//   object.  The controller simply must wait for a user to correct before running again.
+	// - should not be configuration errors. config errors a user must correct belong on the .Status
+	//   object. The controller simply must wait for a user to correct before running again.
 	// - other errors, such as networking errors, etc. are the types of errors that should return here
-	//   and signal the controller to retry the sync loop.  These may be corrected by machines.
+	//   and signal the controller to retry the sync loop. These may be corrected by machines.
 	return errorsutil.NewAggregate(errs)
 }
 
@@ -244,8 +242,13 @@ func (c *jwtCacheFillerController) updateStatus(
 		})
 	}
 
-	_ = conditionsutil.MergeConfigConditions(conditions,
-		original.Generation, &updated.Status.Conditions, plog.New().WithName(controllerName), metav1.NewTime(c.clock.Now()))
+	_ = conditionsutil.MergeConfigConditions(
+		conditions,
+		original.Generation,
+		&updated.Status.Conditions,
+		plog.New().WithName(controllerName),
+		metav1.NewTime(c.clock.Now()),
+	)
 
 	if equality.Semantic.DeepEqual(original, updated) {
 		return nil

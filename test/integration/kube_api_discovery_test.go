@@ -437,11 +437,14 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 			}
 		}
 
+		// manually update this value whenever you add additional fields to an API resource and then run the generator
+		totalExpectedAPIFields := 260
+
 		// Because we are parsing text from `kubectl explain` and because the format of that text can change
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
 		// Pinniped API resources. Without this, the test could accidentally skip parts of the tree if the
 		// format has changed.
-		require.Equal(t, 259, foundFieldNames,
+		require.Equal(t, totalExpectedAPIFields, foundFieldNames,
 			"Expected to find all known fields of all Pinniped API resources. "+
 				"You may will need to update this expectation if you added new fields to the API types.",
 		)

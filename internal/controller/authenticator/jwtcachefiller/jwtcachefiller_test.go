@@ -179,8 +179,10 @@ func TestController(t *testing.T) {
 	someOtherLocalhostIssuerParsed, err := url.Parse(someOtherLocalhostIssuer)
 	require.NoError(t, err)
 
-	frozenNow := time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
-	frozenMetav1Now := metav1.NewTime(frozenNow)
+	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+	require.NoError(t, err)
+	frozenMetav1Now := metav1.NewTime(nowDoesntMatter)
+	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
 
 	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
@@ -434,36 +436,16 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	// happyJWKSURLValidResponse := func(time metav1.Time, observedGeneration int64) metav1.Condition {
-	// 	return metav1.Condition{
-	// 		Type:               "JWKSURLValidResponse",
-	// 		Status:             "True",
-	// 		ObservedGeneration: observedGeneration,
-	// 		LastTransitionTime: time,
-	// 		Reason:             "Success",
-	// 		Message:            "jwks_uri responds to requests",
-	// 	}
-	// }
-	// sadJWKSURLValidResponse := func() metav1.Condition {}
-
-	// condition collections
-	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []metav1.Condition {
+	allHappyConditionsSuccess := func(issuer string, someTime metav1.Time, observedGeneration int64) []metav1.Condition {
 		return status.SortConditionsByType([]metav1.Condition{
-			happyAuthenticatorValid(time, observedGeneration),
-			happyDiscoveryURLValid(time, observedGeneration),
-			happyIssuerURLValid(issuer, time, observedGeneration),
-			happyJWKSURLValid(issuer, time, observedGeneration),
-			// happyJWKSURLValidResponse(time, observedGeneration),
-			happyReadyCondition(time, observedGeneration),
-			happyTLSConfigurationValid(time, observedGeneration),
+			happyAuthenticatorValid(someTime, observedGeneration),
+			happyDiscoveryURLValid(someTime, observedGeneration),
+			happyIssuerURLValid(issuer, someTime, observedGeneration),
+			happyJWKSURLValid(issuer, someTime, observedGeneration),
+			happyReadyCondition(someTime, observedGeneration),
+			happyTLSConfigurationValid(someTime, observedGeneration),
 		})
 	}
-
-	// TODO(BEN): might need a full JWTAuthenticatorStatus with Phase, otherwise remove this.
-	// someJWTAuthenticatorStatus := auth1alpha1.JWTAuthenticatorStatus{
-	// 	Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-	// 	Phase:      auth1alpha1.JWTAuthenticatorPhaseReady,
-	// }
 
 	tests := []struct {
 		name  string
@@ -489,23 +471,18 @@ func TestController(t *testing.T) {
 		{
 			name:    "404: jwt authenticator not found will abort sync loop and not attempt to write status",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			// timestamp and caller will not be empty, but we aren't concerned with the values.  only testing the interesting bits.
 			wantLogs: []map[string]any{
 				{
 					"level":     "info",
-					"timestamp": frozenNow.String(),
+					"timestamp": "2099-08-08T13:57:36.123456Z",
 					"logger":    "jwtcachefiller-controller",
 					"message":   "Sync() found that the JWTAuthenticator does not exist yet or was deleted",
 				},
 			},
 		},
-		// {
-		// TODO:
-		// lines ~ 146
-		// should we test this? can we simulate a server error without rewriting the whole test?
-		// prob with a if(tt.serverErr) then controller := New( withBadClients ) or something....
-		// name: "non-404 `failed to get JWTAuthenticator` for other API server reasons",
-		// },
+		// Existing code that was never tested. We would likely have to create a server with bad clients to
+		// simulate this.
+		// { name: "non-404 `failed to get JWTAuthenticator` for other API server reasons" }
 		{
 			name:    "valid jwt authenticator with CA will complete sync loop successfully with success conditions and ready phase",
 			syncKey: controllerlib.Key{Name: "test-name"},
@@ -518,10 +495,11 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "added new jwt authenticator",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
@@ -543,10 +521,11 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "added new jwt authenticator",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
@@ -569,10 +548,11 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "added new jwt authenticator",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
@@ -606,10 +586,11 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "added new jwt authenticator",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
@@ -642,18 +623,15 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "actual jwt authenticator and desired jwt authenticator are the same",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "actual jwt authenticator and desired jwt authenticator are the same",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
 			}},
-			// We do not cache status, so no status or phase is expected on an updated jwt authenticator
-			// if the cached spec matches, the sync loop will exit before updating status
-			// wantStatusConditions:          nil
-			// wantStatusPhase:               "Ready",
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
 		},
@@ -680,14 +658,16 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{{
 				"level":      "info",
+				"timestamp":  "2099-08-08T13:57:36.123456Z",
 				"logger":     "jwtcachefiller-controller",
 				"message":    "wrong JWT authenticator type in cache",
 				"actualType": "struct { authenticator.Token }",
 			}, {
-				"level":   "info",
-				"logger":  "jwtcachefiller-controller",
-				"message": "added new jwt authenticator",
-				"issuer":  goodIssuer,
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
@@ -734,8 +714,6 @@ func TestController(t *testing.T) {
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
-			// no explicit logs, this is an issue of config, the user must provide TLS config that
-			// isn't incorrect due to mistyping or other issues
 			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
@@ -870,7 +848,6 @@ func TestController(t *testing.T) {
 		// good signing algos.  In the future if we allow any of these to be configured we may have opportunity
 		// to test for errors.
 		// {name: "newCachedJWTAuthenticator: could not initialize oidc authenticator..." },
-		// TODO: are happy, unknown, sad covered in all the above? or do we need more?
 	}
 
 	for _, tt := range tests {
@@ -893,7 +870,7 @@ func TestController(t *testing.T) {
 				cache,
 				pinnipedAPIClient,
 				pinnipedInformers.Authentication().V1alpha1().JWTAuthenticators(),
-				clocktesting.NewFakeClock(frozenNow),
+				frozenClock,
 				logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -920,19 +897,20 @@ func TestController(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				require.Equal(t, lineStruct["level"], tt.wantLogs[logLineNum]["level"], fmt.Sprintf("log line (%d) log level should be correct", logLineNum))
-				// require.Equal(t, lineStruct["timestamp"], tt.wantLogs[logLineNum]["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct", logLineNum))
+				require.Equal(t, tt.wantLogs[logLineNum]["level"], lineStruct["level"], fmt.Sprintf("log line (%d) log level should be correct (in: %s)", logLineNum, lineStruct))
+
+				require.Equal(t, tt.wantLogs[logLineNum]["timestamp"], lineStruct["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct (in: %s)", logLineNum, lineStruct))
 				require.Equal(t, lineStruct["logger"], tt.wantLogs[logLineNum]["logger"], fmt.Sprintf("log line (%d) logger should be correct", logLineNum))
 				require.NotEmpty(t, lineStruct["caller"], fmt.Sprintf("log line (%d) caller should not be empty", logLineNum))
-				require.Equal(t, lineStruct["message"], tt.wantLogs[logLineNum]["message"], fmt.Sprintf("log line (%d) message should be correct", logLineNum))
+				require.Equal(t, tt.wantLogs[logLineNum]["message"], lineStruct["message"], fmt.Sprintf("log line (%d) message should be correct", logLineNum))
 				if lineStruct["issuer"] != nil {
-					require.Equal(t, lineStruct["issuer"], tt.wantLogs[logLineNum]["issuer"], fmt.Sprintf("log line (%d) issuer should be correct", logLineNum))
+					require.Equal(t, tt.wantLogs[logLineNum]["issuer"], lineStruct["issuer"], fmt.Sprintf("log line (%d) issuer should be correct", logLineNum))
 				}
 				if lineStruct["jwtAuthenticator"] != nil {
-					require.Equal(t, lineStruct["jwtAuthenticator"], tt.wantLogs[logLineNum]["jwtAuthenticator"], fmt.Sprintf("log line (%d) jwtAuthenticator should be correct", logLineNum))
+					require.Equal(t, tt.wantLogs[logLineNum]["jwtAuthenticator"], lineStruct["jwtAuthenticator"], fmt.Sprintf("log line (%d) jwtAuthenticator should be correct", logLineNum))
 				}
 				if lineStruct["actualType"] != nil {
-					require.Equal(t, lineStruct["actualType"], tt.wantLogs[logLineNum]["actualType"], fmt.Sprintf("log line (%d) actualType should be correct", logLineNum))
+					require.Equal(t, tt.wantLogs[logLineNum]["actualType"], lineStruct["actualType"], fmt.Sprintf("log line (%d) actualType should be correct", logLineNum))
 				}
 			}
 

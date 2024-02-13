@@ -228,13 +228,17 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLIUpstreamOIDC.CABundle)),
 		}
 	}
-	return CreateTestJWTAuthenticator(ctx, t, spec)
+	return CreateTestJWTAuthenticator(ctx, t, spec, auth1alpha1.JWTAuthenticatorPhaseReady)
 }
 
 // CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator which will be automatically deleted
 // at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
 // authenticator within the test namespace.
-func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
+func CreateTestJWTAuthenticator(
+	ctx context.Context,
+	t *testing.T,
+	spec auth1alpha1.JWTAuthenticatorSpec,
+	expectedStatus auth1alpha1.JWTAuthenticatorPhase) corev1.TypedLocalObjectReference {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -259,11 +263,24 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s", jwtAuthenticator.Name)
 	})
 
+	WaitForJWTAuthenticatorStatusPhase(ctx, t, jwtAuthenticator.Name, expectedStatus)
+
 	return corev1.TypedLocalObjectReference{
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "JWTAuthenticator",
 		Name:     jwtAuthenticator.Name,
 	}
+}
+
+func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase auth1alpha1.JWTAuthenticatorPhase) {
+	t.Helper()
+	jwtAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().JWTAuthenticators()
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		jwtA, err := jwtAuthenticatorClientSet.Get(ctx, jwtAuthenticatorName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+		requireEventually.Equalf(expectPhase, jwtA.Status.Phase, "actual status conditions were: %#v", jwtA.Status.Conditions)
+	}, 60*time.Second, 1*time.Second, "expected the JWTAuthenticator to have status %q", expectPhase)
 }
 
 // CreateTestFederationDomain creates and returns a test FederationDomain in the

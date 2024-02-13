@@ -91,12 +91,13 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
+	// if the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   downstream.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
-	})
+	}, authv1alpha.JWTAuthenticatorPhaseError)
 
 	const (
 		yellowColor = "\u001b[33;1m"

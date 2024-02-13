@@ -111,12 +111,13 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
+	// if the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   federationDomain.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
-	})
+	}, authv1alpha.JWTAuthenticatorPhaseError)
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
@@ -161,6 +162,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -246,6 +248,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -333,6 +336,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -456,6 +460,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -586,6 +591,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -658,6 +664,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -733,6 +740,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -791,6 +799,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -853,6 +862,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -923,6 +933,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -981,6 +992,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1053,6 +1065,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1107,6 +1120,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1161,6 +1175,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1237,6 +1252,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Having one IDP should put the FederationDomain into a ready state.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		testlib.CreateTestClusterRoleBinding(t,
@@ -1270,6 +1286,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Update the FederationDomain to use the two IDPs.
 		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
@@ -1360,6 +1377,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// The FederationDomain should be valid after the above update.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1493,6 +1511,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		}, 20*time.Second, 250*time.Millisecond)
 		// The FederationDomain should be valid after the above update.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Log out so we can try fresh logins again.
 		require.NoError(t, os.Remove(credentialCachePath))

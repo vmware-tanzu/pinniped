@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package storage
@@ -107,10 +107,7 @@ func (k KubeStorage) DeletePKCERequestSession(ctx context.Context, signatureOfAu
 // Fosite will create these in the authorize endpoint when it creates an authcode, but only if the user
 // requested the openid scope.
 //
-// Fosite will never delete these, which is likely a bug in fosite. Although there is a delete method below, fosite
-// never calls it. Used during authcode redemption, they will never be accessed again after a successful authcode
-// redemption. Although that implies that they should probably follow a lifecycle similar the the PKCE storage, they
-// are, in fact, not deleted.
+// Used during authcode redemption, and will be deleted during a successful authcode redemption.
 //
 
 func (k KubeStorage) CreateOpenIDConnectSession(ctx context.Context, fullAuthcode string, requester fosite.Requester) error {
@@ -122,7 +119,7 @@ func (k KubeStorage) GetOpenIDConnectSession(ctx context.Context, fullAuthcode s
 }
 
 func (k KubeStorage) DeleteOpenIDConnectSession(ctx context.Context, fullAuthcode string) error {
-	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode) //nolint:staticcheck  // we know this is deprecated and never called.  our GC controller cleans these up.
+	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, fullAuthcode)
 }
 
 //

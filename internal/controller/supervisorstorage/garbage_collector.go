@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -227,8 +227,7 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 
 	case openidconnect.TypeLabelValue:
 		// For OIDC storage, there is no need to do anything for reasons similar to the PKCE storage.
-		// These are not deleted during downstream authcode exchange, probably due to a bug in fosite, even
-		// though it will never be read or updated again. However, the upstream token contained inside will
+		// These are deleted during downstream authcode exchange. The upstream token contained inside will
 		// be revoked by one of the other cases above.
 		return nil
 

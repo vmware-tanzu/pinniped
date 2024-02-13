@@ -277,9 +277,8 @@ The ID token returned at the end of the authorization code flow will contain the
 - `nonce`: a string value used to associate a Client session with an ID Token, and to mitigate replay attacks
 
 Refreshed ID tokens will contain the same claims, except that a refreshed ID token will also contain an `at_hash` claim,
-and will not contain a `nonce` claim. (The original ID token should also contain an `at_hash` claim, but it is excluded
-due to a bug in one of Pinniped's dependencies. The Pinniped maintainers have submitted a PR to that library to fix
-the bug and are waiting for the next release of that library to incorporate the fix into Pinniped.)
+and will not contain a `nonce` claim. The original ID token should also contain an `at_hash` claim, but it was excluded
+in older versions of Pinniped due to a bug in one of Pinniped's dependencies, which has since been fixed.
 
 Additionally, the following custom claims may be included in the ID tokens, if the client requested
 the `username` and/or `groups` scopes in the original authorization request, and if the client is allowed to request those scopes:

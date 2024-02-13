@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by FederationDomains to implement
@@ -6,11 +6,9 @@
 package oidc
 
 import (
-	"context"
 	"crypto/subtle"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/felixge/httpsnoop"
@@ -131,10 +129,6 @@ func FositeOauth2Helper(
 	jwksProvider jwks.DynamicJWKSProvider,
 	timeoutsConfiguration timeouts.Configuration,
 ) fosite.OAuth2Provider {
-	isRedirectURISecureStrict := func(_ context.Context, uri *url.URL) bool {
-		return fosite.IsRedirectURISecureStrict(uri)
-	}
-
 	oauthConfig := &fosite.Config{
 		IDTokenIssuer: issuer,
 
@@ -157,7 +151,7 @@ func FositeOauth2Helper(
 		MinParameterEntropy: fosite.MinParameterEntropy,
 
 		// do not allow custom scheme redirects, only https and http (on loopback)
-		RedirectSecureChecker: isRedirectURISecureStrict,
+		RedirectSecureChecker: fosite.IsRedirectURISecureStrict,
 
 		// html template for rendering the authorization response when the request has response_mode=form_post
 		FormPostHTMLTemplate: formposthtml.Template(),

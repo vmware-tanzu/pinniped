@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package endpointsmanager
@@ -211,8 +211,8 @@ func TestManager(t *testing.T) {
 			r.Equal("some-state", actualLocationQueryParams.Get("state"))
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
-			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+3,
-				"did not perform any kube actions during the callback request, but should have")
+			r.Equal(numberOfKubeActionsBeforeThisRequest+3, len(kubeClient.Actions()),
+				"did not perform expected number of kube actions during the callback request")
 
 			// Return the important parts of the response so we can use them in our next request to the token endpoint.
 			return actualLocationQueryParams.Get("code")
@@ -253,8 +253,8 @@ func TestManager(t *testing.T) {
 			oidctestutil.VerifyECDSAIDToken(t, jwkIssuer, downstreamClientID, privateKey, idToken)
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
-			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+9,
-				"did not perform any kube actions during the callback request, but should have")
+			r.Equal(numberOfKubeActionsBeforeThisRequest+10, len(kubeClient.Actions()),
+				"did not perform expected number of kube actions during the callback request")
 		}
 
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) *jose.JSONWebKeySet {

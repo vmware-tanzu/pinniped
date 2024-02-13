@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidctestutil
@@ -1302,13 +1302,28 @@ func validateAuthcodeStorage(
 	// Check which scopes were granted.
 	require.ElementsMatch(t, wantDownstreamGrantedScopes, storedRequestFromAuthcode.GetGrantedScopes())
 
+	// Don't care about the order of requested scopes, as long as they match the expected list.
+	storedRequestedScopes := storedRequestFromAuthcode.Form["scope"]
+	require.Len(t, storedRequestedScopes, 1)
+	require.NotEmpty(t, storedRequestedScopes[0])
+	storedRequestedScopesSlice := strings.Split(storedRequestedScopes[0], " ")
+	require.ElementsMatch(t, storedRequestedScopesSlice, wantDownstreamRequestedScopes)
+
 	// Check all the other fields of the stored request.
 	require.NotEmpty(t, storedRequestFromAuthcode.ID)
 	require.Equal(t, wantDownstreamClientID, storedRequestFromAuthcode.Client.GetID())
 	require.ElementsMatch(t, wantDownstreamRequestedScopes, storedRequestFromAuthcode.RequestedScope)
 	require.Nil(t, storedRequestFromAuthcode.RequestedAudience)
 	require.Empty(t, storedRequestFromAuthcode.GrantedAudience)
-	require.Equal(t, url.Values{"redirect_uri": []string{wantDownstreamRedirectURI}}, storedRequestFromAuthcode.Form)
+	require.Equal(t,
+		url.Values{
+			"client_id":     []string{wantDownstreamClientID},
+			"redirect_uri":  []string{wantDownstreamRedirectURI},
+			"response_type": []string{"code"},
+			"scope":         storedRequestedScopes, // already asserted about this actual value above
+		},
+		storedRequestFromAuthcode.Form,
+	)
 	testutil.RequireTimeInDelta(t, time.Now(), storedRequestFromAuthcode.RequestedAt, timeComparisonFudgeFactor)
 
 	// We're not using these fields yet, so confirm that we did not set them (for now).

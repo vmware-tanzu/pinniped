@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package token
@@ -944,23 +944,17 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
 			// This was previously invalidated by the first request, so it remains invalidated
 			requireInvalidPKCEStorage(t, authCode, oauthStore)
-			// Fosite never cleans up OpenID Connect session storage, so it is still there.
-			// Note that customSessionData is only relevant to refresh grant, so we leave it as nil for this
-			// authcode exchange test, even though in practice it would actually be in the session.
-			requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore,
-				test.authcodeExchange.want.wantClientID,
-				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes,
-				test.authcodeExchange.want.wantUsername, test.authcodeExchange.want.wantGroups,
-				nil, test.authcodeExchange.want.wantAdditionalClaims, approxRequestTime)
+			// OpenID Connect session storage is deleted during a successful authcode exchange.
+			requireDeletedOIDCStorage(t, authCode, oauthStore)
 
 			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 0)
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
 			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: pkce.TypeLabelValue}, 0)
 			// Assert the number of all secrets, excluding any OIDCClient's storage secret, since those are not related to session storage.
-			testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2)
+			testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 1)
 		})
 	}
 }
@@ -4425,11 +4419,9 @@ func TestRefreshGrant(t *testing.T) {
 			// Refreshed ID tokens do not include the nonce from the original auth request
 			wantNonceValueInIDToken := false
 
-			requireTokenEndpointBehavior(t,
+			requireTokenEndpointBehavior(
+				t,
 				test.refreshRequest.want,
-				test.authcodeExchange.want.wantUsername, // the old username from the initial login
-				test.authcodeExchange.want.wantGroups,   // the old groups from the initial login
-				test.authcodeExchange.customSessionData, // the old custom session data from the initial login
 				wantNonceValueInIDToken,
 				refreshResponse,
 				authCode,
@@ -4564,11 +4556,9 @@ func exchangeAuthcodeForTokens(
 
 	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)
 
-	requireTokenEndpointBehavior(t,
+	requireTokenEndpointBehavior(
+		t,
 		test.want,
-		test.want.wantUsername, // the old username from the initial login
-		test.want.wantGroups,   // the old groups from the initial login
-		test.customSessionData, // the old custom session data from the initial login
 		wantNonceValueInIDToken,
 		rsp,
 		authCode,
@@ -4584,9 +4574,6 @@ func exchangeAuthcodeForTokens(
 func requireTokenEndpointBehavior(
 	t *testing.T,
 	test tokenEndpointResponseExpectedValues,
-	oldUsername string,
-	oldGroups []string,
-	oldCustomSessionData *psession.CustomSessionData,
 	wantNonceValueInIDToken bool,
 	tokenEndpointResponse *httptest.ResponseRecorder,
 	authCode string,
@@ -4611,16 +4598,13 @@ func requireTokenEndpointBehavior(
 		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets, requestTime)
 		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
-		// Performing a refresh does not update the OIDC storage, so after a refresh it should still have the old custom session data and old username and groups from the initial login.
-		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, oldUsername, oldGroups, oldCustomSessionData, test.wantAdditionalClaims, requestTime)
+		requireDeletedOIDCStorage(t, authCode, oauthStore) // The OIDC storage was deleted during the authcode exchange.
 
 		expectedNumberOfRefreshTokenSessionsStored := 0
 		if wantRefreshToken {
 			expectedNumberOfRefreshTokenSessionsStored = 1
 		}
-		expectedNumberOfIDSessionsStored := 0
 		if wantIDToken {
-			expectedNumberOfIDSessionsStored = 1
 			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, parsedResponseBody["access_token"].(string), requestTime)
 		}
 		if wantRefreshToken {
@@ -4631,9 +4615,9 @@ func requireTokenEndpointBehavior(
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: pkce.TypeLabelValue}, 0)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, expectedNumberOfRefreshTokenSessionsStored)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, expectedNumberOfIDSessionsStored)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 0)
 		// Assert the number of all secrets, excluding any OIDCClient's storage secret, since those are not related to session storage.
-		testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2+expectedNumberOfRefreshTokenSessionsStored+expectedNumberOfIDSessionsStored)
+		testutil.RequireNumberOfSecretsExcludingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: oidcclientsecretstorage.TypeLabelValue}, 2+expectedNumberOfRefreshTokenSessionsStored)
 	} else {
 		require.NotNil(t, test.wantErrorResponseBody, "problem with test table setup: wanted failure but did not specify failure response body")
 
@@ -5001,52 +4985,11 @@ func requireInvalidPKCEStorage(
 	require.True(t, errors.Is(err, fosite.ErrNotFound))
 }
 
-func requireValidOIDCStorage(
-	t *testing.T,
-	body map[string]interface{},
-	code string,
-	storage openid.OpenIDConnectRequestStorage,
-	wantClientID string,
-	wantRequestedScopes []string,
-	wantGrantedScopes []string,
-	wantUsername string,
-	wantGroups []string,
-	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
-	requestTime time.Time,
-) {
+func requireDeletedOIDCStorage(t *testing.T, code string, storage openid.OpenIDConnectRequestStorage) {
 	t.Helper()
 
-	if slices.Contains(wantGrantedScopes, "openid") {
-		// Make sure the OIDC session is still there. Note that Fosite stores OIDC sessions using the full auth code as a key.
-		storedRequest, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
-		require.NoError(t, err)
-
-		// Fosite stores OIDC sessions with only the nonce in the original request form.
-		accessToken, ok := body["access_token"]
-		require.True(t, ok)
-		accessTokenString, ok := accessToken.(string)
-		require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
-		require.NotEmpty(t, accessTokenString)
-
-		requireValidStoredRequest(
-			t,
-			storedRequest,
-			storedRequest.Sanitize([]string{"nonce"}).GetRequestForm(),
-			wantClientID,
-			wantRequestedScopes,
-			wantGrantedScopes,
-			false,
-			wantUsername,
-			wantGroups,
-			wantCustomSessionData,
-			wantAdditionalClaims,
-			requestTime,
-		)
-	} else {
-		_, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
-		require.True(t, errors.Is(err, fosite.ErrNotFound))
-	}
+	_, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
+	require.True(t, errors.Is(err, fosite.ErrNotFound))
 }
 
 func requireValidStoredRequest(

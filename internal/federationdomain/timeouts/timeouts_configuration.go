@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package timeouts
@@ -51,8 +51,8 @@ type Configuration struct {
 	PKCESessionStorageLifetime time.Duration
 
 	// OIDCSessionStorageLifetime is the length of time after which the OIDC session data related to an authcode
-	// is allowed to be garbage collected from storage. Due to a bug in an underlying library, these are not explicitly
-	// deleted. Similar to the PKCE session, they are not needed anymore after the corresponding authcode has expired.
+	// is allowed to be garbage collected from storage. After the authcode is successfully redeemed, the OIDC session is
+	// explicitly deleted. Similar to the PKCE session, they are not needed anymore after the corresponding authcode has expired.
 	// Therefore, this can be just slightly longer than the AuthorizeCodeLifespan. We'll avoid making it exactly the same
 	// as AuthorizeCodeLifespan to avoid any chance of the garbage collector deleting it while it is being used.
 	OIDCSessionStorageLifetime time.Duration

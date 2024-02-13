@@ -231,9 +231,8 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 	return CreateTestJWTAuthenticator(ctx, t, spec)
 }
 
-// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator in
-// $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
-// test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
+// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator which will be automatically deleted
+// at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
 // authenticator within the test namespace.
 func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
 	t.Helper()

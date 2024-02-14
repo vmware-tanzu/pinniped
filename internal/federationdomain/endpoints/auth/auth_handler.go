@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	"golang.org/x/oauth2"
+	"k8s.io/utils/strings/slices"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
@@ -189,9 +191,9 @@ func (h *authorizeHandler) authorize(
 	downstreamsession.AutoApproveScopes(authorizeRequester)
 
 	if requestedBrowserlessFlow {
-		err = h.authorizeWithoutBrowser(w, r, oauthHelper, authorizeRequester, oidcUpstream, ldapUpstream)
+		err = h.authorizeWithoutBrowser(r, w, oauthHelper, authorizeRequester, oidcUpstream, ldapUpstream)
 	} else {
-		err = h.authorizeWithBrowser(w, r, oauthHelper, authorizeRequester, oidcUpstream, ldapUpstream)
+		err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, oidcUpstream, ldapUpstream)
 	}
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
@@ -199,8 +201,8 @@ func (h *authorizeHandler) authorize(
 }
 
 func (h *authorizeHandler) authorizeWithoutBrowser(
-	w http.ResponseWriter,
 	r *http.Request,
+	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
 	authorizeRequester fosite.AuthorizeRequester,
 	oidcUpstream *resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
@@ -215,11 +217,10 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 		return err
 	}
 
+	var identity *downstreamsession.Identity
 	switch {
 	case oidcUpstream != nil:
-		return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w,
-			oauthHelper,
-			authorizeRequester,
+		identity, err = handleAuthRequestForOIDCUpstreamPasswordGrant(r.Context(),
 			oidcUpstream.Provider,
 			oidcUpstream.Transforms,
 			oidcUpstream.DisplayName,
@@ -227,25 +228,36 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 			submittedPassword,
 		)
 	case ldapUpstream != nil:
-		return handleAuthRequestForLDAPUpstreamCLIFlow(r, w,
-			oauthHelper,
-			authorizeRequester,
+		identity, err = handleAuthRequestForLDAPUpstreamCLIFlow(r.Context(),
 			ldapUpstream.Provider,
-			ldapUpstream.SessionProviderType,
 			ldapUpstream.Transforms,
 			ldapUpstream.DisplayName,
 			submittedUsername,
 			submittedPassword,
+			ldapUpstream.SessionProviderType,
+			!slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups),
 		)
 	default:
 		// It should not actually be possible to reach this case.
 		return fosite.ErrServerError.WithHint("Huh? Unknown upstream IDP type.")
 	}
+
+	if err != nil {
+		return err
+	}
+
+	session := downstreamsession.MakeDownstreamSession(
+		identity, authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(),
+	)
+
+	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, session, true)
+
+	return nil
 }
 
 func (h *authorizeHandler) authorizeWithBrowser(
-	w http.ResponseWriter,
 	r *http.Request,
+	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
 	authorizeRequester fosite.AuthorizeRequester,
 	oidcUpstream *resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
@@ -295,41 +307,40 @@ func shouldShowIDPChooser(
 }
 
 func handleAuthRequestForLDAPUpstreamCLIFlow(
-	r *http.Request,
-	w http.ResponseWriter,
-	oauthHelper fosite.OAuth2Provider,
-	authorizeRequester fosite.AuthorizeRequester,
+	ctx context.Context,
 	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
-	idpType psession.ProviderType,
 	identityTransforms *idtransform.TransformationPipeline,
 	idpDisplayName string,
 	submittedUsername string,
 	submittedPassword string,
-) error {
-	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes())
+	idpType psession.ProviderType,
+	skipGroups bool,
+) (*downstreamsession.Identity, error) {
+	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(ctx, submittedUsername, submittedPassword, skipGroups)
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
-		return errUnexpectedUpstreamError.WithWrap(err)
+		return nil, errUnexpectedUpstreamError.WithWrap(err)
 	}
 	if !authenticated {
-		return fosite.ErrAccessDenied.WithHint("Username/password not accepted by LDAP provider.")
+		return nil, fosite.ErrAccessDenied.WithHint("Username/password not accepted by LDAP provider.")
 	}
 
 	subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse, idpDisplayName)
 	upstreamUsername := authenticateResponse.User.GetName()
 	upstreamGroups := authenticateResponse.User.GetGroups()
 
-	username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), identityTransforms, upstreamUsername, upstreamGroups)
+	username, groups, err := downstreamsession.ApplyIdentityTransformations(ctx, identityTransforms, upstreamUsername, upstreamGroups)
 	if err != nil {
-		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
 	customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(ldapUpstream, idpType, authenticateResponse, username, upstreamUsername, upstreamGroups)
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
-	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
 
-	return nil
+	return &downstreamsession.Identity{
+		SessionData: customSessionData,
+		Groups:      groups,
+		Subject:     subject,
+	}, nil
 }
 
 func handleAuthRequestForLDAPUpstreamBrowserFlow(
@@ -370,23 +381,20 @@ func handleAuthRequestForLDAPUpstreamBrowserFlow(
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
-	r *http.Request,
-	w http.ResponseWriter,
-	oauthHelper fosite.OAuth2Provider,
-	authorizeRequester fosite.AuthorizeRequester,
+	ctx context.Context,
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	identityTransforms *idtransform.TransformationPipeline,
 	idpDisplayName string,
 	submittedUsername string,
 	submittedPassword string,
-) error {
+) (*downstreamsession.Identity, error) {
 	if !oidcUpstream.AllowsPasswordGrant() {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return fosite.ErrAccessDenied.WithHint(
+		return nil, fosite.ErrAccessDenied.WithHint(
 			"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.")
 	}
 
-	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), submittedUsername, submittedPassword)
+	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(ctx, submittedUsername, submittedPassword)
 	if err != nil {
 		// Upstream password grant errors can be generic errors (e.g. a network failure) or can be oauth2.RetrieveError errors
 		// which represent the http response from the upstream server. These could be a 5XX or some other unexpected error,
@@ -395,7 +403,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
 		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
 		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
-		return fosite.ErrAccessDenied.WithDebug(err.Error()) // WithDebug hides the error from the client
+		return nil, fosite.ErrAccessDenied.WithDebug(err.Error()) // WithDebug hides the error from the client
 	}
 
 	subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(
@@ -403,27 +411,27 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
-	username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(), identityTransforms, upstreamUsername, upstreamGroups)
+	username, groups, err := downstreamsession.ApplyIdentityTransformations(ctx, identityTransforms, upstreamUsername, upstreamGroups)
 	if err != nil {
-		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
 	additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 
 	customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(oidcUpstream, token, username, upstreamUsername, upstreamGroups)
 	if err != nil {
-		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-		authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, additionalClaims)
-
-	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, true)
-
-	return nil
+	return &downstreamsession.Identity{
+		SessionData:      customSessionData,
+		Groups:           groups,
+		Subject:          subject,
+		AdditionalClaims: additionalClaims,
+	}, nil
 }
 
 func handleAuthRequestForOIDCUpstreamBrowserFlow(
@@ -615,7 +623,7 @@ func handleBrowserFlowAuthRequest(
 		return nil, fosite.ErrServerError.WithHint("Error encoding upstream state param.").WithWrap(err)
 	}
 
-	promptParam := r.Form.Get(promptParamName)
+	promptParam := authorizeRequester.GetRequestForm().Get(promptParamName)
 	if promptParam == promptParamNone && oidc.ScopeWasRequested(authorizeRequester, oidcapi.ScopeOpenID) {
 		return nil, fosite.ErrLoginRequired
 	}

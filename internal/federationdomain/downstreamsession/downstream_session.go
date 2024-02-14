@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package downstreamsession provides some shared helpers for creating downstream OIDC sessions.
@@ -45,41 +45,46 @@ const (
 	idpNameSubjectQueryParam = "idpName"
 )
 
+type Identity struct {
+	// Note that the username is stored in SessionData.Username.
+	SessionData      *psession.CustomSessionData
+	Groups           []string
+	Subject          string
+	AdditionalClaims map[string]interface{}
+}
+
 // MakeDownstreamSession creates a downstream OIDC session.
 func MakeDownstreamSession(
-	subject string,
-	username string,
-	groups []string,
+	identity *Identity,
 	grantedScopes []string,
 	clientID string,
-	custom *psession.CustomSessionData,
-	additionalClaims map[string]interface{},
 ) *psession.PinnipedSession {
 	now := time.Now().UTC()
 	openIDSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
-				Subject:     subject,
+				Subject:     identity.Subject,
 				RequestedAt: now,
 				AuthTime:    now,
 			},
 		},
-		Custom: custom,
-	}
-	if groups == nil {
-		groups = []string{}
+		Custom: identity.SessionData,
 	}
 
 	extras := map[string]interface{}{}
 	extras[oidcapi.IDTokenClaimAuthorizedParty] = clientID
 	if slices.Contains(grantedScopes, oidcapi.ScopeUsername) {
-		extras[oidcapi.IDTokenClaimUsername] = username
+		extras[oidcapi.IDTokenClaimUsername] = identity.SessionData.Username
 	}
 	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
+		groups := identity.Groups
+		if groups == nil {
+			groups = []string{}
+		}
 		extras[oidcapi.IDTokenClaimGroups] = groups
 	}
-	if len(additionalClaims) > 0 {
-		extras[oidcapi.IDTokenClaimAdditionalClaims] = additionalClaims
+	if len(identity.AdditionalClaims) > 0 {
+		extras[oidcapi.IDTokenClaimAdditionalClaims] = identity.AdditionalClaims
 	}
 	openIDSession.IDTokenClaims().Extra = extras
 

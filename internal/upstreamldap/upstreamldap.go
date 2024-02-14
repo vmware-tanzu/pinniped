@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package upstreamldap implements an abstraction of upstream LDAP IDP interactions.
@@ -20,10 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/utils/strings/slices"
 	"k8s.io/utils/trace"
 
-	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
@@ -248,11 +246,12 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes u
 		}
 	}
 
+	// If we were configured to always skip group refresh for all users and all sessions, then skip it.
 	if p.c.GroupSearch.SkipGroupRefresh {
 		return storedRefreshAttributes.Groups, nil
 	}
-	// if we were not granted the groups scope, we should not search for groups or return any.
-	if !slices.Contains(storedRefreshAttributes.GrantedScopes, oidcapi.ScopeGroups) {
+	// If we were asked to skip group search for this particular session, then do not search for groups or return any.
+	if storedRefreshAttributes.SkipGroups {
 		return nil, nil
 	}
 
@@ -423,23 +422,23 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 // authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
-func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string, grantedScopes []string) (*authenticators.Response, bool, error) {
+func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string, skipGroups bool) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
 	}
-	return p.authenticateUserImpl(ctx, username, grantedScopes, endUserBindFunc)
+	return p.authenticateUserImpl(ctx, username, skipGroups, endUserBindFunc)
 }
 
 // AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
-func (p *Provider) AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*authenticators.Response, bool, error) {
+func (p *Provider) AuthenticateUser(ctx context.Context, username, password string, skipGroups bool) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
 	}
-	return p.authenticateUserImpl(ctx, username, grantedScopes, endUserBindFunc)
+	return p.authenticateUserImpl(ctx, username, skipGroups, endUserBindFunc)
 }
 
-func (p *Provider) authenticateUserImpl(ctx context.Context, username string, grantedScopes []string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, skipGroups bool, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
@@ -468,7 +467,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, gr
 		return nil, false, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
 
-	response, err := p.searchAndBindUser(conn, username, grantedScopes, bindFunc)
+	response, err := p.searchAndBindUser(conn, username, skipGroups, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
@@ -565,7 +564,7 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	return searchBase, nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, grantedScopes []string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, skipGroups bool, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,
@@ -612,7 +611,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, grantedScopes [
 	}
 
 	var mappedGroupNames []string
-	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
+	if !skipGroups {
 		var groupSearchUserAttributeForFilterValue string
 		if p.useGroupSearchUserAttributeForFilter() {
 			groupSearchUserAttributeForFilterValue, err = p.getSearchResultAttributeValue(p.c.GroupSearch.UserAttributeForFilter, userEntry, username)

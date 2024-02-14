@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamprovider
@@ -25,14 +25,17 @@ const (
 )
 
 // RefreshAttributes contains information about the user from the original login request
-// and previous refreshes.
+// and previous refreshes to be used during an LDAP session refresh.
 type RefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
 	Groups               []string
 	AdditionalAttributes map[string]string
-	GrantedScopes        []string
+	// Skip group search for this particular session refresh.
+	// E.g. This could be set to true when the user was not granted the downstream groups scope.
+	// There is no reason to spend the cost of an LDAP group search unless we are going to use the results.
+	SkipGroups bool
 }
 
 type UpstreamOIDCIdentityProviderI interface {

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package token provides a handler for the OIDC token endpoint.
@@ -111,14 +111,15 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 
-	grantedScopes := accessRequest.GetGrantedScopes()
+	groupsScopeNotGranted := !slices.Contains(accessRequest.GetGrantedScopes(), oidcapi.ScopeGroups)
+
 	clientID := accessRequest.GetClient().GetID()
 
 	switch customSessionData.ProviderType {
 	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, idpLister, session, grantedScopes, clientID)
+		return upstreamOIDCRefresh(ctx, idpLister, session, groupsScopeNotGranted, clientID)
 	case psession.ProviderTypeLDAP, psession.ProviderTypeActiveDirectory:
-		return upstreamLDAPRefresh(ctx, idpLister, session, grantedScopes, clientID)
+		return upstreamLDAPRefresh(ctx, idpLister, session, groupsScopeNotGranted, clientID)
 	default:
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
@@ -129,11 +130,10 @@ func upstreamOIDCRefresh(
 	ctx context.Context,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	session *psession.PinnipedSession,
-	grantedScopes []string,
+	skipGroups bool,
 	clientID string,
 ) error {
 	s := session.Custom
-	groupsScopeGranted := slices.Contains(grantedScopes, oidcapi.ScopeGroups)
 
 	if s.OIDC == nil {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -194,7 +194,7 @@ func upstreamOIDCRefresh(
 	}
 
 	var refreshedUntransformedGroups []string
-	if groupsScopeGranted {
+	if !skipGroups {
 		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
 		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
 		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
@@ -236,7 +236,7 @@ func upstreamOIDCRefresh(
 		return err
 	}
 	var oldTransformedGroups []string
-	if groupsScopeGranted {
+	if !skipGroups {
 		oldTransformedGroups, err = getDownstreamGroupsFromPinnipedSession(session)
 		if err != nil {
 			return err
@@ -255,7 +255,7 @@ func upstreamOIDCRefresh(
 		return err
 	}
 
-	if groupsScopeGranted {
+	if !skipGroups {
 		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
 		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups
@@ -343,18 +343,17 @@ func upstreamLDAPRefresh(
 	ctx context.Context,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	session *psession.PinnipedSession,
-	grantedScopes []string,
+	skipGroups bool,
 	clientID string,
 ) error {
 	s := session.Custom
-	groupsScopeGranted := slices.Contains(grantedScopes, oidcapi.ScopeGroups)
 
 	oldTransformedUsername, err := getDownstreamUsernameFromPinnipedSession(session)
 	if err != nil {
 		return err
 	}
 	var oldTransformedGroups []string
-	if groupsScopeGranted {
+	if !skipGroups {
 		oldTransformedGroups, err = getDownstreamGroupsFromPinnipedSession(session)
 		if err != nil {
 			return err
@@ -393,7 +392,7 @@ func upstreamLDAPRefresh(
 		DN:                   dn,
 		Groups:               oldUntransformedGroups,
 		AdditionalAttributes: additionalAttributes,
-		GrantedScopes:        grantedScopes,
+		SkipGroups:           skipGroups,
 	}, p.DisplayName)
 	if err != nil {
 		return errUpstreamRefreshError().WithHint(
@@ -413,7 +412,7 @@ func upstreamLDAPRefresh(
 		return err
 	}
 
-	if groupsScopeGranted {
+	if !skipGroups {
 		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
 		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups

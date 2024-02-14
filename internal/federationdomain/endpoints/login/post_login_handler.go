@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -8,7 +8,9 @@ import (
 	"net/url"
 
 	"github.com/ory/fosite"
+	"k8s.io/utils/strings/slices"
 
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -63,8 +65,10 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 		}
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(
-			r.Context(), submittedUsername, submittedPassword, authorizeRequester.GetGrantedScopes(),
+		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(r.Context(),
+			submittedUsername,
+			submittedPassword,
+			!slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups),
 		)
 		if err != nil {
 			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.Provider.GetName())
@@ -100,9 +104,18 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 
 		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(
 			ldapUpstream.Provider, ldapUpstream.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, map[string]interface{}{})
-		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, openIDSession, false)
+
+		session := downstreamsession.MakeDownstreamSession(
+			&downstreamsession.Identity{
+				SessionData: customSessionData,
+				Groups:      groups,
+				Subject:     subject,
+			},
+			authorizeRequester.GetGrantedScopes(),
+			authorizeRequester.GetClient().GetID(),
+		)
+
+		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, session, false)
 
 		return nil
 	}

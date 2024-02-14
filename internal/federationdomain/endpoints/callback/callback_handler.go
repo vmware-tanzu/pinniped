@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package callback provides a handler for the OIDC callback endpoint.
@@ -93,10 +93,18 @@ func NewHandler(
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, additionalClaims)
+		session := downstreamsession.MakeDownstreamSession(
+			&downstreamsession.Identity{
+				SessionData:      customSessionData,
+				Groups:           groups,
+				Subject:          subject,
+				AdditionalClaims: additionalClaims,
+			},
+			authorizeRequester.GetGrantedScopes(),
+			authorizeRequester.GetClient().GetID(),
+		)
 
-		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, session)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err,
 				"upstreamName", upstreamIDPConfig.GetName(), "fositeErr", oidc.FositeErrorForLog(err))

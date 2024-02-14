@@ -291,14 +291,14 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	happyIssuerURLValid := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+	happyIssuerURLValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "IssuerURLValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            fmt.Sprintf("spec.issuer (%s) is a valid URL", issuer),
+			Message:            "issuer is a valid URL",
 		}
 	}
 	sadIssuerURLValidInvalid := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -393,16 +393,14 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	happyJWKSURLValid := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
-		parsed, err := url.Parse(issuer)
-		require.NoError(t, err)
+	happyJWKSURLValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "JWKSURLValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            fmt.Sprintf("jwks_uri (https://%s/jwks.json) is a valid URL", parsed.Host),
+			Message:            "jwks_uri is a valid URL",
 		}
 	}
 	unknownJWKSURLValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -440,8 +438,8 @@ func TestController(t *testing.T) {
 		return status.SortConditionsByType([]metav1.Condition{
 			happyAuthenticatorValid(someTime, observedGeneration),
 			happyDiscoveryURLValid(someTime, observedGeneration),
-			happyIssuerURLValid(issuer, someTime, observedGeneration),
-			happyJWKSURLValid(issuer, someTime, observedGeneration),
+			happyIssuerURLValid(someTime, observedGeneration),
+			happyJWKSURLValid(someTime, observedGeneration),
 			happyReadyCondition(someTime, observedGeneration),
 			happyTLSConfigurationValid(someTime, observedGeneration),
 		})
@@ -784,7 +782,7 @@ func TestController(t *testing.T) {
 			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
-					happyIssuerURLValid(someOtherLocalhostIssuer, frozenMetav1Now, 0),
+					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
 					sadDiscoveryURLValidConnectionRefused(someOtherLocalhostIssuer, frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
@@ -812,7 +810,7 @@ func TestController(t *testing.T) {
 			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
-					happyIssuerURLValid(badIssuerInvalidJWKSURI, frozenMetav1Now, 0),
+					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
@@ -834,7 +832,7 @@ func TestController(t *testing.T) {
 			wantStatusConditions: status.ReplaceConditions(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
-					happyIssuerURLValid(badIssuerInvalidJWKSURIScheme, frozenMetav1Now, 0),
+					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					sadJWKSURLValidScheme("http://.café.com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),

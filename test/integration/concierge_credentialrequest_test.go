@@ -67,8 +67,15 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 			},
 		},
 		{
-			name:          "jwt authenticator",
-			authenticator: testlib.CreateTestJWTAuthenticatorForCLIUpstream,
+			name: "jwt authenticator",
+			authenticator: func(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+				authenticator := testlib.CreateTestJWTAuthenticatorForCLIUpstream(ctx, t)
+				return corev1.TypedLocalObjectReference{
+					APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+					Kind:     "JWTAuthenticator",
+					Name:     authenticator.Name,
+				}
+			},
 			token: func(t *testing.T) (string, string, []string) {
 				pinnipedExe := testlib.PinnipedCLIPath(t)
 				credOutput, _ := runPinnipedLoginOIDC(ctx, t, pinnipedExe)

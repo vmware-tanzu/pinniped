@@ -417,12 +417,11 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 		return pJSON.JWKSURL, conditions, fmt.Errorf("%s", msg)
 	}
 
-	msg := fmt.Sprintf("jwks_uri (%s) is a valid URL", parsedJWKSURL)
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeJWKSURLValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
-		Message: msg,
+		Message: "jwks_uri is a valid URL",
 	})
 	return pJSON.JWKSURL, conditions, nil
 }
@@ -474,12 +473,11 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 		return nil, conditions, false
 	}
 
-	msg := fmt.Sprintf("spec.issuer (%s) is a valid URL", issuer)
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeIssuerURLValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
-		Message: msg,
+		Message: "issuer is a valid URL",
 	})
 	return issuerURL, conditions, true
 }

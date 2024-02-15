@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package chooseidp
@@ -16,6 +16,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 )
 
 func TestChooseIDPHandler(t *testing.T) {
@@ -44,7 +45,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "happy path",
 			method:    http.MethodGet,
 			reqTarget: "/some/path" + oidc.ChooseIDPEndpointPath + "?" + testReqQuery.Encode(),
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("oidc2").Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("ldap1").Build()).
 				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-ad1").Build()).
@@ -68,7 +69,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "happy path when there are special characters in the IDP name",
 			method:    http.MethodGet,
 			reqTarget: "/some/path" + oidc.ChooseIDPEndpointPath + "?" + testReqQuery.Encode(),
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName(`This is Ryan's IDP 👍\~!@#$%^&*()-+[]{}\|;'"<>,.?`).Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName(`This is Josh's IDP 🦭`).Build()).
 				BuildFederationDomainIdentityProvidersListerFinder(),
@@ -90,7 +91,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "no valid IDPs are configured on the FederationDomain",
 			method:    http.MethodGet,
 			reqTarget: "/some/path" + oidc.ChooseIDPEndpointPath + "?" + testReqQuery.Encode(),
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				BuildFederationDomainIdentityProvidersListerFinder(),
 			wantStatus:      http.StatusInternalServerError,
 			wantContentType: "text/plain; charset=utf-8",
@@ -100,7 +101,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "no query params on the request",
 			method:    http.MethodGet,
 			reqTarget: "/some/path" + oidc.ChooseIDPEndpointPath,
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-idp").Build()).
 				BuildFederationDomainIdentityProvidersListerFinder(),
 			wantStatus:      http.StatusBadRequest,
@@ -111,7 +112,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "missing required query param(s) on the request",
 			method:    http.MethodGet,
 			reqTarget: "/some/path" + oidc.ChooseIDPEndpointPath + "?client_id=foo",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-idp").Build()).
 				BuildFederationDomainIdentityProvidersListerFinder(),
 			wantStatus:      http.StatusBadRequest,
@@ -122,7 +123,7 @@ func TestChooseIDPHandler(t *testing.T) {
 			name:      "bad request method",
 			method:    http.MethodPost,
 			reqTarget: oidc.ChooseIDPEndpointPath,
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-idp").Build()).
 				BuildFederationDomainIdentityProvidersListerFinder(),
 			wantStatus:      http.StatusMethodNotAllowed,

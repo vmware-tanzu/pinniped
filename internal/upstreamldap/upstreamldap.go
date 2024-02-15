@@ -25,7 +25,7 @@ import (
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
-	"go.pinniped.dev/internal/federationdomain/downstreamsession"
+	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 )
@@ -235,7 +235,7 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes u
 	if err != nil {
 		return nil, err
 	}
-	newSubject := downstreamsession.DownstreamLDAPSubject(newUID, *p.GetURL(), idpDisplayName)
+	newSubject := downstreamsubject.LDAP(newUID, *p.GetURL(), idpDisplayName)
 	if newSubject != storedRefreshAttributes.Subject {
 		return nil, fmt.Errorf(`searching for user %q produced a different subject than the previous value. expected: %q, actual: %q`, userDN, storedRefreshAttributes.Subject, newSubject)
 	}

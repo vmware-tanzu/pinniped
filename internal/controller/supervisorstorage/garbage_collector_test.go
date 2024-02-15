@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -34,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 )
 
 func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
@@ -359,7 +360,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -483,7 +484,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -560,7 +561,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -631,7 +632,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -702,7 +703,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -775,7 +776,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithResourceUID("upstream-oidc-provider-uid").
 					// make the upstream revocation fail in a retryable way
 					WithRevokeTokenError(dynamicupstreamprovider.NewRetryableRevocationError(errors.New("some retryable upstream revocation error")))
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -800,7 +801,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithResourceUID("upstream-oidc-provider-uid").
 					// make the upstream revocation fail in a non-retryable way
 					WithRevokeTokenError(errors.New("some upstream revocation error not worth retrying"))
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -879,7 +880,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(errors.New("some upstream revocation error")) // the upstream revocation will fail
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1002,7 +1003,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1126,7 +1127,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1204,7 +1205,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1281,7 +1282,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					WithName("upstream-oidc-provider-name").
 					WithResourceUID("upstream-oidc-provider-uid").
 					WithRevokeTokenError(nil)
-				idpListerBuilder := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
+				idpListerBuilder := testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream.Build())
 
 				startInformersAndController(idpListerBuilder.BuildDynamicUpstreamIDPProvider())
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))

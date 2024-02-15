@@ -4,6 +4,7 @@
 package login
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -12,8 +13,10 @@ import (
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
+	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/plog"
 )
@@ -21,7 +24,7 @@ import (
 func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
-		_, ldapUpstream, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
+		ldapUpstream, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil {
 			// This shouldn't normally happen because the authorization endpoint ensured that this provider existed
 			// at that time. It would be possible in the unlikely event that the provider was deleted during the login.
@@ -54,63 +57,39 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
 		// Get the username and password form params from the POST body.
-		submittedUsername := r.PostFormValue(usernameParamName)
-		submittedPassword := r.PostFormValue(passwordParamName)
+		submittedUsername := r.PostFormValue(loginurl.UsernameParamName)
+		submittedPassword := r.PostFormValue(loginurl.PasswordParamName)
 
 		// Treat blank username or password as a bad username/password combination, as opposed to an internal error.
 		if submittedUsername == "" || submittedPassword == "" {
 			// User forgot to enter one of the required fields.
 			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
-			return RedirectToLoginPage(r, w, issuerURL, encodedState, ShowBadUserPassErr)
+			return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
 		}
+
+		skipGroups := !slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups)
 
 		// Attempt to authenticate the user with the upstream IDP.
-		authenticateResponse, authenticated, err := ldapUpstream.Provider.AuthenticateUser(r.Context(),
-			submittedUsername,
-			submittedPassword,
-			!slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups),
-		)
+		identity, err := ldapUpstream.Login(r.Context(), submittedUsername, submittedPassword, skipGroups)
 		if err != nil {
-			plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.Provider.GetName())
-			// There was some problem during authentication with the upstream, aside from bad username/password.
-			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
-			return RedirectToLoginPage(r, w, issuerURL, encodedState, ShowInternalError)
+			switch {
+			case errors.Is(err, resolvedldap.ErrUnexpectedUpstreamLDAPError):
+				// There was some problem during authentication with the upstream, aside from bad username/password.
+				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
+				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowInternalError)
+			case err == resolvedldap.ErrAccessDeniedDueToUsernamePasswordNotAccepted:
+				// The upstream did not accept the username/password combination.
+				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
+				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
+			default:
+				// Some other error happened, e.g. a configured identity transformation failed.
+				oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, false)
+				return nil
+			}
 		}
-		if !authenticated {
-			// The upstream did not accept the username/password combination.
-			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
-			return RedirectToLoginPage(r, w, issuerURL, encodedState, ShowBadUserPassErr)
-		}
-
-		// We had previously interrupted the regular steps of the OIDC authcode flow to show the login page UI.
-		// Now the upstream IDP has authenticated the user, so now we're back into the regular OIDC authcode flow steps.
-		// Both success and error responses from this point onwards should look like the usual fosite redirect
-		// responses, and a happy redirect response will include a downstream authcode.
-		subject := downstreamsession.DownstreamSubjectFromUpstreamLDAP(
-			ldapUpstream.Provider, authenticateResponse, ldapUpstream.DisplayName,
-		)
-		upstreamUsername := authenticateResponse.User.GetName()
-		upstreamGroups := authenticateResponse.User.GetGroups()
-
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(
-			r.Context(), ldapUpstream.Transforms, upstreamUsername, upstreamGroups,
-		)
-		if err != nil {
-			oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester,
-				fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error()), false,
-			)
-			return nil
-		}
-
-		customSessionData := downstreamsession.MakeDownstreamLDAPOrADCustomSessionData(
-			ldapUpstream.Provider, ldapUpstream.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
 
 		session := downstreamsession.MakeDownstreamSession(
-			&downstreamsession.Identity{
-				SessionData: customSessionData,
-				Groups:      groups,
-				Subject:     subject,
-			},
+			identity,
 			authorizeRequester.GetGrantedScopes(),
 			authorizeRequester.GetClient().GetID(),
 		)
@@ -119,4 +98,25 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 
 		return nil
 	}
+}
+
+// redirectToLoginPage redirects to the GET /login page of the specified issuer.
+func redirectToLoginPage(
+	r *http.Request,
+	w http.ResponseWriter,
+	downstreamIssuer string,
+	encodedStateParamValue string,
+	errToDisplay loginurl.ErrorParamValue,
+) error {
+	loginURL, err := loginurl.URL(downstreamIssuer, encodedStateParamValue, errToDisplay)
+	if err != nil {
+		return err
+	}
+
+	http.Redirect(w, r,
+		loginURL,
+		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
+	)
+
+	return nil
 }

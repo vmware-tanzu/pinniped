@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
+	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 )
 
@@ -31,10 +32,10 @@ func NewGetHandler(loginPath string) HandlerFunc {
 }
 
 func getAlert(r *http.Request) (string, bool) {
-	errorParamValue := r.URL.Query().Get(errParamName)
+	errorParamValue := r.URL.Query().Get(loginurl.ErrParamName)
 
 	message := internalErrorMessage
-	if errorParamValue == string(ShowBadUserPassErr) {
+	if errorParamValue == string(loginurl.ShowBadUserPassErr) {
 		message = incorrectUsernameOrPasswordErrorMessage
 	}
 

@@ -18,10 +18,10 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
-	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
-	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/idtransform"
@@ -202,7 +202,7 @@ func upstreamOIDCRefresh(
 		// If the claim is found, then use it to update the user's group membership in the session.
 		// If the claim is not found, then we have no new information about groups, so skip updating the group membership
 		// and let any old groups memberships in the session remain.
-		refreshedUntransformedGroups, err = downstreamsession.GetGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
+		refreshedUntransformedGroups, err = resolvedoidc.GetGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
 		if err != nil {
 			return errUpstreamRefreshError().WithHintf(
 				"Upstream refresh error while extracting groups claim.").WithTrace(err).
@@ -324,14 +324,15 @@ func getString(m map[string]interface{}, key string) (string, bool) {
 func findOIDCProviderByNameAndValidateUID(
 	s *psession.CustomSessionData,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-) (*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider, error) {
-	for _, p := range idpLister.GetOIDCIdentityProviders() {
-		if p.Provider.GetName() == s.ProviderName {
-			if p.Provider.GetResourceUID() != s.ProviderUID {
+) (*resolvedoidc.FederationDomainResolvedOIDCIdentityProvider, error) {
+	for _, p := range idpLister.GetIdentityProviders() {
+		if p.GetSessionProviderType() == psession.ProviderTypeOIDC && p.GetProvider().GetName() == s.ProviderName {
+			if p.GetProvider().GetResourceUID() != s.ProviderUID {
 				return nil, errorsx.WithStack(errUpstreamRefreshError().WithHint(
 					"Provider from upstream session data has changed its resource UID since authentication."))
 			}
-			return p, nil
+			// TODO: make a new interface method for refreshing rather than downcasting here
+			return p.(*resolvedoidc.FederationDomainResolvedOIDCIdentityProvider), nil
 		}
 	}
 	return nil, errorsx.WithStack(errUpstreamRefreshError().
@@ -457,25 +458,23 @@ func transformRefreshedIdentity(
 func findLDAPProviderByNameAndValidateUID(
 	s *psession.CustomSessionData,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-) (*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider, string, error) {
-	var providers []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
+) (*resolvedldap.FederationDomainResolvedLDAPIdentityProvider, string, error) {
 	var dn string
 	if s.ProviderType == psession.ProviderTypeLDAP {
-		providers = idpLister.GetLDAPIdentityProviders()
 		dn = s.LDAP.UserDN
 	} else if s.ProviderType == psession.ProviderTypeActiveDirectory {
-		providers = idpLister.GetActiveDirectoryIdentityProviders()
 		dn = s.ActiveDirectory.UserDN
 	}
 
-	for _, p := range providers {
-		if p.Provider.GetName() == s.ProviderName {
-			if p.Provider.GetResourceUID() != s.ProviderUID {
+	for _, p := range idpLister.GetIdentityProviders() {
+		if p.GetSessionProviderType() == s.ProviderType && p.GetProvider().GetName() == s.ProviderName {
+			if p.GetProvider().GetResourceUID() != s.ProviderUID {
 				return nil, "", errorsx.WithStack(errUpstreamRefreshError().WithHint(
 					"Provider from upstream session data has changed its resource UID since authentication.").
 					WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
 			}
-			return p, dn, nil
+			// TODO: make a new interface method for refreshing rather than downcasting here
+			return p.(*resolvedldap.FederationDomainResolvedLDAPIdentityProvider), dn, nil
 		}
 	}
 

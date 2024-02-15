@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package idpdiscovery
@@ -13,6 +13,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 )
 
 func TestIDPDiscovery(t *testing.T) {
@@ -38,8 +39,8 @@ func TestIDPDiscovery(t *testing.T) {
 				"pinniped_identity_providers": [
 					{"name": "a-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "a-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
-					{"name": "x-some-idp",      "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
-					{"name": "x-some-idp",      "type": "oidc",            "flows": ["browser_authcode"]},
+					{"name": "x-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
+					{"name": "x-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
 					{"name": "y-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
 					{"name": "z-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
 					{"name": "z-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
@@ -69,13 +70,13 @@ func TestIDPDiscovery(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().
+			idpLister := testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("z-some-oidc-idp").WithAllowPasswordGrant(true).Build()).
-				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-idp").Build()).
+				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("x-some-oidc-idp").Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("a-some-ldap-idp").Build()).
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("a-some-oidc-idp").Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ldap-idp").Build()).
-				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("x-some-idp").Build()).
+				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("x-some-ldap-idp").Build()).
 				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ad-idp").Build()).
 				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("y-some-ad-idp").Build()).
 				BuildFederationDomainIdentityProvidersListerFinder()

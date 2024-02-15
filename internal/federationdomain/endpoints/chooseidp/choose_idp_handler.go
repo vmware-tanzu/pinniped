@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package chooseidp
@@ -43,14 +43,8 @@ func NewHandler(authURL string, upstreamIDPs federationdomainproviders.Federatio
 		}
 
 		var idps []chooseidphtml.IdentityProvider
-		for _, p := range upstreamIDPs.GetOIDCIdentityProviders() {
-			idps = append(idps, newIDPForPageData(p.DisplayName))
-		}
-		for _, p := range upstreamIDPs.GetLDAPIdentityProviders() {
-			idps = append(idps, newIDPForPageData(p.DisplayName))
-		}
-		for _, p := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
-			idps = append(idps, newIDPForPageData(p.DisplayName))
+		for _, p := range upstreamIDPs.GetIdentityProviders() {
+			idps = append(idps, newIDPForPageData(p.GetDisplayName()))
 		}
 
 		sort.SliceStable(idps, func(i, j int) bool {

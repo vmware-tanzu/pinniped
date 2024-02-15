@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package callback
@@ -28,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
@@ -182,7 +183,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	tests := []struct {
 		name string
 
-		idps          *oidctestutil.UpstreamIDPListerBuilder
+		idps          *testidplister.UpstreamIDPListerBuilder
 		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		method        string
 		path          string
@@ -209,7 +210,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	}{
 		{
 			name:   "GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().WithAuthorizeRequestParams(
@@ -240,7 +241,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "GET with good state and cookie with additional params",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().
 				WithAdditionalClaimMappings(map[string]string{
 					"downstreamCustomClaim":  "upstreamCustomClaim",
 					"downstreamOtherClaim":   "upstreamOtherClaim",
@@ -283,7 +284,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -307,7 +308,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code when using dynamic client",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyStateForDynamicClient).String(),
@@ -332,7 +333,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "GET with authcode exchange that returns an access token but no refresh token when there is a userinfo endpoint returns 303 to downstream client callback with its state and code",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
+			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -356,7 +357,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "form_post happy path without username or groups scopes requested",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().WithAuthorizeRequestParams(
@@ -391,7 +392,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:                              "GET with authcode exchange that returns an access token but no refresh token but has a short token lifetime which is stored as a warning in the session",
-			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
+			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -428,7 +429,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP provides no username or group claim configuration, so we use default username claim and skip groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
 			),
 			method:                            http.MethodGet,
@@ -458,7 +459,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUsernameClaim("email").WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
 			),
 			method:                            http.MethodGet,
@@ -488,7 +489,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUsernameClaim("email").
 					WithIDTokenClaim("email", "joe@whitehouse.gov").
 					WithIDTokenClaim("email_verified", true).Build(),
@@ -520,7 +521,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUsernameClaim("some-claim").
 					WithIDTokenClaim("some-claim", "joe").
 					WithIDTokenClaim("email", "joe@whitehouse.gov").
@@ -553,7 +554,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithUsernameClaim("email").
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithUsernameClaim("email").
 				WithIDTokenClaim("email", "joe@whitehouse.gov").
 				WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
 			),
@@ -570,7 +571,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned no refresh token with an access token when there is no userinfo endpoint",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -584,7 +585,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned no refresh token and no access token",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithoutAccessToken().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithoutAccessToken().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -598,7 +599,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned an empty refresh token and empty access token",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -612,7 +613,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned no refresh token and empty access token",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithEmptyAccessToken().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithoutRefreshToken().WithEmptyAccessToken().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -626,7 +627,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "return an error when upstream IDP returned an empty refresh token and no access token",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithoutAccessToken().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithEmptyRefreshToken().WithoutAccessToken().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -640,7 +641,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with false value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUsernameClaim("email").
 					WithIDTokenClaim("email", "joe@whitehouse.gov").
 					WithIDTokenClaim("email_verified", false).Build(),
@@ -658,7 +659,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUsernameClaim("sub").Build(),
 			),
 			method:                            http.MethodGet,
@@ -688,7 +689,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP's configured groups claim in the ID token has a non-array value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
 			),
 			method:                            http.MethodGet,
@@ -718,7 +719,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
@@ -748,7 +749,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:          "using dynamic client which is allowed to request username scope, but does not actually request username scope in authorize request, does not get username in ID token",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: newRequestPath().WithState(
@@ -778,7 +779,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:          "using dynamic client which is allowed to request groups scope, but does not actually request groups scope in authorize request, does not get groups in ID token",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: newRequestPath().WithState(
@@ -808,7 +809,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request username scope, and does not actually request username scope in authorize request, does not get username in ID token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -851,7 +852,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request groups scope, and does not actually request groups scope in authorize request, does not get groups in ID token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -894,7 +895,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using identity transformations which modify the username and group names",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyUpstream().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
@@ -925,7 +926,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		// Pre-upstream-exchange verification
 		{
 			name:            "PUT method is invalid",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPut,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -934,7 +935,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "POST method is invalid",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPost,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -943,7 +944,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "PATCH method is invalid",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPatch,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -952,7 +953,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "DELETE method is invalid",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodDelete,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -961,7 +962,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "code param was not included on request",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).WithoutCode().String(),
 			csrfCookie:      happyCSRFCookie,
@@ -971,7 +972,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "state param was not included on request",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithoutState().String(),
 			csrfCookie:      happyCSRFCookie,
@@ -981,7 +982,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState("this-will-not-decode").String(),
 			csrfCookie:      happyCSRFCookie,
@@ -993,7 +994,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			// This shouldn't happen in practice because the authorize endpoint should have already run the same
 			// validations, but we would like to test the error handling in this endpoint anyway.
 			name:   "state param contains authorization request params which fail validation",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
@@ -1013,7 +1014,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "state's internal version does not match what we want",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyUpstreamStateParam().WithStateVersion("wrong-state-version").Build(t, happyStateCodec)).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -1023,7 +1024,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params element is invalid",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(happyUpstreamStateParam().
 				WithAuthorizeRequestParams("the following is an invalid url encoding token, and therefore this is an invalid param: %z").
@@ -1035,7 +1036,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params are missing required value (e.g., client_id)",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
@@ -1050,7 +1051,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params have invalid client_id",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
@@ -1065,7 +1066,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:          "dynamic clients do not allow response_mode=form_post",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: newRequestPath().WithState(
@@ -1087,7 +1088,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request username scope in authorize request but requests it anyway",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -1116,7 +1117,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request groups scope in authorize request but requests it anyway",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -1145,7 +1146,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params does not contain openid scope",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().
 				WithState(
@@ -1174,7 +1175,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params does not contain openid, username, or groups scope",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().
 				WithState(
@@ -1204,7 +1205,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params also included offline_access scope",
-			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().
 				WithState(
@@ -1233,7 +1234,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "the OIDCIdentityProvider resource has been deleted",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(otherUpstreamOIDCIdentityProvider),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(otherUpstreamOIDCIdentityProvider),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -1243,7 +1244,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "the CSRF cookie does not exist on request",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			wantStatus:      http.StatusForbidden,
@@ -1252,7 +1253,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
@@ -1262,7 +1263,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "cookie csrf value does not match state csrf value",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyUpstreamStateParam().WithCSRF("wrong-csrf-value").Build(t, happyStateCodec)).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -1274,7 +1275,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		// Upstream exchange
 		{
 			name: "upstream auth code exchange fails",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithUpstreamAuthcodeExchangeError(errors.New("some error")).Build(),
 			),
 			method:          http.MethodGet,
@@ -1290,7 +1291,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does not contain requested username claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithoutIDTokenClaim(oidcUpstreamUsernameClaim).Build(),
 			),
 			method:          http.MethodGet,
@@ -1306,7 +1307,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does not contain requested groups claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithoutIDTokenClaim(oidcUpstreamGroupsClaim).Build(),
 			),
 			method:                            http.MethodGet,
@@ -1336,7 +1337,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token contains username claim with weird format",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, 42).Build(),
 			),
 			method:          http.MethodGet,
@@ -1352,7 +1353,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token contains username claim with empty string value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, "").Build(),
 			),
 			method:          http.MethodGet,
@@ -1368,7 +1369,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does not contain iss claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithoutIDTokenClaim("iss").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1384,7 +1385,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does has an empty string value for iss claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1400,7 +1401,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token has an non-string iss claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1416,7 +1417,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does not contain sub claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithoutIDTokenClaim("sub").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1432,7 +1433,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token does has an empty string value for sub claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim("sub", "").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1448,7 +1449,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token has an non-string sub claim when using default username claim config",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim("sub", 42).WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -1464,7 +1465,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token contains groups claim with weird format",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, 42).Build(),
 			),
 			method:          http.MethodGet,
@@ -1480,7 +1481,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token contains groups claim where one element is invalid",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
 			),
 			method:          http.MethodGet,
@@ -1496,7 +1497,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "upstream ID token contains groups claim with invalid null type",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, nil).Build(),
 			),
 			method:          http.MethodGet,
@@ -1512,7 +1513,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name: "using identity transformations which reject the authentication",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyUpstream().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),

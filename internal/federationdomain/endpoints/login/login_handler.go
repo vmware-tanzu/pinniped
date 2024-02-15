@@ -1,11 +1,10 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
 
 import (
 	"net/http"
-	"net/url"
 
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
@@ -14,19 +13,6 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
-)
-
-type ErrorParamValue string
-
-const (
-	usernameParamName = "username"
-	passwordParamName = "password"
-	stateParamName    = "state"
-	errParamName      = "err"
-
-	ShowNoError        ErrorParamValue = ""
-	ShowInternalError  ErrorParamValue = "internal_error"
-	ShowBadUserPassErr ErrorParamValue = "login_error"
 )
 
 // HandlerFunc is a function that can handle either a GET or POST request for the login endpoint.
@@ -92,34 +78,4 @@ func wrapSecurityHeaders(handler http.Handler) http.Handler {
 		}
 		wrapped.ServeHTTP(w, r)
 	})
-}
-
-// RedirectToLoginPage redirects to the GET /login page of the specified issuer.
-// The specified issuer should never end with a "/", which is validated by
-// provider.FederationDomainIssuer when the issuer string comes from that type.
-func RedirectToLoginPage(
-	r *http.Request,
-	w http.ResponseWriter,
-	downstreamIssuer string,
-	encodedStateParamValue string,
-	errToDisplay ErrorParamValue,
-) error {
-	loginURL, err := url.Parse(downstreamIssuer + oidc.PinnipedLoginPath)
-	if err != nil {
-		return err
-	}
-
-	q := loginURL.Query()
-	q.Set(stateParamName, encodedStateParamValue)
-	if errToDisplay != ShowNoError {
-		q.Set(errParamName, string(errToDisplay))
-	}
-	loginURL.RawQuery = q.Encode()
-
-	http.Redirect(w, r,
-		loginURL.String(),
-		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
-	)
-
-	return nil
 }

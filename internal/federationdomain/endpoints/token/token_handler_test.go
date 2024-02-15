@@ -61,6 +61,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
@@ -884,7 +885,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
+				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 		})
 	}
 }
@@ -919,7 +920,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// First call - should be successful.
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
+				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
@@ -1574,7 +1575,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
-				test.authcodeExchange, oidctestutil.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
+				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
@@ -2009,7 +2010,7 @@ func TestRefreshGrant(t *testing.T) {
 
 	tests := []struct {
 		name                      string
-		idps                      *oidctestutil.UpstreamIDPListerBuilder
+		idps                      *testidplister.UpstreamIDPListerBuilder
 		kubeResources             func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		authcodeExchange          authcodeExchangeInputs
 		refreshRequest            refreshRequestInputs
@@ -2017,7 +2018,7 @@ func TestRefreshGrant(t *testing.T) {
 	}{
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned)",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2035,7 +2036,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with OIDC upstream with identity transformations which modify the username and group names",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2070,7 +2071,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with OIDC upstream with identity transformations which modify the username and group names when the upstream refresh does not return new username or groups then it reruns the transformations on the old upstream username and groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{},
@@ -2109,7 +2110,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with OIDC upstream with identity transformations which modify the username and group names when the downstream username has changed compared to initial login",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2149,7 +2150,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with OIDC upstream with identity transformations which reject the auth",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2189,7 +2190,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned) and additionalClaims",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2252,7 +2253,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2280,7 +2281,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client with additional claims",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2349,7 +2350,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant with upstream username claim but without downstream username scope granted, using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2396,7 +2397,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with unchanged username claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2416,7 +2417,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant when the customsessiondata has a stored access token and no stored refresh token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").
 					WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
@@ -2460,7 +2461,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant without openid scope granted (no id token returned)",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{},
@@ -2497,7 +2498,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh does not return a new ID token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{},
@@ -2521,7 +2522,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships (as strings) from the merged ID token and userinfo results, it updates groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2552,7 +2553,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships (as strings) from the merged ID token and userinfo results, it updates groups, using dynamic client - updates groups without outputting warnings",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2590,7 +2591,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships (as interface{} types) from the merged ID token and userinfo results, it updates groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2621,7 +2622,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships as an empty list from the merged ID token and userinfo results, it updates groups to be empty",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2651,7 +2652,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results by omitting claim, it keeps groups from initial login",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2678,7 +2679,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships from LDAP, it updates groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -2706,7 +2707,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns new group memberships from LDAP, it updates groups, using dynamic client - updates groups without outputting warnings",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -2741,7 +2742,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh returns empty list of group memberships from LDAP, it updates groups to an empty list",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -2768,7 +2769,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "ldap refresh grant when the upstream refresh when username and groups scopes are not requested on original request or refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -2812,7 +2813,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "oidc refresh grant when the upstream refresh when username and groups scopes are not requested on original request or refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2859,7 +2860,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "oidc refresh grant when the upstream refresh when groups scope not requested on original request or refresh when using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2910,7 +2911,7 @@ func TestRefreshGrant(t *testing.T) {
 			// fosite does not look at the scopes provided in refresh requests, although it is a valid parameter.
 			// even if 'groups' is not sent in the refresh request, we will send groups all the same.
 			name: "refresh grant when the upstream refresh when groups scope requested on original request but not refresh refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -2954,7 +2955,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "error from refresh grant when the upstream refresh does not return new group memberships from the merged ID token and userinfo results by returning group claim with illegal nil value",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2975,7 +2976,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "happy path refresh grant when the upstream refresh does not return a new refresh token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -2993,7 +2994,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the refresh request adds a new scope to the list of requested scopes then it is ignored",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3014,7 +3015,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is granted anyway",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3058,7 +3059,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the refresh request does not include a scope param then it gets all the same scopes as the original authorization request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3079,7 +3080,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name:             "when a valid refresh token is sent in the refresh request, but the token has already expired",
-			idps:             oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps:             testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			modifyRefreshTokenStorage: func(t *testing.T, oauthStore *storage.KubeStorage, secrets v1.SecretInterface, refreshToken string) {
 				// The fosite storage APIs don't offer a way to update a refresh token, so we will instead find the underlying
@@ -3128,7 +3129,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when a bad refresh token is sent in the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access username groups") },
@@ -3155,7 +3156,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the access token is sent as if it were a refresh token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access username groups") },
@@ -3182,7 +3183,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the wrong client ID is included in the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access username groups") },
@@ -3209,7 +3210,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the refresh request uses a different client than the one that was used to get the refresh token",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3230,7 +3231,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the client auth fails on the refresh request using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3261,7 +3262,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "dynamic client uses wrong auth method on the refresh request (must use basic auth)",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3292,7 +3293,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: nil, // this should not happen in practice
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
@@ -3307,7 +3308,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no provider name in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: "", // this should not happen in practice
@@ -3334,7 +3335,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no provider UID in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3361,7 +3362,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no provider type in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3388,7 +3389,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is an illegal provider type in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3415,7 +3416,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no OIDC-specific data in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3442,7 +3443,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when there is no OIDC refresh token nor access token in custom session data found in the session storage during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3475,7 +3476,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the provider in the session storage is not found due to its name during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
@@ -3507,7 +3508,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the provider in the session storage is found but has the wrong resource UID during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
 					ProviderName: oidcUpstreamName,
@@ -3539,7 +3540,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the upstream refresh fails during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithPerformRefreshError(errors.New("some upstream refresh error")).Build()),
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
@@ -3557,7 +3558,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the upstream refresh returns an invalid ID token during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
 				// This is the current format of the errors returned by the production code version of ValidateTokenAndMergeWithUserInfo, see ValidateTokenAndMergeWithUserInfo in upstreamoidc.go
 				WithValidateTokenAndMergeWithUserInfoError(httperr.Wrap(http.StatusBadRequest, "some validate error", errors.New("some validate cause"))).
@@ -3579,7 +3580,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the upstream refresh returns an ID token with a different subject than the original",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
 				// This is the current format of the errors returned by the production code version of ValidateTokenAndMergeWithUserInfo, see ValidateTokenAndMergeWithUserInfo in upstreamoidc.go
 				WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
@@ -3607,7 +3608,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with claims but not the subject claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3632,7 +3633,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with changed username claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3659,7 +3660,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "refresh grant with changed issuer claim",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
 						Claims: map[string]interface{}{
@@ -3686,7 +3687,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3702,7 +3703,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path with identity transformations which modify the username and group names",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3735,7 +3736,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh with identity transformations which modify the username and group names when the downstream username has changed compared to initial login",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3775,7 +3776,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh with identity transformations which reject the auth",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3815,7 +3816,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3839,7 +3840,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh happy path without downstream username scope granted, using dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3882,7 +3883,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh happy path",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(activeDirectoryUpstreamName).
 				WithResourceUID(activeDirectoryUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3904,7 +3905,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh when the LDAP session data is nil",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3941,7 +3942,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh when the ad session data is nil",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(activeDirectoryUpstreamName).
 				WithResourceUID(activeDirectoryUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -3978,7 +3979,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh when the LDAP session data does not contain dn",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4019,7 +4020,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh when the active directory session data does not contain dn",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(activeDirectoryUpstreamName).
 				WithResourceUID(activeDirectoryUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4060,7 +4061,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream ldap refresh returns an error",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4083,7 +4084,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory refresh returns an error",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(activeDirectoryUpstreamName).
 				WithResourceUID(activeDirectoryUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4112,7 +4113,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name:             "upstream ldap idp not found",
-			idps:             oidctestutil.NewUpstreamIDPListerBuilder(),
+			idps:             testidplister.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
@@ -4128,7 +4129,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "upstream active directory idp not found",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder(),
+			idps: testidplister.NewUpstreamIDPListerBuilder(),
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				customSessionData: happyActiveDirectoryCustomSessionData,
@@ -4150,7 +4151,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "fosite session is empty",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4182,7 +4183,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "groups not found in extra field when the groups scope was granted",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4220,7 +4221,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "username in custom session is empty string during refresh",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).
@@ -4258,7 +4259,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the ldap provider in the session storage is found but has the wrong resource UID during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID("the-wrong-uid").
 				WithURL(ldapUpstreamURL).
@@ -4279,7 +4280,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "when the active directory provider in the session storage is found but has the wrong resource UID during the refresh request",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(activeDirectoryUpstreamName).
 				WithResourceUID("the-wrong-uid").
 				WithURL(ldapUpstreamURL).
@@ -4306,7 +4307,7 @@ func TestRefreshGrant(t *testing.T) {
 		},
 		{
 			name: "auth time is the zero value", // time.Times can never be nil, but it is possible that it would be the zero value which would mean something's wrong
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 				WithName(ldapUpstreamName).
 				WithResourceUID(ldapUpstreamResourceUID).
 				WithURL(ldapUpstreamURL).

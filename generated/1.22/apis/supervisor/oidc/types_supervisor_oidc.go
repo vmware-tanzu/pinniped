@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -28,6 +28,10 @@ const (
 
 	// IDTokenClaimSubject is name of the subject claim defined by the OIDC spec.
 	IDTokenClaimSubject = "sub"
+
+	// IDTokenSubClaimIDPNameQueryParam is the name of the query param used in the values of the "sub" claim
+	// in Supervisor-issued ID tokens to identify with which external identity provider the user authenticated.
+	IDTokenSubClaimIDPNameQueryParam = "idpName"
 
 	// IDTokenClaimAuthorizedParty is name of the authorized party claim defined by the OIDC spec.
 	IDTokenClaimAuthorizedParty = "azp"

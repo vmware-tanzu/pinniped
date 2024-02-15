@@ -29,6 +29,7 @@ import (
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 )
 
 func TestManager(t *testing.T) {
@@ -301,7 +302,7 @@ func TestManager(t *testing.T) {
 				},
 			}
 
-			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().
+			idpLister := testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName(upstreamIDPName1).
 					WithClientID("test-client-id-1").

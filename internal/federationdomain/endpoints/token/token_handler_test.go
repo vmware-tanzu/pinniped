@@ -3479,6 +3479,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
+					Username:     goodUsername,
 					ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
 					ProviderUID:  oidcUpstreamResourceUID,
 					ProviderType: oidcUpstreamType,
@@ -3487,6 +3488,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						Username:     goodUsername,
 						ProviderName: "this-name-will-not-be-found", // this could happen if the OIDCIdentityProvider was deleted since original login
 						ProviderUID:  oidcUpstreamResourceUID,
 						ProviderType: oidcUpstreamType,
@@ -3511,6 +3513,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			authcodeExchange: authcodeExchangeInputs{
 				customSessionData: &psession.CustomSessionData{
+					Username:     goodUsername,
 					ProviderName: oidcUpstreamName,
 					ProviderUID:  "this is the wrong uid", // this could happen if the OIDCIdentityProvider was deleted and recreated at the same name since original login
 					ProviderType: oidcUpstreamType,
@@ -3519,6 +3522,7 @@ func TestRefreshGrant(t *testing.T) {
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
 					&psession.CustomSessionData{ // want the initial customSessionData to be unmodified
+						Username:     goodUsername,
 						ProviderName: oidcUpstreamName,
 						ProviderUID:  "this is the wrong uid", // this could happen if the OIDCIdentityProvider was deleted and recreated at the same name since original login
 						ProviderType: oidcUpstreamType,

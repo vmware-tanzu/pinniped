@@ -6,13 +6,12 @@ package token
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/ory/fosite"
 	errorsx "github.com/pkg/errors"
-	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/utils/strings/slices"
@@ -20,11 +19,8 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
-	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
-	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
-	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
-	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 )
@@ -98,7 +94,11 @@ func errUpstreamRefreshError() *fosite.RFC6749Error {
 	}
 }
 
-func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI) error {
+func upstreamRefresh(
+	ctx context.Context,
+	accessRequest fosite.AccessRequester,
+	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
 
 	customSessionData := session.Custom
@@ -111,387 +111,74 @@ func upstreamRefresh(ctx context.Context, accessRequest fosite.AccessRequester, 
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 
-	groupsScopeNotGranted := !slices.Contains(accessRequest.GetGrantedScopes(), oidcapi.ScopeGroups)
+	skipGroups := !slices.Contains(accessRequest.GetGrantedScopes(), oidcapi.ScopeGroups)
 
 	clientID := accessRequest.GetClient().GetID()
 
-	switch customSessionData.ProviderType {
-	case psession.ProviderTypeOIDC:
-		return upstreamOIDCRefresh(ctx, idpLister, session, groupsScopeNotGranted, clientID)
-	case psession.ProviderTypeLDAP, psession.ProviderTypeActiveDirectory:
-		return upstreamLDAPRefresh(ctx, idpLister, session, groupsScopeNotGranted, clientID)
-	default:
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-}
-
-//nolint:funlen
-func upstreamOIDCRefresh(
-	ctx context.Context,
-	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-	session *psession.PinnipedSession,
-	skipGroups bool,
-	clientID string,
-) error {
-	s := session.Custom
-
-	if s.OIDC == nil {
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-
-	accessTokenStored := s.OIDC.UpstreamAccessToken != ""
-	refreshTokenStored := s.OIDC.UpstreamRefreshToken != ""
-
-	exactlyOneTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
-	if !exactlyOneTokenStored {
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-
-	p, err := findOIDCProviderByNameAndValidateUID(s, idpLister)
+	err := validateSessionHasUsername(session)
 	if err != nil {
 		return err
 	}
 
-	plog.Debug("attempting upstream refresh request",
-		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-
-	var tokens *oauth2.Token
-	if refreshTokenStored {
-		tokens, err = p.Provider.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
-		if err != nil {
-			return errUpstreamRefreshError().WithHint(
-				"Upstream refresh failed.",
-			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-		}
-	} else {
-		tokens = &oauth2.Token{AccessToken: s.OIDC.UpstreamAccessToken}
-	}
-
-	// Upstream refresh may or may not return a new ID token. From the spec:
-	// "the response body is the Token Response of Section 3.1.3.3 except that it might not contain an id_token."
-	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
-	_, hasIDTok := tokens.Extra("id_token").(string)
-
-	// We may or may not have an ID token, and we may or may not have a userinfo endpoint to call for more claims.
-	// Use what we can (one, both, or neither) and return the union of their claims. If we stored an access token,
-	// then require that the userinfo endpoint exists and returns a successful response, or else we would have no
-	// way to check that the user's session was not revoked on the server.
-	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
-	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
-	validatedTokens, err := p.Provider.ValidateTokenAndMergeWithUserInfo(ctx, tokens, "", hasIDTok, accessTokenStored)
-	if err != nil {
-		return errUpstreamRefreshError().WithHintf(
-			"Upstream refresh returned an invalid ID token or UserInfo response.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-	mergedClaims := validatedTokens.IDToken.Claims
-
-	// To the extent possible, check that the user's basic identity hasn't changed. We check that their downstream
-	// username has not changed separately below, as part of reapplying the transformations.
-	err = validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, session)
+	idp, err := findProviderByNameAndType(providerName, customSessionData.ProviderType, providerUID, idpLister)
 	if err != nil {
 		return err
 	}
 
-	var refreshedUntransformedGroups []string
-	if !skipGroups {
-		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
-		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
-		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
-		// now we might not have a refreshed ID token.
-		// If the claim is found, then use it to update the user's group membership in the session.
-		// If the claim is not found, then we have no new information about groups, so skip updating the group membership
-		// and let any old groups memberships in the session remain.
-		refreshedUntransformedGroups, err = resolvedoidc.GetGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
-		if err != nil {
-			return errUpstreamRefreshError().WithHintf(
-				"Upstream refresh error while extracting groups claim.").WithTrace(err).
-				WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-		}
-	}
-
-	// It's possible that a username wasn't returned by the upstream provider during refresh,
-	// but if it is, verify that the transformed version of it hasn't changed.
-	refreshedUntransformedUsername, hasRefreshedUntransformedUsername := getString(mergedClaims, p.Provider.GetUsernameClaim())
-
-	oldUntransformedUsername := s.UpstreamUsername
-	oldUntransformedGroups := s.UpstreamGroups
-	if !hasRefreshedUntransformedUsername {
-		// If we could not get a new username, then we still need the untransformed username to be able to
-		// run the transformations again, so fetch the original untransformed username from the session.
-		refreshedUntransformedUsername = oldUntransformedUsername
-	}
-	if refreshedUntransformedGroups == nil {
-		// If we could not get a new list of groups, then we still need the untransformed groups list to be able to
-		// run the transformations again, so fetch the original untransformed groups list from the session.
-		// We should also run the transformations on the original groups even when the groups scope was not granted,
-		// because a transformation policy may want to reject the authentication based on the group memberships, even
-		// though the group memberships will not be shared with the client (in the code below) due to the groups scope
-		// not being granted.
-		refreshedUntransformedGroups = oldUntransformedGroups
-	}
-
-	oldTransformedUsername, err := getDownstreamUsernameFromPinnipedSession(session)
-	if err != nil {
-		return err
-	}
+	oldTransformedUsername := session.Custom.Username
 	var oldTransformedGroups []string
 	if !skipGroups {
-		oldTransformedGroups, err = getDownstreamGroupsFromPinnipedSession(session)
+		oldTransformedGroups, err = getDownstreamGroupsFromSession(session)
 		if err != nil {
 			return err
 		}
 	}
 
-	transformationResult, err := transformRefreshedIdentity(ctx,
-		p.Transforms,
-		oldTransformedUsername,
-		refreshedUntransformedUsername,
-		refreshedUntransformedGroups,
-		s.ProviderName,
-		s.ProviderType,
-	)
+	refreshedGroups, err := idp.UpstreamRefresh(ctx, session, skipGroups)
 	if err != nil {
 		return err
 	}
 
 	if !skipGroups {
-		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
+		warnIfGroupsChanged(ctx, oldTransformedGroups, refreshedGroups, oldTransformedUsername, clientID)
 		// Replace the old value for the downstream groups in the user's session with the new value.
-		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups
-	}
-
-	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
-	// the user's session. If we did not get a new refresh token, then keep the old one in the session by avoiding
-	// overwriting the old one.
-	if tokens.RefreshToken != "" {
-		plog.Debug("upstream refresh request returned a new refresh token",
-			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-		s.OIDC.UpstreamRefreshToken = tokens.RefreshToken
+		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedGroups
 	}
 
 	return nil
 }
 
-// print out the diff between two lists of sorted groups.
-func diffSortedGroups(oldGroups, newGroups []string) ([]string, []string) {
-	oldGroupsAsSet := sets.NewString(oldGroups...)
-	newGroupsAsSet := sets.NewString(newGroups...)
-	added := newGroupsAsSet.Difference(oldGroupsAsSet)   // groups in newGroups that are not in oldGroups i.e. added
-	removed := oldGroupsAsSet.Difference(newGroupsAsSet) // groups in oldGroups that are not in newGroups i.e. removed
-	return added.List(), removed.List()
-}
-
-func validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession) error {
-	s := session.Custom
-
-	// If we have any claims at all, we better have a subject, and it better match the previous value.
-	// but it's possible that we don't because both returning a new id token on refresh and having a userinfo
-	// endpoint are optional.
-	if len(mergedClaims) == 0 {
-		return nil
-	}
-
-	newSub, hasSub := getString(mergedClaims, oidcapi.IDTokenClaimSubject)
-	if !hasSub {
-		return errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh not found")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-	if s.OIDC.UpstreamSubject != newSub {
-		return errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-
-	newIssuer, hasIssuer := getString(mergedClaims, oidcapi.IDTokenClaimIssuer)
-	// It's possible that an issuer wasn't returned by the upstream provider during refresh,
-	// but if it is, verify that it hasn't changed.
-	if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
-		return errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").WithTrace(errors.New("issuer in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-
-	return nil
-}
-
-func getString(m map[string]interface{}, key string) (string, bool) {
-	val, ok := m[key].(string)
-	return val, ok
-}
-
-func findOIDCProviderByNameAndValidateUID(
-	s *psession.CustomSessionData,
+// findProviderByNameAndType finds the IDP by its resource name and IDP type,
+// and validates that its resource UID matches the expected UID.
+func findProviderByNameAndType(
+	providerResourceName string,
+	providerType psession.ProviderType,
+	mustHaveResourceUID types.UID,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-) (*resolvedoidc.FederationDomainResolvedOIDCIdentityProvider, error) {
+) (resolvedprovider.FederationDomainResolvedIdentityProvider, error) {
 	for _, p := range idpLister.GetIdentityProviders() {
-		if p.GetSessionProviderType() == psession.ProviderTypeOIDC && p.GetProvider().GetName() == s.ProviderName {
-			if p.GetProvider().GetResourceUID() != s.ProviderUID {
+		if p.GetSessionProviderType() == providerType && p.GetProvider().GetName() == providerResourceName {
+			if p.GetProvider().GetResourceUID() != mustHaveResourceUID {
 				return nil, errorsx.WithStack(errUpstreamRefreshError().WithHint(
 					"Provider from upstream session data has changed its resource UID since authentication."))
 			}
-			// TODO: make a new interface method for refreshing rather than downcasting here
-			return p.(*resolvedoidc.FederationDomainResolvedOIDCIdentityProvider), nil
+			return p, nil
 		}
 	}
 	return nil, errorsx.WithStack(errUpstreamRefreshError().
 		WithHint("Provider from upstream session data was not found.").
-		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
+		WithDebugf("provider name: %q, provider type: %q", providerResourceName, providerType))
 }
 
-func upstreamLDAPRefresh(
-	ctx context.Context,
-	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-	session *psession.PinnipedSession,
-	skipGroups bool,
-	clientID string,
-) error {
-	s := session.Custom
-
-	oldTransformedUsername, err := getDownstreamUsernameFromPinnipedSession(session)
-	if err != nil {
-		return err
-	}
-	var oldTransformedGroups []string
-	if !skipGroups {
-		oldTransformedGroups, err = getDownstreamGroupsFromPinnipedSession(session)
-		if err != nil {
-			return err
-		}
-	}
-
-	validLDAP := s.ProviderType == psession.ProviderTypeLDAP && s.LDAP != nil && s.LDAP.UserDN != ""
-	validAD := s.ProviderType == psession.ProviderTypeActiveDirectory && s.ActiveDirectory != nil && s.ActiveDirectory.UserDN != ""
-	if !(validLDAP || validAD) {
+func validateSessionHasUsername(session *psession.PinnipedSession) error {
+	downstreamUsername := session.Custom.Username
+	if len(downstreamUsername) == 0 {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
-
-	var additionalAttributes map[string]string
-	if s.ProviderType == psession.ProviderTypeLDAP {
-		additionalAttributes = s.LDAP.ExtraRefreshAttributes
-	} else {
-		additionalAttributes = s.ActiveDirectory.ExtraRefreshAttributes
-	}
-
-	p, dn, err := findLDAPProviderByNameAndValidateUID(s, idpLister)
-	if err != nil {
-		return err
-	}
-	if session.IDTokenClaims().AuthTime.IsZero() {
-		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-
-	plog.Debug("attempting upstream refresh request",
-		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-
-	oldUntransformedUsername := s.UpstreamUsername
-	oldUntransformedGroups := s.UpstreamGroups
-	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.RefreshAttributes{
-		Username:             oldUntransformedUsername,
-		Subject:              session.Fosite.Claims.Subject,
-		DN:                   dn,
-		Groups:               oldUntransformedGroups,
-		AdditionalAttributes: additionalAttributes,
-		SkipGroups:           skipGroups,
-	}, p.DisplayName)
-	if err != nil {
-		return errUpstreamRefreshError().WithHint(
-			"Upstream refresh failed.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
-	}
-
-	transformationResult, err := transformRefreshedIdentity(ctx,
-		p.Transforms,
-		oldTransformedUsername,
-		oldUntransformedUsername, // LDAP PerformRefresh validates that the username did not change, so this is also the refreshed upstream username
-		refreshedUntransformedGroups,
-		s.ProviderName,
-		s.ProviderType,
-	)
-	if err != nil {
-		return err
-	}
-
-	if !skipGroups {
-		warnIfGroupsChanged(ctx, oldTransformedGroups, transformationResult.Groups, transformationResult.Username, clientID)
-		// Replace the old value for the downstream groups in the user's session with the new value.
-		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = transformationResult.Groups
-	}
-
 	return nil
 }
 
-func transformRefreshedIdentity(
-	ctx context.Context,
-	transforms *idtransform.TransformationPipeline,
-	oldTransformedUsername string,
-	upstreamUsername string,
-	upstreamGroups []string,
-	providerName string,
-	providerType psession.ProviderType,
-) (*idtransform.TransformationResult, error) {
-	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
-	if err != nil {
-		return nil, errUpstreamRefreshError().WithHintf(
-			"Upstream refresh error while applying configured identity transformations.").
-			WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
-	}
-
-	if !transformationResult.AuthenticationAllowed {
-		return nil, errUpstreamRefreshError().WithHintf(
-			"Upstream refresh rejected by configured identity policy: %s.", transformationResult.RejectedAuthenticationMessage).
-			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
-	}
-
-	if oldTransformedUsername != transformationResult.Username {
-		return nil, errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").
-			WithTrace(errors.New("username in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
-	}
-
-	return transformationResult, nil
-}
-
-func findLDAPProviderByNameAndValidateUID(
-	s *psession.CustomSessionData,
-	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
-) (*resolvedldap.FederationDomainResolvedLDAPIdentityProvider, string, error) {
-	var dn string
-	if s.ProviderType == psession.ProviderTypeLDAP {
-		dn = s.LDAP.UserDN
-	} else if s.ProviderType == psession.ProviderTypeActiveDirectory {
-		dn = s.ActiveDirectory.UserDN
-	}
-
-	for _, p := range idpLister.GetIdentityProviders() {
-		if p.GetSessionProviderType() == s.ProviderType && p.GetProvider().GetName() == s.ProviderName {
-			if p.GetProvider().GetResourceUID() != s.ProviderUID {
-				return nil, "", errorsx.WithStack(errUpstreamRefreshError().WithHint(
-					"Provider from upstream session data has changed its resource UID since authentication.").
-					WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-			}
-			// TODO: make a new interface method for refreshing rather than downcasting here
-			return p.(*resolvedldap.FederationDomainResolvedLDAPIdentityProvider), dn, nil
-		}
-	}
-
-	return nil, "", errorsx.WithStack(errUpstreamRefreshError().
-		WithHint("Provider from upstream session data was not found.").
-		WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType))
-}
-
-func getDownstreamUsernameFromPinnipedSession(session *psession.PinnipedSession) (string, error) {
-	downstreamUsername := session.Custom.Username
-	if len(downstreamUsername) == 0 {
-		return "", errorsx.WithStack(errMissingUpstreamSessionInternalError())
-	}
-	return downstreamUsername, nil
-}
-
-func getDownstreamGroupsFromPinnipedSession(session *psession.PinnipedSession) ([]string, error) {
+func getDownstreamGroupsFromSession(session *psession.PinnipedSession) ([]string, error) {
 	extra := session.Fosite.Claims.Extra
 	if extra == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -533,4 +220,12 @@ func warnIfGroupsChanged(ctx context.Context, oldGroups, newGroups []string, use
 	if len(removed) > 0 {
 		warning.AddWarning(ctx, "", fmt.Sprintf("User %q has been removed from the following groups: %q", username, removed))
 	}
+}
+
+func diffSortedGroups(oldGroups, newGroups []string) ([]string, []string) {
+	oldGroupsAsSet := sets.NewString(oldGroups...)
+	newGroupsAsSet := sets.NewString(newGroups...)
+	added := newGroupsAsSet.Difference(oldGroupsAsSet)   // groups in newGroups that are not in oldGroups i.e. added
+	removed := oldGroupsAsSet.Difference(newGroupsAsSet) // groups in oldGroups that are not in newGroups i.e. removed
+	return added.List(), removed.List()
 }

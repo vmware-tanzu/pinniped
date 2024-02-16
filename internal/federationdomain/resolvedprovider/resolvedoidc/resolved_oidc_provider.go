@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
+	errorsx "github.com/pkg/errors"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
@@ -215,6 +217,169 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) HandleCallback(
 	}, nil
 }
 
+func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
+	ctx context.Context,
+	session *psession.PinnipedSession,
+	groupsWillBeIgnored bool,
+) (refreshedGroups []string, err error) {
+	s := session.Custom
+
+	if s.OIDC == nil {
+		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+	}
+
+	accessTokenStored := s.OIDC.UpstreamAccessToken != ""
+	refreshTokenStored := s.OIDC.UpstreamRefreshToken != ""
+
+	exactlyOneTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
+	if !exactlyOneTokenStored {
+		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+	}
+
+	oldTransformedUsername := session.Custom.Username
+	oldUntransformedUsername := session.Custom.UpstreamUsername
+	oldUntransformedGroups := session.Custom.UpstreamGroups
+
+	plog.Debug("attempting upstream refresh request",
+		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+
+	var tokens *oauth2.Token
+	if refreshTokenStored {
+		tokens, err = p.Provider.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		if err != nil {
+			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(
+				"Upstream refresh failed.",
+			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+		}
+	} else {
+		tokens = &oauth2.Token{AccessToken: s.OIDC.UpstreamAccessToken}
+	}
+
+	// Upstream refresh may or may not return a new ID token. From the spec:
+	// "the response body is the Token Response of Section 3.1.3.3 except that it might not contain an id_token."
+	// https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
+	_, hasIDTok := tokens.Extra("id_token").(string)
+
+	// We may or may not have an ID token, and we may or may not have a userinfo endpoint to call for more claims.
+	// Use what we can (one, both, or neither) and return the union of their claims. If we stored an access token,
+	// then require that the userinfo endpoint exists and returns a successful response, or else we would have no
+	// way to check that the user's session was not revoked on the server.
+	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at
+	// least some providers do not include one, so we skip the nonce validation here (but not other validations).
+	validatedTokens, err := p.Provider.ValidateTokenAndMergeWithUserInfo(ctx, tokens, "", hasIDTok, accessTokenStored)
+	if err != nil {
+		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh returned an invalid ID token or UserInfo response.").WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+	}
+	mergedClaims := validatedTokens.IDToken.Claims
+
+	// To the extent possible, check that the user's basic identity hasn't changed. We check that their downstream
+	// username has not changed separately below, as part of reapplying the transformations.
+	err = validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, session)
+	if err != nil {
+		return nil, err
+	}
+
+	var refreshedUntransformedGroups []string
+	if !groupsWillBeIgnored {
+		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
+		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
+		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
+		// now we might not have a refreshed ID token.
+		// If the claim is found, then use it to update the user's group membership in the session.
+		// If the claim is not found, then we have no new information about groups, so skip updating the group membership
+		// and let any old groups memberships in the session remain.
+		refreshedUntransformedGroups, err = getGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
+		if err != nil {
+			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+				"Upstream refresh error while extracting groups claim.").WithTrace(err).
+				WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+		}
+	}
+
+	// It's possible that a username wasn't returned by the upstream provider during refresh,
+	// but if it is, verify that the transformed version of it hasn't changed.
+	refreshedUntransformedUsername, hasRefreshedUntransformedUsername := getString(mergedClaims, p.Provider.GetUsernameClaim())
+
+	if !hasRefreshedUntransformedUsername {
+		// If we could not get a new username, then we still need the untransformed username to be able to
+		// run the transformations again, so fetch the original untransformed username from the session.
+		refreshedUntransformedUsername = oldUntransformedUsername
+	}
+	if refreshedUntransformedGroups == nil {
+		// If we could not get a new list of groups, then we still need the untransformed groups list to be able to
+		// run the transformations again, so fetch the original untransformed groups list from the session.
+		// We should also run the transformations on the original groups even when the groups scope was not granted,
+		// because a transformation policy may want to reject the authentication based on the group memberships, even
+		// though the group memberships will not be shared with the client (in the code below) due to the groups scope
+		// not being granted.
+		refreshedUntransformedGroups = oldUntransformedGroups
+	}
+
+	transformationResult, err := resolvedprovider.TransformRefreshedIdentity(ctx,
+		p.Transforms,
+		oldTransformedUsername,
+		refreshedUntransformedUsername,
+		refreshedUntransformedGroups,
+		s.ProviderName,
+		s.ProviderType,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
+	// the user's session. If we did not get a new refresh token, then keep the old one in the session by avoiding
+	// overwriting the old one.
+	if tokens.RefreshToken != "" {
+		plog.Debug("upstream refresh request returned a new refresh token",
+			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+		s.OIDC.UpstreamRefreshToken = tokens.RefreshToken
+	}
+
+	return transformationResult.Groups, nil
+}
+
+func validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession) error {
+	s := session.Custom
+
+	// If we have any claims at all, we better have a subject, and it better match the previous value.
+	// but it's possible that we don't because both returning a new id token on refresh and having a userinfo
+	// endpoint are optional.
+	if len(mergedClaims) == 0 {
+		return nil
+	}
+
+	newSub, hasSub := getString(mergedClaims, oidcapi.IDTokenClaimSubject)
+	if !hasSub {
+		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh not found")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+	}
+	if s.OIDC.UpstreamSubject != newSub {
+		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+	}
+
+	newIssuer, hasIssuer := getString(mergedClaims, oidcapi.IDTokenClaimIssuer)
+	// It's possible that an issuer wasn't returned by the upstream provider during refresh,
+	// but if it is, verify that it hasn't changed.
+	if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
+		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").WithTrace(errors.New("issuer in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+	}
+
+	return nil
+}
+
+func getString(m map[string]interface{}, key string) (string, bool) {
+	val, ok := m[key].(string)
+	return val, ok
+}
+
 func makeDownstreamOIDCCustomSessionData(
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	token *oidctypes.Token,
@@ -291,7 +456,7 @@ func getDownstreamIdentityFromUpstreamIDToken(
 		return "", "", nil, err
 	}
 
-	groups, err := GetGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+	groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -413,10 +578,10 @@ func downstreamUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, up
 	)
 }
 
-// GetGroupsFromUpstreamIDToken returns mapped group names coerced into a slice of strings.
+// getGroupsFromUpstreamIDToken returns mapped group names coerced into a slice of strings.
 // It returns nil when there is no configured groups claim name, or then when the configured claim name is not found
 // in the provided map of claims. It returns an error when the claim exists but its value cannot be parsed.
-func GetGroupsFromUpstreamIDToken(
+func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) ([]string, error) {

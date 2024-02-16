@@ -5,6 +5,10 @@ package resolvedprovider
 
 import (
 	"context"
+	"errors"
+	"net/http"
+
+	"github.com/ory/fosite"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -58,4 +62,64 @@ type FederationDomainResolvedIdentityProvider interface {
 	// identity, and transform it into their downstream identity.
 	// Returned errors should be from the httperr package.
 	HandleCallback(ctx context.Context, authCode string, pkce pkce.Code, nonce nonce.Nonce, redirectURI string) (*Identity, error)
+
+	// UpstreamRefresh performs a refresh with the upstream provider.
+	// The user's session information is passed in, and implementations should be careful mutating anything about the
+	// session because changes will be saved into the session.
+	// If possible, implementations should update the user's group memberships by fetching them from the
+	// upstream provider during the refresh, and returning them.
+	// The groupsWillBeIgnored parameter will be true when the returned groups are going to be ignored by the caller,
+	// in which case this function may be able to save some effort by avoiding getting the user's upstream groups.
+	// Returned errors should be of type fosite.RFC6749Error.
+	UpstreamRefresh(ctx context.Context, session *psession.PinnipedSession, groupsWillBeIgnored bool) (refreshedGroups []string, err error)
+}
+
+func ErrMissingUpstreamSessionInternalError() *fosite.RFC6749Error {
+	return &fosite.RFC6749Error{
+		ErrorField:       "error",
+		DescriptionField: "There was an internal server error.",
+		HintField:        "Required upstream data not found in session.",
+		CodeField:        http.StatusInternalServerError,
+	}
+}
+
+func ErrUpstreamRefreshError() *fosite.RFC6749Error {
+	return &fosite.RFC6749Error{
+		ErrorField:       "error",
+		DescriptionField: "Error during upstream refresh.",
+		CodeField:        http.StatusUnauthorized,
+	}
+}
+
+func TransformRefreshedIdentity(
+	ctx context.Context,
+	transforms *idtransform.TransformationPipeline,
+	oldTransformedUsername string,
+	upstreamUsername string,
+	upstreamGroups []string,
+	providerName string,
+	providerType psession.ProviderType,
+) (*idtransform.TransformationResult, error) {
+	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
+	if err != nil {
+		return nil, ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh error while applying configured identity transformations.").
+			WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	if !transformationResult.AuthenticationAllowed {
+		return nil, ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh rejected by configured identity policy: %s.", transformationResult.RejectedAuthenticationMessage).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	if oldTransformedUsername != transformationResult.Username {
+		return nil, ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").
+			WithTrace(errors.New("username in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	return transformationResult, nil
 }

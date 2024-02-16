@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/ory/fosite"
+	errorsx "github.com/pkg/errors"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
@@ -135,6 +136,73 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) HandleCallback(
 	_redirectURI string,
 ) (*resolvedprovider.Identity, error) {
 	return nil, httperr.New(http.StatusInternalServerError, "not supported for this type of identity provider")
+}
+
+func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
+	ctx context.Context,
+	session *psession.PinnipedSession,
+	groupsWillBeIgnored bool,
+) (refreshedGroups []string, err error) {
+	s := session.Custom
+
+	var dn string
+	if s.ProviderType == psession.ProviderTypeLDAP {
+		dn = s.LDAP.UserDN
+	} else if s.ProviderType == psession.ProviderTypeActiveDirectory {
+		dn = s.ActiveDirectory.UserDN
+	}
+
+	validLDAP := s.ProviderType == psession.ProviderTypeLDAP && s.LDAP != nil && s.LDAP.UserDN != ""
+	validAD := s.ProviderType == psession.ProviderTypeActiveDirectory && s.ActiveDirectory != nil && s.ActiveDirectory.UserDN != ""
+	if !(validLDAP || validAD) {
+		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+	}
+
+	var additionalAttributes map[string]string
+	if s.ProviderType == psession.ProviderTypeLDAP {
+		additionalAttributes = s.LDAP.ExtraRefreshAttributes
+	} else {
+		additionalAttributes = s.ActiveDirectory.ExtraRefreshAttributes
+	}
+
+	if session.IDTokenClaims().AuthTime.IsZero() {
+		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+	}
+
+	oldTransformedUsername := session.Custom.Username
+	oldUntransformedUsername := session.Custom.UpstreamUsername
+	oldUntransformedGroups := session.Custom.UpstreamGroups
+
+	plog.Debug("attempting upstream refresh request",
+		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+
+	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.RefreshAttributes{
+		Username:             oldUntransformedUsername,
+		Subject:              session.Fosite.Claims.Subject,
+		DN:                   dn,
+		Groups:               oldUntransformedGroups,
+		AdditionalAttributes: additionalAttributes,
+		SkipGroups:           groupsWillBeIgnored,
+	}, p.DisplayName)
+	if err != nil {
+		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(
+			"Upstream refresh failed.").WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+	}
+
+	transformationResult, err := resolvedprovider.TransformRefreshedIdentity(ctx,
+		p.Transforms,
+		oldTransformedUsername,
+		oldUntransformedUsername, // LDAP PerformRefresh validates that the username did not change, so this is also the refreshed upstream username
+		refreshedUntransformedGroups,
+		s.ProviderName,
+		s.ProviderType,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return transformationResult.Groups, nil
 }
 
 func makeDownstreamLDAPOrADCustomSessionData(

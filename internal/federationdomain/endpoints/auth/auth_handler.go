@@ -130,7 +130,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamProvider, err := chooseUpstreamIDP(idpNameQueryParamValue, h.idpFinder)
+	idp, err := chooseUpstreamIDP(idpNameQueryParamValue, h.idpFinder)
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w,
 			h.oauthHelperWithoutStorage,
@@ -142,7 +142,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.authorize(w, r, requestedBrowserlessFlow, idpNameQueryParamValue, upstreamProvider)
+	h.authorize(w, r, requestedBrowserlessFlow, idpNameQueryParamValue, idp)
 }
 
 func (h *authorizeHandler) authorize(
@@ -150,7 +150,7 @@ func (h *authorizeHandler) authorize(
 	r *http.Request,
 	requestedBrowserlessFlow bool,
 	idpNameQueryParamValue string,
-	upstreamProvider resolvedprovider.FederationDomainResolvedIdentityProvider,
+	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
 ) {
 	// Browser flows do not need session storage at this step. For browser flows, the request parameters
 	// should be forwarded to the next step as upstream state parameters to avoid storing session state
@@ -177,9 +177,9 @@ func (h *authorizeHandler) authorize(
 	downstreamsession.AutoApproveScopes(authorizeRequester)
 
 	if requestedBrowserlessFlow {
-		err = h.authorizeWithoutBrowser(r, w, oauthHelper, authorizeRequester, upstreamProvider)
+		err = h.authorizeWithoutBrowser(r, w, oauthHelper, authorizeRequester, idp)
 	} else {
-		err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, upstreamProvider)
+		err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
 	}
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
@@ -191,7 +191,7 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
 	authorizeRequester fosite.AuthorizeRequester,
-	upstreamProvider resolvedprovider.FederationDomainResolvedIdentityProvider,
+	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
 ) error {
 	if err := requireStaticClientForUsernameAndPasswordHeaders(authorizeRequester); err != nil {
 		return err
@@ -204,14 +204,25 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 
 	groupsWillBeIgnored := !slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups)
 
-	identity, err := upstreamProvider.Login(r.Context(), submittedUsername, submittedPassword, groupsWillBeIgnored)
+	identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword, groupsWillBeIgnored)
 	if err != nil {
 		return err
 	}
 
-	session := downstreamsession.MakeDownstreamSession(
-		identity, authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(),
-	)
+	username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(),
+		idp.GetTransforms(), identity.UpstreamUsername, identity.UpstreamGroups)
+	if err != nil {
+		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+	}
+
+	session := downstreamsession.NewPinnipedSession(idp, &downstreamsession.SessionConfig{
+		UpstreamIdentity:    identity,
+		UpstreamLoginExtras: loginExtras,
+		Username:            username,
+		Groups:              groups,
+		ClientID:            authorizeRequester.GetClient().GetID(),
+		GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+	})
 
 	oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, session, true)
 
@@ -223,7 +234,7 @@ func (h *authorizeHandler) authorizeWithBrowser(
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,
 	authorizeRequester fosite.AuthorizeRequester,
-	upstreamProvider resolvedprovider.FederationDomainResolvedIdentityProvider,
+	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
 ) error {
 	authRequestState, err := generateUpstreamAuthorizeRequestState(r, w,
 		authorizeRequester,
@@ -231,8 +242,8 @@ func (h *authorizeHandler) authorizeWithBrowser(
 		h.generateCSRF,
 		h.generateNonce,
 		h.generatePKCE,
-		upstreamProvider.GetDisplayName(),
-		upstreamProvider.GetSessionProviderType(),
+		idp.GetDisplayName(),
+		idp.GetSessionProviderType(),
 		h.cookieCodec,
 		h.upstreamStateEncoder,
 	)
@@ -240,7 +251,7 @@ func (h *authorizeHandler) authorizeWithBrowser(
 		return err
 	}
 
-	redirectURL, err := upstreamProvider.UpstreamAuthorizeRedirectURL(authRequestState, h.downstreamIssuerURL)
+	redirectURL, err := idp.UpstreamAuthorizeRedirectURL(authRequestState, h.downstreamIssuerURL)
 	if err != nil {
 		return err
 	}

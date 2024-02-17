@@ -25,38 +25,75 @@ import (
 
 const idTransformUnexpectedErr = constable.Error("configured identity transformation or policy resulted in unexpected error")
 
-// MakeDownstreamSession creates a downstream OIDC session.
-func MakeDownstreamSession(identity *resolvedprovider.Identity, grantedScopes []string, clientID string) *psession.PinnipedSession {
+// SessionConfig is everything that is needed to start a new downstream Pinniped session, including the upstream and
+// downstream identities of the user. All fields are required.
+type SessionConfig struct {
+	UpstreamIdentity    *resolvedprovider.Identity
+	UpstreamLoginExtras *resolvedprovider.IdentityLoginExtras
+
+	// The downstream username.
+	Username string
+	// The downstream groups.
+	Groups []string
+
+	// The ID of the client who started the new downstream session.
+	ClientID string
+	// The scopes that were granted for the new downstream session.
+	GrantedScopes []string
+}
+
+// NewPinnipedSession creates a downstream Pinniped session.
+func NewPinnipedSession(
+	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
+	c *SessionConfig,
+) *psession.PinnipedSession {
 	now := time.Now().UTC()
-	openIDSession := &psession.PinnipedSession{
+
+	customSessionData := &psession.CustomSessionData{
+		Username:         c.Username,
+		UpstreamUsername: c.UpstreamIdentity.UpstreamUsername,
+		UpstreamGroups:   c.UpstreamIdentity.UpstreamGroups,
+		ProviderUID:      idp.GetProvider().GetResourceUID(),
+		ProviderName:     idp.GetProvider().GetName(),
+		ProviderType:     idp.GetSessionProviderType(),
+		Warnings:         c.UpstreamLoginExtras.Warnings,
+	}
+	idp.ApplyIDPSpecificSessionDataToSession(customSessionData, c.UpstreamIdentity.IDPSpecificSessionData)
+
+	pinnipedSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
-				Subject:     identity.Subject,
+				Subject:     c.UpstreamIdentity.DownstreamSubject,
 				RequestedAt: now,
 				AuthTime:    now,
 			},
 		},
-		Custom: identity.SessionData,
+		Custom: customSessionData,
 	}
 
 	extras := map[string]interface{}{}
-	extras[oidcapi.IDTokenClaimAuthorizedParty] = clientID
-	if slices.Contains(grantedScopes, oidcapi.ScopeUsername) {
-		extras[oidcapi.IDTokenClaimUsername] = identity.SessionData.Username
+
+	extras[oidcapi.IDTokenClaimAuthorizedParty] = c.ClientID
+
+	if slices.Contains(c.GrantedScopes, oidcapi.ScopeUsername) {
+		extras[oidcapi.IDTokenClaimUsername] = c.Username
 	}
-	if slices.Contains(grantedScopes, oidcapi.ScopeGroups) {
-		groups := identity.Groups
+
+	if slices.Contains(c.GrantedScopes, oidcapi.ScopeGroups) {
+		groups := c.Groups
 		if groups == nil {
 			groups = []string{}
 		}
 		extras[oidcapi.IDTokenClaimGroups] = groups
 	}
-	if len(identity.AdditionalClaims) > 0 {
-		extras[oidcapi.IDTokenClaimAdditionalClaims] = identity.AdditionalClaims
-	}
-	openIDSession.IDTokenClaims().Extra = extras
 
-	return openIDSession
+	if len(c.UpstreamLoginExtras.DownstreamAdditionalClaims) > 0 {
+		extras[oidcapi.IDTokenClaimAdditionalClaims] = c.UpstreamLoginExtras.DownstreamAdditionalClaims
+	}
+
+	pinnipedSession.IDTokenClaims().Extra = extras
+
+	return pinnipedSession
 }
 
 // AutoApproveScopes auto-grants the scopes which we support and for which we do not require end-user approval,
@@ -89,11 +126,11 @@ func AutoApproveScopes(authorizeRequester fosite.AuthorizeRequester) {
 // or potentially reject the identity.
 func ApplyIdentityTransformations(
 	ctx context.Context,
-	identityTransforms *idtransform.TransformationPipeline,
+	transforms *idtransform.TransformationPipeline,
 	username string,
 	groups []string,
 ) (string, []string, error) {
-	transformationResult, err := identityTransforms.Evaluate(ctx, username, groups)
+	transformationResult, err := transforms.Evaluate(ctx, username, groups)
 	if err != nil {
 		plog.Error("unexpected identity transformation error during authentication", err, "inputUsername", username)
 		return "", nil, idTransformUnexpectedErr

@@ -20,7 +20,6 @@ import (
 	"go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -87,6 +86,17 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) GetTransforms() *idtransf
 	return p.Transforms
 }
 
+func (p *FederationDomainResolvedOIDCIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{} {
+	if session.OIDC == nil {
+		return nil
+	}
+	return session.OIDC.Clone()
+}
+
+func (p *FederationDomainResolvedOIDCIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{}) {
+	session.OIDC = idpSpecificSessionData.(*psession.OIDCSessionData)
+}
+
 func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamAuthorizeRedirectURL(state *resolvedprovider.UpstreamAuthorizeRequestState, downstreamIssuerURL string) (string, error) {
 	upstreamOAuthConfig := oauth2.Config{
 		ClientID: p.Provider.GetClientID(),
@@ -120,10 +130,10 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) Login(
 	submittedUsername string,
 	submittedPassword string,
 	_groupsWillBeIgnored bool, // ignored because we always compute the user's group memberships for OIDC, if possible
-) (*resolvedprovider.Identity, error) {
+) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	if !p.Provider.AllowsPasswordGrant() {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return nil, fosite.ErrAccessDenied.WithHint(
+		return nil, nil, fosite.ErrAccessDenied.WithHint(
 			"Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.")
 	}
 
@@ -136,35 +146,35 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) Login(
 		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
 		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
 		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
-		return nil, fosite.ErrAccessDenied.WithDebug(err.Error()) // WithDebug hides the error from the client
+		return nil, nil, fosite.ErrAccessDenied.WithDebug(err.Error()) // WithDebug hides the error from the client
 	}
 
-	subject, upstreamUsername, upstreamGroups, err := getDownstreamIdentityFromUpstreamIDToken(
-		p.Provider, token.IDToken.Claims, p.DisplayName,
+	subject, upstreamUsername, upstreamGroups, err := getIdentityFromUpstreamIDToken(
+		p.Provider, token.IDToken.Claims, p.GetDisplayName(),
 	)
 	if err != nil {
 		// Return a user-friendly error for this case which is entirely within our control.
-		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
-	}
-
-	username, groups, err := downstreamsession.ApplyIdentityTransformations(ctx, p.Transforms, upstreamUsername, upstreamGroups)
-	if err != nil {
-		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
 	additionalClaims := mapAdditionalClaimsFromUpstreamIDToken(p.Provider, token.IDToken.Claims)
 
-	customSessionData, err := makeDownstreamOIDCCustomSessionData(p.Provider, token, username, upstreamUsername, upstreamGroups)
+	oidcSessionData, warnings, err := makeDownstreamOIDCSessionData(p.Provider, token)
 	if err != nil {
-		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+		return nil, nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 	}
 
 	return &resolvedprovider.Identity{
-		SessionData:      customSessionData,
-		Groups:           groups,
-		Subject:          subject,
-		AdditionalClaims: additionalClaims,
-	}, nil
+			UpstreamUsername:       upstreamUsername,
+			UpstreamGroups:         upstreamGroups,
+			DownstreamSubject:      subject,
+			IDPSpecificSessionData: oidcSessionData,
+		},
+		&resolvedprovider.IdentityLoginExtras{
+			DownstreamAdditionalClaims: additionalClaims,
+			Warnings:                   warnings,
+		},
+		nil
 }
 
 func (p *FederationDomainResolvedOIDCIdentityProvider) HandleCallback(
@@ -173,7 +183,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) HandleCallback(
 	pkce pkce.Code,
 	nonce nonce.Nonce,
 	redirectURI string,
-) (*resolvedprovider.Identity, error) {
+) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	token, err := p.Provider.ExchangeAuthcodeAndValidateTokens(
 		ctx,
 		authCode,
@@ -183,76 +193,68 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) HandleCallback(
 	)
 	if err != nil {
 		plog.WarningErr("error exchanging and validating upstream tokens", err, "upstreamName", p.Provider.GetName())
-		return nil, httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
+		return nil, nil, httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 	}
 
-	subject, upstreamUsername, upstreamGroups, err := getDownstreamIdentityFromUpstreamIDToken(
-		p.Provider, token.IDToken.Claims, p.DisplayName,
+	subject, upstreamUsername, upstreamGroups, err := getIdentityFromUpstreamIDToken(
+		p.Provider, token.IDToken.Claims, p.GetDisplayName(),
 	)
 	if err != nil {
-		return nil, httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
-	}
-
-	username, groups, err := downstreamsession.ApplyIdentityTransformations(
-		ctx, p.Transforms, upstreamUsername, upstreamGroups,
-	)
-	if err != nil {
-		return nil, httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		return nil, nil, httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 	}
 
 	additionalClaims := mapAdditionalClaimsFromUpstreamIDToken(p.Provider, token.IDToken.Claims)
 
-	customSessionData, err := makeDownstreamOIDCCustomSessionData(
-		p.Provider, token, username, upstreamUsername, upstreamGroups,
-	)
+	oidcSessionData, warnings, err := makeDownstreamOIDCSessionData(p.Provider, token)
 	if err != nil {
-		return nil, httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		return nil, nil, httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 	}
 
 	return &resolvedprovider.Identity{
-		SessionData:      customSessionData,
-		Groups:           groups,
-		Subject:          subject,
-		AdditionalClaims: additionalClaims,
-	}, nil
+			UpstreamUsername:       upstreamUsername,
+			UpstreamGroups:         upstreamGroups,
+			DownstreamSubject:      subject,
+			IDPSpecificSessionData: oidcSessionData,
+		},
+		&resolvedprovider.IdentityLoginExtras{
+			DownstreamAdditionalClaims: additionalClaims,
+			Warnings:                   warnings,
+		},
+		nil
 }
 
 func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	ctx context.Context,
-	session *psession.PinnipedSession,
+	identity *resolvedprovider.Identity,
 	groupsWillBeIgnored bool,
-) (refreshedGroups []string, err error) {
-	s := session.Custom
-
-	if s.OIDC == nil {
+) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
+	sessionData, ok := identity.IDPSpecificSessionData.(*psession.OIDCSessionData)
+	if !ok {
+		// This shouldn't really happen.
 		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
 	}
 
-	accessTokenStored := s.OIDC.UpstreamAccessToken != ""
-	refreshTokenStored := s.OIDC.UpstreamRefreshToken != ""
+	accessTokenStored := sessionData.UpstreamAccessToken != ""
+	refreshTokenStored := sessionData.UpstreamRefreshToken != ""
 
 	exactlyOneTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
 	if !exactlyOneTokenStored {
 		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
 	}
 
-	oldTransformedUsername := session.Custom.Username
-	oldUntransformedUsername := session.Custom.UpstreamUsername
-	oldUntransformedGroups := session.Custom.UpstreamGroups
-
 	plog.Debug("attempting upstream refresh request",
-		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+		"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
 
 	var tokens *oauth2.Token
 	if refreshTokenStored {
-		tokens, err = p.Provider.PerformRefresh(ctx, s.OIDC.UpstreamRefreshToken)
+		tokens, err = p.Provider.PerformRefresh(ctx, sessionData.UpstreamRefreshToken)
 		if err != nil {
 			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(
 				"Upstream refresh failed.",
-			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 		}
 	} else {
-		tokens = &oauth2.Token{AccessToken: s.OIDC.UpstreamAccessToken}
+		tokens = &oauth2.Token{AccessToken: sessionData.UpstreamAccessToken}
 	}
 
 	// Upstream refresh may or may not return a new ID token. From the spec:
@@ -270,13 +272,13 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	if err != nil {
 		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh returned an invalid ID token or UserInfo response.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 	}
 	mergedClaims := validatedTokens.IDToken.Claims
 
 	// To the extent possible, check that the user's basic identity hasn't changed. We check that their downstream
 	// username has not changed separately below, as part of reapplying the transformations.
-	err = validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, session)
+	err = validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, sessionData, p.Provider.GetName(), p.GetSessionProviderType())
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +296,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 		if err != nil {
 			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 				"Upstream refresh error while extracting groups claim.").WithTrace(err).
-				WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+				WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 		}
 	}
 
@@ -304,46 +306,35 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 
 	if !hasRefreshedUntransformedUsername {
 		// If we could not get a new username, then we still need the untransformed username to be able to
-		// run the transformations again, so fetch the original untransformed username from the session.
-		refreshedUntransformedUsername = oldUntransformedUsername
-	}
-	if refreshedUntransformedGroups == nil {
-		// If we could not get a new list of groups, then we still need the untransformed groups list to be able to
-		// run the transformations again, so fetch the original untransformed groups list from the session.
-		// We should also run the transformations on the original groups even when the groups scope was not granted,
-		// because a transformation policy may want to reject the authentication based on the group memberships, even
-		// though the group memberships will not be shared with the client (in the code below) due to the groups scope
-		// not being granted.
-		refreshedUntransformedGroups = oldUntransformedGroups
+		// run the transformations again, so use the original untransformed username from the session.
+		refreshedUntransformedUsername = identity.UpstreamUsername
 	}
 
-	transformationResult, err := resolvedprovider.TransformRefreshedIdentity(ctx,
-		p.Transforms,
-		oldTransformedUsername,
-		refreshedUntransformedUsername,
-		refreshedUntransformedGroups,
-		s.ProviderName,
-		s.ProviderType,
-	)
-	if err != nil {
-		return nil, err
-	}
+	updatedSessionData := sessionData.Clone()
 
 	// Upstream refresh may or may not return a new refresh token. If we got a new refresh token, then update it in
 	// the user's session. If we did not get a new refresh token, then keep the old one in the session by avoiding
 	// overwriting the old one.
 	if tokens.RefreshToken != "" {
 		plog.Debug("upstream refresh request returned a new refresh token",
-			"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
-		s.OIDC.UpstreamRefreshToken = tokens.RefreshToken
+			"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
+
+		updatedSessionData.UpstreamRefreshToken = tokens.RefreshToken
 	}
 
-	return transformationResult.Groups, nil
+	return &resolvedprovider.RefreshedIdentity{
+		UpstreamUsername:       refreshedUntransformedUsername,
+		UpstreamGroups:         refreshedUntransformedGroups,
+		IDPSpecificSessionData: updatedSessionData,
+	}, nil
 }
 
-func validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims map[string]interface{}, session *psession.PinnipedSession) error {
-	s := session.Custom
-
+func validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(
+	mergedClaims map[string]interface{},
+	s *psession.OIDCSessionData,
+	providerName string,
+	providerType psession.ProviderType,
+) error {
 	// If we have any claims at all, we better have a subject, and it better match the previous value.
 	// but it's possible that we don't because both returning a new id token on refresh and having a userinfo
 	// endpoint are optional.
@@ -355,21 +346,21 @@ func validateSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims map[string]
 	if !hasSub {
 		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh not found")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
-	if s.OIDC.UpstreamSubject != newSub {
+	if s.UpstreamSubject != newSub {
 		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh failed.").WithTrace(errors.New("subject in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	newIssuer, hasIssuer := getString(mergedClaims, oidcapi.IDTokenClaimIssuer)
 	// It's possible that an issuer wasn't returned by the upstream provider during refresh,
 	// but if it is, verify that it hasn't changed.
-	if hasIssuer && s.OIDC.UpstreamIssuer != newIssuer {
+	if hasIssuer && s.UpstreamIssuer != newIssuer {
 		return resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh failed.").WithTrace(errors.New("issuer in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	return nil
@@ -380,33 +371,22 @@ func getString(m map[string]interface{}, key string) (string, bool) {
 	return val, ok
 }
 
-func makeDownstreamOIDCCustomSessionData(
+func makeDownstreamOIDCSessionData(
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	token *oidctypes.Token,
-	username string,
-	untransformedUpstreamUsername string,
-	untransformedUpstreamGroups []string,
-) (*psession.CustomSessionData, error) {
+) (*psession.OIDCSessionData, []string, error) {
 	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, oidcUpstream.GetName(), token.IDToken.Claims)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, oidcUpstream.GetName(), token.IDToken.Claims)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	customSessionData := &psession.CustomSessionData{
-		Username:         username,
-		UpstreamUsername: untransformedUpstreamUsername,
-		UpstreamGroups:   untransformedUpstreamGroups,
-		ProviderUID:      oidcUpstream.GetResourceUID(),
-		ProviderName:     oidcUpstream.GetName(),
-		ProviderType:     psession.ProviderTypeOIDC,
-		OIDC: &psession.OIDCSessionData{
-			UpstreamIssuer:  upstreamIssuer,
-			UpstreamSubject: upstreamSubject,
-		},
+	sessionData := &psession.OIDCSessionData{
+		UpstreamIssuer:  upstreamIssuer,
+		UpstreamSubject: upstreamSubject,
 	}
 
 	const pleaseCheck = "please check configuration of OIDCIdentityProvider and the client in the " +
@@ -417,41 +397,43 @@ func makeDownstreamOIDCCustomSessionData(
 		"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams(),
 	}
 
+	var warnings []string
+
 	hasRefreshToken := token.RefreshToken != nil && token.RefreshToken.Token != ""
 	hasAccessToken := token.AccessToken != nil && token.AccessToken.Token != ""
 	switch {
 	case hasRefreshToken: // we prefer refresh tokens, so check for this first
-		customSessionData.OIDC.UpstreamRefreshToken = token.RefreshToken.Token
+		sessionData.UpstreamRefreshToken = token.RefreshToken.Token
 	case hasAccessToken: // as a fallback, we can use the access token as long as there is a userinfo endpoint
 		if !oidcUpstream.HasUserInfoURL() {
 			plog.Warning("access token was returned by upstream provider during login without a refresh token "+
 				"and there was no userinfo endpoint available on the provider. "+pleaseCheck, logKV...)
-			return nil, errors.New("access token was returned by upstream provider but there was no userinfo endpoint")
+			return nil, nil, errors.New("access token was returned by upstream provider but there was no userinfo endpoint")
 		}
 		plog.Info("refresh token not returned by upstream provider during login, using access token instead. "+pleaseCheck, logKV...)
-		customSessionData.OIDC.UpstreamAccessToken = token.AccessToken.Token
+		sessionData.UpstreamAccessToken = token.AccessToken.Token
 		// When we are in a flow where we will be performing access token based refresh, issue a warning to the client if the access
 		// token lifetime is very short, since that would mean that the user's session is very short.
 		// The warnings are stored here and will be processed by the token handler.
 		threeHoursFromNow := metav1.NewTime(time.Now().Add(3 * time.Hour))
 		if !token.AccessToken.Expiry.IsZero() && token.AccessToken.Expiry.Before(&threeHoursFromNow) {
-			customSessionData.Warnings = append(customSessionData.Warnings, "Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
+			warnings = []string{"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in."}
 		}
 	default:
 		plog.Warning("refresh token and access token not returned by upstream provider during login. "+pleaseCheck, logKV...)
-		return nil, errors.New("neither access token nor refresh token returned by upstream provider")
+		return nil, nil, errors.New("neither access token nor refresh token returned by upstream provider")
 	}
 
-	return customSessionData, nil
+	return sessionData, warnings, nil
 }
 
-// getDownstreamIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
-func getDownstreamIdentityFromUpstreamIDToken(
+// getIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
+func getIdentityFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 	idpDisplayName string,
 ) (string, string, []string, error) {
-	subject, username, err := getSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims, idpDisplayName)
+	subject, username, err := getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims, idpDisplayName)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -485,7 +467,7 @@ func mapAdditionalClaimsFromUpstreamIDToken(
 	return mapped
 }
 
-func getSubjectAndUsernameFromUpstreamIDToken(
+func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 	idpDisplayName string,
@@ -504,7 +486,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 
 	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaimName == "" {
-		return subject, downstreamUsernameFromUpstreamOIDCSubject(upstreamIssuer, upstreamSubject), nil
+		return subject, mappedUsernameFromUpstreamOIDCSubject(upstreamIssuer, upstreamSubject), nil
 	}
 
 	// If the upstream username claim is configured to be the special "email" claim and the upstream "email_verified"
@@ -572,7 +554,7 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 	return valueAsString, nil
 }
 
-func downstreamUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, upstreamSubject string) string {
+func mappedUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, upstreamSubject string) string {
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString,
 		oidc.IDTokenClaimSubject, url.QueryEscape(upstreamSubject),
 	)

@@ -5,6 +5,7 @@ package resolvedldap
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/ory/fosite"
@@ -12,7 +13,6 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
-	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
@@ -64,6 +64,33 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) GetTransforms() *idtransf
 	return p.Transforms
 }
 
+func (p *FederationDomainResolvedLDAPIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{} {
+	switch p.GetSessionProviderType() {
+	case psession.ProviderTypeLDAP:
+		if session.LDAP == nil {
+			return nil
+		}
+		return session.LDAP.Clone()
+	case psession.ProviderTypeActiveDirectory:
+		if session.ActiveDirectory == nil {
+			return nil
+		}
+		return session.ActiveDirectory.Clone()
+	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
+		fallthrough
+	default:
+		return nil
+	}
+}
+
+func (p *FederationDomainResolvedLDAPIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{}) {
+	if p.GetSessionProviderType() == psession.ProviderTypeActiveDirectory {
+		session.ActiveDirectory = idpSpecificSessionData.(*psession.ActiveDirectorySessionData)
+		return
+	}
+	session.LDAP = idpSpecificSessionData.(*psession.LDAPSessionData)
+}
+
 func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamAuthorizeRedirectURL(state *resolvedprovider.UpstreamAuthorizeRequestState, downstreamIssuerURL string) (string, error) {
 	loginURL, err := loginurl.URL(downstreamIssuerURL, state.EncodedStateParam, loginurl.ShowNoError)
 	if err != nil {
@@ -99,33 +126,49 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) Login(
 	submittedUsername string,
 	submittedPassword string,
 	groupsWillBeIgnored bool,
-) (*resolvedprovider.Identity, error) {
+) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	authenticateResponse, authenticated, err := p.Provider.AuthenticateUser(ctx, submittedUsername, submittedPassword, groupsWillBeIgnored)
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", p.Provider.GetName())
-		return nil, ErrUnexpectedUpstreamLDAPError.WithWrap(err)
+		return nil, nil, ErrUnexpectedUpstreamLDAPError.WithWrap(err)
 	}
 	if !authenticated {
-		return nil, ErrAccessDeniedDueToUsernamePasswordNotAccepted
+		return nil, nil, ErrAccessDeniedDueToUsernamePasswordNotAccepted
 	}
 
-	subject := downstreamSubjectFromUpstreamLDAP(p.Provider, authenticateResponse, p.DisplayName)
+	subject := downstreamSubjectFromUpstreamLDAP(p.Provider, authenticateResponse, p.GetDisplayName())
 	upstreamUsername := authenticateResponse.User.GetName()
 	upstreamGroups := authenticateResponse.User.GetGroups()
 
-	username, groups, err := downstreamsession.ApplyIdentityTransformations(ctx, p.Transforms, upstreamUsername, upstreamGroups)
-	if err != nil {
-		return nil, fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+	var sessionData interface{}
+	switch p.GetSessionProviderType() {
+	case psession.ProviderTypeLDAP:
+		sessionData = &psession.LDAPSessionData{
+			UserDN:                 authenticateResponse.DN,
+			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
+		}
+	case psession.ProviderTypeActiveDirectory:
+		sessionData = &psession.ActiveDirectorySessionData{
+			UserDN:                 authenticateResponse.DN,
+			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
+		}
+	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
+		fallthrough
+	default:
+		return nil, nil, ErrUnexpectedUpstreamLDAPError.WithWrap(fmt.Errorf("unexpected provider type %q", p.GetSessionProviderType()))
 	}
 
-	customSessionData := makeDownstreamLDAPOrADCustomSessionData(
-		p.Provider, p.SessionProviderType, authenticateResponse, username, upstreamUsername, upstreamGroups)
-
 	return &resolvedprovider.Identity{
-		SessionData: customSessionData,
-		Groups:      groups,
-		Subject:     subject,
-	}, nil
+			UpstreamUsername:       upstreamUsername,
+			UpstreamGroups:         upstreamGroups,
+			DownstreamSubject:      subject,
+			IDPSpecificSessionData: sessionData,
+		},
+		&resolvedprovider.IdentityLoginExtras{
+			DownstreamAdditionalClaims: nil,
+			Warnings:                   nil,
+		},
+		nil
 }
 
 func (p *FederationDomainResolvedLDAPIdentityProvider) HandleCallback(
@@ -134,109 +177,73 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) HandleCallback(
 	_pkce pkce.Code,
 	_nonce nonce.Nonce,
 	_redirectURI string,
-) (*resolvedprovider.Identity, error) {
-	return nil, httperr.New(http.StatusInternalServerError, "not supported for this type of identity provider")
+) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
+	return nil, nil, httperr.New(http.StatusInternalServerError,
+		"HandleCallback() is not supported for LDAP and ActiveDirectory types of identity provider")
 }
 
 func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
 	ctx context.Context,
-	session *psession.PinnipedSession,
+	identity *resolvedprovider.Identity,
 	groupsWillBeIgnored bool,
-) (refreshedGroups []string, err error) {
-	s := session.Custom
-
+) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	var dn string
-	if s.ProviderType == psession.ProviderTypeLDAP {
-		dn = s.LDAP.UserDN
-	} else if s.ProviderType == psession.ProviderTypeActiveDirectory {
-		dn = s.ActiveDirectory.UserDN
-	}
-
-	validLDAP := s.ProviderType == psession.ProviderTypeLDAP && s.LDAP != nil && s.LDAP.UserDN != ""
-	validAD := s.ProviderType == psession.ProviderTypeActiveDirectory && s.ActiveDirectory != nil && s.ActiveDirectory.UserDN != ""
-	if !(validLDAP || validAD) {
-		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
-	}
-
 	var additionalAttributes map[string]string
-	if s.ProviderType == psession.ProviderTypeLDAP {
-		additionalAttributes = s.LDAP.ExtraRefreshAttributes
-	} else {
-		additionalAttributes = s.ActiveDirectory.ExtraRefreshAttributes
+
+	switch p.GetSessionProviderType() {
+	case psession.ProviderTypeLDAP:
+		sessionData, ok := identity.IDPSpecificSessionData.(*psession.LDAPSessionData)
+		if !ok {
+			// This shouldn't really happen.
+			return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+		}
+		dn = sessionData.UserDN
+		additionalAttributes = sessionData.ExtraRefreshAttributes
+	case psession.ProviderTypeActiveDirectory:
+		sessionData, ok := identity.IDPSpecificSessionData.(*psession.ActiveDirectorySessionData)
+		if !ok {
+			// This shouldn't really happen.
+			return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+		}
+		dn = sessionData.UserDN
+		additionalAttributes = sessionData.ExtraRefreshAttributes
+	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
+		fallthrough
+	default:
+		// This shouldn't really happen.
+		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Unexpected provider type during refresh %q", p.GetSessionProviderType()).WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 	}
 
-	if session.IDTokenClaims().AuthTime.IsZero() {
+	if dn == "" {
 		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
 	}
-
-	oldTransformedUsername := session.Custom.Username
-	oldUntransformedUsername := session.Custom.UpstreamUsername
-	oldUntransformedGroups := session.Custom.UpstreamGroups
 
 	plog.Debug("attempting upstream refresh request",
-		"providerName", s.ProviderName, "providerType", s.ProviderType, "providerUID", s.ProviderUID)
+		"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
 
 	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.RefreshAttributes{
-		Username:             oldUntransformedUsername,
-		Subject:              session.Fosite.Claims.Subject,
+		Username:             identity.UpstreamUsername,
+		Subject:              identity.DownstreamSubject,
 		DN:                   dn,
-		Groups:               oldUntransformedGroups,
+		Groups:               identity.UpstreamGroups,
 		AdditionalAttributes: additionalAttributes,
 		SkipGroups:           groupsWillBeIgnored,
-	}, p.DisplayName)
+	}, p.GetDisplayName())
 	if err != nil {
 		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(
 			"Upstream refresh failed.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", s.ProviderName, s.ProviderType)
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 	}
 
-	transformationResult, err := resolvedprovider.TransformRefreshedIdentity(ctx,
-		p.Transforms,
-		oldTransformedUsername,
-		oldUntransformedUsername, // LDAP PerformRefresh validates that the username did not change, so this is also the refreshed upstream username
-		refreshedUntransformedGroups,
-		s.ProviderName,
-		s.ProviderType,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return transformationResult.Groups, nil
-}
-
-func makeDownstreamLDAPOrADCustomSessionData(
-	ldapUpstream upstreamprovider.UpstreamLDAPIdentityProviderI,
-	idpType psession.ProviderType,
-	authenticateResponse *authenticators.Response,
-	username string,
-	untransformedUpstreamUsername string,
-	untransformedUpstreamGroups []string,
-) *psession.CustomSessionData {
-	customSessionData := &psession.CustomSessionData{
-		Username:         username,
-		UpstreamUsername: untransformedUpstreamUsername,
-		UpstreamGroups:   untransformedUpstreamGroups,
-		ProviderUID:      ldapUpstream.GetResourceUID(),
-		ProviderName:     ldapUpstream.GetName(),
-		ProviderType:     idpType,
-	}
-
-	if idpType == psession.ProviderTypeLDAP {
-		customSessionData.LDAP = &psession.LDAPSessionData{
-			UserDN:                 authenticateResponse.DN,
-			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
-		}
-	}
-
-	if idpType == psession.ProviderTypeActiveDirectory {
-		customSessionData.ActiveDirectory = &psession.ActiveDirectorySessionData{
-			UserDN:                 authenticateResponse.DN,
-			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
-		}
-	}
-
-	return customSessionData
+	return &resolvedprovider.RefreshedIdentity{
+		// LDAP PerformRefresh validates that the username did not change during refresh,
+		// so the original upstream username is also the refreshed upstream username.
+		UpstreamUsername:       identity.UpstreamUsername,
+		UpstreamGroups:         refreshedUntransformedGroups,
+		IDPSpecificSessionData: nil,
+	}, nil
 }
 
 func downstreamSubjectFromUpstreamLDAP(

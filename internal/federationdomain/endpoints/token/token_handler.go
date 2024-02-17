@@ -6,6 +6,7 @@ package token
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -21,6 +22,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 )
@@ -113,11 +115,22 @@ func upstreamRefresh(
 
 	skipGroups := !slices.Contains(accessRequest.GetGrantedScopes(), oidcapi.ScopeGroups)
 
-	clientID := accessRequest.GetClient().GetID()
+	if session.IDTokenClaims().AuthTime.IsZero() {
+		return errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
+	}
 
 	err := validateSessionHasUsername(session)
 	if err != nil {
 		return err
+	}
+
+	var oldTransformedGroups []string
+	if !skipGroups {
+		// Only validate the groups in the session if the groups scope was granted.
+		oldTransformedGroups, err = validateAndGetDownstreamGroupsFromSession(session)
+		if err != nil {
+			return err
+		}
 	}
 
 	idp, err := findProviderByNameAndType(providerName, customSessionData.ProviderType, providerUID, idpLister)
@@ -125,24 +138,59 @@ func upstreamRefresh(
 		return err
 	}
 
-	oldTransformedUsername := session.Custom.Username
-	var oldTransformedGroups []string
-	if !skipGroups {
-		oldTransformedGroups, err = getDownstreamGroupsFromSession(session)
-		if err != nil {
-			return err
-		}
+	cloneOfIDPSpecificSessionData := idp.CloneIDPSpecificSessionDataFromSession(session.Custom)
+	if cloneOfIDPSpecificSessionData == nil {
+		return errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
 	}
 
-	refreshedGroups, err := idp.UpstreamRefresh(ctx, session, skipGroups)
+	oldUntransformedUsername := session.Custom.UpstreamUsername
+	oldUntransformedGroups := session.Custom.UpstreamGroups
+	oldTransformedUsername := session.Custom.Username
+
+	previousIdentity := resolvedprovider.Identity{
+		UpstreamUsername:       oldUntransformedUsername,
+		UpstreamGroups:         oldUntransformedGroups,
+		DownstreamSubject:      session.Fosite.Claims.Subject,
+		IDPSpecificSessionData: cloneOfIDPSpecificSessionData,
+	}
+
+	// Perform the upstream refresh.
+	refreshedIdentity, err := idp.UpstreamRefresh(ctx, &previousIdentity, skipGroups)
+	if err != nil {
+		return err
+	}
+
+	// If the idp wants to update the session with new information from the refresh, then update it.
+	if refreshedIdentity.IDPSpecificSessionData != nil {
+		idp.ApplyIDPSpecificSessionDataToSession(session.Custom, refreshedIdentity.IDPSpecificSessionData)
+	}
+
+	if refreshedIdentity.UpstreamGroups == nil {
+		// If we could not get a new list of groups, then we still need the untransformed groups list to be able to
+		// run the transformations again, so fetch the original untransformed groups list from the session.
+		// We should also run the transformations on the original groups even when the groups scope was not granted,
+		// because a transformation policy may want to reject the authentication based on the group memberships, even
+		// though the group memberships will not be shared with the client (in the code below) due to the groups scope
+		// not being granted.
+		refreshedIdentity.UpstreamGroups = oldUntransformedGroups
+	}
+
+	refreshedTransformedGroups, err := applyIdentityTransformationsDuringRefresh(ctx,
+		idp.GetTransforms(),
+		oldTransformedUsername, // this function validates that the old and new transformed usernames match
+		refreshedIdentity.UpstreamUsername,
+		refreshedIdentity.UpstreamGroups,
+		session.Custom.ProviderName,
+		session.Custom.ProviderType,
+	)
 	if err != nil {
 		return err
 	}
 
 	if !skipGroups {
-		warnIfGroupsChanged(ctx, oldTransformedGroups, refreshedGroups, oldTransformedUsername, clientID)
+		warnIfGroupsChanged(ctx, oldTransformedGroups, refreshedTransformedGroups, oldTransformedUsername, accessRequest.GetClient().GetID())
 		// Replace the old value for the downstream groups in the user's session with the new value.
-		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedGroups
+		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedTransformedGroups
 	}
 
 	return nil
@@ -178,7 +226,42 @@ func validateSessionHasUsername(session *psession.PinnipedSession) error {
 	return nil
 }
 
-func getDownstreamGroupsFromSession(session *psession.PinnipedSession) ([]string, error) {
+// applyIdentityTransformationsDuringRefresh is similar to downstreamsession.ApplyIdentityTransformations
+// but with validation that the username has not changed, and with slightly different error messaging.
+func applyIdentityTransformationsDuringRefresh(
+	ctx context.Context,
+	transforms *idtransform.TransformationPipeline,
+	oldTransformedUsername string,
+	upstreamUsername string,
+	upstreamGroups []string,
+	providerName string,
+	providerType psession.ProviderType,
+) ([]string, error) {
+	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
+	if err != nil {
+		return nil, errUpstreamRefreshError().WithHintf(
+			"Upstream refresh error while applying configured identity transformations.").
+			WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	if !transformationResult.AuthenticationAllowed {
+		return nil, errUpstreamRefreshError().WithHintf(
+			"Upstream refresh rejected by configured identity policy: %s.", transformationResult.RejectedAuthenticationMessage).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	if oldTransformedUsername != transformationResult.Username {
+		return nil, errUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").
+			WithTrace(errors.New("username in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
+	}
+
+	return transformationResult.Groups, nil
+}
+
+func validateAndGetDownstreamGroupsFromSession(session *psession.PinnipedSession) ([]string, error) {
 	extra := session.Fosite.Claims.Extra
 	if extra == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())

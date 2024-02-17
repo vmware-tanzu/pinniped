@@ -31,8 +31,8 @@ func NewHandler(
 			return err
 		}
 
-		oidcIdentityProvider, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
-		if err != nil || oidcIdentityProvider == nil {
+		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
+		if err != nil || idp == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
@@ -57,21 +57,31 @@ func NewHandler(
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
-		identity, err := oidcIdentityProvider.HandleCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
+		identity, loginExtras, err := idp.HandleCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
 		if err != nil {
 			return err
 		}
 
-		session := downstreamsession.MakeDownstreamSession(
-			identity,
-			authorizeRequester.GetGrantedScopes(),
-			authorizeRequester.GetClient().GetID(),
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(
+			r.Context(), idp.GetTransforms(), identity.UpstreamUsername, identity.UpstreamGroups,
 		)
+		if err != nil {
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		}
+
+		session := downstreamsession.NewPinnipedSession(idp, &downstreamsession.SessionConfig{
+			UpstreamIdentity:    identity,
+			UpstreamLoginExtras: loginExtras,
+			Username:            username,
+			Groups:              groups,
+			ClientID:            authorizeRequester.GetClient().GetID(),
+			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+		})
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, session)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err,
-				"identityProviderDisplayName", oidcIdentityProvider.GetDisplayName(), "fositeErr", oidc.FositeErrorForLog(err))
+				"identityProviderDisplayName", idp.GetDisplayName(), "fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 

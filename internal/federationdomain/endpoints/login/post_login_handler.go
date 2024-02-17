@@ -24,7 +24,7 @@ import (
 func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
-		ldapUpstream, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
+		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil {
 			// This shouldn't normally happen because the authorization endpoint ensured that this provider existed
 			// at that time. It would be possible in the unlikely event that the provider was deleted during the login.
@@ -70,7 +70,7 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 		skipGroups := !slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups)
 
 		// Attempt to authenticate the user with the upstream IDP.
-		identity, err := ldapUpstream.Login(r.Context(), submittedUsername, submittedPassword, skipGroups)
+		identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword, skipGroups)
 		if err != nil {
 			switch {
 			case errors.Is(err, resolvedldap.ErrUnexpectedUpstreamLDAPError):
@@ -82,17 +82,28 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
 			default:
-				// Some other error happened, e.g. a configured identity transformation failed.
+				// Some other error happened.
 				oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, false)
 				return nil
 			}
 		}
 
-		session := downstreamsession.MakeDownstreamSession(
-			identity,
-			authorizeRequester.GetGrantedScopes(),
-			authorizeRequester.GetClient().GetID(),
-		)
+		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(),
+			idp.GetTransforms(), identity.UpstreamUsername, identity.UpstreamGroups)
+		if err != nil {
+			err = fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
+			oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, false)
+			return nil
+		}
+
+		session := downstreamsession.NewPinnipedSession(idp, &downstreamsession.SessionConfig{
+			UpstreamIdentity:    identity,
+			UpstreamLoginExtras: loginExtras,
+			Username:            username,
+			Groups:              groups,
+			ClientID:            authorizeRequester.GetClient().GetID(),
+			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+		})
 
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, session, false)
 

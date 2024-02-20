@@ -24,7 +24,7 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.op
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240202021202-6d0b6a386732
+	github.com/chromedp/cdproto v0.0.0-20240214232516-ad4608604e9e
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/coreos/go-semver v0.3.1
@@ -38,7 +38,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
-	github.com/google/cel-go v0.19.0
+	github.com/google/cel-go v0.20.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
@@ -46,14 +46,14 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.46.1-0.20240213131620-c16a2d159d6d
+	github.com/ory/fosite v0.46.1-0.20240215100027-1f27af44d4f8
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.20.16
+	github.com/tdewolff/minify/v2 v2.20.17
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.19.0
 	golang.org/x/net v0.21.0
@@ -61,15 +61,15 @@ require (
 	golang.org/x/sync v0.6.0
 	golang.org/x/term v0.17.0
 	golang.org/x/text v0.14.0
-	k8s.io/api v0.29.1
-	k8s.io/apiextensions-apiserver v0.29.1
-	k8s.io/apimachinery v0.29.1
-	k8s.io/apiserver v0.29.1
-	k8s.io/client-go v0.29.1
-	k8s.io/component-base v0.29.1
+	k8s.io/api v0.29.2
+	k8s.io/apiextensions-apiserver v0.29.2
+	k8s.io/apimachinery v0.29.2
+	k8s.io/apiserver v0.29.2
+	k8s.io/client-go v0.29.2
+	k8s.io/component-base v0.29.2
 	k8s.io/gengo v0.0.0-20240129211411-f967bbeff4b4
 	k8s.io/klog/v2 v2.120.1
-	k8s.io/kube-aggregator v0.29.1
+	k8s.io/kube-aggregator v0.29.2
 	k8s.io/kube-openapi v0.0.0-20240209001042-7a0d5b415232
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/yaml v1.4.0
@@ -151,7 +151,7 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/tdewolff/parse/v2 v2.7.11 // indirect
+	github.com/tdewolff/parse/v2 v2.7.12 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
@@ -189,7 +189,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.29.1 // indirect
+	k8s.io/kms v0.29.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

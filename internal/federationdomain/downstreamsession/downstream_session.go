@@ -30,27 +30,29 @@ const idTransformUnexpectedErr = constable.Error("configured identity transforma
 type SessionConfig struct {
 	UpstreamIdentity    *resolvedprovider.Identity
 	UpstreamLoginExtras *resolvedprovider.IdentityLoginExtras
-
-	// The downstream username.
-	Username string
-	// The downstream groups.
-	Groups []string
-
 	// The ID of the client who started the new downstream session.
 	ClientID string
 	// The scopes that were granted for the new downstream session.
 	GrantedScopes []string
 }
 
-// NewPinnipedSession creates a downstream Pinniped session.
+// NewPinnipedSession applies the configured FederationDomain identity transformations
+// and creates a downstream Pinniped session.
 func NewPinnipedSession(
+	ctx context.Context,
 	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
 	c *SessionConfig,
-) *psession.PinnipedSession {
+) (*psession.PinnipedSession, error) {
 	now := time.Now().UTC()
 
+	downstreamUsername, downstreamGroups, err := applyIdentityTransformations(ctx,
+		idp.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
+	if err != nil {
+		return nil, err
+	}
+
 	customSessionData := &psession.CustomSessionData{
-		Username:         c.Username,
+		Username:         downstreamUsername,
 		UpstreamUsername: c.UpstreamIdentity.UpstreamUsername,
 		UpstreamGroups:   c.UpstreamIdentity.UpstreamGroups,
 		ProviderUID:      idp.GetProvider().GetResourceUID(),
@@ -76,15 +78,14 @@ func NewPinnipedSession(
 	extras[oidcapi.IDTokenClaimAuthorizedParty] = c.ClientID
 
 	if slices.Contains(c.GrantedScopes, oidcapi.ScopeUsername) {
-		extras[oidcapi.IDTokenClaimUsername] = c.Username
+		extras[oidcapi.IDTokenClaimUsername] = downstreamUsername
 	}
 
 	if slices.Contains(c.GrantedScopes, oidcapi.ScopeGroups) {
-		groups := c.Groups
-		if groups == nil {
-			groups = []string{}
+		if downstreamGroups == nil {
+			downstreamGroups = []string{}
 		}
-		extras[oidcapi.IDTokenClaimGroups] = groups
+		extras[oidcapi.IDTokenClaimGroups] = downstreamGroups
 	}
 
 	if len(c.UpstreamLoginExtras.DownstreamAdditionalClaims) > 0 {
@@ -93,7 +94,7 @@ func NewPinnipedSession(
 
 	pinnipedSession.IDTokenClaims().Extra = extras
 
-	return pinnipedSession
+	return pinnipedSession, nil
 }
 
 // AutoApproveScopes auto-grants the scopes which we support and for which we do not require end-user approval,
@@ -122,9 +123,9 @@ func AutoApproveScopes(authorizeRequester fosite.AuthorizeRequester) {
 	}
 }
 
-// ApplyIdentityTransformations applies an identity transformation pipeline to an upstream identity to transform
+// applyIdentityTransformations applies an identity transformation pipeline to an upstream identity to transform
 // or potentially reject the identity.
-func ApplyIdentityTransformations(
+func applyIdentityTransformations(
 	ctx context.Context,
 	transforms *idtransform.TransformationPipeline,
 	username string,

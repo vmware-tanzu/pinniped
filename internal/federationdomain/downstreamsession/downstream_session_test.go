@@ -82,7 +82,7 @@ func TestApplyIdentityTransformations(t *testing.T) {
 				pipeline.AppendTransformation(compiledTransform)
 			}
 
-			gotUsername, gotGroups, err := ApplyIdentityTransformations(context.Background(), pipeline, tt.username, tt.groups)
+			gotUsername, gotGroups, err := applyIdentityTransformations(context.Background(), pipeline, tt.username, tt.groups)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Empty(t, gotUsername)

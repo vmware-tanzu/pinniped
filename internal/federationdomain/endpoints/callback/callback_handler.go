@@ -57,26 +57,20 @@ func NewHandler(
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
-		identity, loginExtras, err := idp.HandleCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
+		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
 		if err != nil {
 			return err
 		}
 
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(
-			r.Context(), idp.GetTransforms(), identity.UpstreamUsername, identity.UpstreamGroups,
-		)
-		if err != nil {
-			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
-		}
-
-		session := downstreamsession.NewPinnipedSession(idp, &downstreamsession.SessionConfig{
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
 			UpstreamIdentity:    identity,
 			UpstreamLoginExtras: loginExtras,
-			Username:            username,
-			Groups:              groups,
 			ClientID:            authorizeRequester.GetClient().GetID(),
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
 		})
+		if err != nil {
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
+		}
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, session)
 		if err != nil {

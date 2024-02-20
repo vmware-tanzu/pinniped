@@ -88,22 +88,17 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			}
 		}
 
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(r.Context(),
-			idp.GetTransforms(), identity.UpstreamUsername, identity.UpstreamGroups)
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+			UpstreamIdentity:    identity,
+			UpstreamLoginExtras: loginExtras,
+			ClientID:            authorizeRequester.GetClient().GetID(),
+			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+		})
 		if err != nil {
 			err = fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
 			oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, false)
 			return nil
 		}
-
-		session := downstreamsession.NewPinnipedSession(idp, &downstreamsession.SessionConfig{
-			UpstreamIdentity:    identity,
-			UpstreamLoginExtras: loginExtras,
-			Username:            username,
-			Groups:              groups,
-			ClientID:            authorizeRequester.GetClient().GetID(),
-			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
-		})
 
 		oidc.PerformAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, session, false)
 

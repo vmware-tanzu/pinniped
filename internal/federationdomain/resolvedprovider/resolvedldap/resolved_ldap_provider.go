@@ -171,7 +171,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) Login(
 		nil
 }
 
-func (p *FederationDomainResolvedLDAPIdentityProvider) HandleCallback(
+func (p *FederationDomainResolvedLDAPIdentityProvider) LoginFromCallback(
 	_ctx context.Context,
 	_authCode string,
 	_pkce pkce.Code,
@@ -179,7 +179,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) HandleCallback(
 	_redirectURI string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	return nil, nil, httperr.New(http.StatusInternalServerError,
-		"HandleCallback() is not supported for LDAP and ActiveDirectory types of identity provider")
+		"LoginFromCallback() is not supported for LDAP and ActiveDirectory types of identity provider")
 }
 
 func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(

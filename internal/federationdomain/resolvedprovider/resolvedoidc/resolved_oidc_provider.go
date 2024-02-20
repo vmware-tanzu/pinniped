@@ -177,7 +177,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) Login(
 		nil
 }
 
-func (p *FederationDomainResolvedOIDCIdentityProvider) HandleCallback(
+func (p *FederationDomainResolvedOIDCIdentityProvider) LoginFromCallback(
 	ctx context.Context,
 	authCode string,
 	pkce pkce.Code,

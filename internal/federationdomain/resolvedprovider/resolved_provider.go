@@ -83,8 +83,8 @@ type RefreshedIdentity struct {
 // FederationDomainResolvedIdentityProvider.UpstreamAuthorizeRedirectURL to help formulate the upstream authorization
 // request. It includes the state param that should be sent in the upstream authorization request. It also includes
 // the information needed to create the PKCE and nonce parameters for the upstream authorization request. If the
-// upstream authorization request does not need PKCE and/or nonce params, then implementations of
-// FederationDomainResolvedIdentityProvider.UpstreamAuthorizeRedirectURL may choose to ignore those struct fields.
+// upstream authorization request does not allow PKCE, then implementations of
+// FederationDomainResolvedIdentityProvider.UpstreamAuthorizeRedirectURL may choose to ignore that struct field.
 type UpstreamAuthorizeRequestState struct {
 	EncodedStateParam string
 	PKCE              pkce.Code
@@ -131,6 +131,13 @@ type FederationDomainResolvedIdentityProvider interface {
 	// the downstream browser-based authorization flow. Returned errors should be of type fosite.RFC6749Error.
 	UpstreamAuthorizeRedirectURL(state *UpstreamAuthorizeRequestState, downstreamIssuerURL string) (string, error)
 
+	// LoginFromCallback handles an OAuth-style callback in a browser-based flow. This function should complete
+	// the authorization with the upstream identity provider using the authCode, extract their upstream
+	// identity, and transform it into their downstream identity. If the upstream does not allow PKCE, then
+	// the pkce parameter can be ignored.
+	// Returned errors should be from the httperr package.
+	LoginFromCallback(ctx context.Context, authCode string, pkce pkce.Code, nonce nonce.Nonce, redirectURI string) (*Identity, *IdentityLoginExtras, error)
+
 	// Login performs auth using a username and password that was submitted by the client, without a web browser.
 	// This function should authenticate the user with the upstream identity provider, extract their upstream
 	// identity, and transform it into their downstream identity.
@@ -138,12 +145,6 @@ type FederationDomainResolvedIdentityProvider interface {
 	// in which case this function may be able to save some effort by avoiding getting the user's upstream groups.
 	// Returned errors should be of type fosite.RFC6749Error.
 	Login(ctx context.Context, submittedUsername string, submittedPassword string, groupsWillBeIgnored bool) (*Identity, *IdentityLoginExtras, error)
-
-	// HandleCallback handles an OAuth-style callback in a browser-based flow. This function should complete
-	// the authorization with the upstream identity provider using the authCode, extract their upstream
-	// identity, and transform it into their downstream identity.
-	// Returned errors should be from the httperr package.
-	HandleCallback(ctx context.Context, authCode string, pkce pkce.Code, nonce nonce.Nonce, redirectURI string) (*Identity, *IdentityLoginExtras, error)
 
 	// UpstreamRefresh performs a refresh with the upstream provider.
 	// The user's previous identity information is provided as a parameter.

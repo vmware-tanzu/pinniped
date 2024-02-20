@@ -226,7 +226,7 @@ func validateSessionHasUsername(session *psession.PinnipedSession) error {
 	return nil
 }
 
-// applyIdentityTransformationsDuringRefresh is similar to downstreamsession.ApplyIdentityTransformations
+// applyIdentityTransformationsDuringRefresh is similar to downstreamsession.applyIdentityTransformations
 // but with validation that the username has not changed, and with slightly different error messaging.
 func applyIdentityTransformationsDuringRefresh(
 	ctx context.Context,

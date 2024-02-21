@@ -10,10 +10,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -46,7 +43,9 @@ import (
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
+	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -209,12 +208,12 @@ func TestController(t *testing.T) {
 	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 	someJWTAuthenticatorSpecWithUsernameClaim := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 		Claims: auth1alpha1.JWTTokenClaims{
 			Username: "my-custom-username-claim",
 		},
@@ -222,7 +221,7 @@ func TestController(t *testing.T) {
 	someJWTAuthenticatorSpecWithGroupsClaim := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 		Claims: auth1alpha1.JWTTokenClaims{
 			Groups: customGroupsClaim,
 		},
@@ -248,12 +247,12 @@ func TestController(t *testing.T) {
 	invalidIssuerJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://.café   .com/café/café/café/coffee",
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 	invalidIssuerSchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "http://.café.com/café/café/café/coffee",
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 
 	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
@@ -263,18 +262,18 @@ func TestController(t *testing.T) {
 	badIssuerJWKSURIJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURI,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
 	}
 	badIssuerJWKSURISchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURIScheme,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
 	}
 
 	jwksFetchShouldFailJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   jwksFetchShouldFailServer.URL,
 		Audience: goodAudience,
-		TLS:      tlsSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
+		TLS:      conciergetestutil.TlsSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
 	}
 
 	happyReadyCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -1455,7 +1454,7 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			actualLogLines := logLines(log.String())
+			actualLogLines := testlogger.LogLines(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {
@@ -1800,21 +1799,6 @@ func testTableForAuthenticateTokenTests(
 	return tests
 }
 
-func tlsSpecFromTLSConfig(tls *tls.Config) *auth1alpha1.TLSSpec {
-	pemData := make([]byte, 0)
-	for _, certificate := range tls.Certificates {
-		for _, reallyCertificate := range certificate.Certificate {
-			pemData = append(pemData, pem.EncodeToMemory(&pem.Block{
-				Type:  "CERTIFICATE",
-				Bytes: reallyCertificate,
-			})...)
-		}
-	}
-	return &auth1alpha1.TLSSpec{
-		CertificateAuthorityData: base64.StdEncoding.EncodeToString(pemData),
-	}
-}
-
 func createJWT(
 	t *testing.T,
 	signingKey interface{},
@@ -1867,12 +1851,4 @@ func newCacheValue(t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec, wantClos
 		tokenAuthenticatorCloser: tokenAuthenticatorCloser,
 		spec:                     &spec,
 	}
-}
-
-func logLines(logs string) []string {
-	if len(logs) == 0 {
-		return nil
-	}
-
-	return strings.Split(strings.TrimSpace(logs), "\n")
 }

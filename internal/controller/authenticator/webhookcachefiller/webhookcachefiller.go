@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package webhookcachefiller implements a controller for filling an authncache.Cache with each added/updated WebhookAuthenticator.
@@ -6,6 +6,7 @@ package webhookcachefiller
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net/url"
@@ -33,15 +34,16 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/plog"
 )
 
 const (
 	controllerName                   = "webhookcachefiller-controller"
 	typeReady                        = "Ready"
-	typeTLSConfigurationValid        = "TLSConfigurationValid"
+	typeTLSBundleValid               = "TLSBundleValid"
+	typeTLSConnetionNegotiationValid = "TLSConnetionNegotiationValid"
 	typeEndpointURLValid             = "EndpointURLValid"
-	typeEndpointPOSTValid            = "EndpointPOSTValid"
 	typeAuthenticatorValid           = "AuthenticatorValid"
 	reasonSuccess                    = "Success"
 	reasonNotReady                   = "NotReady"
@@ -53,7 +55,8 @@ const (
 	reasonInvalidTLSConfiguration    = "InvalidTLSConfiguration"
 	reasonInvalidEndpointURL         = "InvalidEndpointURL"
 	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
-	msgUnableToValidate              = "unable to validate; other issues present"
+	reasonUnableToDialServer         = "UnableToDialServer"
+	msgUnableToValidate              = "unable to validate; see other conditions for details"
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
@@ -63,16 +66,18 @@ func New(
 	webhooks authinformers.WebhookAuthenticatorInformer,
 	clock clock.Clock,
 	log plog.Logger,
+	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error),
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: controllerName,
 			Syncer: &webhookCacheFillerController{
-				cache:    cache,
-				client:   client,
-				webhooks: webhooks,
-				clock:    clock,
-				log:      log.WithName(controllerName),
+				cache:         cache,
+				client:        client,
+				webhooks:      webhooks,
+				clock:         clock,
+				log:           log.WithName(controllerName),
+				tlsDialerFunc: tlsDialerFunc,
 			},
 		},
 		controllerlib.WithInformer(
@@ -84,11 +89,12 @@ func New(
 }
 
 type webhookCacheFillerController struct {
-	cache    *authncache.Cache
-	webhooks authinformers.WebhookAuthenticatorInformer
-	client   conciergeclientset.Interface
-	clock    clock.Clock
-	log      plog.Logger
+	cache         *authncache.Cache
+	webhooks      authinformers.WebhookAuthenticatorInformer
+	client        conciergeclientset.Interface
+	clock         clock.Clock
+	log           plog.Logger
+	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error)
 }
 
 // Sync implements controllerlib.Syncer.
@@ -106,25 +112,31 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	specCopy := obj.Spec.DeepCopy()
 	var errs []error
 
-	_, conditions, tlsOk := c.validateTLS(specCopy.TLS, conditions)
-	_, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
-	conditions, endpointPOSTOk := c.validateEndpointPOST(specCopy.Endpoint, conditions, tlsOk && endpointOk)
+	certPool, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
+	endpointURL, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
+	okSoFar := tlsBundleOk && endpointOk
+	conditions, tlsNegotiateErr := c.validateTLSNegotiation(certPool, endpointURL, conditions, okSoFar)
+	errs = append(errs, tlsNegotiateErr)
+	okSoFar = okSoFar && tlsNegotiateErr == nil
 
 	webhookAuthenticator, conditions, err := newWebhookAuthenticator(
 		&obj.Spec,
 		os.CreateTemp,
 		clientcmd.WriteToFile,
 		conditions,
-		tlsOk && endpointOk && endpointPOSTOk,
+		okSoFar,
 	)
 	errs = append(errs, err)
 
-	c.cache.Store(authncache.Key{
-		APIGroup: auth1alpha1.GroupName,
-		Kind:     "WebhookAuthenticator",
-		Name:     ctx.Key.Name,
-	}, webhookAuthenticator)
-	c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
+	if !conditionsutil.HadErrorCondition(conditions) {
+		c.cache.Store(authncache.Key{
+			APIGroup: auth1alpha1.GroupName,
+			Kind:     "WebhookAuthenticator",
+			Name:     ctx.Key.Name,
+		}, webhookAuthenticator)
+		c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
+	}
+
 	err = c.updateStatus(ctx.Context, obj, conditions)
 	errs = append(errs, err)
 
@@ -266,21 +278,76 @@ func newWebhookAuthenticator(
 	return webhookA, conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.CertPool, endpointURL *url.URL, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
+	if !prereqOk {
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeTLSConnetionNegotiationValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: msgUnableToValidate,
+		})
+		return conditions, nil
+	}
+
+	// dial requires domain, IPv4 or IPv6 w/o protocol
+	endpointHostPort, err := endpointaddr.Parse(endpointURL.Host, 443)
+	if err != nil {
+		// we have already validated the endpoint with url.Parse(endpoint) in c.validateEndpoint()
+		// so there is no reason to have a parsing error here.
+		c.log.Error("error parsing endpoint", err)
+	}
+
+	conn, dialErr := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// If certPool is nil then RootCAs will be set to nil and TLS will use the host's root CA set automatically.
+		RootCAs: certPool,
+	})
+
+	if dialErr != nil {
+		errText := "cannot dial server"
+		msg := fmt.Sprintf("%s: %s", errText, dialErr.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeTLSConnetionNegotiationValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonUnableToDialServer,
+			Message: msg,
+		})
+		return conditions, fmt.Errorf("%s: %w", errText, dialErr)
+	}
+
+	// this error should never be significant
+	err = conn.Close()
+	if err != nil {
+		c.log.Error("error closing dialer", err)
+	}
+
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeTLSConnetionNegotiationValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: "tls verified",
+	})
+	return conditions, nil
+}
+
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
 	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConfigurationValid,
+			Type:    typeTLSBundleValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidTLSConfiguration,
 			Message: msg,
 		})
 		return rootCAs, conditions, false
 	}
-	msg := "valid TLS configuration"
+	msg := "successfully parsed specified CA bundle"
+	if rootCAs == nil {
+		msg = "no CA bundle specified"
+	}
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
+		Type:    typeTLSBundleValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: msg,
@@ -300,9 +367,9 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		})
 		return nil, conditions, false
 	}
-
+	// handles empty string and other issues as well.
 	if endpointURL.Scheme != "https" {
-		msg := fmt.Sprintf("spec.issuer %s has invalid scheme, require 'https'", endpoint)
+		msg := fmt.Sprintf("spec.endpoint %s has invalid scheme, require 'https'", endpoint)
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeEndpointURLValid,
 			Status:  metav1.ConditionFalse,
@@ -321,31 +388,11 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 	return endpointURL, conditions, true
 }
 
-func (c *webhookCacheFillerController) validateEndpointPOST(endpoint string, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, bool) {
-	if endpoint == "" {
-		// TODO(BEN): do something with this. time to validate the endpoint will receive a POST
-		fmt.Println("FIX THIS")
-	}
-	if !prereqOk {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeEndpointPOSTValid,
-			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
-			Message: msgUnableToValidate,
-		})
-		return conditions, false
-	}
-
-	// TODO: do some things here so this func makes sense.
-	return conditions, false
-}
-
 func (c *webhookCacheFillerController) updateStatus(
 	ctx context.Context,
 	original *auth1alpha1.WebhookAuthenticator,
 	conditions []*metav1.Condition,
 ) error {
-
 	updated := original.DeepCopy()
 
 	if hadErrorCondition(conditions) {

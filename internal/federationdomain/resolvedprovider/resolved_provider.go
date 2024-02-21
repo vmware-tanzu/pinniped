@@ -141,20 +141,16 @@ type FederationDomainResolvedIdentityProvider interface {
 	// Login performs auth using a username and password that was submitted by the client, without a web browser.
 	// This function should authenticate the user with the upstream identity provider, extract their upstream
 	// identity, and transform it into their downstream identity.
-	// The groupsWillBeIgnored parameter will be true when the returned groups are going to be ignored by the caller,
-	// in which case this function may be able to save some effort by avoiding getting the user's upstream groups.
 	// Returned errors should be of type fosite.RFC6749Error.
-	Login(ctx context.Context, submittedUsername string, submittedPassword string, groupsWillBeIgnored bool) (*Identity, *IdentityLoginExtras, error)
+	Login(ctx context.Context, submittedUsername string, submittedPassword string) (*Identity, *IdentityLoginExtras, error)
 
 	// UpstreamRefresh performs a refresh with the upstream provider.
 	// The user's previous identity information is provided as a parameter.
 	// Implementations may use this information to assist in refreshes, but mutations to this argument will be ignored.
 	// If possible, implementations should update the user's upstream group memberships by fetching them from the
 	// upstream provider during the refresh, and returning them.
-	// The groupsWillBeIgnored parameter will be true when the returned groups are going to be ignored by the caller,
-	// in which case this function may be able to save some effort by avoiding getting the user's upstream groups.
 	// Returned errors should be of type fosite.RFC6749Error.
-	UpstreamRefresh(ctx context.Context, identity *Identity, groupsWillBeIgnored bool) (refreshedIdentity *RefreshedIdentity, err error)
+	UpstreamRefresh(ctx context.Context, identity *Identity) (refreshedIdentity *RefreshedIdentity, err error)
 }
 
 // ErrMissingUpstreamSessionInternalError returns a common type of error that can happen during a login or refresh.

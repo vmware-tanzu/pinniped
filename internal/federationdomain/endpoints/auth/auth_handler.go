@@ -13,7 +13,6 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
-	"k8s.io/utils/strings/slices"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
@@ -202,9 +201,7 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 		return err
 	}
 
-	groupsWillBeIgnored := !slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups)
-
-	identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword, groupsWillBeIgnored)
+	identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword)
 	if err != nil {
 		return err
 	}

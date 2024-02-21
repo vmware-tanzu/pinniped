@@ -178,7 +178,6 @@ func TestEndUserAuthentication(t *testing.T) {
 		name                       string
 		username                   string
 		password                   string
-		skipGroups                 bool
 		providerConfig             *ProviderConfig
 		searchMocks                func(conn *mockldapconn.MockConn)
 		bindEndUserMocks           func(conn *mockldapconn.MockConn)
@@ -289,25 +288,6 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
 				info := r.User.(*user.DefaultInfo)
 				info.Groups = []string{}
-			}),
-		},
-		{
-			name:           "when groups are requested to be skipped, don't do group search",
-			username:       testUpstreamUsername,
-			password:       testUpstreamPassword,
-			skipGroups:     true,
-			providerConfig: providerConfig(nil),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
-				info := r.User.(*user.DefaultInfo)
-				info.Groups = nil
 			}),
 		},
 		{
@@ -753,30 +733,6 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: expectedAuthResponse(nil),
-		},
-		{
-			name:       "when the UserAttributeForFilter is set to something other than dn but groups are to be skipped, so skips validating UserAttributeForFilter attribute value",
-			username:   testUpstreamUsername,
-			password:   testUpstreamPassword,
-			skipGroups: true,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
-			}),
-			searchMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
-					// need to additionally ask for the attribute when performing user search
-					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName"}
-				})).Return(exampleUserSearchResult, nil).Times(1) // result does not contain someUserAttrName, but does not matter since group search is skipped
-				conn.EXPECT().Close().Times(1)
-			},
-			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
-			},
-			wantAuthResponse: expectedAuthResponse(func(r *authenticators.Response) {
-				info := r.User.(*user.DefaultInfo)
-				info.Groups = nil
-			}),
 		},
 		{
 			name:     "when the UserAttributeForFilter is set to something other than dn but that attribute is not returned by the user search",
@@ -1421,7 +1377,7 @@ func TestEndUserAuthentication(t *testing.T) {
 
 			ldapProvider := New(*tt.providerConfig)
 
-			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, tt.skipGroups)
+			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != nil:
@@ -1453,7 +1409,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
 
-			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, tt.skipGroups)
+			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != nil:
@@ -1585,7 +1541,6 @@ func TestUpstreamRefresh(t *testing.T) {
 	tests := []struct {
 		name           string
 		providerConfig *ProviderConfig
-		skipGroups     bool
 		setupMocks     func(conn *mockldapconn.MockConn)
 		refreshUserDN  string
 		dialError      error
@@ -1722,18 +1677,6 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantGroups: nil, // do not update groups
 		},
 		{
-			name:           "happy path where group search is configured but groups search is requested to be skipped",
-			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(nil)).Return(happyPathUserSearchResult, nil).Times(1)
-				// note that group search is not expected
-				conn.EXPECT().Close().Times(1)
-			},
-			skipGroups: true,
-			wantGroups: nil,
-		},
-		{
 			name: "happy path where group search is configured but skipGroupRefresh is set, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.SkipGroupRefresh = true
@@ -1749,23 +1692,6 @@ func TestUpstreamRefresh(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantGroups: nil, // do not update groups
-		},
-		{
-			name: "happy path where group search is configured but groups search is requested to be skipped, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
-			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
-			}),
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
-					// need to additionally ask for the attribute when performing user search
-					r.Attributes = []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute, "someUserAttrName", pwdLastSetAttribute}
-				})).Return(happyPathUserSearchResult, nil).Times(1)
-				// note that group search is not expected
-				conn.EXPECT().Close().Times(1)
-			},
-			skipGroups: true,
-			wantGroups: nil,
 		},
 		{
 			name: "happy path when the UserAttributeForFilter is set to something other than dn",
@@ -2282,7 +2208,6 @@ func TestUpstreamRefresh(t *testing.T) {
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,
 				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
-				SkipGroups:           tt.skipGroups,
 			}, testUpstreamName)
 			if tt.wantErr != "" {
 				require.Error(t, err)

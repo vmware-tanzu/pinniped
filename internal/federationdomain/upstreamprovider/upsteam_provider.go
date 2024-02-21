@@ -32,10 +32,6 @@ type RefreshAttributes struct {
 	DN                   string
 	Groups               []string
 	AdditionalAttributes map[string]string
-	// Skip group search for this particular session refresh.
-	// E.g. This could be set to true when the user was not granted the downstream groups scope.
-	// There is no reason to spend the cost of an LDAP group search unless we are going to use the results.
-	SkipGroups bool
 }
 
 // UpstreamIdentityProviderI includes the interface functions that are common to all upstream identity provider types.

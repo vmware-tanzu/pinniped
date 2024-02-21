@@ -31,7 +31,7 @@ import (
 // See k8s.io/apiserver/pkg/authentication/authenticator/interfaces.go for the token authenticator
 // interface, as well as the Response type.
 type UserAuthenticator interface {
-	AuthenticateUser(ctx context.Context, username, password string, skipGroups bool) (*Response, bool, error)
+	AuthenticateUser(ctx context.Context, username, password string) (*Response, bool, error)
 }
 
 type Response struct {

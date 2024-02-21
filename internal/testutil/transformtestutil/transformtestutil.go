@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package transformtestutil
@@ -53,6 +53,23 @@ func NewRejectAllAuthPipeline(t *testing.T) *idtransform.TransformationPipeline 
 	)
 	require.NoError(t, err)
 	p.AppendTransformation(compiledTransform)
+
+	return p
+}
+
+func NewPipeline(t *testing.T, transforms []celtransformer.CELTransformation) *idtransform.TransformationPipeline {
+	t.Helper()
+
+	transformer, err := celtransformer.NewCELTransformer(5 * time.Second)
+	require.NoError(t, err)
+
+	p := idtransform.NewTransformationPipeline()
+
+	for _, transform := range transforms {
+		compiledTransform, err := transformer.CompileTransformation(transform, nil)
+		require.NoError(t, err)
+		p.AppendTransformation(compiledTransform)
+	}
 
 	return p
 }

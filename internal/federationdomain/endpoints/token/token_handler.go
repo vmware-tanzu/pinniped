@@ -147,7 +147,7 @@ func upstreamRefresh(
 	oldUntransformedGroups := session.Custom.UpstreamGroups
 	oldTransformedUsername := session.Custom.Username
 
-	previousIdentity := resolvedprovider.Identity{
+	previousIdentity := &resolvedprovider.Identity{
 		UpstreamUsername:       oldUntransformedUsername,
 		UpstreamGroups:         oldUntransformedGroups,
 		DownstreamSubject:      session.Fosite.Claims.Subject,
@@ -155,7 +155,7 @@ func upstreamRefresh(
 	}
 
 	// Perform the upstream refresh.
-	refreshedIdentity, err := idp.UpstreamRefresh(ctx, &previousIdentity, skipGroups)
+	refreshedIdentity, err := idp.UpstreamRefresh(ctx, previousIdentity)
 	if err != nil {
 		return err
 	}

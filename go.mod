@@ -54,7 +54,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify/v2 v2.20.17
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.19.0
 	golang.org/x/net v0.21.0
 	golang.org/x/oauth2 v0.17.0
@@ -70,7 +70,7 @@ require (
 	k8s.io/gengo v0.0.0-20240129211411-f967bbeff4b4
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.2
-	k8s.io/kube-openapi v0.0.0-20240209001042-7a0d5b415232
+	k8s.io/kube-openapi v0.0.0-20240220201932-37d671a357a5
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/yaml v1.4.0
 )

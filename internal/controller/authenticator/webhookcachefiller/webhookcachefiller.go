@@ -5,12 +5,17 @@
 package webhookcachefiller
 
 import (
+	"context"
+	"crypto/x509"
 	"fmt"
+	"net/url"
 	"os"
 
-	"github.com/go-logr/logr"
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	webhookutil "k8s.io/apiserver/pkg/util/webhook"
@@ -18,24 +23,56 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
+)
+
+const (
+	controllerName                   = "webhookcachefiller-controller"
+	typeReady                        = "Ready"
+	typeTLSConfigurationValid        = "TLSConfigurationValid"
+	typeEndpointURLValid             = "EndpointURLValid"
+	typeEndpointPOSTValid            = "EndpointPOSTValid"
+	typeAuthenticatorValid           = "AuthenticatorValid"
+	reasonSuccess                    = "Success"
+	reasonNotReady                   = "NotReady"
+	reasonUnableToValidate           = "UnableToValidate"
+	reasonUnableToCreateTempFile     = "UnableToCreateTempFile"
+	reasonUnableToMarshallKubeconfig = "UnableToMarshallKubeconfig"
+	reasonUnableToLoadKubeconfig     = "UnableToLoadKubeconfig"
+	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
+	reasonInvalidTLSConfiguration    = "InvalidTLSConfiguration"
+	reasonInvalidEndpointURL         = "InvalidEndpointURL"
+	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
+	msgUnableToValidate              = "unable to validate; other issues present"
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
-func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
+func New(
+	cache *authncache.Cache,
+	client conciergeclientset.Interface,
+	webhooks authinformers.WebhookAuthenticatorInformer,
+	clock clock.Clock,
+	log plog.Logger,
+) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "webhookcachefiller-controller",
-			Syncer: &controller{
+			Name: controllerName,
+			Syncer: &webhookCacheFillerController{
 				cache:    cache,
+				client:   client,
 				webhooks: webhooks,
-				log:      log.WithName("webhookcachefiller-controller"),
+				clock:    clock,
+				log:      log.WithName(controllerName),
 			},
 		},
 		controllerlib.WithInformer(
@@ -46,14 +83,16 @@ func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInf
 	)
 }
 
-type controller struct {
+type webhookCacheFillerController struct {
 	cache    *authncache.Cache
 	webhooks authinformers.WebhookAuthenticatorInformer
-	log      logr.Logger
+	client   conciergeclientset.Interface
+	clock    clock.Clock
+	log      plog.Logger
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *controller) Sync(ctx controllerlib.Context) error {
+func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
@@ -63,10 +102,22 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
-	webhookAuthenticator, err := newWebhookAuthenticator(&obj.Spec, os.CreateTemp, clientcmd.WriteToFile)
-	if err != nil {
-		return fmt.Errorf("failed to build webhook config: %w", err)
-	}
+	conditions := make([]*metav1.Condition, 0)
+	specCopy := obj.Spec.DeepCopy()
+	var errs []error
+
+	_, conditions, tlsOk := c.validateTLS(specCopy.TLS, conditions)
+	_, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
+	conditions, endpointPOSTOk := c.validateEndpointPOST(specCopy.Endpoint, conditions, tlsOk && endpointOk)
+
+	webhookAuthenticator, conditions, err := newWebhookAuthenticator(
+		&obj.Spec,
+		os.CreateTemp,
+		clientcmd.WriteToFile,
+		conditions,
+		tlsOk && endpointOk && endpointPOSTOk,
+	)
+	errs = append(errs, err)
 
 	c.cache.Store(authncache.Key{
 		APIGroup: auth1alpha1.GroupName,
@@ -74,7 +125,15 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		Name:     ctx.Key.Name,
 	}, webhookAuthenticator)
 	c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
-	return nil
+	err = c.updateStatus(ctx.Context, obj, conditions)
+	errs = append(errs, err)
+
+	// sync loop errors:
+	// - should not be configuration errors. config errors a user must correct belong on the .Status
+	//   object. The controller simply must wait for a user to correct before running again.
+	// - other errors, such as networking errors, etc. are the types of errors that should return here
+	//   and signal the controller to retry the sync loop. These may be corrected by machines.
+	return errorsutil.NewAggregate(errs)
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
@@ -83,17 +142,44 @@ func newWebhookAuthenticator(
 	spec *auth1alpha1.WebhookAuthenticatorSpec,
 	tempfileFunc func(string, string) (*os.File, error),
 	marshalFunc func(clientcmdapi.Config, string) error,
-) (*webhook.WebhookTokenAuthenticator, error) {
+	conditions []*metav1.Condition,
+	prereqOk bool,
+) (*webhook.WebhookTokenAuthenticator, []*metav1.Condition, error) {
+	if !prereqOk {
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: msgUnableToValidate,
+		})
+		return nil, conditions, nil
+	}
 	temp, err := tempfileFunc("", "pinniped-webhook-kubeconfig-*")
 	if err != nil {
-		return nil, fmt.Errorf("unable to create temporary file: %w", err)
+		errText := "unable to create temporary file"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonUnableToCreateTempFile,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 	defer func() { _ = os.Remove(temp.Name()) }()
 
 	cluster := &clientcmdapi.Cluster{Server: spec.Endpoint}
 	_, cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
-		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
+		errText := "invalid TLS configuration"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidTLSConfiguration,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
 	kubeconfig := clientcmdapi.NewConfig()
@@ -102,7 +188,15 @@ func newWebhookAuthenticator(
 	kubeconfig.CurrentContext = "anonymous"
 
 	if err := marshalFunc(*kubeconfig, temp.Name()); err != nil {
-		return nil, fmt.Errorf("unable to marshal kubeconfig: %w", err)
+		errText := "unable to marshal kubeconfig"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonUnableToMarshallKubeconfig,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
 	// We use v1beta1 instead of v1 since v1beta1 is more prevalent in our desired
@@ -136,10 +230,166 @@ func newWebhookAuthenticator(
 	//  then use client.JSONConfig as clientConfig
 	clientConfig, err := webhookutil.LoadKubeconfig(temp.Name(), customDial)
 	if err != nil {
-		return nil, err
+		errText := "unable to load kubeconfig"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonUnableToLoadKubeconfig,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
 	// this uses a http client that does not honor our TLS config
-	// TODO fix when we pick up https://github.com/kubernetes/kubernetes/pull/106155
-	return webhook.New(clientConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
+	// TODO: fix when we pick up https://github.com/kubernetes/kubernetes/pull/106155
+	//   NOTE: looks like the above was merged on Mar 18, 2022
+	webhookA, err := webhook.New(clientConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
+	if err != nil {
+		errText := "unable to instantiate webhook"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonUnableToInstantiateWebhook,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
+	}
+	msg := "authenticator initialized"
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeAuthenticatorValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: msg,
+	})
+	return webhookA, conditions, nil
+}
+
+func (c *webhookCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
+	if err != nil {
+		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeTLSConfigurationValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidTLSConfiguration,
+			Message: msg,
+		})
+		return rootCAs, conditions, false
+	}
+	msg := "valid TLS configuration"
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeTLSConfigurationValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: msg,
+	})
+	return rootCAs, conditions, true
+}
+
+func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL is invalid", err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeEndpointURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidEndpointURL,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	if endpointURL.Scheme != "https" {
+		msg := fmt.Sprintf("spec.issuer %s has invalid scheme, require 'https'", endpoint)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeEndpointURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidEndpointURLScheme,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeEndpointURLValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: "endpoint is a valid URL",
+	})
+	return endpointURL, conditions, true
+}
+
+func (c *webhookCacheFillerController) validateEndpointPOST(endpoint string, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, bool) {
+	if endpoint == "" {
+		// TODO(BEN): do something with this. time to validate the endpoint will receive a POST
+		fmt.Println("FIX THIS")
+	}
+	if !prereqOk {
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeEndpointPOSTValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: msgUnableToValidate,
+		})
+		return conditions, false
+	}
+
+	// TODO: do some things here so this func makes sense.
+	return conditions, false
+}
+
+func (c *webhookCacheFillerController) updateStatus(
+	ctx context.Context,
+	original *auth1alpha1.WebhookAuthenticator,
+	conditions []*metav1.Condition,
+) error {
+
+	updated := original.DeepCopy()
+
+	if hadErrorCondition(conditions) {
+		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseError
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonNotReady,
+			Message: "the WebhookAuthenticator is not ready: see other conditions for details",
+		})
+	} else {
+		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseReady
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeReady,
+			Status:  metav1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the WebhookAuthenticator is ready",
+		})
+	}
+
+	_ = conditionsutil.MergeConfigConditions(
+		conditions,
+		original.Generation,
+		&updated.Status.Conditions,
+		plog.New().WithName(controllerName),
+		metav1.NewTime(c.clock.Now()),
+	)
+
+	if equality.Semantic.DeepEqual(original, updated) {
+		return nil
+	}
+
+	_, err := c.client.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	if err != nil {
+		c.log.Info(fmt.Sprintf("ERROR: %v", err))
+	}
+	return err
+}
+
+func hadErrorCondition(conditions []*metav1.Condition) bool {
+	for _, c := range conditions {
+		if c.Status != metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package callback provides a handler for the OIDC callback endpoint.
@@ -31,12 +31,11 @@ func NewHandler(
 			return err
 		}
 
-		resolvedOIDCIdentityProvider, _, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
-		if err != nil || resolvedOIDCIdentityProvider == nil {
+		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
+		if err != nil || idp == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
-		upstreamIDPConfig := resolvedOIDCIdentityProvider.Provider
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
@@ -58,48 +57,25 @@ func NewHandler(
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
-		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
-			r.Context(),
-			authcode(r),
-			state.PKCECode,
-			state.Nonce,
-			redirectURI,
-		)
+		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
 		if err != nil {
-			plog.WarningErr("error exchanging and validating upstream tokens", err, "upstreamName", upstreamIDPConfig.GetName())
-			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
+			return err
 		}
 
-		subject, upstreamUsername, upstreamGroups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(
-			upstreamIDPConfig, token.IDToken.Claims, resolvedOIDCIdentityProvider.DisplayName,
-		)
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+			UpstreamIdentity:    identity,
+			UpstreamLoginExtras: loginExtras,
+			ClientID:            authorizeRequester.GetClient().GetID(),
+			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+		})
 		if err != nil {
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
-		username, groups, err := downstreamsession.ApplyIdentityTransformations(
-			r.Context(), resolvedOIDCIdentityProvider.Transforms, upstreamUsername, upstreamGroups,
-		)
-		if err != nil {
-			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
-		}
-
-		additionalClaims := downstreamsession.MapAdditionalClaimsFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
-
-		customSessionData, err := downstreamsession.MakeDownstreamOIDCCustomSessionData(
-			upstreamIDPConfig, token, username, upstreamUsername, upstreamGroups,
-		)
-		if err != nil {
-			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
-		}
-
-		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups,
-			authorizeRequester.GetGrantedScopes(), authorizeRequester.GetClient().GetID(), customSessionData, additionalClaims)
-
-		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, session)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err,
-				"upstreamName", upstreamIDPConfig.GetName(), "fositeErr", oidc.FositeErrorForLog(err))
+				"identityProviderDisplayName", idp.GetDisplayName(), "fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 

@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package idpdiscovery provides a handler for the upstream IDP discovery endpoint.
@@ -40,29 +40,11 @@ func responseAsJSON(upstreamIDPs federationdomainproviders.FederationDomainIdent
 	r := v1alpha1.IDPDiscoveryResponse{PinnipedIDPs: []v1alpha1.PinnipedIDP{}}
 
 	// The cache of IDPs could change at any time, so always recalculate the list.
-	for _, federationDomainIdentityProvider := range upstreamIDPs.GetLDAPIdentityProviders() {
+	for _, federationDomainIdentityProvider := range upstreamIDPs.GetIdentityProviders() {
 		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
-			Name:  federationDomainIdentityProvider.DisplayName,
-			Type:  v1alpha1.IDPTypeLDAP,
-			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword, v1alpha1.IDPFlowBrowserAuthcode},
-		})
-	}
-	for _, federationDomainIdentityProvider := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
-		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
-			Name:  federationDomainIdentityProvider.DisplayName,
-			Type:  v1alpha1.IDPTypeActiveDirectory,
-			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword, v1alpha1.IDPFlowBrowserAuthcode},
-		})
-	}
-	for _, federationDomainIdentityProvider := range upstreamIDPs.GetOIDCIdentityProviders() {
-		flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
-		if federationDomainIdentityProvider.Provider.AllowsPasswordGrant() {
-			flows = append(flows, v1alpha1.IDPFlowCLIPassword)
-		}
-		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
-			Name:  federationDomainIdentityProvider.DisplayName,
-			Type:  v1alpha1.IDPTypeOIDC,
-			Flows: flows,
+			Name:  federationDomainIdentityProvider.GetDisplayName(),
+			Type:  federationDomainIdentityProvider.GetIDPDiscoveryType(),
+			Flows: federationDomainIdentityProvider.GetIDPDiscoveryFlows(),
 		})
 	}
 

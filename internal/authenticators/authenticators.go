@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package authenticators contains authenticator interfaces.
@@ -31,7 +31,7 @@ import (
 // See k8s.io/apiserver/pkg/authentication/authenticator/interfaces.go for the token authenticator
 // interface, as well as the Response type.
 type UserAuthenticator interface {
-	AuthenticateUser(ctx context.Context, username, password string, grantedScopes []string) (*Response, bool, error)
+	AuthenticateUser(ctx context.Context, username, password string, skipGroups bool) (*Response, bool, error)
 }
 
 type Response struct {

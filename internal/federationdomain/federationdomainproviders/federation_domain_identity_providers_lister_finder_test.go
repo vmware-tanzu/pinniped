@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package federationdomainproviders
@@ -10,7 +10,10 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 )
 
 func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
@@ -105,43 +108,38 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	require.NoError(t, err)
 
 	// Resolved IdPs
-	myOIDCIDP1Resolved := &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+	myOIDCIDP1Resolved := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
 		DisplayName:         "my-oidc-idp1",
 		Provider:            myOIDCIDP1,
 		SessionProviderType: "oidc",
 	}
-	myOIDCIDP2Resolved := &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+	myOIDCIDP2Resolved := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
 		DisplayName:         "my-oidc-idp2",
 		Provider:            myOIDCIDP2,
 		SessionProviderType: "oidc",
 	}
-	myLDAPIDP1Resolved := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+	myLDAPIDP1Resolved := &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 		DisplayName:         "my-ldap-idp1",
 		Provider:            myLDAPIDP1,
 		SessionProviderType: "ldap",
 	}
-	myLDAPIDP2Resolved := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+	myLDAPIDP2Resolved := &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 		DisplayName:         "my-ldap-idp2",
 		Provider:            myLDAPIDP2,
 		SessionProviderType: "ldap",
 	}
-	myADIDP1Resolved := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+	myADIDP1Resolved := &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 		DisplayName:         "my-ad-idp1",
 		Provider:            myADIDP1,
 		SessionProviderType: "activedirectory",
 	}
-	myADIDP2Resolved := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
-		DisplayName:         "my-ad-idp2",
-		Provider:            myADIDP2,
-		SessionProviderType: "activedirectory",
-	}
 
-	myDefaultOIDCIDPResolved := &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+	myDefaultOIDCIDPResolved := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
 		DisplayName:         "my-default-oidc-idp",
 		Provider:            myDefaultOIDCIDP,
 		SessionProviderType: "oidc",
 	}
-	myDefaultLDAPIDPResolved := &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+	myDefaultLDAPIDPResolved := &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 		DisplayName:         "my-default-ldap-idp",
 		Provider:            myDefaultLDAPIDP,
 		SessionProviderType: "ldap",
@@ -152,14 +150,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		wrappedLister            idplister.UpstreamIdentityProvidersLister
 		federationDomainIssuer   *FederationDomainIssuer
 		findIDPByDisplayName     string
-		wantOIDCIDPByDisplayName *resolvedprovider.FederationDomainResolvedOIDCIdentityProvider
-		wantLDAPIDPByDisplayName *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
+		wantOIDCIDPByDisplayName *resolvedoidc.FederationDomainResolvedOIDCIdentityProvider
+		wantLDAPIDPByDisplayName *resolvedldap.FederationDomainResolvedLDAPIdentityProvider
 		wantError                string
 	}{
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IdP by display name with one IDP configured",
 			findIDPByDisplayName: "my-oidc-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithLDAP(myLDAPIDP1).
 				BuildDynamicUpstreamIDPProvider(),
@@ -169,7 +167,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP by display name if multiple IDPs configured of the same type",
 			findIDPByDisplayName: "my-oidc-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				BuildDynamicUpstreamIDPProvider(),
@@ -179,7 +177,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP by display name if multiple IDPs configured of different types",
 			findIDPByDisplayName: "my-oidc-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -191,7 +189,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type OIDC by display name",
 			findIDPByDisplayName: "my-oidc-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -204,7 +202,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type LDAP by display name",
 			findIDPByDisplayName: "my-ldap-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -216,7 +214,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type AD (LDAP)  by display name",
 			findIDPByDisplayName: "my-ad-idp1",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -229,7 +227,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will error if IDP by display name is not found - no such display name",
 			findIDPByDisplayName: "i-cant-find-my-idp",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -242,7 +240,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{
 			name:                 "FindUpstreamIDPByDisplayName will error if IDP by display name is not found - display name was found, but IDP it points at does not exist",
 			findIDPByDisplayName: "my-idp",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithIDPWithLostUID,
 			wantError:              `identity provider not available: "my-idp"`,
@@ -255,7 +253,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			t.Parallel()
 
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
-			foundOIDCIDP, foundLDAPIDP, err := subject.FindUpstreamIDPByDisplayName(tt.findIDPByDisplayName)
+			foundIDP, err := subject.FindUpstreamIDPByDisplayName(tt.findIDPByDisplayName)
 
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
@@ -263,10 +261,10 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			if tt.wantOIDCIDPByDisplayName != nil {
-				require.Equal(t, tt.wantOIDCIDPByDisplayName, foundOIDCIDP)
+				require.Equal(t, tt.wantOIDCIDPByDisplayName, foundIDP)
 			}
 			if tt.wantLDAPIDPByDisplayName != nil {
-				require.Equal(t, tt.wantLDAPIDPByDisplayName, foundLDAPIDP)
+				require.Equal(t, tt.wantLDAPIDPByDisplayName, foundIDP)
 			}
 		})
 	}
@@ -275,13 +273,13 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		name                   string
 		wrappedLister          idplister.UpstreamIdentityProvidersLister
 		federationDomainIssuer *FederationDomainIssuer
-		wantDefaultOIDCIDP     *resolvedprovider.FederationDomainResolvedOIDCIdentityProvider
-		wantDefaultLDAPIDP     *resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
+		wantDefaultOIDCIDP     *resolvedoidc.FederationDomainResolvedOIDCIdentityProvider
+		wantDefaultLDAPIDP     *resolvedldap.FederationDomainResolvedLDAPIdentityProvider
 		wantError              string
 	}{
 		{
 			name: "FindDefaultIDP returns an OIDCIdentityProvider if there is an OIDCIdentityProvider defined as the default IDP",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myDefaultOIDCIDP).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithDefaultOIDCIDP,
@@ -289,7 +287,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "FindDefaultIDP returns an LDAPIdentityProvider if there is an LDAPIdentityProvider defined as the default IDP",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(myDefaultLDAPIDP).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithDefaultLDAPIDP,
@@ -297,7 +295,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "FindDefaultIDP returns an error if there is no default IDP to return",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(myDefaultLDAPIDP).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithoutIDP,
@@ -305,7 +303,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "FindDefaultIDP returns an error if there are multiple IDPs configured",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithLDAP(myLDAPIDP1).
 				BuildDynamicUpstreamIDPProvider(),
@@ -314,7 +312,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "FindDefaultIDP returns an error if the wrapped lister does not contain the default IDP (not available)",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
 					WithName("my-default-ldap-idp").
 					WithResourceUID("my-ldap-idp-resource-uid-does-not-match").
@@ -331,7 +329,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			t.Parallel()
 
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
-			foundOIDCIDP, foundLDAPIDP, err := subject.FindDefaultIDP()
+			foundIDP, err := subject.FindDefaultIDP()
 
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
@@ -339,23 +337,23 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			if tt.wantDefaultOIDCIDP != nil {
-				require.Equal(t, tt.wantDefaultOIDCIDP, foundOIDCIDP)
+				require.Equal(t, tt.wantDefaultOIDCIDP, foundIDP)
 			}
 			if tt.wantDefaultLDAPIDP != nil {
-				require.Equal(t, tt.wantDefaultLDAPIDP, foundLDAPIDP)
+				require.Equal(t, tt.wantDefaultLDAPIDP, foundIDP)
 			}
 		})
 	}
 
-	testGetOIDCIdentityProviders := []struct {
+	testGetIdentityProviders := []struct {
 		name                   string
 		wrappedLister          idplister.UpstreamIdentityProvidersLister
 		federationDomainIssuer *FederationDomainIssuer
-		wantIDPs               []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider
+		wantIDPs               []resolvedprovider.FederationDomainResolvedIdentityProvider
 	}{
 		{
-			name: "GetOIDCIdentityProviders will list all OIDCIdentityProviders",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			name: "GetIdentityProviders will list all identity providers that can be resolved",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
@@ -363,14 +361,17 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithActiveDirectory(myADIDP1).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+			wantIDPs: []resolvedprovider.FederationDomainResolvedIdentityProvider{
 				myOIDCIDP1Resolved,
 				myOIDCIDP2Resolved,
+				myLDAPIDP1Resolved,
+				myLDAPIDP2Resolved,
+				myADIDP1Resolved,
 			},
 		},
 		{
-			name: "GetLDAPIdentityProviders will return a list of LDAP IDPs if there are LDAPIdentityProviders configured but exclude LDAP IDPs that do not have matching UIDs",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			name: "GetIdentityProviders will return a list of IDPs if there are IDPs configured but exclude IDPs that do not have matching UIDs",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
@@ -381,153 +382,29 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithActiveDirectory(myADIDP1).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithLotsOfIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+			wantIDPs: []resolvedprovider.FederationDomainResolvedIdentityProvider{
 				myOIDCIDP1Resolved,
 				myOIDCIDP2Resolved,
-			},
-		},
-		{
-			name: "GetOIDCIdentityProviders will return nil of no OIDCIDentityProviders are found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithLDAP(myLDAPIDP1).
-				WithLDAP(myLDAPIDP2).
-				WithActiveDirectory(myADIDP1).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs:               []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{},
-		},
-	}
-
-	for _, tt := range testGetOIDCIdentityProviders {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
-			idps := subject.GetOIDCIdentityProviders()
-
-			require.Equal(t, tt.wantIDPs, idps)
-		})
-	}
-
-	testGetLDAPIdentityProviders := []struct {
-		name                   string
-		wrappedLister          idplister.UpstreamIdentityProvidersLister
-		federationDomainIssuer *FederationDomainIssuer
-		wantIDPs               []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
-	}{
-		{
-			name: "GetLDAPIdentityProviders will list all LDAPIdentityProviders",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithLDAP(myLDAPIDP1).
-				WithLDAP(myLDAPIDP2).
-				WithActiveDirectory(myADIDP1).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 				myLDAPIDP1Resolved,
-				myLDAPIDP2Resolved,
-			},
-		},
-		{
-			name: "GetLDAPIdentityProviders will return a list of LDAP IDPs if there are LDAPIdentityProviders configured but exclude LDAP IDPs that do not have matching UIDs",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithLDAP(myLDAPIDP1).
-				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
-					WithName("my-ldap-idp-that-isnt-in-fd-issuer").
-					WithResourceUID("my-ldap-idp-that-isnt-in-fd-issuer").
-					Build()).
-				WithActiveDirectory(myADIDP1).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithLotsOfIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
-				myLDAPIDP1Resolved,
-			},
-		},
-		{
-			name: "GetLDAPIdentityProviders will return an empty list of IDPs if no LDAPIdentityProviders are found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithActiveDirectory(myADIDP1).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs:               []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{},
-		},
-	}
-	for _, tt := range testGetLDAPIdentityProviders {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
-			idps := subject.GetLDAPIdentityProviders()
-
-			require.Equal(t, tt.wantIDPs, idps)
-		})
-	}
-
-	testGetActiveDirectoryIdentityProviders := []struct {
-		name                   string
-		wrappedLister          idplister.UpstreamIdentityProvidersLister
-		federationDomainIssuer *FederationDomainIssuer
-		wantIDPs               []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
-	}{
-		{
-			name: "GetActiveDirectoryIdentityProviders will return a list of LDAP IDPs if there are ActiveDirectoryIdentityProviders configured",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithLDAP(myLDAPIDP1).
-				WithActiveDirectory(myADIDP1).
-				WithActiveDirectory(myADIDP2).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
-				myADIDP1Resolved,
-				myADIDP2Resolved,
-			},
-		},
-		{
-			name: "GetActiveDirectoryIdentityProviders will return a list of LDAP IDPs if there are ActiveDirectoryIdentityProviders configured but exclude AD IDPs that do not have matching UIDs",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithLDAP(myLDAPIDP1).
-				WithActiveDirectory(myADIDP1).
-				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().
-					WithName("my-ad-idp-that-isnt-in-fd-issuer").
-					WithResourceUID("my-ad-idp-that-isnt-in-fd-issuer").
-					Build()).
-				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithLotsOfIDPs,
-			wantIDPs: []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
 				myADIDP1Resolved,
 			},
 		},
 		{
-			name: "GetActiveDirectoryIdentityProviders will return an empty list of LDAP IDPs if no ActiveDirectoryIdentityProviders are found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(myOIDCIDP1).
-				WithOIDC(myOIDCIDP2).
-				WithLDAP(myLDAPIDP1).
+			name: "GetIdentityProviders will return empty list if no IDPs are found",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantIDPs:               []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{},
+			wantIDPs:               []resolvedprovider.FederationDomainResolvedIdentityProvider{},
 		},
 	}
 
-	for _, tt := range testGetActiveDirectoryIdentityProviders {
+	for _, tt := range testGetIdentityProviders {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			subject := NewFederationDomainIdentityProvidersListerFinder(tt.federationDomainIssuer, tt.wrappedLister)
-			idps := subject.GetActiveDirectoryIdentityProviders()
+			idps := subject.GetIdentityProviders()
 
 			require.Equal(t, tt.wantIDPs, idps)
 		})
@@ -541,14 +418,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}{
 		{
 			name: "IDPCount when there are none to be found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
 			wantCount:              0,
 		},
 		{
 			name: "IDPCount when there are various types of IDP to be found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
 				WithOIDC(myOIDCIDP2).
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
@@ -591,7 +468,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}{
 		{
 			name: "HasDefaultIDP when there is an OIDC provider set as default",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myDefaultOIDCIDP).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithDefaultOIDCIDP,
@@ -599,7 +476,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "HasDefaultIDP when there is an LDAP provider set as default",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(myDefaultLDAPIDP).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithDefaultLDAPIDP,
@@ -607,7 +484,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "HasDefaultIDP when there is one set even if it cannot be found",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 					WithName("my-oidc-idp-that-isnt-in-fd-issuer").
 					WithResourceUID("my-oidc-idp-that-isnt-in-fd-issuer").
@@ -618,7 +495,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		},
 		{
 			name: "HasDefaultIDP when there is none set",
-			wrappedLister: oidctestutil.NewUpstreamIDPListerBuilder().
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
 			wantHasDefaultIDP:      false,

@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamldap
@@ -178,7 +178,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		name                       string
 		username                   string
 		password                   string
-		grantedScopes              []string
+		skipGroups                 bool
 		providerConfig             *ProviderConfig
 		searchMocks                func(conn *mockldapconn.MockConn)
 		bindEndUserMocks           func(conn *mockldapconn.MockConn)
@@ -292,10 +292,10 @@ func TestEndUserAuthentication(t *testing.T) {
 			}),
 		},
 		{
-			name:           "when groups scope isn't granted, don't do group search",
+			name:           "when groups are requested to be skipped, don't do group search",
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
-			grantedScopes:  []string{},
+			skipGroups:     true,
 			providerConfig: providerConfig(nil),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -755,10 +755,10 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantAuthResponse: expectedAuthResponse(nil),
 		},
 		{
-			name:          "when the UserAttributeForFilter is set to something other than dn but groups scope is not granted so skips validating UserAttributeForFilter attribute value",
-			username:      testUpstreamUsername,
-			password:      testUpstreamPassword,
-			grantedScopes: []string{}, // no groups scope
+			name:       "when the UserAttributeForFilter is set to something other than dn but groups are to be skipped, so skips validating UserAttributeForFilter attribute value",
+			username:   testUpstreamUsername,
+			password:   testUpstreamPassword,
+			skipGroups: true,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
 			}),
@@ -1421,11 +1421,7 @@ func TestEndUserAuthentication(t *testing.T) {
 
 			ldapProvider := New(*tt.providerConfig)
 
-			if tt.grantedScopes == nil {
-				tt.grantedScopes = []string{"groups"}
-			}
-
-			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, tt.grantedScopes)
+			authResponse, authenticated, err := ldapProvider.AuthenticateUser(context.Background(), tt.username, tt.password, tt.skipGroups)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != nil:
@@ -1457,7 +1453,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
 
-			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, tt.grantedScopes)
+			authResponse, authenticated, err = ldapProvider.DryRunAuthenticateUser(context.Background(), tt.username, tt.skipGroups)
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != nil:
@@ -1589,7 +1585,7 @@ func TestUpstreamRefresh(t *testing.T) {
 	tests := []struct {
 		name           string
 		providerConfig *ProviderConfig
-		grantedScopes  []string
+		skipGroups     bool
 		setupMocks     func(conn *mockldapconn.MockConn)
 		refreshUserDN  string
 		dialError      error
@@ -1726,7 +1722,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantGroups: nil, // do not update groups
 		},
 		{
-			name:           "happy path where group search is configured but groups scope isn't included",
+			name:           "happy path where group search is configured but groups search is requested to be skipped",
 			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -1734,8 +1730,8 @@ func TestUpstreamRefresh(t *testing.T) {
 				// note that group search is not expected
 				conn.EXPECT().Close().Times(1)
 			},
-			grantedScopes: []string{},
-			wantGroups:    nil,
+			skipGroups: true,
+			wantGroups: nil,
 		},
 		{
 			name: "happy path where group search is configured but skipGroupRefresh is set, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
@@ -1755,7 +1751,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			wantGroups: nil, // do not update groups
 		},
 		{
-			name: "happy path where group search is configured but groups scope isn't included, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
+			name: "happy path where group search is configured but groups search is requested to be skipped, when the UserAttributeForFilter is set to something other than dn, still skips group refresh, and skips validating UserAttributeForFilter attribute value",
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.GroupSearch.UserAttributeForFilter = "someUserAttrName"
 			}),
@@ -1768,8 +1764,8 @@ func TestUpstreamRefresh(t *testing.T) {
 				// note that group search is not expected
 				conn.EXPECT().Close().Times(1)
 			},
-			grantedScopes: []string{},
-			wantGroups:    nil,
+			skipGroups: true,
+			wantGroups: nil,
 		},
 		{
 			name: "happy path when the UserAttributeForFilter is set to something other than dn",
@@ -2275,9 +2271,6 @@ func TestUpstreamRefresh(t *testing.T) {
 				tt.refreshUserDN = testUserSearchResultDNValue // default for all tests
 			}
 
-			if tt.grantedScopes == nil {
-				tt.grantedScopes = []string{"groups"}
-			}
 			initialPwdLastSetEncoded := base64.RawURLEncoding.EncodeToString([]byte("132801740800000000"))
 			ldapProvider := New(*tt.providerConfig)
 			subject := fmt.Sprintf(
@@ -2289,7 +2282,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,
 				AdditionalAttributes: map[string]string{pwdLastSetAttribute: initialPwdLastSetEncoded},
-				GrantedScopes:        tt.grantedScopes,
+				SkipGroups:           tt.skipGroups,
 			}, testUpstreamName)
 			if tt.wantErr != "" {
 				require.Error(t, err)

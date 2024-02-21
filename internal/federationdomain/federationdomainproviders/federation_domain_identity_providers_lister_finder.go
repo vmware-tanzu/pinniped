@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package federationdomainproviders
@@ -11,6 +11,8 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/psession"
 )
@@ -25,26 +27,14 @@ type FederationDomainIdentityProvider struct {
 }
 
 type FederationDomainIdentityProvidersFinderI interface {
-	FindDefaultIDP() (
-		*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
-		*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
-		error,
-	)
-
-	FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (
-		*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
-		*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
-		error,
-	)
-
+	FindDefaultIDP() (resolvedprovider.FederationDomainResolvedIdentityProvider, error)
+	FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (resolvedprovider.FederationDomainResolvedIdentityProvider, error)
 	HasDefaultIDP() bool
 	IDPCount() int
 }
 
 type FederationDomainIdentityProvidersListerI interface {
-	GetOIDCIdentityProviders() []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider
-	GetLDAPIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
-	GetActiveDirectoryIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider
+	GetIdentityProviders() []resolvedprovider.FederationDomainResolvedIdentityProvider
 }
 
 type FederationDomainIdentityProvidersListerFinderI interface {
@@ -105,39 +95,28 @@ func NewFederationDomainIdentityProvidersListerFinder(
 }
 
 func (u *FederationDomainIdentityProvidersListerFinder) IDPCount() int {
-	return len(u.GetOIDCIdentityProviders()) + len(u.GetLDAPIdentityProviders()) + len(u.GetActiveDirectoryIdentityProviders())
+	return len(u.GetIdentityProviders())
 }
 
 // FindUpstreamIDPByDisplayName selects either an OIDC, LDAP, or ActiveDirectory IDP, or returns an error.
 // It only considers the allowed IDPs while doing the lookup by display name.
 // Note that ActiveDirectory and LDAP IDPs both return the same type, but with different SessionProviderType values.
 func (u *FederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDisplayName(upstreamIDPDisplayName string) (
-	*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
-	*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
+	resolvedprovider.FederationDomainResolvedIdentityProvider,
 	error,
 ) {
 	// Given a display name, look up the identity provider's UID for that display name.
 	idpUIDForDisplayName, ok := u.idpDisplayNamesToResourceUIDsMap[upstreamIDPDisplayName]
 	if !ok {
-		return nil, nil, fmt.Errorf("identity provider not found: %q", upstreamIDPDisplayName)
+		return nil, fmt.Errorf("identity provider not found: %q", upstreamIDPDisplayName)
 	}
 	// Find the IDP with that UID. It could be any type, so look at all types to find it.
-	for _, p := range u.GetOIDCIdentityProviders() {
-		if p.Provider.GetResourceUID() == idpUIDForDisplayName {
-			return p, nil, nil
+	for _, p := range u.GetIdentityProviders() {
+		if p.GetProvider().GetResourceUID() == idpUIDForDisplayName {
+			return p, nil
 		}
 	}
-	for _, p := range u.GetLDAPIdentityProviders() {
-		if p.Provider.GetResourceUID() == idpUIDForDisplayName {
-			return nil, p, nil
-		}
-	}
-	for _, p := range u.GetActiveDirectoryIdentityProviders() {
-		if p.Provider.GetResourceUID() == idpUIDForDisplayName {
-			return nil, p, nil
-		}
-	}
-	return nil, nil, fmt.Errorf("identity provider not available: %q", upstreamIDPDisplayName)
+	return nil, fmt.Errorf("identity provider not available: %q", upstreamIDPDisplayName)
 }
 
 func (u *FederationDomainIdentityProvidersListerFinder) HasDefaultIDP() bool {
@@ -150,29 +129,30 @@ func (u *FederationDomainIdentityProvidersListerFinder) HasDefaultIDP() bool {
 // without specifying an IDP name, and there are no IDPs explicitly specified on the FederationDomain, and there
 // is exactly one IDP CR defined in the Supervisor namespace.
 func (u *FederationDomainIdentityProvidersListerFinder) FindDefaultIDP() (
-	*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider,
-	*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider,
+	resolvedprovider.FederationDomainResolvedIdentityProvider,
 	error,
 ) {
 	if !u.HasDefaultIDP() {
-		return nil, nil, fmt.Errorf("identity provider not found: this federation domain does not have a default identity provider")
+		return nil, fmt.Errorf("identity provider not found: this federation domain does not have a default identity provider")
 	}
 	return u.FindUpstreamIDPByDisplayName(u.defaultIdentityProvider.DisplayName)
 }
 
-// GetOIDCIdentityProviders lists only the OIDC providers for this FederationDomain.
-func (u *FederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders() []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider {
+// GetIdentityProviders list all identity providers for this FederationDomain.
+func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() []resolvedprovider.FederationDomainResolvedIdentityProvider {
 	// Get the cached providers once at the start in case they change during the rest of this function.
-	cachedProviders := u.wrappedLister.GetOIDCIdentityProviders()
-	providers := []*resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{}
+	cachedOIDCProviders := u.wrappedLister.GetOIDCIdentityProviders()
+	cachedLDAPProviders := u.wrappedLister.GetLDAPIdentityProviders()
+	cachedADProviders := u.wrappedLister.GetActiveDirectoryIdentityProviders()
+	providers := []resolvedprovider.FederationDomainResolvedIdentityProvider{}
 	// Every configured identityProvider on the FederationDomain uses an objetRef to an underlying IDP CR that might
 	// be available as a provider in the wrapped cache. For each configured identityProvider/displayName...
 	for _, idp := range u.configuredIdentityProviders {
 		// Check if the IDP used by that displayName is in the cached available OIDC providers.
-		for _, p := range cachedProviders {
+		for _, p := range cachedOIDCProviders {
 			if idp.UID == p.GetResourceUID() {
 				// Found it, so append it to the result.
-				providers = append(providers, &resolvedprovider.FederationDomainResolvedOIDCIdentityProvider{
+				providers = append(providers, &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
 					DisplayName:         idp.DisplayName,
 					Provider:            p,
 					SessionProviderType: psession.ProviderTypeOIDC,
@@ -180,23 +160,11 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetOIDCIdentityProviders
 				})
 			}
 		}
-	}
-	return providers
-}
-
-// GetLDAPIdentityProviders lists only the LDAP providers for this FederationDomain.
-func (u *FederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider {
-	// Get the cached providers once at the start in case they change during the rest of this function.
-	cachedProviders := u.wrappedLister.GetLDAPIdentityProviders()
-	providers := []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{}
-	// Every configured identityProvider on the FederationDomain uses an objetRef to an underlying IDP CR that might
-	// be available as a provider in the wrapped cache. For each configured identityProvider/displayName...
-	for _, idp := range u.configuredIdentityProviders {
 		// Check if the IDP used by that displayName is in the cached available LDAP providers.
-		for _, p := range cachedProviders {
+		for _, p := range cachedLDAPProviders {
 			if idp.UID == p.GetResourceUID() {
 				// Found it, so append it to the result.
-				providers = append(providers, &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+				providers = append(providers, &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 					DisplayName:         idp.DisplayName,
 					Provider:            p,
 					SessionProviderType: psession.ProviderTypeLDAP,
@@ -204,23 +172,11 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetLDAPIdentityProviders
 				})
 			}
 		}
-	}
-	return providers
-}
-
-// GetActiveDirectoryIdentityProviders lists only the ActiveDirectory providers for this FederationDomain.
-func (u *FederationDomainIdentityProvidersListerFinder) GetActiveDirectoryIdentityProviders() []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider {
-	// Get the cached providers once at the start in case they change during the rest of this function.
-	cachedProviders := u.wrappedLister.GetActiveDirectoryIdentityProviders()
-	providers := []*resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{}
-	// Every configured identityProvider on the FederationDomain uses an objetRef to an underlying IDP CR that might
-	// be available as a provider in the wrapped cache. For each configured identityProvider/displayName...
-	for _, idp := range u.configuredIdentityProviders {
-		// Check if the IDP used by that displayName is in the cached available ActiveDirectory providers.
-		for _, p := range cachedProviders {
+		// Check if the IDP used by that displayName is in the cached available AD providers.
+		for _, p := range cachedADProviders {
 			if idp.UID == p.GetResourceUID() {
 				// Found it, so append it to the result.
-				providers = append(providers, &resolvedprovider.FederationDomainResolvedLDAPIdentityProvider{
+				providers = append(providers, &resolvedldap.FederationDomainResolvedLDAPIdentityProvider{
 					DisplayName:         idp.DisplayName,
 					Provider:            p,
 					SessionProviderType: psession.ProviderTypeActiveDirectory,

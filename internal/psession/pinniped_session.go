@@ -1,9 +1,10 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package psession
 
 import (
+	"maps"
 	"time"
 
 	"github.com/mohae/deepcopy"
@@ -108,16 +109,35 @@ type OIDCSessionData struct {
 	UpstreamIssuer string `json:"upstreamIssuer"`
 }
 
+func (s *OIDCSessionData) Clone() *OIDCSessionData {
+	dataCopy := *s // this shortcut works because all fields in this type are currently strings (no pointers)
+	return &dataCopy
+}
+
 // LDAPSessionData is the additional data needed by Pinniped when the upstream IDP is an LDAP provider.
 type LDAPSessionData struct {
 	UserDN                 string            `json:"userDN"`
 	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
 }
 
+func (s *LDAPSessionData) Clone() *LDAPSessionData {
+	return &LDAPSessionData{
+		UserDN:                 s.UserDN,
+		ExtraRefreshAttributes: maps.Clone(s.ExtraRefreshAttributes), // shallow copy works because all keys and values are strings
+	}
+}
+
 // ActiveDirectorySessionData is the additional data needed by Pinniped when the upstream IDP is an Active Directory provider.
 type ActiveDirectorySessionData struct {
 	UserDN                 string            `json:"userDN"`
 	ExtraRefreshAttributes map[string]string `json:"extraRefreshAttributes,omitempty"`
+}
+
+func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
+	return &ActiveDirectorySessionData{
+		UserDN:                 s.UserDN,
+		ExtraRefreshAttributes: maps.Clone(s.ExtraRefreshAttributes), // shallow copy works because all keys and values are strings
+	}
 }
 
 // NewPinnipedSession returns a new empty session.

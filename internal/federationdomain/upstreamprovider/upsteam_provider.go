@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamprovider
@@ -25,28 +25,37 @@ const (
 )
 
 // RefreshAttributes contains information about the user from the original login request
-// and previous refreshes.
+// and previous refreshes to be used during an LDAP session refresh.
 type RefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
 	Groups               []string
 	AdditionalAttributes map[string]string
-	GrantedScopes        []string
+	// Skip group search for this particular session refresh.
+	// E.g. This could be set to true when the user was not granted the downstream groups scope.
+	// There is no reason to spend the cost of an LDAP group search unless we are going to use the results.
+	SkipGroups bool
 }
 
-type UpstreamOIDCIdentityProviderI interface {
-	// GetName returns a name for this upstream provider. The controller watching the OIDCIdentityProviders will
+// UpstreamIdentityProviderI includes the interface functions that are common to all upstream identity provider types.
+// These represent the identity provider resources, i.e. OIDCIdentityProvider, etc.
+type UpstreamIdentityProviderI interface {
+	// GetName returns a name for this upstream provider. The controller watching the identity provider resources will
 	// set this to be the Name of the CR from its metadata. Note that this is different from the DisplayName configured
 	// in each FederationDomain that uses this provider, so this name is for internal use only, not for interacting
 	// with clients. Clients should not expect to see this name or send this name.
 	GetName() string
 
-	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
-	GetClientID() string
-
 	// GetResourceUID returns the Kubernetes resource ID
 	GetResourceUID() types.UID
+}
+
+type UpstreamOIDCIdentityProviderI interface {
+	UpstreamIdentityProviderI
+
+	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
+	GetClientID() string
 
 	// GetAuthorizationURL returns the Authorization Endpoint fetched from discovery.
 	GetAuthorizationURL() *url.URL
@@ -107,16 +116,12 @@ type UpstreamOIDCIdentityProviderI interface {
 }
 
 type UpstreamLDAPIdentityProviderI interface {
-	// GetName returns a name for this upstream provider.
-	GetName() string
+	UpstreamIdentityProviderI
 
 	// GetURL returns a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
 	// This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 	// identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
 	GetURL() *url.URL
-
-	// GetResourceUID returns the Kubernetes resource ID
-	GetResourceUID() types.UID
 
 	// UserAuthenticator adds an interface method for performing user authentication against the upstream LDAP provider.
 	authenticators.UserAuthenticator

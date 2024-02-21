@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -73,7 +73,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 		name                string
 		username            string
 		password            string
-		grantedScopes       []string
+		skipGroups          bool
 		provider            *upstreamldap.Provider
 		wantError           testutil.RequireErrorStringFunc
 		wantAuthResponse    *authenticators.Response
@@ -116,11 +116,11 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			},
 		},
 		{
-			name:          "groups scope not in granted scopes",
-			username:      "pinny",
-			password:      pinnyPassword,
-			grantedScopes: []string{},
-			provider:      upstreamldap.New(*providerConfig(nil)),
+			name:       "skip groups",
+			username:   "pinny",
+			password:   pinnyPassword,
+			skipGroups: true,
+			provider:   upstreamldap.New(*providerConfig(nil)),
 			wantAuthResponse: &authenticators.Response{
 				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: nil},
 				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
@@ -741,10 +741,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.grantedScopes == nil {
-				tt.grantedScopes = []string{"groups"}
-			}
-			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password, tt.grantedScopes)
+			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password, tt.skipGroups)
 
 			switch {
 			case tt.wantError != nil:
@@ -802,7 +799,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 			authUserCtx, authUserCtxCancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer authUserCtxCancelFunc()
 
-			authResponse, authenticated, err := provider.AuthenticateUser(authUserCtx, env.SupervisorUpstreamLDAP.TestUserCN, env.SupervisorUpstreamLDAP.TestUserPassword, []string{"groups"})
+			authResponse, authenticated, err := provider.AuthenticateUser(authUserCtx, env.SupervisorUpstreamLDAP.TestUserCN, env.SupervisorUpstreamLDAP.TestUserPassword, false)
 			resultCh <- authUserResult{
 				response:      authResponse,
 				authenticated: authenticated,

@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -27,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
+	"go.pinniped.dev/internal/testutil/testidplister"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 )
 
@@ -289,7 +290,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		idps          *oidctestutil.UpstreamIDPListerBuilder
+		idps          *testidplister.UpstreamIDPListerBuilder
 		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		decodedState  *oidc.UpstreamStateParamData
 		formParams    url.Values
@@ -329,7 +330,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 	}{
 		{
 			name: "happy LDAP login",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProvider). // should pick this one
 				WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
 			decodedState:                      happyLDAPDecodedState,
@@ -352,7 +353,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login with identity transformations which modify the username and group names",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProviderBuilder.WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()). // should pick this one
 				WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
 			decodedState:                      happyLDAPDecodedState,
@@ -380,7 +381,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login with dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProvider). // should pick this one
 				WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
 			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
@@ -404,7 +405,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy AD login",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(erroringUpstreamLDAPIdentityProvider).
 				WithActiveDirectory(upstreamActiveDirectoryIdentityProvider), // should pick this one
 			decodedState:                      happyActiveDirectoryDecodedState,
@@ -427,7 +428,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy AD login with identity transformations which modify the username and group names",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(erroringUpstreamLDAPIdentityProvider).
 				WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder.WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()), // should pick this one
 			decodedState:                      happyActiveDirectoryDecodedState,
@@ -455,7 +456,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy AD login with dynamic client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(erroringUpstreamLDAPIdentityProvider).
 				WithActiveDirectory(upstreamActiveDirectoryIdentityProvider), // should pick this one
 			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
@@ -479,7 +480,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when downstream response_mode=form_post returns 200 with HTML+JS form",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"response_mode": "form_post"},
@@ -504,7 +505,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when downstream redirect uri matches what is configured for client except for the port number",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"redirect_uri": "http://127.0.0.1:4242/callback"},
@@ -529,7 +530,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "happy LDAP login when downstream redirect uri matches what is configured for client except for the port number with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -555,7 +556,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when there are additional allowed downstream requested scopes",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"scope": "openid offline_access pinniped:request-audience"},
@@ -581,7 +582,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is allowed to request username and groups but does not request them",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -607,7 +608,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is not allowed to request username and does not request username",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -641,7 +642,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when there are additional allowed downstream requested scopes with dynamic client, when dynamic client is not allowed to request groups and does not request groups",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -675,7 +676,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP when downstream OIDC validations are skipped because the openid scope was not requested",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{
@@ -705,7 +706,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "happy LDAP login when username and groups scopes are not requested",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProvider). // should pick this one
 				WithActiveDirectory(erroringUpstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
@@ -733,7 +734,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "bad username LDAP login",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			formParams:                   url.Values{userParam: []string{"wrong!"}, passParam: []string{happyLDAPPassword}},
 			wantStatus:                   http.StatusSeeOther,
@@ -743,7 +744,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "bad password LDAP login",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			formParams:                   url.Values{userParam: []string{happyLDAPUsername}, passParam: []string{"wrong!"}},
 			wantStatus:                   http.StatusSeeOther,
@@ -753,7 +754,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "blank username LDAP login",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			formParams:                   url.Values{userParam: []string{""}, passParam: []string{happyLDAPPassword}},
 			wantStatus:                   http.StatusSeeOther,
@@ -763,7 +764,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "blank password LDAP login",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			formParams:                   url.Values{userParam: []string{happyLDAPUsername}, passParam: []string{""}},
 			wantStatus:                   http.StatusSeeOther,
@@ -773,7 +774,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "username and password sent as URI query params should be ignored since they are expected in form post body",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			reqURIQuery:                  happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -783,7 +784,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:                         "error during upstream LDAP authentication",
-			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(erroringUpstreamLDAPIdentityProvider),
+			idps:                         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(erroringUpstreamLDAPIdentityProvider),
 			decodedState:                 happyLDAPDecodedState,
 			formParams:                   happyUsernamePasswordFormParams,
 			wantStatus:                   http.StatusSeeOther,
@@ -793,7 +794,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "downstream redirect uri does not match what is configured for client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"redirect_uri": "http://127.0.0.1/wrong_callback"},
@@ -804,7 +805,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "downstream redirect uri does not match what is configured for client with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -816,7 +817,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "downstream client does not exist",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"client_id": "wrong_client_id"},
@@ -827,7 +828,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "downstream client is missing",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"client_id": ""},
@@ -838,7 +839,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "response type is unsupported",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"response_type": "unsupported"},
@@ -849,7 +850,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "response type form_post is unsupported for dynamic clients",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -861,7 +862,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "response type is missing",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"response_type": ""},
@@ -872,7 +873,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "PKCE code_challenge is missing",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"code_challenge": ""},
@@ -887,7 +888,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "PKCE code_challenge_method is invalid",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"},
@@ -902,7 +903,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "PKCE code_challenge_method is `plain`",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"code_challenge_method": "plain"}, // plain is not allowed
@@ -917,7 +918,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "PKCE code_challenge_method is missing",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"code_challenge_method": ""},
@@ -932,7 +933,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "PKCE code_challenge_method is missing with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -948,7 +949,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "prompt param is not allowed to have none and another legal value at the same time",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"prompt": "none login"},
@@ -963,7 +964,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "LDAP login using identity transformations which reject the authentication",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithLDAP(upstreamLDAPIdentityProviderBuilder.WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
 			decodedState:               happyLDAPDecodedState,
 			formParams:                 happyUsernamePasswordFormParams,
@@ -974,7 +975,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "AD login using identity transformations which reject the authentication",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().
+			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithActiveDirectory(upstreamActiveDirectoryIdentityProviderBuilder.WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
 			decodedState:               happyActiveDirectoryDecodedState,
 			formParams:                 happyUsernamePasswordFormParams,
@@ -985,7 +986,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "downstream state does not have enough entropy",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"state": "short"},
@@ -996,7 +997,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "downstream scopes do not match what is configured for client",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 					map[string]string{"scope": "openid offline_access pinniped:request-audience scope_not_allowed"},
@@ -1007,7 +1008,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request username scope in authorize request but requests it anyway",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -1027,7 +1028,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name: "using dynamic client which is not allowed to request groups scope in authorize request but requests it anyway",
-			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
@@ -1047,7 +1048,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:          "downstream scopes do not match what is configured for client with dynamic client",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
 				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
@@ -1059,14 +1060,14 @@ func TestPostLoginEndpoint(t *testing.T) {
 		},
 		{
 			name:         "no upstream providers are configured or provider cannot be found by name",
-			idps:         oidctestutil.NewUpstreamIDPListerBuilder(), // empty
+			idps:         testidplister.NewUpstreamIDPListerBuilder(), // empty
 			decodedState: happyLDAPDecodedState,
 			formParams:   happyUsernamePasswordFormParams,
 			wantErr:      "error finding upstream provider: did not find IDP with name \"some-ldap-idp\"",
 		},
 		{
 			name:         "upstream provider cannot be found by name and type",
-			idps:         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
+			idps:         testidplister.NewUpstreamIDPListerBuilder().WithLDAP(upstreamLDAPIdentityProvider),
 			decodedState: happyActiveDirectoryDecodedState, // correct upstream IDP name, but wrong upstream IDP type
 			formParams:   happyUsernamePasswordFormParams,
 			wantErr:      "error finding upstream provider: did not find IDP with name \"some-active-directory-idp\"",

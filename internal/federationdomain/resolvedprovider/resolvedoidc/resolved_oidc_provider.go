@@ -129,7 +129,6 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) Login(
 	ctx context.Context,
 	submittedUsername string,
 	submittedPassword string,
-	_groupsWillBeIgnored bool, // ignored because we always compute the user's group memberships for OIDC, if possible
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	if !p.Provider.AllowsPasswordGrant() {
 		// Return a user-friendly error for this case which is entirely within our control.
@@ -226,7 +225,6 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) LoginFromCallback(
 func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	ctx context.Context,
 	identity *resolvedprovider.Identity,
-	groupsWillBeIgnored bool,
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	sessionData, ok := identity.IDPSpecificSessionData.(*psession.OIDCSessionData)
 	if !ok {
@@ -283,21 +281,18 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 		return nil, err
 	}
 
-	var refreshedUntransformedGroups []string
-	if !groupsWillBeIgnored {
-		// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
-		// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
-		// claim name. It could also be missing because the claim was originally found in the ID token during login, but
-		// now we might not have a refreshed ID token.
-		// If the claim is found, then use it to update the user's group membership in the session.
-		// If the claim is not found, then we have no new information about groups, so skip updating the group membership
-		// and let any old groups memberships in the session remain.
-		refreshedUntransformedGroups, err = getGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
-		if err != nil {
-			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
-				"Upstream refresh error while extracting groups claim.").WithTrace(err).
-				WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
-		}
+	// If possible, update the user's group memberships. The configured groups claim name (if there is one) may or
+	// may not be included in the newly fetched and merged claims. It could be missing due to a misconfiguration of the
+	// claim name. It could also be missing because the claim was originally found in the ID token during login, but
+	// now we might not have a refreshed ID token.
+	// If the claim is found, then use it to update the user's group membership in the session.
+	// If the claim is not found, then we have no new information about groups, so skip updating the group membership
+	// and let any old groups memberships in the session remain.
+	refreshedUntransformedGroups, err := getGroupsFromUpstreamIDToken(p.Provider, mergedClaims)
+	if err != nil {
+		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
+			"Upstream refresh error while extracting groups claim.").WithTrace(err).
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 	}
 
 	// It's possible that a username wasn't returned by the upstream provider during refresh,

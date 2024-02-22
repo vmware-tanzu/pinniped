@@ -9,9 +9,7 @@ import (
 	"net/url"
 
 	"github.com/ory/fosite"
-	"k8s.io/utils/strings/slices"
 
-	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -67,10 +65,8 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
 		}
 
-		skipGroups := !slices.Contains(authorizeRequester.GetGrantedScopes(), oidcapi.ScopeGroups)
-
 		// Attempt to authenticate the user with the upstream IDP.
-		identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword, skipGroups)
+		identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword)
 		if err != nil {
 			switch {
 			case errors.Is(err, resolvedldap.ErrUnexpectedUpstreamLDAPError):

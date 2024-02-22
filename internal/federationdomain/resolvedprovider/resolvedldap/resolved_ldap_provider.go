@@ -125,9 +125,8 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) Login(
 	ctx context.Context,
 	submittedUsername string,
 	submittedPassword string,
-	groupsWillBeIgnored bool,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
-	authenticateResponse, authenticated, err := p.Provider.AuthenticateUser(ctx, submittedUsername, submittedPassword, groupsWillBeIgnored)
+	authenticateResponse, authenticated, err := p.Provider.AuthenticateUser(ctx, submittedUsername, submittedPassword)
 	if err != nil {
 		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", p.Provider.GetName())
 		return nil, nil, ErrUnexpectedUpstreamLDAPError.WithWrap(err)
@@ -185,7 +184,6 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) LoginFromCallback(
 func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
 	ctx context.Context,
 	identity *resolvedprovider.Identity,
-	groupsWillBeIgnored bool,
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	var dn string
 	var additionalAttributes map[string]string
@@ -229,7 +227,6 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
 		DN:                   dn,
 		Groups:               identity.UpstreamGroups,
 		AdditionalAttributes: additionalAttributes,
-		SkipGroups:           groupsWillBeIgnored,
 	}, p.GetDisplayName())
 	if err != nil {
 		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(

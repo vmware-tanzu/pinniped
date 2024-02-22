@@ -42,6 +42,7 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
@@ -2904,6 +2905,64 @@ func TestRefreshGrant(t *testing.T) {
 					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+				},
+			},
+		},
+		{
+			name: "refresh grant when the upstream refresh when groups scope not requested on original request, when using dynamic client, " +
+				"still runs identity transformations with upstream groups in case transforms want to reject auth based on groups, even though groups would not be included in final ID token",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub":             goodUpstreamSubject,
+							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).
+					WithTransformsForFederationDomain(transformtestutil.NewPipeline(t,
+						[]celtransformer.CELTransformation{
+							&celtransformer.AllowAuthenticationPolicy{
+								Expression:                    `!groups.exists(g, g in ["` + "new-group1" + `"])`, // reject auth for users who belongs to an upstream group
+								RejectedAuthenticationMessage: `users who belong to certain upstream group are not allowed`,
+							},
+						}),
+					).Build()),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access username")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				customSessionData:  initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                  http.StatusOK,
+					wantClientID:                dynamicClientID,
+					wantSuccessBodyFields:       []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:         []string{"openid", "offline_access", "username"},
+					wantGrantedScopes:           []string{"openid", "offline_access", "username"},
+					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+					wantUsername:                goodUsername,
+					wantGroups:                  nil,
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithClientID("").WithScope("openid offline_access username").ReadCloser()
+					r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1) // Use basic auth header instead.
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
+					wantStatus:                        http.StatusUnauthorized,
+					// auth was rejected because of the upstream group to which the user belonged, as shown by the configured RejectedAuthenticationMessage appearing here
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh rejected by configured identity policy: users who belong to certain upstream group are not allowed."
+						}
+					`),
 				},
 			},
 		},

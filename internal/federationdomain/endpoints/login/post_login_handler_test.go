@@ -20,6 +20,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
@@ -673,6 +674,44 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+		},
+		{
+			name: "login with dynamic client which is not allowed to request groups still runs identity transformations with upstream groups " +
+				"in case transforms want to reject auth based on groups, even though groups would not be included in final ID token",
+			idps: testidplister.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder.
+					WithTransformsForFederationDomain(transformtestutil.NewPipeline(t,
+						[]celtransformer.CELTransformation{
+							&celtransformer.AllowAuthenticationPolicy{
+								Expression:                    `!groups.exists(g, g in ["` + happyLDAPGroups[0] + `"])`, // reject auth for users who belongs to an upstream group
+								RejectedAuthenticationMessage: `users who belong to certain upstream group are not allowed`,
+							},
+						}),
+					).Build()),
+			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
+					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
+					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+				require.NoError(t, kubeClient.Tracker().Add(secret))
+			},
+			decodedState: modifyHappyLDAPDecodedState(func(data *oidc.UpstreamStateParamData) {
+				data.AuthParams = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
+					map[string]string{"scope": "openid username offline_access"},
+				).Encode()
+			}),
+			formParams:      happyUsernamePasswordFormParams,
+			wantStatus:      http.StatusSeeOther,
+			wantContentType: htmlContentType,
+			wantBodyString:  "",
+			wantRedirectLocationString: urlWithQuery(downstreamRedirectURI, map[string]string{
+				"error": "access_denied",
+				// auth was rejected because of the upstream group to which the user belonged, as shown by the configured RejectedAuthenticationMessage appearing here
+				"error_description": "The resource owner or authorization server denied the request. Reason: configured identity policy rejected this authentication: users who belong to certain upstream group are not allowed.",
+				"state":             happyDownstreamState,
+			}),
 		},
 		{
 			name: "happy LDAP when downstream OIDC validations are skipped because the openid scope was not requested",

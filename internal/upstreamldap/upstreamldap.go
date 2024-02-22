@@ -250,10 +250,6 @@ func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes u
 	if p.c.GroupSearch.SkipGroupRefresh {
 		return storedRefreshAttributes.Groups, nil
 	}
-	// If we were asked to skip group search for this particular session, then do not search for groups or return any.
-	if storedRefreshAttributes.SkipGroups {
-		return nil, nil
-	}
 
 	var groupSearchUserAttributeForFilterValue string
 	if p.useGroupSearchUserAttributeForFilter() {
@@ -422,23 +418,23 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 // authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
-func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string, skipGroups bool) (*authenticators.Response, bool, error) {
+func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
 	}
-	return p.authenticateUserImpl(ctx, username, skipGroups, endUserBindFunc)
+	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
 // AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
-func (p *Provider) AuthenticateUser(ctx context.Context, username, password string, skipGroups bool) (*authenticators.Response, bool, error) {
+func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 	endUserBindFunc := func(conn Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
 	}
-	return p.authenticateUserImpl(ctx, username, skipGroups, endUserBindFunc)
+	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
-func (p *Provider) authenticateUserImpl(ctx context.Context, username string, skipGroups bool, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
@@ -467,7 +463,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, sk
 		return nil, false, fmt.Errorf(`error binding as %q before user search: %w`, p.c.BindUsername, err)
 	}
 
-	response, err := p.searchAndBindUser(conn, username, skipGroups, bindFunc)
+	response, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
@@ -564,7 +560,7 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	return searchBase, nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, skipGroups bool, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,
@@ -610,20 +606,17 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, skipGroups bool
 		return nil, err
 	}
 
-	var mappedGroupNames []string
-	if !skipGroups {
-		var groupSearchUserAttributeForFilterValue string
-		if p.useGroupSearchUserAttributeForFilter() {
-			groupSearchUserAttributeForFilterValue, err = p.getSearchResultAttributeValue(p.c.GroupSearch.UserAttributeForFilter, userEntry, username)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		mappedGroupNames, err = p.searchGroupsForUserMembership(conn, userEntry.DN, groupSearchUserAttributeForFilterValue)
+	var groupSearchUserAttributeForFilterValue string
+	if p.useGroupSearchUserAttributeForFilter() {
+		groupSearchUserAttributeForFilterValue, err = p.getSearchResultAttributeValue(p.c.GroupSearch.UserAttributeForFilter, userEntry, username)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	mappedGroupNames, err := p.searchGroupsForUserMembership(conn, userEntry.DN, groupSearchUserAttributeForFilterValue)
+	if err != nil {
+		return nil, err
 	}
 
 	mappedRefreshAttributes := make(map[string]string)

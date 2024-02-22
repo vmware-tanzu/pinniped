@@ -73,7 +73,6 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 		name                string
 		username            string
 		password            string
-		skipGroups          bool
 		provider            *upstreamldap.Provider
 		wantError           testutil.RequireErrorStringFunc
 		wantAuthResponse    *authenticators.Response
@@ -111,18 +110,6 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "dc=pinniped,dc=dev" })),
 			wantAuthResponse: &authenticators.Response{
 				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{"ball-game-players", "seals"}},
-				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
-				ExtraRefreshAttributes: map[string]string{},
-			},
-		},
-		{
-			name:       "skip groups",
-			username:   "pinny",
-			password:   pinnyPassword,
-			skipGroups: true,
-			provider:   upstreamldap.New(*providerConfig(nil)),
-			wantAuthResponse: &authenticators.Response{
-				User:                   &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: nil},
 				DN:                     "cn=pinny,ou=users,dc=pinniped,dc=dev",
 				ExtraRefreshAttributes: map[string]string{},
 			},
@@ -741,7 +728,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password, tt.skipGroups)
+			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password)
 
 			switch {
 			case tt.wantError != nil:
@@ -799,7 +786,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 			authUserCtx, authUserCtxCancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer authUserCtxCancelFunc()
 
-			authResponse, authenticated, err := provider.AuthenticateUser(authUserCtx, env.SupervisorUpstreamLDAP.TestUserCN, env.SupervisorUpstreamLDAP.TestUserPassword, false)
+			authResponse, authenticated, err := provider.AuthenticateUser(authUserCtx, env.SupervisorUpstreamLDAP.TestUserCN, env.SupervisorUpstreamLDAP.TestUserPassword)
 			resultCh <- authUserResult{
 				response:      authResponse,
 				authenticated: authenticated,

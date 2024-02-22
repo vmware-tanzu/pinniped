@@ -115,7 +115,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string, _skipGroups bool) (*authenticators.Response, bool, error) {
+func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context, username, password string) (*authenticators.Response, bool, error) {
 	return u.AuthenticateFunc(ctx, username, password)
 }
 

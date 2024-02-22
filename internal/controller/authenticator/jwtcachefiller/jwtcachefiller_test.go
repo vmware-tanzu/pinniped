@@ -42,7 +42,7 @@ import (
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/status"
+	"go.pinniped.dev/internal/testutil/conditionstestutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -172,6 +172,17 @@ func TestController(t *testing.T) {
 		require.NoError(t, err)
 	}))
 
+	jwksFetchShouldFailMux := http.NewServeMux()
+	jwksFetchShouldFailServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tlsserver.AssertTLS(t, r, ptls.Default)
+		jwksFetchShouldFailMux.ServeHTTP(w, r)
+	}), tlsserver.RecordTLSHello)
+	jwksFetchShouldFailMux.Handle("/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, jwksFetchShouldFailServer.URL, jwksFetchShouldFailServer.URL+"/fetch/will/fail/jwks.json")
+		require.NoError(t, err)
+	}))
+
 	goodIssuer := goodOIDCIssuerServer.URL
 	badIssuerInvalidJWKSURI := badOIDCIssuerServerInvalidJWKSURI.URL
 	badIssuerInvalidJWKSURIScheme := badOIDCIssuerServerInvalidJWKSURIScheme.URL
@@ -244,6 +255,12 @@ func TestController(t *testing.T) {
 		Issuer:   badIssuerInvalidJWKSURIScheme,
 		Audience: goodAudience,
 		TLS:      tlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
+	}
+
+	jwksFetchShouldFailJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   jwksFetchShouldFailServer.URL,
+		Audience: goodAudience,
+		TLS:      tlsSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
 	}
 
 	happyReadyCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -438,13 +455,44 @@ func TestController(t *testing.T) {
 			Message:            `jwks_uri ` + issuer + ` has invalid scheme, require 'https'`,
 		}
 	}
+	happyJWKSFetch := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "JWKSFetchValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "successfully fetched jwks",
+		}
+	}
+	unknownJWKSFetch := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "JWKSFetchValid",
+			Status:             "Unknown",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "UnableToValidate",
+			Message:            "unable to validate; see other conditions for details",
+		}
+	}
+	sadJWKSFetch := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "JWKSFetchValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidCouldNotFetchJWKS",
+			Message:            "could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n",
+		}
+	}
 
 	allHappyConditionsSuccess := func(issuer string, someTime metav1.Time, observedGeneration int64) []metav1.Condition {
-		return status.SortConditionsByType([]metav1.Condition{
+		return conditionstestutil.SortByType([]metav1.Condition{
 			happyAuthenticatorValid(someTime, observedGeneration),
 			happyDiscoveryURLValid(someTime, observedGeneration),
 			happyIssuerURLValid(someTime, observedGeneration),
 			happyJWKSURLValid(someTime, observedGeneration),
+			happyJWKSFetch(someTime, observedGeneration),
 			happyReadyCondition(someTime, observedGeneration),
 			happyTLSConfigurationValidCAParsed(someTime, observedGeneration),
 		})
@@ -722,13 +770,14 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
 					sadDiscoveryURLValidx509(goodIssuer, frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 				},
 			),
@@ -747,7 +796,7 @@ func TestController(t *testing.T) {
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -755,6 +804,7 @@ func TestController(t *testing.T) {
 					unknownDiscoveryURLValid(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase:  "Error",
@@ -770,7 +820,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -778,6 +828,7 @@ func TestController(t *testing.T) {
 					unknownDiscoveryURLValid(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase: "Error",
@@ -792,7 +843,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -800,6 +851,7 @@ func TestController(t *testing.T) {
 					unknownDiscoveryURLValid(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase: "Error",
@@ -814,7 +866,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(frozenMetav1Now, 0),
@@ -822,6 +874,7 @@ func TestController(t *testing.T) {
 					sadDiscoveryURLValidConnectionRefused(goodIssuer+"/foo/bar/baz/shizzle", frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 				},
 			),
@@ -843,13 +896,14 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase: "Error",
@@ -865,17 +919,43 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					sadJWKSURLValidScheme("http://.café.com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+					unknownJWKSFetch(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase: "Error",
 			wantSyncLoopErr: testutil.WantExactErrorString("jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
+		},
+		// since this is a hard-coded token we can't do any meaningful testing for this case (and should also never have an error)
+		// {name: "validateJWKSFetch: could not sign tokens"},
+		{
+			name: "validateJWKSFetch: could not fetch keys.... this should be a resync err",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *jwksFetchShouldFailJWTAuthenticatorSpec,
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantStatusConditions: conditionstestutil.Replace(
+				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+				[]metav1.Condition{
+					happyIssuerURLValid(frozenMetav1Now, 0),
+					sadReadyCondition(frozenMetav1Now, 0),
+					unknownAuthenticatorValid(frozenMetav1Now, 0),
+					sadJWKSFetch(frozenMetav1Now, 0),
+				},
+			),
+			wantStatusPhase: "Error",
+			wantSyncLoopErr: testutil.WantExactErrorString("could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n"),
 		},
 		{
 			name: "updateStatus: when updateStatus() is called with matching original and updated conditions, it will not update",
@@ -915,7 +995,7 @@ func TestController(t *testing.T) {
 					},
 					Spec: *someJWTAuthenticatorSpec,
 					Status: auth1alpha1.JWTAuthenticatorStatus{
-						Conditions: status.ReplaceConditions(
+						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								sadReadyCondition(frozenMetav1Now, 0),
@@ -949,7 +1029,7 @@ func TestController(t *testing.T) {
 					},
 					Spec: *someJWTAuthenticatorSpec,
 					Status: auth1alpha1.JWTAuthenticatorStatus{
-						Conditions: status.ReplaceConditions(
+						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								sadReadyCondition(frozenMetav1Now, 0),
@@ -980,7 +1060,7 @@ func TestController(t *testing.T) {
 				},
 			}},
 			// conditions and phase match previous state since update failed
-			wantStatusConditions: status.ReplaceConditions(
+			wantStatusConditions: conditionstestutil.Replace(
 				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 				[]metav1.Condition{
 					sadReadyCondition(frozenMetav1Now, 0),
@@ -1038,7 +1118,7 @@ func TestController(t *testing.T) {
 			}
 
 			actualLogLines := logLines(log.String())
-			require.Equal(t, len(actualLogLines), len(tt.wantLogs), "log line count should be correct")
+			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {
 				require.NotNil(t, tt.wantLogs[logLineNum], "expected log line should never be empty")
@@ -1049,7 +1129,7 @@ func TestController(t *testing.T) {
 				require.Equal(t, tt.wantLogs[logLineNum]["level"], lineStruct["level"], fmt.Sprintf("log line (%d) log level should be correct (in: %s)", logLineNum, lineStruct))
 
 				require.Equal(t, tt.wantLogs[logLineNum]["timestamp"], lineStruct["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct (in: %s)", logLineNum, lineStruct))
-				require.Equal(t, lineStruct["logger"], tt.wantLogs[logLineNum]["logger"], fmt.Sprintf("log line (%d) logger should be correct", logLineNum))
+				require.Equal(t, tt.wantLogs[logLineNum]["logger"], lineStruct["logger"], fmt.Sprintf("log line (%d) logger should be correct", logLineNum))
 				require.NotEmpty(t, lineStruct["caller"], fmt.Sprintf("log line (%d) caller should not be empty", logLineNum))
 				require.Equal(t, tt.wantLogs[logLineNum]["message"], lineStruct["message"], fmt.Sprintf("log line (%d) message should be correct", logLineNum))
 				if lineStruct["issuer"] != nil {

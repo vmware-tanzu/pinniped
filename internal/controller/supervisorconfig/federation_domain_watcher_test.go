@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -32,7 +32,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/status"
+	"go.pinniped.dev/internal/testutil/conditionstestutil"
 )
 
 func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
@@ -492,7 +492,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	}
 
 	allHappyConditionsSuccess := func(issuer string, time metav1.Time, observedGeneration int64) []metav1.Condition {
-		return status.SortConditionsByType([]metav1.Condition{
+		return conditionstestutil.SortByType([]metav1.Condition{
 			happyTransformationExamplesCondition(frozenMetav1Now, 123),
 			happyTransformationExpressionsCondition(frozenMetav1Now, 123),
 			happyKindCondition(frozenMetav1Now, 123),
@@ -507,7 +507,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	}
 
 	allHappyConditionsLegacyConfigurationSuccess := func(issuer string, idpName string, time metav1.Time, observedGeneration int64) []metav1.Condition {
-		return status.ReplaceConditions(
+		return conditionstestutil.Replace(
 			allHappyConditionsSuccess(issuer, time, observedGeneration),
 			[]metav1.Condition{
 				happyIdentityProvidersFoundConditionLegacyConfigurationSuccess(idpName, time, observedGeneration),
@@ -716,7 +716,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantStatusUpdates: []*configv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
@@ -758,7 +758,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantStatusUpdates: []*configv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIssuerURLValidConditionCannotHaveQuery(frozenMetav1Now, 123),
@@ -798,7 +798,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte.cOm/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
@@ -810,7 +810,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),
@@ -871,7 +871,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte-adDress.cOm/path1", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -883,7 +883,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate-address.com:1234/path2", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadOneTLSSecretPerIssuerHostnameCondition(frozenMetav1Now, 123),
@@ -895,7 +895,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(invalidIssuerURL, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
 							unknownIssuerIsUniqueCondition(frozenMetav1Now, 123),
@@ -923,7 +923,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantStatusUpdates: []*configv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
@@ -932,7 +932,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionLegacyConfigurationIdentityProviderNotFound(frozenMetav1Now, 123),
@@ -953,7 +953,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantStatusUpdates: []*configv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(3, frozenMetav1Now, 123),
@@ -1005,7 +1005,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIdentityProvidersFoundConditionIdentityProvidersObjectRefsNotFound(here.Doc(
@@ -1159,7 +1159,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadDisplayNamesUniqueCondition(`"duplicate1", "duplicate2"`, frozenMetav1Now, 123),
@@ -1222,7 +1222,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadAPIGroupSuffixCondition(`"", "", "wrong.example.com"`, frozenMetav1Now, 123),
@@ -1284,7 +1284,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadKindCondition(`"", "wrong"`, frozenMetav1Now, 123),
@@ -1334,7 +1334,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadTransformationExpressionsCondition(here.Doc(
@@ -1480,7 +1480,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
@@ -1579,7 +1579,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadTransformationExamplesCondition(here.Doc(
@@ -1726,7 +1726,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadAPIGroupSuffixCondition(`"this is wrong"`, frozenMetav1Now, 123),
@@ -1786,7 +1786,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
 					},
 					configv1alpha1.FederationDomainPhaseError,
-					status.ReplaceConditions(
+					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
 							sadIssuerIsUniqueCondition(frozenMetav1Now, 123),

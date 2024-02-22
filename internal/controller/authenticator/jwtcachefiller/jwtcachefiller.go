@@ -63,7 +63,7 @@ const (
 	reasonInvalidDiscoveryProbe        = "InvalidDiscoveryProbe"
 	reasonInvalidAuthenticator         = "InvalidAuthenticator"
 
-	msgUnableToValidate = "unable to validate; other issues present"
+	msgUnableToValidate = "unable to validate; see other conditions for details"
 
 	defaultUsernameClaim = oidcapi.IDTokenClaimUsername
 	defaultGroupsClaim   = oidcapi.IDTokenClaimGroups
@@ -170,14 +170,14 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	specCopy := obj.Spec.DeepCopy()
 	var errs []error
 
-	rootCAs, conditions, tlsOk := c.validateTLS(specCopy, conditions)
+	rootCAs, conditions, tlsOk := c.validateTLS(specCopy.TLS, conditions)
 	_, conditions, issuerOk := c.validateIssuer(specCopy.Issuer, conditions)
 
 	client := phttp.Default(rootCAs)
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
-	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, specCopy, conditions, tlsOk && issuerOk)
+	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, specCopy.Issuer, conditions, tlsOk && issuerOk)
 	errs = append(errs, providerErr)
 
 	jwksURL, conditions, jwksErr := c.validateProviderJWKSURL(provider, pJSON, conditions, tlsOk && issuerOk && providerErr == nil)
@@ -188,9 +188,9 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	cachedAuthenticator, conditions, err := c.newCachedJWTAuthenticator(coreOSCtx, client, obj.Spec.DeepCopy(), jwksURL, conditions, tlsOk && issuerOk && providerErr == nil && jwksErr == nil)
 	errs = append(errs, err)
 
-	if !hadErrorCondition(conditions) {
-		c.cache.Store(cacheKey, cachedAuthenticator) // the in-memory cache must need the extra functionality
-		c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).Info("added new jwt authenticator")
+	if !conditionsutil.HadErrorCondition(conditions) {
+		c.cache.Store(cacheKey, cachedAuthenticator)
+		c.log.Info("added new jwt authenticator", "jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer)
 	}
 
 	err = c.updateStatus(ctx.Context, obj, conditions)
@@ -224,7 +224,7 @@ func (c *jwtCacheFillerController) updateStatus(
 ) error {
 	updated := original.DeepCopy()
 
-	if hadErrorCondition(conditions) {
+	if conditionsutil.HadErrorCondition(conditions) {
 		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
@@ -253,11 +253,7 @@ func (c *jwtCacheFillerController) updateStatus(
 	if equality.Semantic.DeepEqual(original, updated) {
 		return nil
 	}
-
 	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
-	if err != nil {
-		c.log.Info(fmt.Sprintf("ERROR: %v", err))
-	}
 	return err
 }
 
@@ -333,7 +329,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(ctx context.Context
 	}, conditions, nil
 }
 
-func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context, spec *auth1alpha1.JWTAuthenticatorSpec, conditions []*metav1.Condition, prereqOk bool) (*providerJSON, *coreosoidc.Provider, []*metav1.Condition, error) {
+func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context, issuer string, conditions []*metav1.Condition, prereqOk bool) (*providerJSON, *coreosoidc.Provider, []*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeDiscoveryValid,
@@ -343,7 +339,7 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 		})
 		return nil, nil, conditions, nil
 	}
-	provider, err := coreosoidc.NewProvider(ctx, spec.Issuer)
+	provider, err := coreosoidc.NewProvider(ctx, issuer)
 	pJSON := &providerJSON{}
 	if err != nil {
 		errText := "could not perform oidc discovery on provider issuer"
@@ -426,8 +422,8 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 	return pJSON.JWKSURL, conditions, nil
 }
 
-func (c *jwtCacheFillerController) validateTLS(spec *auth1alpha1.JWTAuthenticatorSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	rootCAs, _, err := pinnipedauthenticator.CABundle(spec.TLS)
+func (c *jwtCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -439,7 +435,10 @@ func (c *jwtCacheFillerController) validateTLS(spec *auth1alpha1.JWTAuthenticato
 		return rootCAs, conditions, false
 	}
 
-	msg := "valid TLS configuration"
+	msg := "successfully parsed specified CA bundle"
+	if rootCAs == nil {
+		msg = "no CA bundle specified"
+	}
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeTLSConfigurationValid,
 		Status:  metav1.ConditionTrue,
@@ -480,13 +479,4 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 		Message: "issuer is a valid URL",
 	})
 	return issuerURL, conditions, true
-}
-
-func hadErrorCondition(conditions []*metav1.Condition) bool {
-	for _, c := range conditions {
-		if c.Status != metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
 }

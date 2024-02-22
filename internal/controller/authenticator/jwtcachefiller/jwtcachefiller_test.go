@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package jwtcachefiller
@@ -14,9 +14,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -175,12 +176,8 @@ func TestController(t *testing.T) {
 	badIssuerInvalidJWKSURI := badOIDCIssuerServerInvalidJWKSURI.URL
 	badIssuerInvalidJWKSURIScheme := badOIDCIssuerServerInvalidJWKSURIScheme.URL
 	someOtherIssuer := "https://some-other-issuer.com" // placeholder only for tests that don't get far enough to make requests
-	someOtherLocalhostIssuer := "https://127.0.0.1:443/some-other-issuer"
-	someOtherLocalhostIssuerParsed, err := url.Parse(someOtherLocalhostIssuer)
-	require.NoError(t, err)
 
 	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
-	require.NoError(t, err)
 	frozenMetav1Now := metav1.NewTime(nowDoesntMatter)
 	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
 
@@ -235,7 +232,7 @@ func TestController(t *testing.T) {
 	}
 
 	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
-		Issuer:   someOtherLocalhostIssuer,
+		Issuer:   goodIssuer + "/foo/bar/baz/shizzle",
 		Audience: goodAudience,
 	}
 	badIssuerJWKSURIJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
@@ -270,14 +267,24 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	happyTLSConfigurationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	happyTLSConfigurationValidCAParsed := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "TLSConfigurationValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "valid TLS configuration",
+			Message:            "successfully parsed specified CA bundle",
+		}
+	}
+	happyTLSConfigurationValidNoCA := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "TLSConfigurationValid",
+			Status:             "True",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "Success",
+			Message:            "no CA bundle specified",
 		}
 	}
 	sadTLSConfigurationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -340,7 +347,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "UnableToValidate",
-			Message:            "unable to validate; other issues present",
+			Message:            "unable to validate; see other conditions for details",
 		}
 	}
 	// NOTE: we can't reach this error the way our code is written.
@@ -367,7 +374,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "UnableToValidate",
-			Message:            "unable to validate; other issues present",
+			Message:            "unable to validate; see other conditions for details",
 		}
 	}
 	sadDiscoveryURLValidx509 := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -381,15 +388,13 @@ func TestController(t *testing.T) {
 		}
 	}
 	sadDiscoveryURLValidConnectionRefused := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
-		parsed, err := url.Parse(issuer)
-		require.NoError(t, err)
 		return metav1.Condition{
 			Type:               "DiscoveryURLValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "InvalidDiscoveryProbe",
-			Message:            fmt.Sprintf(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": dial tcp %s: connect: connection refused`, issuer, parsed.Host),
+			Message:            fmt.Sprintf(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, issuer),
 		}
 	}
 
@@ -410,7 +415,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "UnableToValidate",
-			Message:            "unable to validate; other issues present",
+			Message:            "unable to validate; see other conditions for details",
 		}
 	}
 	sadJWKSURLValidParseURI := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -441,18 +446,18 @@ func TestController(t *testing.T) {
 			happyIssuerURLValid(someTime, observedGeneration),
 			happyJWKSURLValid(someTime, observedGeneration),
 			happyReadyCondition(someTime, observedGeneration),
-			happyTLSConfigurationValid(someTime, observedGeneration),
+			happyTLSConfigurationValidCAParsed(someTime, observedGeneration),
 		})
 	}
 
 	tests := []struct {
-		name  string
-		cache func(*testing.T, *authncache.Cache, bool)
-		// syncKey is used behind the scenes to simulate the pre-existence of jwtAuthenticator(s).
-		// if not provided, then the test assumes the jwtAuthenticator(s) are new Authenticator(s).
+		name              string
+		cache             func(*testing.T, *authncache.Cache, bool)
 		syncKey           controllerlib.Key
 		jwtAuthenticators []runtime.Object
-		wantClose         bool
+		// for modifying the clients to hack in arbitrary api responses
+		configClient func(*pinnipedfake.Clientset)
+		wantClose    bool
 		// Only errors that are non-config related errors are returned from the sync loop.
 		// Errors such as url.Parse of the issuer are not returned as they imply a user error.
 		// Since these errors trigger a resync, we are careful only to return an error when
@@ -481,6 +486,35 @@ func TestController(t *testing.T) {
 		// Existing code that was never tested. We would likely have to create a server with bad clients to
 		// simulate this.
 		// { name: "non-404 `failed to get JWTAuthenticator` for other API server reasons" }
+		{
+			name:    "valid jwt authenticator sync loop with no change will preserve existing status",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				},
+			},
+			wantLogs: []map[string]any{{
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
+				"jwtAuthenticator": map[string]interface{}{
+					"name": "test-name",
+				},
+			}},
+			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+			wantStatusPhase:      "Ready",
+			wantCacheEntries:     1,
+		},
 		{
 			name:    "valid jwt authenticator with CA will complete sync loop successfully with success conditions and ready phase",
 			syncKey: controllerlib.Key{Name: "test-name"},
@@ -695,6 +729,7 @@ func TestController(t *testing.T) {
 					sadDiscoveryURLValidx509(goodIssuer, frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase:  "Error",
@@ -784,13 +819,14 @@ func TestController(t *testing.T) {
 				[]metav1.Condition{
 					happyIssuerURLValid(frozenMetav1Now, 0),
 					sadReadyCondition(frozenMetav1Now, 0),
-					sadDiscoveryURLValidConnectionRefused(someOtherLocalhostIssuer, frozenMetav1Now, 0),
+					sadDiscoveryURLValidConnectionRefused(goodIssuer+"/foo/bar/baz/shizzle", frozenMetav1Now, 0),
 					unknownAuthenticatorValid(frozenMetav1Now, 0),
 					unknownJWKSURLValid(frozenMetav1Now, 0),
+					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 				},
 			),
 			wantStatusPhase: "Error",
-			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + someOtherLocalhostIssuer + `/.well-known/openid-configuration": dial tcp ` + someOtherLocalhostIssuerParsed.Host + `: connect: connection refused`),
+			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
 		},
 		// cannot be tested currently the way the coreos lib works.
 		// the constructor requires an issuer in the payload and validates the issuer matches the actual issuer,
@@ -819,7 +855,7 @@ func TestController(t *testing.T) {
 			wantStatusPhase: "Error",
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
 		}, {
-			name: "validateProviderJWKSURL: invalid scheme, requires 'https'  will fail sync loop and will report failed and unknown conditions and Error phase and will enqueue new sync",
+			name: "validateProviderJWKSURL: invalid scheme, requires 'https' will fail sync loop and will report failed and unknown conditions and Error phase and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -841,6 +877,119 @@ func TestController(t *testing.T) {
 			wantStatusPhase: "Error",
 			wantSyncLoopErr: testutil.WantExactErrorString("jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
 		},
+		{
+			name: "updateStatus: when updateStatus() is called with matching original and updated conditions, it will not update",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantLogs: []map[string]any{{
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
+				"jwtAuthenticator": map[string]interface{}{
+					"name": "test-name",
+				},
+			}},
+			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+			wantStatusPhase:      "Ready",
+			wantCacheEntries:     1,
+		},
+		{
+			name: "updateStatus: when updateStatus() is called with different original and updated conditions, it will update the conditions",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: status.ReplaceConditions(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "SomethingBeforeUpdating",
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantLogs: []map[string]any{{
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
+				"jwtAuthenticator": map[string]interface{}{
+					"name": "test-name",
+				},
+			}},
+			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+			wantStatusPhase:      "Ready",
+			wantCacheEntries:     1,
+		},
+		{
+			name: "updateStatus: when updateStatus() fails an error will enqueue a new sync",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: status.ReplaceConditions(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "SomethingThatWontUpdate",
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			configClient: func(client *pinnipedfake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"jwtauthenticators",
+					func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("some update error")
+					},
+				)
+			},
+			wantLogs: []map[string]any{{
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
+				"jwtAuthenticator": map[string]interface{}{
+					"name": "test-name",
+				},
+			}},
+			// conditions and phase match previous state since update failed
+			wantStatusConditions: status.ReplaceConditions(
+				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+				[]metav1.Condition{
+					sadReadyCondition(frozenMetav1Now, 0),
+				},
+			),
+			wantStatusPhase:  "SomethingThatWontUpdate",
+			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
+			wantCacheEntries: 1,
+		},
 		// cannot be tested the way we are invoking oidc.New as we don't provide enough configuration
 		// knobs to actually invoke the code in a broken way.  We always give a good client, good keys, and
 		// good signing algos.  In the future if we allow any of these to be configured we may have opportunity
@@ -854,6 +1003,9 @@ func TestController(t *testing.T) {
 			t.Parallel()
 
 			pinnipedAPIClient := pinnipedfake.NewSimpleClientset(tt.jwtAuthenticators...)
+			if tt.configClient != nil {
+				tt.configClient(pinnipedAPIClient)
+			}
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
 			cache := authncache.New()
 
@@ -892,9 +1044,8 @@ func TestController(t *testing.T) {
 				require.NotNil(t, tt.wantLogs[logLineNum], "expected log line should never be empty")
 				var lineStruct map[string]any
 				err := json.Unmarshal([]byte(logLine), &lineStruct)
-				if err != nil {
-					t.Error(err)
-				}
+				require.NoError(t, err)
+
 				require.Equal(t, tt.wantLogs[logLineNum]["level"], lineStruct["level"], fmt.Sprintf("log line (%d) log level should be correct (in: %s)", logLineNum, lineStruct))
 
 				require.Equal(t, tt.wantLogs[logLineNum]["timestamp"], lineStruct["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct (in: %s)", logLineNum, lineStruct))
@@ -919,7 +1070,7 @@ func TestController(t *testing.T) {
 				jwtAuthSubject, getErr := pinnipedAPIClient.AuthenticationV1alpha1().JWTAuthenticators().Get(getCtx, "test-name", metav1.GetOptions{})
 				require.NoError(t, getErr)
 				require.Equal(t, tt.wantStatusConditions, jwtAuthSubject.Status.Conditions, "status.conditions must be correct")
-				require.Equal(t, tt.wantStatusPhase, jwtAuthSubject.Status.Phase, "jwt authenticator status.phase should be correct")
+				require.Equal(t, tt.wantStatusPhase, jwtAuthSubject.Status.Phase, "status.phase should be correct")
 			}
 
 			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))

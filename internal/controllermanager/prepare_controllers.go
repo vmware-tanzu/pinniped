@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package controllermanager provides an entrypoint into running all of the controllers that run as
@@ -236,8 +236,6 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		WithController(
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
-				// TODO (BEN): add the client here for next story
-				// client.PinnipedConcierge.AuthenticationV1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
 			),

@@ -44,6 +44,9 @@ spec:
    audience: my-client-id
    claims:
      username: email
+     # Note that you may also want to configure a groups claim here,
+     # if your OIDC provider supports putting one into ID tokens.
+     # See the "Including group membership" section below for more details.
 ```
 
 If you've saved this into a file `my-jwt-authenticator.yaml`, then install it into your cluster using:
@@ -59,17 +62,28 @@ Generate a kubeconfig file to target the JWTAuthenticator:
 ```sh
 pinniped get kubeconfig \
   --oidc-client-id my-client-id \
-  --oidc-scopes openid,email \
+  --oidc-scopes openid,offline_access,email \
   --oidc-listen-port 12345 \
-  > my-cluster.yaml
+  > my-kubeconfig.yaml
 ```
 
 Note that the value for the `--oidc-client-id` flag must be your OIDC client's ID, which must also be the same
 value declared as the `audience` in the JWTAuthenticator.
 
-This creates a kubeconfig YAML file `my-cluster.yaml` that targets your JWTAuthenticator using `pinniped login oidc` as an [ExecCredential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
+Also note that you may need different scopes in the `--oidc-scopes` list, depending on your OIDC provider.
+Please refer to the documentation for your OIDC provider.
+- Most providers will require you to include `openid` in this list at a minimum.
+- You may need to add `offline_access` (or a similar scope) to ask your provider to also return a refresh token.
+  If your provider can return refresh tokens, the Pinniped CLI will use them to automatically refresh expired ID
+  tokens without any need for user interaction, until the refresh token stops working.
+- In the example above, the `email` scope asks the provider to return an `email` claim in the ID token
+  whose value will be the user's email address. Most providers support this scope.
+- You might need a scope to ask the provider to return a groups claim (see the "Including group membership"
+  section below for more details).
 
-It should look something like below:
+The above command creates a kubeconfig YAML file `my-kubeconfig.yaml` that targets your JWTAuthenticator using `pinniped login oidc` as an [ExecCredential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
+
+The contents of that kubeconfig file should look something like below:
 
 ```yaml
 apiVersion: v1
@@ -112,7 +126,7 @@ users:
 Use the kubeconfig with `kubectl` to access your cluster:
 
 ```sh
-kubectl --kubeconfig my-cluster.yaml get namespaces
+kubectl --kubeconfig my-kubeconfig.yaml get namespaces
 ```
 
 You should see:
@@ -182,7 +196,7 @@ pinniped get kubeconfig \
   --oidc-client-id my-client-id \
   --oidc-scopes openid,email,groups \
   --oidc-listen-port 12345 \
-  > my-cluster.yaml
+  > my-kubeconfig.yaml
 ```
 
 ### Use the kubeconfig file
@@ -195,14 +209,14 @@ Use the kubeconfig with `kubectl` to access your cluster, as before:
 rm -rf ~/.config/pinniped
 
 # Log in again by issuing a kubectl command.
-kubectl --kubeconfig my-cluster.yaml get namespaces
+kubectl --kubeconfig my-kubeconfig.yaml get namespaces
 ```
 
 To see the username and group membership as understood by the Kubernetes cluster, you can use
 this command:
 
 ```sh
-pinniped whoami --kubeconfig my-cluster.yaml
+pinniped whoami --kubeconfig my-kubeconfig.yaml
 ```
 
 If your groups configuration worked, then you should see your list of group names from your OIDC provider

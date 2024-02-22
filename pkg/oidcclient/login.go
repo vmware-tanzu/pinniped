@@ -354,12 +354,10 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 func (h *handlerState) needRFC8693TokenExchange(token *oidctypes.Token) bool {
 	// Need a new ID token if there is a requested audience value and any of the following are true...
 	return h.requestedAudience != "" &&
-		// we don't have an ID token
+		// we don't have an ID token (maybe it expired or was otherwise removed from the session cache)
 		(token.IDToken == nil ||
-			// or, our current ID token has expired or is close to expiring
-			idTokenExpiredOrCloseToExpiring(token.IDToken) ||
 			// or, our current ID token has a different audience
-			(h.requestedAudience != token.IDToken.Claims["aud"]))
+			h.requestedAudience != token.IDToken.Claims["aud"])
 }
 
 func (h *handlerState) tokenValidForNearFuture(token *oidctypes.Token) (bool, string) {

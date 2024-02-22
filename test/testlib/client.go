@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -205,8 +205,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 }
 
 // CreateTestJWTAuthenticatorForCLIUpstream creates and returns a test JWTAuthenticator which will be automatically
-// deleted at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which describes
-// the test JWT authenticator within the test namespace.
+// deleted at the end of the current test's lifetime.
 //
 // CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLIUpstreamOIDC.
 func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *auth1alpha1.JWTAuthenticator {
@@ -232,8 +231,7 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 }
 
 // CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator which will be automatically deleted
-// at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
-// authenticator within the test namespace.
+// at the end of the current test's lifetime.
 func CreateTestJWTAuthenticator(
 	ctx context.Context,
 	t *testing.T,

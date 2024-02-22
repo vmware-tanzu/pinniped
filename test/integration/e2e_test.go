@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -111,7 +111,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
-	// if the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
+	// If the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   federationDomain.Spec.Issuer,

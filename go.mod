@@ -70,7 +70,7 @@ require (
 	k8s.io/gengo v0.0.0-20240129211411-f967bbeff4b4
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.2
-	k8s.io/kube-openapi v0.0.0-20240220201932-37d671a357a5
+	k8s.io/kube-openapi v0.0.0-20240221221325-2ac9dc51f3f1
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/yaml v1.4.0
 )

@@ -8,6 +8,7 @@ package jwtcachefiller
 import (
 	"context"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,7 +18,6 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v3"
-	"github.com/ory/fosite/token/jwt"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,8 +42,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// These default values come from the way that the Supervisor issues and signs tokens. We make these
-// the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 const (
 	controllerName = "jwtcachefiller-controller"
 
@@ -65,13 +63,17 @@ const (
 	reasonInvalidTLSConfiguration      = "InvalidTLSConfiguration"
 	reasonInvalidDiscoveryProbe        = "InvalidDiscoveryProbe"
 	reasonInvalidAuthenticator         = "InvalidAuthenticator"
-	reasonInvalidTokenSigning          = "InvalidTokenSigning"
+	reasonInvalidTokenSigningFailure   = "InvalidTokenSigningFailure"
 	reasonInvalidCouldNotFetchJWKS     = "InvalidCouldNotFetchJWKS"
 
 	msgUnableToValidate = "unable to validate; see other conditions for details"
 
+	// These default values come from the way that the Supervisor issues and signs tokens. We make these
+	// the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 	defaultUsernameClaim = oidcapi.IDTokenClaimUsername
 	defaultGroupsClaim   = oidcapi.IDTokenClaimGroups
+
+	minimalJWTToTriggerJWKSFetch = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.e30."
 )
 
 type providerJSON struct {
@@ -177,19 +179,23 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 
 	rootCAs, conditions, tlsOk := c.validateTLS(specCopy.TLS, conditions)
 	_, conditions, issuerOk := c.validateIssuer(specCopy.Issuer, conditions)
+	okSoFar := tlsOk && issuerOk
 
 	client := phttp.Default(rootCAs)
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
-	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, specCopy.Issuer, conditions, tlsOk && issuerOk)
+	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, specCopy.Issuer, conditions, okSoFar)
 	errs = append(errs, providerErr)
+	okSoFar = okSoFar && providerErr == nil
 
-	jwksURL, conditions, jwksErr := c.validateProviderJWKSURL(provider, pJSON, conditions, tlsOk && issuerOk && providerErr == nil)
+	jwksURL, conditions, jwksErr := c.validateProviderJWKSURL(provider, pJSON, conditions, okSoFar)
 	errs = append(errs, jwksErr)
+	okSoFar = okSoFar && jwksErr == nil
 
-	keySet, conditions, jwksFetchErr := c.validateJWKSFetch(coreOSCtx, jwksURL, conditions, tlsOk && issuerOk && providerErr == nil && jwksErr == nil)
+	keySet, conditions, jwksFetchErr := c.validateJWKSFetch(coreOSCtx, jwksURL, conditions, okSoFar)
 	errs = append(errs, jwksFetchErr)
+	okSoFar = okSoFar && jwksFetchErr == nil
 
 	// Make a deep copy of the spec so we aren't storing pointers to something that the informer cache
 	// may mutate! We don't store status as status is derived from spec.
@@ -198,7 +204,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		obj.Spec.DeepCopy(),
 		keySet,
 		conditions,
-		tlsOk && issuerOk && providerErr == nil && jwksErr == nil && jwksFetchErr == nil)
+		okSoFar)
 	errs = append(errs, err)
 
 	if !conditionsutil.HadErrorCondition(conditions) {
@@ -209,10 +215,10 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	err = c.updateStatus(ctx.Context, obj, conditions)
 	errs = append(errs, err)
 
-	// sync loop errors:
-	// - should not be configuration errors. config errors a user must correct belong on the .Status
+	// Sync loop errors:
+	// - Should not be configuration errors. Config errors a user must correct belong on the .Status
 	//   object. The controller simply must wait for a user to correct before running again.
-	// - other errors, such as networking errors, etc. are the types of errors that should return here
+	// - Other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
 	return errorsutil.NewAggregate(errs)
 }
@@ -230,174 +236,63 @@ func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncac
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) updateStatus(
-	ctx context.Context,
-	original *auth1alpha1.JWTAuthenticator,
-	conditions []*metav1.Condition,
-) error {
-	updated := original.DeepCopy()
-
-	if conditionsutil.HadErrorCondition(conditions) {
-		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseError
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeReady,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonNotReady,
-			Message: "the JWTAuthenticator is not ready: see other conditions for details",
-		})
-	} else {
-		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseReady
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeReady,
-			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: "the JWTAuthenticator is ready",
-		})
-	}
-
-	_ = conditionsutil.MergeConfigConditions(
-		conditions,
-		original.Generation,
-		&updated.Status.Conditions,
-		plog.New().WithName(controllerName),
-		metav1.NewTime(c.clock.Now()),
-	)
-
-	if equality.Semantic.DeepEqual(original, updated) {
-		return nil
-	}
-	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
-	return err
-}
-
-func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksURL string, conditions []*metav1.Condition, prereqOk bool) (*coreosoidc.RemoteKeySet, []*metav1.Condition, error) {
-	if !prereqOk {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
-			Message: msgUnableToValidate,
-		})
-		return nil, conditions, nil
-	}
-	keySet := coreosoidc.NewRemoteKeySet(ctx, jwksURL)
-	testJWTToken := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
-		"aud": "fake-audience-for-verification-probe",
-	})
-	rawToken, signErr := testJWTToken.SignedString(jwt.UnsafeAllowNoneSignatureType)
-	// no unit tests for this block.
-	// this is not configurable, there is no way to change the token we are using
-	// for testing, so we simply shouldn't hit this block.
-	if signErr != nil {
-		errText := "could not sign tokens"
-		msg := fmt.Sprintf("%s: %s", errText, signErr.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidTokenSigning,
-			Message: msg,
-		})
-		return keySet, conditions, fmt.Errorf("%s: %w", errText, signErr)
-	}
-	_, verifyWithKeySetErr := keySet.VerifySignature(ctx, rawToken)
-	verifyErrString := verifyWithKeySetErr.Error()
-	// we need to fetch the keys. this is the main concern of this function
-	if strings.Contains(verifyErrString, "fetching keys") {
-		errText := "could not fetch keys"
-		msg := fmt.Sprintf("%s: %s", errText, verifyErrString)
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidCouldNotFetchJWKS,
-			Message: msg,
-		})
-		return keySet, conditions, fmt.Errorf("%s: %w", errText, verifyWithKeySetErr)
-	}
-	// this error indicates success of this check.  we only wanted to test if we could fetch, we aren't actually
-	// testing for valid signature verification.
-	if strings.Contains(verifyErrString, "failed to verify id token signature") {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
-			Message: "successfully fetched jwks",
-		})
-		return keySet, conditions, nil
-	}
-	// any other errors we will ignore and treat this as a success.
-	return keySet, conditions, nil
-}
-
-// newCachedJWTAuthenticator creates a jwt authenticator from the provided spec.
-func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client, spec *auth1alpha1.JWTAuthenticatorSpec, keySet *coreosoidc.RemoteKeySet, conditions []*metav1.Condition, prereqOk bool) (*cachedJWTAuthenticator, []*metav1.Condition, error) {
-	if !prereqOk {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeAuthenticatorValid,
-			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
-			Message: msgUnableToValidate,
-		})
-		return nil, conditions, nil
-	}
-
-	usernameClaim := spec.Claims.Username
-	if usernameClaim == "" {
-		usernameClaim = defaultUsernameClaim
-	}
-	groupsClaim := spec.Claims.Groups
-	if groupsClaim == "" {
-		groupsClaim = defaultGroupsClaim
-	}
-
-	oidcAuthenticator, err := oidc.New(oidc.Options{
-		JWTAuthenticator: apiserver.JWTAuthenticator{
-			Issuer: apiserver.Issuer{
-				URL:       spec.Issuer,
-				Audiences: []string{spec.Audience},
-			},
-			ClaimMappings: apiserver.ClaimMappings{
-				Username: apiserver.PrefixedClaimOrExpression{
-					Claim:  usernameClaim,
-					Prefix: ptr.To(""),
-				},
-				Groups: apiserver.PrefixedClaimOrExpression{
-					Claim:  groupsClaim,
-					Prefix: ptr.To(""),
-				},
-			},
-		},
-		KeySet:               keySet,
-		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
-		Client:               client,
-	})
+func (c *jwtCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
 	if err != nil {
-		// no unit test for this failure.
-		// it seems that our production code doesn't provide config knobs that would allow
-		// incorrect configuration of oidc.New().  We validate inputs before we get to this point
-		// and exit early if there are problems. In the future, if we allow more configuration,
-		// such as supported signing algorithm config, we may be able to test this.
-		errText := "could not initialize oidc authenticator"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeAuthenticatorValid,
+			Type:    typeTLSConfigurationValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidAuthenticator,
+			Reason:  reasonInvalidTLSConfiguration,
 			Message: msg,
 		})
-		// resync err, lots of possible issues that may or may not be machine related
-		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
+		return rootCAs, conditions, false
 	}
-	msg := "authenticator initialized"
+
+	msg := "successfully parsed specified CA bundle"
+	if rootCAs == nil {
+		msg = "no CA bundle specified"
+	}
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeAuthenticatorValid,
+		Type:    typeTLSConfigurationValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: msg,
 	})
-	return &cachedJWTAuthenticator{
-		tokenAuthenticatorCloser: oidcAuthenticator,
-		spec:                     spec,
-	}, conditions, nil
+	return rootCAs, conditions, true
+}
+
+func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {
+	issuerURL, err := url.Parse(issuer)
+	if err != nil {
+		msg := fmt.Sprintf("%s: %s", "spec.issuer URL is invalid", err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeIssuerURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidIssuerURL,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	if issuerURL.Scheme != "https" {
+		msg := fmt.Sprintf("spec.issuer %s has invalid scheme, require 'https'", issuer)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeIssuerURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidIssuerURLScheme,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeIssuerURLValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: "issuer is a valid URL",
+	})
+	return issuerURL, conditions, true
 }
 
 func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context, issuer string, conditions []*metav1.Condition, prereqOk bool) (*providerJSON, *coreosoidc.Provider, []*metav1.Condition, error) {
@@ -493,61 +388,186 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 	return pJSON.JWKSURL, conditions, nil
 }
 
-func (c *jwtCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
-	if err != nil {
-		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
+// validateJWKSFetch deliberately takes an unsigned JWT to trigger coreosoidc.NewRemoteKeySet to
+// indirectly fetch the JWKS.  This lets us report a status about the endpoint, even though
+// we expect the verification checks to actually fail.  This also pre-warms the cache of keys
+// in the remote keyset object.
+func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksURL string, conditions []*metav1.Condition, prereqOk bool) (*coreosoidc.RemoteKeySet, []*metav1.Condition, error) {
+	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConfigurationValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidTLSConfiguration,
-			Message: msg,
+			Type:    typeJWKSFetchValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: msgUnableToValidate,
 		})
-		return rootCAs, conditions, false
+		return nil, conditions, nil
+	}
+	keySet := coreosoidc.NewRemoteKeySet(ctx, jwksURL)
+
+	// keySet.verifySignature calls functions which may error in a couple of ways that
+	// we will treat as success because we are really only concerned here that we could
+	// fetch the keys at all.
+	_, verifyWithKeySetErr := keySet.VerifySignature(ctx, minimalJWTToTriggerJWKSFetch)
+	if verifyWithKeySetErr == nil {
+		// No unit test.
+		// Since we hard-coded this token we expect there to always be a verification error.
+		// The purpose of this function is really to test if we can get the JWKS, not to actually validate a token.
+		// Therefore, we should never hit this path, nevertheless, lets handle just in case something unexpected happens.
+		errText := "jwks should not have verified unsigned jwt token"
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeJWKSFetchValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: errText,
+		})
+		return nil, conditions, errors.New(errText)
 	}
 
-	msg := "successfully parsed specified CA bundle"
-	if rootCAs == nil {
-		msg = "no CA bundle specified"
+	verifyErrString := verifyWithKeySetErr.Error()
+	// We need to fetch the keys. This is the main concern of this function.
+	if strings.HasPrefix(verifyErrString, "fetching keys") {
+		errText := "could not fetch keys"
+		msg := fmt.Sprintf("%s: %s", errText, verifyErrString)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeJWKSFetchValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidCouldNotFetchJWKS,
+			Message: msg,
+		})
+		return nil, conditions, fmt.Errorf("%s: %w", errText, verifyWithKeySetErr)
 	}
+	// This error indicates success of this check. We only wanted to test if we could fetch, we aren't actually
+	// testing for valid signature verification.
+	if strings.Contains(verifyErrString, "failed to verify id token signature") {
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeJWKSFetchValid,
+			Status:  metav1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "successfully fetched jwks",
+		})
+		return keySet, conditions, nil
+	}
+
+	// No unit tests, currently no way to reach this code path.
+	errText := "unexpected verification error while fetching jwks"
+	msg := fmt.Sprintf("%s: %s", errText, verifyErrString)
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
+		Type:    typeJWKSFetchValid,
+		Status:  metav1.ConditionUnknown,
+		Reason:  reasonUnableToValidate,
+		Message: msg,
+	})
+	return nil, conditions, fmt.Errorf("%s: %w", errText, verifyWithKeySetErr)
+}
+
+// newCachedJWTAuthenticator creates a jwt authenticator from the provided spec.
+func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client, spec *auth1alpha1.JWTAuthenticatorSpec, keySet *coreosoidc.RemoteKeySet, conditions []*metav1.Condition, prereqOk bool) (*cachedJWTAuthenticator, []*metav1.Condition, error) {
+	if !prereqOk {
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnableToValidate,
+			Message: msgUnableToValidate,
+		})
+		return nil, conditions, nil
+	}
+
+	usernameClaim := spec.Claims.Username
+	if usernameClaim == "" {
+		usernameClaim = defaultUsernameClaim
+	}
+	groupsClaim := spec.Claims.Groups
+	if groupsClaim == "" {
+		groupsClaim = defaultGroupsClaim
+	}
+
+	oidcAuthenticator, err := oidc.New(oidc.Options{
+		JWTAuthenticator: apiserver.JWTAuthenticator{
+			Issuer: apiserver.Issuer{
+				URL:       spec.Issuer,
+				Audiences: []string{spec.Audience},
+			},
+			ClaimMappings: apiserver.ClaimMappings{
+				Username: apiserver.PrefixedClaimOrExpression{
+					Claim:  usernameClaim,
+					Prefix: ptr.To(""),
+				},
+				Groups: apiserver.PrefixedClaimOrExpression{
+					Claim:  groupsClaim,
+					Prefix: ptr.To(""),
+				},
+			},
+		},
+		KeySet:               keySet,
+		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
+		Client:               client,
+	})
+	if err != nil {
+		// no unit test for this failure.
+		// it seems that our production code doesn't provide config knobs that would allow
+		// incorrect configuration of oidc.New().  We validate inputs before we get to this point
+		// and exit early if there are problems. In the future, if we allow more configuration,
+		// such as supported signing algorithm config, we may be able to test this.
+		errText := "could not initialize oidc authenticator"
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeAuthenticatorValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidAuthenticator,
+			Message: msg,
+		})
+		// resync err, lots of possible issues that may or may not be machine related
+		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
+	}
+	msg := "authenticator initialized"
+	conditions = append(conditions, &metav1.Condition{
+		Type:    typeAuthenticatorValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: msg,
 	})
-	return rootCAs, conditions, true
+	return &cachedJWTAuthenticator{
+		tokenAuthenticatorCloser: oidcAuthenticator,
+		spec:                     spec,
+	}, conditions, nil
 }
 
-func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {
-	issuerURL, err := url.Parse(issuer)
-	if err != nil {
-		msg := fmt.Sprintf("%s: %s", "spec.issuer URL is invalid", err.Error())
+func (c *jwtCacheFillerController) updateStatus(
+	ctx context.Context,
+	original *auth1alpha1.JWTAuthenticator,
+	conditions []*metav1.Condition,
+) error {
+	updated := original.DeepCopy()
+
+	if conditionsutil.HadErrorCondition(conditions) {
+		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeIssuerURLValid,
+			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidIssuerURL,
-			Message: msg,
+			Reason:  reasonNotReady,
+			Message: "the JWTAuthenticator is not ready: see other conditions for details",
 		})
-		return nil, conditions, false
+	} else {
+		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseReady
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeReady,
+			Status:  metav1.ConditionTrue,
+			Reason:  reasonSuccess,
+			Message: "the JWTAuthenticator is ready",
+		})
 	}
 
-	if issuerURL.Scheme != "https" {
-		msg := fmt.Sprintf("spec.issuer %s has invalid scheme, require 'https'", issuer)
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeIssuerURLValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidIssuerURLScheme,
-			Message: msg,
-		})
-		return nil, conditions, false
-	}
+	_ = conditionsutil.MergeConfigConditions(
+		conditions,
+		original.Generation,
+		&updated.Status.Conditions,
+		plog.New().WithName(controllerName),
+		metav1.NewTime(c.clock.Now()),
+	)
 
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeIssuerURLValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
-		Message: "issuer is a valid URL",
-	})
-	return issuerURL, conditions, true
+	if equality.Semantic.DeepEqual(original, updated) {
+		return nil
+	}
+	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	return err
 }

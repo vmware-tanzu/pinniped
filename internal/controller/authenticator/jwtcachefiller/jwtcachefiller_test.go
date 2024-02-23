@@ -24,9 +24,13 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/golang/mock/gomock"
+	"github.com/google/go-cmp/cmp"
+	fositejwt "github.com/ory/fosite/token/jwt"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -45,6 +49,13 @@ import (
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
+
+func TestMinimalJWTToTriggerJWKSFetch(t *testing.T) {
+	tinyJWT := fositejwt.NewWithClaims(fositejwt.SigningMethodNone, fositejwt.MapClaims{})
+	tinyJWTStr, err := tinyJWT.SignedString(fositejwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+	require.Equal(t, tinyJWTStr, minimalJWTToTriggerJWKSFetch)
+}
 
 func TestController(t *testing.T) {
 	t.Parallel()
@@ -191,6 +202,9 @@ func TestController(t *testing.T) {
 	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
 	frozenMetav1Now := metav1.NewTime(nowDoesntMatter)
 	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+
+	timeInThePast := time.Date(1111, time.January, 1, 1, 1, 1, 111111, time.Local)
+	frozenTimeInThePast := metav1.NewTime(timeInThePast)
 
 	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
@@ -497,7 +511,16 @@ func TestController(t *testing.T) {
 			happyTLSConfigurationValidCAParsed(someTime, observedGeneration),
 		})
 	}
-
+	jwtAuthenticatorsGVR := schema.GroupVersionResource{
+		Group:    "authentication.concierge.pinniped.dev",
+		Version:  "v1alpha1",
+		Resource: "jwtauthenticators",
+	}
+	jwtAUthenticatorGVK := schema.GroupVersionKind{
+		Group:   "authentication.concierge.pinniped.dev",
+		Version: "v1alpha1",
+		Kind:    "JWTAuthenticator",
+	}
 	tests := []struct {
 		name              string
 		cache             func(*testing.T, *authncache.Cache, bool)
@@ -512,15 +535,14 @@ func TestController(t *testing.T) {
 		// something can be automatically corrected on a retry (ie an error that might be networking).
 		wantSyncLoopErr                  testutil.RequireErrorStringFunc
 		wantLogs                         []map[string]any
-		wantStatusConditions             []metav1.Condition
-		wantStatusPhase                  auth1alpha1.JWTAuthenticatorPhase
+		wantActions                      func() []coretesting.Action
 		wantCacheEntries                 int
 		wantUsernameClaim                string
 		wantGroupsClaim                  string
 		runTestsOnResultingAuthenticator bool
 	}{
 		{
-			name:    "404: jwt authenticator not found will abort sync loop and not attempt to write status",
+			name:    "404:  JWTAuthenticator not found will abort sync loop, no status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []map[string]any{
 				{
@@ -530,12 +552,15 @@ func TestController(t *testing.T) {
 					"message":   "Sync() found that the JWTAuthenticator does not exist yet or was deleted",
 				},
 			},
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+				}
+			},
 		},
-		// Existing code that was never tested. We would likely have to create a server with bad clients to
-		// simulate this.
-		// { name: "non-404 `failed to get JWTAuthenticator` for other API server reasons" }
 		{
-			name:    "valid jwt authenticator sync loop with no change will preserve existing status",
+			name:    "Sync: valid and unchanged JWTAuthenticator: loop will preserve existing status conditions",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -559,12 +584,78 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:      "Ready",
-			wantCacheEntries:     1,
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+				}
+			},
+			wantCacheEntries: 1,
+		}, {
+			name:    "Sync: changed JWTAuthenticator: loop will update timestamps only on relevant statuses",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								// sad and unknwn will update with new statuses and timestamps
+								sadReadyCondition(frozenTimeInThePast, 0),
+								sadDiscoveryURLValidx509(goodIssuer, frozenTimeInThePast, 0),
+								unknownAuthenticatorValid(frozenTimeInThePast, 0),
+								unknownJWKSURLValid(frozenTimeInThePast, 0),
+								unknownJWKSFetch(frozenTimeInThePast, 0),
+								// this one will remain unchanged as it was good to begin with
+								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				},
+			},
+			wantLogs: []map[string]any{{
+				"level":     "info",
+				"timestamp": "2099-08-08T13:57:36.123456Z",
+				"logger":    "jwtcachefiller-controller",
+				"message":   "added new jwt authenticator",
+				"issuer":    goodIssuer,
+				"jwtAuthenticator": map[string]interface{}{
+					"name": "test-name",
+				},
+			}},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								// this timestamp should not have updated, it didn't change.
+								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 0),
+							},
+						),
+						Phase: "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantCacheEntries: 1,
 		},
 		{
-			name:    "valid jwt authenticator with CA will complete sync loop successfully with success conditions and ready phase",
+			name:    "Sync: valid JWTAuthenticator with CA: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -584,13 +675,29 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions:             allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:                  "Ready",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
-			name:    "valid jwt authenticator with custom username claim will complete sync loop successfully with success conditions and ready phase",
+			name:    "Sync: JWTAuthenticator with custom username claim: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -610,14 +717,30 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions:             allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:                  "Ready",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpecWithUsernameClaim,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries:                 1,
 			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.Claims.Username,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
-			name:    "valid jwt authenticator with custom groups claim will complete sync loop successfully with success conditions and ready phase",
+			name:    "Sync: JWTAuthenticator with custom groups claim: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -637,14 +760,30 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions:             allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:                  "Ready",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpecWithGroupsClaim,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries:                 1,
 			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.Claims.Groups,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
-			name: "updating jwt authenticator with new fields closes previous instance and will complete sync loop successfully with success conditions and ready phase",
+			name: "Sync: JWTAuthenticator with new fields: loop will close previous instance of JWTAuthenticator and complete successfully and update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -675,13 +814,29 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions:             allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:                  "Ready",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
-			name: "updating jwt authenticator with the same value does not trigger sync loop and will not update conditions or phase",
+			name: "Sync: JWTAuthenticator with no change: loop will abort early and not update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -712,11 +867,17 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+				}
+			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
 		},
 		{
-			name: "updating jwt authenticator when cache value is wrong type will complete sync loop successfully with success conditions and ready phase",
+			name: "Sync: JWTAuthenticator update when cached authenticator is different type: loop will complete successfully and update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -752,13 +913,29 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions:             allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:                  "Ready",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
-			name:    "TLS: valid jwt authenticator without CA will fail to cache the authenticator and will fail with failed and unknown conditions and Error phase and will enqueue a resync in case of machine error",
+			name:    "Sync: valid JWTAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -768,25 +945,41 @@ func TestController(t *testing.T) {
 					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *missingTLSJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadDiscoveryURLValidx509(goodIssuer, frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					sadReadyCondition(frozenMetav1Now, 0),
-					sadDiscoveryURLValidx509(goodIssuer, frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					unknownJWKSURLValid(frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase:  "Error",
 			wantSyncLoopErr:  testutil.WantX509UntrustedCertErrorString(`could not perform oidc discovery on provider issuer: Get "`+goodIssuer+`/.well-known/openid-configuration": %s`, "Acme Co"),
 			wantCacheEntries: 0,
 		},
 		{
-			name:    "validateTLS: invalid jwt authenticator CA will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			name:    "validateTLS: JWTAuthenticator with invalid CA: loop will fail, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -796,21 +989,37 @@ func TestController(t *testing.T) {
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					sadReadyCondition(frozenMetav1Now, 0),
-					sadTLSConfigurationValid(frozenMetav1Now, 0),
-					unknownDiscoveryURLValid(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					unknownJWKSURLValid(frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase:  "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *invalidTLSJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantCacheEntries: 0,
 		}, {
-			name: "validateIssuer: parsing error (spec.issuer URL is invalid) will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -820,20 +1029,36 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					sadReadyCondition(frozenMetav1Now, 0),
-					sadIssuerURLValidInvalid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
-					unknownDiscoveryURLValid(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					unknownJWKSURLValid(frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *invalidIssuerJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 		}, {
-			name: "validateIssuer: parsing error (spec.issuer URL has invalid scheme, requires https) will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			name: "validateIssuer: parsing error (spec.issuer URL has invalid scheme, requires https): loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -843,20 +1068,36 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					sadReadyCondition(frozenMetav1Now, 0),
-					sadIssuerURLValidInvalidScheme("http://.café.com/café/café/café/coffee", frozenMetav1Now, 0),
-					unknownDiscoveryURLValid(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					unknownJWKSURLValid(frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *invalidIssuerSchemeJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalidScheme("http://.café.com/café/café/café/coffee", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 		}, {
-			name: "validateProviderDiscovery: could not perform oidc discovery on provider issuer will fail sync loop and will report failed and unknown conditions and Error phase and will enqueue new sync",
+			name: "validateProviderDiscovery: could not perform oidc discovery on provider issuer: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -866,19 +1107,35 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					happyIssuerURLValid(frozenMetav1Now, 0),
-					sadReadyCondition(frozenMetav1Now, 0),
-					sadDiscoveryURLValidConnectionRefused(goodIssuer+"/foo/bar/baz/shizzle", frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					unknownJWKSURLValid(frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-					happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *validIssuerURLButDoesNotExistJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadDiscoveryURLValidConnectionRefused(goodIssuer+"/foo/bar/baz/shizzle", frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
 		},
 		// cannot be tested currently the way the coreos lib works.
@@ -886,7 +1143,7 @@ func TestController(t *testing.T) {
 		// which ensures the .Claims() parsing cannot fail (in the current impl)
 		// { name: "validateProviderJWKSURL: could not get provider jwks_uri... ",},
 		{
-			name: "validateProviderJWKSURL: could not parse provider jwks_uri will fail sync loop and will report failed and unknown conditions and Error phase and will enqueue new sync",
+			name: "validateProviderJWKSURL: could not parse provider jwks_uri: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -896,20 +1153,36 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					happyIssuerURLValid(frozenMetav1Now, 0),
-					sadReadyCondition(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
 		}, {
-			name: "validateProviderJWKSURL: invalid scheme, requires 'https' will fail sync loop and will report failed and unknown conditions and Error phase and will enqueue new sync",
+			name: "validateProviderJWKSURL: invalid scheme, requires 'https': loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -919,23 +1192,39 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					happyIssuerURLValid(frozenMetav1Now, 0),
-					sadReadyCondition(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					sadJWKSURLValidScheme("http://.café.com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
-					unknownJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *badIssuerJWKSURISchemeJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSURLValidScheme("http://.café.com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantSyncLoopErr: testutil.WantExactErrorString("jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
 		},
 		// since this is a hard-coded token we can't do any meaningful testing for this case (and should also never have an error)
 		// {name: "validateJWKSFetch: could not sign tokens"},
 		{
-			name: "validateJWKSFetch: could not fetch keys.... this should be a resync err",
+			name: "validateJWKSFetch: could not fetch keys: loop will fail sync, will write failed and unknown status conditions, and will enqueue a resync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -945,20 +1234,36 @@ func TestController(t *testing.T) {
 				},
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					happyIssuerURLValid(frozenMetav1Now, 0),
-					sadReadyCondition(frozenMetav1Now, 0),
-					unknownAuthenticatorValid(frozenMetav1Now, 0),
-					sadJWKSFetch(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase: "Error",
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *jwksFetchShouldFailJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantSyncLoopErr: testutil.WantExactErrorString("could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n"),
 		},
 		{
-			name: "updateStatus: when updateStatus() is called with matching original and updated conditions, it will not update",
+			name: "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -982,12 +1287,16 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:      "Ready",
-			wantCacheEntries:     1,
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+				}
+			},
+			wantCacheEntries: 1,
 		},
 		{
-			name: "updateStatus: when updateStatus() is called with different original and updated conditions, it will update the conditions",
+			name: "updateStatus: called with different original and updated conditions: will make request to update conditions",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1016,12 +1325,28 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantStatusConditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-			wantStatusPhase:      "Ready",
-			wantCacheEntries:     1,
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantCacheEntries: 1,
 		},
 		{
-			name: "updateStatus: when updateStatus() fails an error will enqueue a new sync",
+			name: "updateStatus: when update request fails: error will enqueue a resync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1049,6 +1374,27 @@ func TestController(t *testing.T) {
 					},
 				)
 			},
+			wantActions: func() []coretesting.Action {
+				// This captures that there was an attempt to update to Ready, allHappyConditions,
+				// but the wantSyncLoopErr indicates that there is a failure, so the JWTAuthenticator
+				// remains with a bad phase and at least 1 sad condition
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 			wantLogs: []map[string]any{{
 				"level":     "info",
 				"timestamp": "2099-08-08T13:57:36.123456Z",
@@ -1059,14 +1405,6 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			// conditions and phase match previous state since update failed
-			wantStatusConditions: conditionstestutil.Replace(
-				allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
-				[]metav1.Condition{
-					sadReadyCondition(frozenMetav1Now, 0),
-				},
-			),
-			wantStatusPhase:  "SomethingThatWontUpdate",
 			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
 			wantCacheEntries: 1,
 		},
@@ -1143,14 +1481,11 @@ func TestController(t *testing.T) {
 				}
 			}
 
-			if tt.jwtAuthenticators != nil {
-				var jwtAuthSubject *auth1alpha1.JWTAuthenticator
-				getCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				jwtAuthSubject, getErr := pinnipedAPIClient.AuthenticationV1alpha1().JWTAuthenticators().Get(getCtx, "test-name", metav1.GetOptions{})
-				require.NoError(t, getErr)
-				require.Equal(t, tt.wantStatusConditions, jwtAuthSubject.Status.Conditions, "status.conditions must be correct")
-				require.Equal(t, tt.wantStatusPhase, jwtAuthSubject.Status.Phase, "status.phase should be correct")
+			if !assert.ElementsMatch(t, tt.wantActions(), pinnipedAPIClient.Actions()) {
+				// cmp.Diff is superior to require.ElementsMatch in terms of readability here.
+				// require.ElementsMatch will handle pointers better than require.Equal, but
+				// the timestamps are still incredibly verbose.
+				require.Fail(t, cmp.Diff(tt.wantActions(), pinnipedAPIClient.Actions()), "actions should be exactly the expected number of actions and also contain the correct resources")
 			}
 
 			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))

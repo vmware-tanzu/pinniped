@@ -76,6 +76,9 @@ const (
 // stdin returns the file descriptor for stdin as an int.
 func stdin() int { return int(os.Stdin.Fd()) }
 
+// stderr returns the file descriptor for stderr as an int.
+func stderr() int { return int(os.Stderr.Fd()) }
+
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
@@ -84,15 +87,15 @@ type handlerState struct {
 	clientID string
 	scopes   []string
 	cache    SessionCache
-	out      io.Writer
+	out      io.Writer // this is stderr except in unit tests
 
+	// Tracking the usage of some other functional options.
 	upstreamIdentityProviderName string
 	upstreamIdentityProviderType string
 	cliToSendCredentials         bool
-
-	requestedAudience string
-
-	httpClient *http.Client
+	skipBrowser                  bool
+	requestedAudience            string
+	httpClient                   *http.Client
 
 	// Parameters of the localhost listener.
 	listenAddr   string
@@ -113,7 +116,8 @@ type handlerState struct {
 	openURL         func(string) error
 	getEnv          func(key string) string
 	listen          func(string, string) (net.Listener, error)
-	isTTY           func(int) bool
+	stdinIsTTY      func() bool
+	stderrIsTTY     func() bool
 	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error)
 	promptForValue  func(ctx context.Context, promptLabel string, out io.Writer) (string, error)
@@ -188,6 +192,7 @@ func WithBrowserOpen(openURL func(url string) error) Option {
 // open the user's default web browser.
 func WithSkipBrowserOpen() Option {
 	return func(h *handlerState) error {
+		h.skipBrowser = true
 		h.openURL = func(_ string) error { return nil }
 		return nil
 	}
@@ -292,7 +297,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		openURL:       browser.OpenURL,
 		getEnv:        os.Getenv,
 		listen:        net.Listen,
-		isTTY:         term.IsTerminal,
+		stdinIsTTY:    func() bool { return term.IsTerminal(stdin()) },
+		stderrIsTTY:   func() bool { return term.IsTerminal(stderr()) },
 		getProvider:   upstreamoidc.New,
 		validateIDToken: func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 			return provider.Verifier(&coreosoidc.Config{ClientID: audience}).Verify(ctx, token)
@@ -588,7 +594,7 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 
 	// If the listener failed to start and stdin is not a TTY, then we have no hope of succeeding,
 	// since we won't be able to receive the web callback and we can't prompt for the manual auth code.
-	if listener == nil && !h.isTTY(stdin()) {
+	if listener == nil && !h.stdinIsTTY() {
 		return nil, fmt.Errorf("login failed: must have either a localhost listener or stdin must be a TTY")
 	}
 
@@ -618,13 +624,34 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	}
 
 	// Open the authorize URL in the users browser, logging but otherwise ignoring any error.
+	// Keep track of whether the browser was opened.
+	openedBrowser := true
 	if err := h.openURL(authorizeURL); err != nil {
+		openedBrowser = false
 		h.logger.V(plog.KlogLevelDebug).Error(err, "could not open browser")
 	}
+	if h.skipBrowser {
+		// We didn't actually try to open the browser in the above call to openURL().
+		openedBrowser = false
+	}
+
+	// Always print the URL for ttys. This is the case when we were invoked by kubectl.
+	// For a non-tty, when the browser has opened, skip printing this, because printing it may confuse
+	// a console-based UI program like k9s which invoked this. The browser already has the URL in this case.
+	// For a non-tty, if the browser did not open, then the user has no way to login without the URL,
+	// so print it even though it may confuse apps like k9s.
+	//
+	// Note that there can be other reasons why stderr is not a tty. For example, when using bash redirects
+	// to combine stderr into stdout, e.g. "cmd1 2>&1 | cmd2", then stderr is not a tty for cmd1.
+	// If this hurts someone's ability to write scripts then we may want to instead introduce a command-line
+	// option or env var to control when this printing is skipped. For now, it seems unlikely that someone
+	// would be trying to script interactive logins, especially since they could use the CLI-based
+	// username/password prompts and env vars for scripting).
+	printAuthorizeURL := h.stderrIsTTY() || !openedBrowser
 
 	// Prompt the user to visit the authorize URL, and to paste a manually-copied auth code (if possible).
 	ctx, cancel := context.WithCancel(h.ctx)
-	cleanupPrompt := h.promptForWebLogin(ctx, authorizeURL)
+	cleanupPrompt := h.promptForWebLogin(ctx, authorizeURL, printAuthorizeURL)
 	defer func() {
 		cancel()
 		cleanupPrompt()
@@ -642,12 +669,13 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	}
 }
 
-func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string) func() {
-	_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, printAuthorizeURL bool) func() {
+	if printAuthorizeURL {
+		_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+	}
 
-	// If stdin is not a TTY, print the URL but don't prompt for the manual paste,
-	// since we have no way of reading it.
-	if !h.isTTY(stdin()) {
+	// If stdin is not a TTY, don't prompt for the manual paste, since we have no way of reading it.
+	if !h.stdinIsTTY() {
 		return func() {}
 	}
 
@@ -685,6 +713,8 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 	return wg.Wait
 }
 
+// promptForValue interactively prompts the user for a plaintext value and reads their input.
+// This can be replaced by a mock implementation for unit tests.
 func promptForValue(ctx context.Context, promptLabel string, out io.Writer) (string, error) {
 	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")
@@ -717,6 +747,8 @@ func promptForValue(ctx context.Context, promptLabel string, out io.Writer) (str
 	}
 }
 
+// promptForSecret interactively prompts the user for a secret value, obscuring their input while reading it.
+// This can be replaced by a mock implementation for unit tests.
 func promptForSecret(promptLabel string, out io.Writer) (string, error) {
 	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")

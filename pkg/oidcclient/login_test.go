@@ -18,7 +18,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -622,7 +621,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.cache = cache
 
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
-					h.isTTY = func(int) bool { return false }
+					h.stdinIsTTY = func() bool { return false }
+					h.stderrIsTTY = func() bool { return true }
 					return nil
 				}
 			},
@@ -693,10 +693,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						assert.Equal(t, "localhost:0", addr)
 						return nil, fmt.Errorf("some listen error")
 					}
-					h.isTTY = func(fd int) bool {
-						assert.Equal(t, fd, syscall.Stdin)
-						return false
-					}
+					h.stdinIsTTY = func() bool { return false }
+					h.stderrIsTTY = func() bool { return true }
 					return nil
 				}
 			},
@@ -714,9 +712,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					require.NoError(t, WithSkipListen()(h))
-					h.isTTY = func(fd int) bool { return true }
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
 						require.NoError(t, err)
@@ -747,15 +746,16 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantErr: "error handling callback: failed to prompt for manual authorization code: some prompt error",
 		},
 		{
-			name: "listen success and manual prompt succeeds",
+			name: "listening fails and manual prompt fails",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
-					h.isTTY = func(fd int) bool { return true }
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
 						require.NoError(t, err)
@@ -792,6 +792,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 
@@ -826,6 +828,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					h.openURL = func(_ string) error {
 						go func() {
@@ -858,6 +862,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -922,6 +929,225 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
+			name:     "callback returns success, without stderr tty and with opening the browser, did not show authorize URL on stderr",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      successServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+
+					client := newClientForServer(successServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
+
+					h.skipBrowser = false
+					h.openURL = func(actualURL string) error {
+						parsedActualURL, err := url.Parse(actualURL)
+						require.NoError(t, err)
+						actualParams := parsedActualURL.Query()
+
+						require.Contains(t, actualParams.Get("redirect_uri"), "http://127.0.0.1:")
+						actualParams.Del("redirect_uri")
+
+						require.Equal(t, url.Values{
+							"code_challenge":        []string{testCodeChallenge},
+							"code_challenge_method": []string{"S256"},
+							"response_type":         []string{"code"},
+							"scope":                 []string{"test-scope"},
+							"nonce":                 []string{"test-nonce"},
+							"state":                 []string{"test-state"},
+							"access_type":           []string{"offline"},
+							"client_id":             []string{"test-client-id"},
+						}, actualParams)
+
+						parsedActualURL.RawQuery = ""
+						require.Equal(t, successServer.URL+"/authorize", parsedActualURL.String())
+
+						go func() {
+							h.callbacks <- callbackResult{token: &testToken}
+						}()
+						return nil
+					}
+					return nil
+				}
+			},
+			issuer:     successServer.URL,
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
+			wantStdErr: "", // does not show "Log in by visiting this link" with authorize URL
+			wantToken:  &testToken,
+		},
+		{
+			name:     "callback returns success, without stderr tty but there was an error when opening the browser, did show authorize URL on stderr",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      successServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+
+					client := newClientForServer(successServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
+
+					h.skipBrowser = false
+					h.openURL = func(actualURL string) error {
+						parsedActualURL, err := url.Parse(actualURL)
+						require.NoError(t, err)
+						actualParams := parsedActualURL.Query()
+
+						require.Contains(t, actualParams.Get("redirect_uri"), "http://127.0.0.1:")
+						actualParams.Del("redirect_uri")
+
+						require.Equal(t, url.Values{
+							"code_challenge":        []string{testCodeChallenge},
+							"code_challenge_method": []string{"S256"},
+							"response_type":         []string{"code"},
+							"scope":                 []string{"test-scope"},
+							"nonce":                 []string{"test-nonce"},
+							"state":                 []string{"test-state"},
+							"access_type":           []string{"offline"},
+							"client_id":             []string{"test-client-id"},
+						}, actualParams)
+
+						parsedActualURL.RawQuery = ""
+						require.Equal(t, successServer.URL+"/authorize", parsedActualURL.String())
+
+						go func() {
+							h.callbacks <- callbackResult{token: &testToken}
+						}()
+						return fmt.Errorf("some error while opening browser")
+					}
+					return nil
+				}
+			},
+			issuer: successServer.URL,
+			wantLogs: []string{
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"msg"="could not open browser" "error"="some error while opening browser"`,
+			},
+			wantStdErr: "^" +
+				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
+				regexp.QuoteMeta("    https://127.0.0.1:") +
+				"[0-9]+" + // random port
+				regexp.QuoteMeta("/authorize?access_type=offline&client_id=test-client-id&code_challenge="+testCodeChallenge+
+					"&code_challenge_method=S256&nonce=test-nonce&redirect_uri=http%3A%2F%2F127.0.0.1%3A") +
+				"[0-9]+" + // random port
+				regexp.QuoteMeta("%2Fcallback&response_type=code&scope=test-scope&state=test-state") +
+				regexp.QuoteMeta("\n\n") +
+				"$",
+			wantToken: &testToken,
+		},
+		{
+			name:     "callback returns success, without stderr tty and with skipping the browser, did show authorize URL on stderr",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      successServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+
+					client := newClientForServer(successServer)
+					client.Timeout = 10 * time.Second
+					require.NoError(t, WithClient(client)(h))
+
+					h.skipBrowser = true
+					h.openURL = func(actualURL string) error {
+						parsedActualURL, err := url.Parse(actualURL)
+						require.NoError(t, err)
+						actualParams := parsedActualURL.Query()
+
+						require.Contains(t, actualParams.Get("redirect_uri"), "http://127.0.0.1:")
+						actualParams.Del("redirect_uri")
+
+						require.Equal(t, url.Values{
+							"code_challenge":        []string{testCodeChallenge},
+							"code_challenge_method": []string{"S256"},
+							"response_type":         []string{"code"},
+							"scope":                 []string{"test-scope"},
+							"nonce":                 []string{"test-nonce"},
+							"state":                 []string{"test-state"},
+							"access_type":           []string{"offline"},
+							"client_id":             []string{"test-client-id"},
+						}, actualParams)
+
+						parsedActualURL.RawQuery = ""
+						require.Equal(t, successServer.URL+"/authorize", parsedActualURL.String())
+
+						go func() {
+							h.callbacks <- callbackResult{token: &testToken}
+						}()
+						return nil
+					}
+					return nil
+				}
+			},
+			issuer:   successServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
+			wantStdErr: "^" +
+				regexp.QuoteMeta("Log in by visiting this link:\n\n") +
+				regexp.QuoteMeta("    https://127.0.0.1:") +
+				"[0-9]+" + // random port
+				regexp.QuoteMeta("/authorize?access_type=offline&client_id=test-client-id&code_challenge="+testCodeChallenge+
+					"&code_challenge_method=S256&nonce=test-nonce&redirect_uri=http%3A%2F%2F127.0.0.1%3A") +
+				"[0-9]+" + // random port
+				regexp.QuoteMeta("%2Fcallback&response_type=code&scope=test-scope&state=test-state") +
+				regexp.QuoteMeta("\n\n") +
+				"$",
+			wantToken: &testToken,
+		},
+		{
 			name:     "callback returns success with request_mode=form_post",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
@@ -929,6 +1155,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -989,7 +1218,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					"&code_challenge_method=S256&nonce=test-nonce&redirect_uri=http%3A%2F%2F127.0.0.1%3A") +
 				"[0-9]+" + // random port
 				regexp.QuoteMeta("%2Fcallback&response_mode=form_post&response_type=code&scope=test-scope&state=test-state") +
-				regexp.QuoteMeta("\n\n") +
+				regexp.QuoteMeta("\n\n[...]\n\n") +
 				"$",
 			wantToken: &testToken,
 		},
@@ -1001,6 +1230,9 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					h.stdinIsTTY = func() bool { return true }
+					h.stderrIsTTY = func() bool { return true }
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -2166,7 +2398,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			testLogger := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
-			klog.SetLogger(testLogger.Logger)
+			klog.SetLogger(testLogger.Logger)     // this is unfortunately a global logger, so can't run these tests in parallel :(
+			t.Cleanup(func() {
+				klog.ClearLogger()
+			})
 
 			buffer := bytes.Buffer{}
 			tok, err := Login(tt.issuer, tt.clientID,
@@ -2231,40 +2466,52 @@ func withOutWriter(t *testing.T, out io.Writer) Option {
 
 func TestHandlePasteCallback(t *testing.T) {
 	const testRedirectURI = "http://127.0.0.1:12324/callback"
+	const testAuthURL = "https://test-authorize-url/"
+
+	expectedAuthURLOutput := func(expectedAuthURL string) string {
+		return fmt.Sprintf("Log in by visiting this link:\n\n    %s\n\n", expectedAuthURL)
+	}
 
 	tests := []struct {
-		name         string
-		opt          func(t *testing.T) Option
+		name              string
+		opt               func(t *testing.T) Option
+		authorizeURL      string
+		printAuthorizeURL bool
+
+		wantStderr   string
 		wantCallback *callbackResult
 	}{
 		{
 			name: "no stdin available",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.isTTY = func(fd int) bool {
-						require.Equal(t, syscall.Stdin, fd)
-						return false
-					}
+					h.stdinIsTTY = func() bool { return false }
 					h.useFormPost = true
 					return nil
 				}
 			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: true,
+			wantStderr:        expectedAuthURLOutput(testAuthURL),
 		},
 		{
 			name: "no form_post mode available",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.isTTY = func(fd int) bool { return true }
+					h.stdinIsTTY = func() bool { return true }
 					h.useFormPost = false
 					return nil
 				}
 			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: true,
+			wantStderr:        expectedAuthURLOutput(testAuthURL),
 		},
 		{
 			name: "prompt fails",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.isTTY = func(fd int) bool { return true }
+					h.stdinIsTTY = func() bool { return true }
 					h.useFormPost = true
 					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
 						assert.Equal(t, "    Optionally, paste your authorization code: ", promptLabel)
@@ -2273,6 +2520,9 @@ func TestHandlePasteCallback(t *testing.T) {
 					return nil
 				}
 			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: true,
+			wantStderr:        expectedAuthURLOutput(testAuthURL),
 			wantCallback: &callbackResult{
 				err: fmt.Errorf("failed to prompt for manual authorization code: some prompt error"),
 			},
@@ -2281,7 +2531,7 @@ func TestHandlePasteCallback(t *testing.T) {
 			name: "redeeming code fails",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.isTTY = func(fd int) bool { return true }
+					h.stdinIsTTY = func() bool { return true }
 					h.useFormPost = true
 					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
 						return "invalid", nil
@@ -2297,15 +2547,18 @@ func TestHandlePasteCallback(t *testing.T) {
 					return nil
 				}
 			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: true,
+			wantStderr:        expectedAuthURLOutput(testAuthURL),
 			wantCallback: &callbackResult{
 				err: fmt.Errorf("some exchange error"),
 			},
 		},
 		{
-			name: "success",
+			name: "success, with printing auth url",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.isTTY = func(fd int) bool { return true }
+					h.stdinIsTTY = func() bool { return true }
 					h.useFormPost = true
 					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
 						return "valid", nil
@@ -2321,6 +2574,36 @@ func TestHandlePasteCallback(t *testing.T) {
 					return nil
 				}
 			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: true,
+			wantStderr:        expectedAuthURLOutput(testAuthURL),
+			wantCallback: &callbackResult{
+				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
+			},
+		},
+		{
+			name: "success, without printing auth url",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.stdinIsTTY = func() bool { return true }
+					h.useFormPost = true
+					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
+						return "valid", nil
+					}
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil)
+						return mock
+					}
+					return nil
+				}
+			},
+			authorizeURL:      testAuthURL,
+			printAuthorizeURL: false, // do not want to print auth URL
+			wantStderr:        "",    // auth URL was not printed to stdout
 			wantCallback: &callbackResult{
 				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
 			},
@@ -2345,11 +2628,9 @@ func TestHandlePasteCallback(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
-			h.promptForWebLogin(ctx, "https://test-authorize-url/")
-			require.Equal(t,
-				"Log in by visiting this link:\n\n    https://test-authorize-url/\n\n",
-				buf.String(),
-			)
+			h.promptForWebLogin(ctx, tt.authorizeURL, tt.printAuthorizeURL)
+
+			require.Equal(t, tt.wantStderr, buf.String())
 
 			if tt.wantCallback != nil {
 				select {

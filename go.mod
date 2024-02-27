@@ -1,7 +1,9 @@
 module go.pinniped.dev
 
 // k8s.io/api@v0.29.0 requires go@1.21
-go 1.21
+go 1.21.3
+
+toolchain go1.22.0
 
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.29.0/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
@@ -24,14 +26,14 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.op
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240214232516-ad4608604e9e
+	github.com/chromedp/cdproto v0.0.0-20240226204813-532e667d868f
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.4
-	github.com/go-jose/go-jose/v3 v3.0.1
+	github.com/go-jose/go-jose/v3 v3.0.2
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-logr/logr v1.4.1
 	github.com/go-logr/stdr v1.2.2
@@ -53,9 +55,9 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tdewolff/minify/v2 v2.20.17
+	github.com/tdewolff/minify/v2 v2.20.18
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.19.0
+	golang.org/x/crypto v0.20.0
 	golang.org/x/net v0.21.0
 	golang.org/x/oauth2 v0.17.0
 	golang.org/x/sync v0.6.0
@@ -67,10 +69,10 @@ require (
 	k8s.io/apiserver v0.29.2
 	k8s.io/client-go v0.29.2
 	k8s.io/component-base v0.29.2
-	k8s.io/gengo v0.0.0-20240129211411-f967bbeff4b4
+	k8s.io/gengo v0.0.0-20240226174109-00c4be8627da
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.2
-	k8s.io/kube-openapi v0.0.0-20240221221325-2ac9dc51f3f1
+	k8s.io/kube-openapi v0.0.0-20240227032403-f107216b40e2
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -173,10 +175,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
-	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/mod v0.15.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.16.1 // indirect
+	golang.org/x/tools v0.18.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect

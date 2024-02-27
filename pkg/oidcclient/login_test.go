@@ -1159,6 +1159,23 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.stdinIsTTY = func() bool { return true }
 					h.stderrIsTTY = func() bool { return true }
 
+					// Because response_mode=form_post, the Login function is going to prompt the user
+					// to paste their authcode. This test needs to handle that prompt.
+					h.promptForValue = func(ctx context.Context, promptLabel string, _ io.Writer) (string, error) {
+						assert.Equal(t, "    Optionally, paste your authorization code: ", promptLabel)
+						// This test does not want to simulate the user entering their authcode at the prompt,
+						// nor does it want to simulate a prompt error, so this function should hang as if
+						// we are waiting for user input. Otherwise, promptForWebLogin would be racing to
+						// write the result of this function to the callback chan (versus this test trying
+						// to write its own callbackResult to the same chan).
+						// The context passed into this function should be cancelled by the caller when it
+						// has received the authcode callback because the caller is no longer interested in
+						// waiting for the prompt anymore at that point, so this function can finish when
+						// the context is cancelled.
+						<-ctx.Done()
+						return "", errors.New("this error should be ignored by the caller because the context is already cancelled")
+					}
+
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
 						Issuer:      formPostSuccessServer.URL,
@@ -2467,6 +2484,8 @@ func withOutWriter(t *testing.T, out io.Writer) Option {
 func TestHandlePasteCallback(t *testing.T) {
 	const testRedirectURI = "http://127.0.0.1:12324/callback"
 	const testAuthURL = "https://test-authorize-url/"
+	const cancelledAuthcodePromptOutput = "[...]\n"
+	const newlineAfterEveryAuthcodePromptOutput = "\n"
 
 	expectedAuthURLOutput := func(expectedAuthURL string) string {
 		return fmt.Sprintf("Log in by visiting this link:\n\n    %s\n\n", expectedAuthURL)
@@ -2522,7 +2541,7 @@ func TestHandlePasteCallback(t *testing.T) {
 			},
 			authorizeURL:      testAuthURL,
 			printAuthorizeURL: true,
-			wantStderr:        expectedAuthURLOutput(testAuthURL),
+			wantStderr:        expectedAuthURLOutput(testAuthURL) + cancelledAuthcodePromptOutput + newlineAfterEveryAuthcodePromptOutput,
 			wantCallback: &callbackResult{
 				err: fmt.Errorf("failed to prompt for manual authorization code: some prompt error"),
 			},
@@ -2549,7 +2568,7 @@ func TestHandlePasteCallback(t *testing.T) {
 			},
 			authorizeURL:      testAuthURL,
 			printAuthorizeURL: true,
-			wantStderr:        expectedAuthURLOutput(testAuthURL),
+			wantStderr:        expectedAuthURLOutput(testAuthURL) + newlineAfterEveryAuthcodePromptOutput,
 			wantCallback: &callbackResult{
 				err: fmt.Errorf("some exchange error"),
 			},
@@ -2576,7 +2595,7 @@ func TestHandlePasteCallback(t *testing.T) {
 			},
 			authorizeURL:      testAuthURL,
 			printAuthorizeURL: true,
-			wantStderr:        expectedAuthURLOutput(testAuthURL),
+			wantStderr:        expectedAuthURLOutput(testAuthURL) + newlineAfterEveryAuthcodePromptOutput,
 			wantCallback: &callbackResult{
 				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
 			},
@@ -2602,8 +2621,8 @@ func TestHandlePasteCallback(t *testing.T) {
 				}
 			},
 			authorizeURL:      testAuthURL,
-			printAuthorizeURL: false, // do not want to print auth URL
-			wantStderr:        "",    // auth URL was not printed to stdout
+			printAuthorizeURL: false,                                 // do not want to print auth URL
+			wantStderr:        newlineAfterEveryAuthcodePromptOutput, // auth URL was not printed to stdout
 			wantCallback: &callbackResult{
 				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
 			},
@@ -2628,9 +2647,7 @@ func TestHandlePasteCallback(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
-			h.promptForWebLogin(ctx, tt.authorizeURL, tt.printAuthorizeURL)
-
-			require.Equal(t, tt.wantStderr, buf.String())
+			cleanupPrompt := h.promptForWebLogin(ctx, tt.authorizeURL, tt.printAuthorizeURL)
 
 			if tt.wantCallback != nil {
 				select {
@@ -2640,6 +2657,15 @@ func TestHandlePasteCallback(t *testing.T) {
 					require.Equal(t, *tt.wantCallback, result)
 				}
 			}
+
+			// Reading buf before the goroutine inside of promptForWebLogin finishes is a data race,
+			// because that goroutine will also try to write to buf.
+			// Avoid this by shutting down its goroutine by cancelling its context,
+			// and clean it up with its cleanup function (which waits for it to be done).
+			// Then it should always be safe to read buf.
+			cancel()
+			cleanupPrompt()
+			require.Equal(t, tt.wantStderr, buf.String())
 		})
 	}
 }

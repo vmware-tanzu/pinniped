@@ -669,6 +669,9 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	}
 }
 
+// promptForWebLogin prints a login URL to the screen, if needed. It will also print the "paste yor authorization code"
+// prompt to the screen and wait for user input, if needed. It can be cancelled by the context provided.
+// It returns a function which should be invoked by the caller to perform some cleanup.
 func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, printAuthorizeURL bool) func() {
 	if printAuthorizeURL {
 		_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
@@ -714,6 +717,7 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 }
 
 // promptForValue interactively prompts the user for a plaintext value and reads their input.
+// If the context is canceled, it will return an error immediately.
 // This can be replaced by a mock implementation for unit tests.
 func promptForValue(ctx context.Context, promptLabel string, out io.Writer) (string, error) {
 	if !term.IsTerminal(stdin()) {

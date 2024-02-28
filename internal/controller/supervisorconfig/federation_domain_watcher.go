@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -211,7 +211,7 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 		// made the FederationDomain's endpoints available.
 		fdToConditionsMap[federationDomain] = conditions
 
-		if !hadErrorCondition(conditions) {
+		if !conditionsutil.HadErrorCondition(conditions) {
 			// Successfully validated the FederationDomain, so allow it to be loaded.
 			federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
 		}
@@ -794,7 +794,7 @@ func (c *federationDomainWatcherController) updateStatus(
 ) error {
 	updated := federationDomain.DeepCopy()
 
-	if hadErrorCondition(conditions) {
+	if conditionsutil.HadErrorCondition(conditions) {
 		updated.Status.Phase = configv1alpha1.FederationDomainPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
@@ -948,15 +948,6 @@ func newCrossFederationDomainConfigValidator(federationDomains []*configv1alpha1
 		issuerCounts:                      issuerCounts,
 		uniqueSecretNamesPerIssuerAddress: uniqueSecretNamesPerIssuerAddress,
 	}
-}
-
-func hadErrorCondition(conditions []*metav1.Condition) bool {
-	for _, c := range conditions {
-		if c.Status != metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
 }
 
 func stringSetsEqual(a []string, b []string) bool {

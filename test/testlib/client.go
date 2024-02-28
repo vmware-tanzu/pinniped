@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -204,13 +204,11 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	}
 }
 
-// CreateTestJWTAuthenticatorForCLIUpstream creates and returns a test JWTAuthenticator in
-// $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
-// test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
-// authenticator within the test namespace.
+// CreateTestJWTAuthenticatorForCLIUpstream creates and returns a test JWTAuthenticator which will be automatically
+// deleted at the end of the current test's lifetime.
 //
 // CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLIUpstreamOIDC.
-func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *auth1alpha1.JWTAuthenticator {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	spec := auth1alpha1.JWTAuthenticatorSpec{
@@ -228,14 +226,17 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLIUpstreamOIDC.CABundle)),
 		}
 	}
-	return CreateTestJWTAuthenticator(ctx, t, spec)
+	authenticator := CreateTestJWTAuthenticator(ctx, t, spec, auth1alpha1.JWTAuthenticatorPhaseReady)
+	return authenticator
 }
 
-// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator in
-// $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
-// test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
-// authenticator within the test namespace.
-func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
+// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator which will be automatically deleted
+// at the end of the current test's lifetime.
+func CreateTestJWTAuthenticator(
+	ctx context.Context,
+	t *testing.T,
+	spec auth1alpha1.JWTAuthenticatorSpec,
+	expectedStatus auth1alpha1.JWTAuthenticatorPhase) *auth1alpha1.JWTAuthenticator {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -260,11 +261,46 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s", jwtAuthenticator.Name)
 	})
 
-	return corev1.TypedLocalObjectReference{
-		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-		Kind:     "JWTAuthenticator",
-		Name:     jwtAuthenticator.Name,
-	}
+	WaitForJWTAuthenticatorStatusPhase(ctx, t, jwtAuthenticator.Name, expectedStatus)
+
+	return jwtAuthenticator
+}
+
+func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase auth1alpha1.JWTAuthenticatorPhase) {
+	t.Helper()
+	jwtAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().JWTAuthenticators()
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		jwtA, err := jwtAuthenticatorClientSet.Get(ctx, jwtAuthenticatorName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+		requireEventually.Equalf(expectPhase, jwtA.Status.Phase, "actual status conditions were: %#v", jwtA.Status.Conditions)
+	}, 60*time.Second, 1*time.Second, "expected the JWTAuthenticator to have status %q", expectPhase)
+}
+
+func WaitForJWTAuthenticatorStatusConditions(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectConditions []metav1.Condition) {
+	t.Helper()
+	jwtAuthenticatorClient := NewConciergeClientset(t).AuthenticationV1alpha1().JWTAuthenticators()
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		fd, err := jwtAuthenticatorClient.Get(ctx, jwtAuthenticatorName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+
+		requireEventually.Lenf(fd.Status.Conditions, len(expectConditions),
+			"wanted status conditions: %#v", expectConditions)
+
+		for i, wantCond := range expectConditions {
+			actualCond := fd.Status.Conditions[i]
+
+			// This is a cheat to avoid needing to make equality assertions on these fields.
+			requireEventually.NotZero(actualCond.LastTransitionTime)
+			wantCond.LastTransitionTime = actualCond.LastTransitionTime
+			requireEventually.NotZero(actualCond.ObservedGeneration)
+			wantCond.ObservedGeneration = actualCond.ObservedGeneration
+
+			requireEventually.Equalf(wantCond, actualCond,
+				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
+				expectConditions, fd.Status.Conditions, i)
+		}
+	}, 60*time.Second, 1*time.Second, "wanted JWTAuthenticator conditions")
 }
 
 // CreateTestFederationDomain creates and returns a test FederationDomain in the

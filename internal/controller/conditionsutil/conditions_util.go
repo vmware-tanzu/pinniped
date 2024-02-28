@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package conditionsutil
@@ -117,5 +117,14 @@ func mergeConfigCondition(existing *[]metav1.Condition, new *metav1.Condition) b
 	}
 
 	// Otherwise the entry is already up to date.
+	return false
+}
+
+func HadErrorCondition(conditions []*metav1.Condition) bool {
+	for _, c := range conditions {
+		if c.Status != metav1.ConditionTrue {
+			return true
+		}
+	}
 	return false
 }

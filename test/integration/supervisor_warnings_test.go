@@ -91,12 +91,13 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
+	// if the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
 	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   downstream.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
-	})
+	}, authv1alpha.JWTAuthenticatorPhaseError)
 
 	const (
 		yellowColor = "\u001b[33;1m"
@@ -110,6 +111,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -257,6 +259,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
 		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -418,6 +421,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"

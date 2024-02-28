@@ -1,9 +1,22 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+type JWTAuthenticatorPhase string
+
+const (
+	// JWTAuthenticatorPhasePending is the default phase for newly-created JWTAuthenticator resources.
+	JWTAuthenticatorPhasePending JWTAuthenticatorPhase = "Pending"
+
+	// JWTAuthenticatorPhaseReady is the phase for an JWTAuthenticator resource in a healthy state.
+	JWTAuthenticatorPhaseReady JWTAuthenticatorPhase = "Ready"
+
+	// JWTAuthenticatorPhaseError is the phase for an JWTAuthenticator in an unhealthy state.
+	JWTAuthenticatorPhaseError JWTAuthenticatorPhase = "Error"
+)
 
 // Status of a JWT authenticator.
 type JWTAuthenticatorStatus struct {
@@ -13,6 +26,10 @@ type JWTAuthenticatorStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// Phase summarizes the overall status of the JWTAuthenticator.
+	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase JWTAuthenticatorPhase `json:"phase,omitempty"`
 }
 
 // Spec for configuring a JWT authenticator.

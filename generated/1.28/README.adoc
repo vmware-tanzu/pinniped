@@ -46,6 +46,18 @@ JWTAuthenticator describes the configuration of a JWT authenticator.
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase"]
+==== JWTAuthenticatorPhase (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]
+****
+
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec"]
 ==== JWTAuthenticatorSpec 
 
@@ -80,6 +92,7 @@ Status of a JWT authenticator.
 |===
 | Field | Description
 | *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase[$$JWTAuthenticatorPhase$$]__ | Phase summarizes the overall status of the JWTAuthenticator.
 |===
 
 

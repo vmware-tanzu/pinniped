@@ -43,6 +43,10 @@ rules:
       - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
     resources: [ jwtauthenticators, webhookauthenticators ]
     verbs: [ get, list, watch ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
+    resources: [ jwtauthenticators/status, webhookauthenticators/status ]
+    verbs: [ get, list, watch, update ]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

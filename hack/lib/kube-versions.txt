@@ -1,6 +1,9 @@
-1.28.4
-1.27.8
-1.26.11
+# This file lists the versions of Kubernetes to use for codegen.
+# They must be listed newest to oldest.
+1.29.2
+1.28.7
+1.27.11
+1.26.14
 1.25.16
 1.24.17
 1.23.17

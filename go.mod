@@ -47,13 +47,13 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.46.1-0.20240215100027-1f27af44d4f8
+	github.com/ory/fosite v0.46.1
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/tdewolff/minify/v2 v2.20.18
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.20.0

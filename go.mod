@@ -23,6 +23,10 @@ replace (
 // to resolve the clashes with ory/x, so use the same version that kubernetes/apiserver chooses for opentelemetry.
 replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
 
+// This is an indirect dep which is currently at v0.42.0 (see below), but scanners report that version
+// has CVE-2023-45142, so replace it with the fixed version.
+replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
+
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20240226204813-532e667d868f

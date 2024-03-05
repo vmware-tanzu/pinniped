@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -2966,6 +2966,15 @@ func startLocalCallbackServer(t *testing.T) *localCallbackServer {
 	// Handle the callback by sending the *http.Request object back through a channel.
 	callbacks := make(chan *http.Request, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("got request at localhost callback listener with method %s, URL %s headers: %#v", r.Method, r.URL.String(), r.Header)
+
+		if r.Method == http.MethodGet && r.URL.Path == "/favicon.ico" {
+			// Chrome will request favicons. The favicon request will come after the authcode request.
+			// 404 those requests rather than hanging on the channel send below.
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
 		callbacks <- r
 	}))
 	server.URL += "/callback"

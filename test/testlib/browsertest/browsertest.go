@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package browsertest provides integration test helpers for our browser-based tests.
@@ -56,10 +56,22 @@ func OpenBrowser(t *testing.T) *Browser {
 	options := append(
 		// Start with the defaults.
 		chromedp.DefaultExecAllocatorOptions[:],
+
 		// Add "ignore-certificate-errors" Chrome flag.
 		chromedp.IgnoreCertErrors,
+
 		// Uncomment this to watch the browser while the test runs.
 		// chromedp.Flag("headless", false), chromedp.Flag("hide-scrollbars", false), chromedp.Flag("mute-audio", false),
+
+		// Uncomment this to automatically open the devtools window when the browser opens. Helpful when not headless.
+		// chromedp.Flag("auto-open-devtools-for-tabs", true),
+
+		// Uncomment one of these lines (and update path if needed) to use
+		// Google Chrome Beta (download from https://www.google.com/chrome/beta/)
+		// when running integration tests on your local machine.
+		// These are the default paths for macOS and Linux, respectively.
+		// chromedp.ExecPath("/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"),
+		// chromedp.ExecPath("/usr/bin/google-chrome-beta"),
 	)
 
 	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {

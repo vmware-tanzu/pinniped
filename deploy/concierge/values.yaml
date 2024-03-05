@@ -1,4 +1,4 @@
-#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ def validate_strings_map(obj):
@@ -52,7 +52,7 @@ replicas: 2
 #@schema/title "Image repo"
 #@schema/desc "The repository for the Concierge container image."
 #@schema/validation min_len=1
-image_repo: projects.registry.vmware.com/pinniped/pinniped-server
+image_repo: ghcr.io/vmware-tanzu/pinniped/pinniped-server
 
 #@schema/title "Image digest"
 #@schema/desc "The image digest for the Concierge container image. If both image_digest or an image_tag are given, only image_digest will be used."
@@ -72,7 +72,7 @@ image_tag: latest
 #@ on the control plane. This image needs only to include `sleep` and `cat` binaries. \
 #@ By default, the same image specified for image_repo/image_digest/image_tag will be re-used."
 #@schema/desc kube_cert_agent_image
-#@schema/examples ("Image including tag or digest", "projects.registry.vmware.com/pinniped/pinniped-server:latest")
+#@schema/examples ("Image including tag or digest", "ghcr.io/vmware-tanzu/pinniped/pinniped-server:latest")
 #@schema/nullable
 #@schema/validation min_len=1
 kube_cert_agent_image: ""

@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -29,6 +29,10 @@ func KubeServerSupportsCertificatesV1API(t *testing.T, discoveryClient discovery
 		continue
 	}
 	return false
+}
+
+func KubeServerMinorVersionAtLeastInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min int) bool {
+	return !KubeServerMinorVersionInBetweenInclusive(t, discoveryClient, 0, min-1)
 }
 
 func KubeServerMinorVersionInBetweenInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min, max int) bool {

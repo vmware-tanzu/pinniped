@@ -941,76 +941,71 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		}
 	}()
 
+	// Calculate the allowed origin for CORS.
+	issuerURL, err := url.Parse(h.issuer)
+	if err != nil {
+		// This shouldn't happen in practice because the URL is normally validated before this function is called.
+		// Avoid using httperr.Wrap because that would hide the details of err from the browser output.
+		return httperr.Newf(http.StatusInternalServerError, "invalid issuer url: %s", err.Error())
+	}
+	allowOrigin := issuerURL.Scheme + "://" + issuerURL.Host
+
 	var params url.Values
-	if h.useFormPost { //nolint:nestif
-		// Return HTTP 405 for anything that's not a POST or an OPTIONS request.
-		if r.Method != http.MethodPost && r.Method != http.MethodOptions {
-			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
-			w.WriteHeader(http.StatusMethodNotAllowed)
+
+	switch r.Method {
+	case http.MethodOptions:
+		// Google Chrome decided that it should do CORS preflight checks for this Javascript form submission POST request.
+		// See https://developer.chrome.com/blog/private-network-access-preflight/
+		// It seems like Chrome will likely soon also add CORS preflight checks for GET requests on redirects.
+		// See https://chromestatus.com/feature/4869685172764672
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			// The CORS preflight request should have an origin.
+			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got OPTIONS request without origin header")
+			w.WriteHeader(http.StatusBadRequest)
 			return nil // keep listening for more requests
 		}
-
-		// For POST and OPTIONS requests, calculate the allowed origin for CORS.
-		issuerURL, err := url.Parse(h.issuer)
-		if err != nil {
-			// Avoid using httperr.Wrap because that would hide the details of err from the browser output.
-			return httperr.Newf(http.StatusInternalServerError, "invalid issuer url: %s", err.Error())
+		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
+		// To tell the browser that it is okay to make the real POST or GET request, return the following response.
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
+		w.Header().Set("Access-Control-Allow-Credentials", "false")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Private-Network", "true")
+		// If the browser would like to send some headers on the real request, allow them. Chrome doesn't
+		// currently send this header at the moment. This is in case some browser in the future decides to
+		// request to be allowed to send specific headers by using Access-Control-Request-Headers.
+		requestedHeaders := r.Header.Get("Access-Control-Request-Headers")
+		if requestedHeaders != "" {
+			w.Header().Set("Access-Control-Allow-Headers", requestedHeaders)
 		}
-		allowOrigin := issuerURL.Scheme + "://" + issuerURL.Host
+		w.WriteHeader(http.StatusNoContent)
+		return nil // keep listening for more requests
 
-		if r.Method == http.MethodOptions {
-			// Google Chrome decided that it should do CORS preflight checks for this Javascript form submission POST request.
-			// See https://developer.chrome.com/blog/private-network-access-preflight/
-			origin := r.Header.Get("Origin")
-			if origin == "" {
-				// The CORS preflight request should have an origin.
-				h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got OPTIONS request without origin header")
-				w.WriteHeader(http.StatusBadRequest)
-				return nil // keep listening for more requests
-			}
-			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
-			// To tell the browser that it is okay to make the real POST request, return the following response.
-			w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
-			w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
-			w.Header().Set("Access-Control-Allow-Credentials", "false")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Private-Network", "true")
-			// If the browser would like to send some headers on the real request, allow them. Chrome doesn't
-			// currently send this header at the moment. This is in case some browser in the future decides to
-			// request to be allowed to send specific headers by using Access-Control-Request-Headers.
-			requestedHeaders := r.Header.Get("Access-Control-Request-Headers")
-			if requestedHeaders != "" {
-				w.Header().Set("Access-Control-Allow-Headers", requestedHeaders)
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return nil // keep listening for more requests
-		} // Otherwise, this is a POST request...
-
+	case http.MethodPost:
 		// Parse and pull the response parameters from an application/x-www-form-urlencoded request body.
 		if err = r.ParseForm(); err != nil {
 			// Avoid using httperr.Wrap because that would hide the details of err from the browser output.
 			return httperr.Newf(http.StatusBadRequest, "invalid form: %s", err.Error())
 		}
-		params = r.Form
+		params = r.Form // grab the params and continue handling this request below
 
-		// Allow CORS requests for POST so in the future our Javascript code can be updated to use the fetch API's
-		// mode "cors", and still be compatible with older CLI versions starting with those that have this code
-		// for CORS headers. Updating to use CORS would allow our Javascript code (form_post.js) to see the true
-		// http response status from this endpoint. Note that the POST response does not need to set as many CORS
-		// headers as the OPTIONS preflight response.
-		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
-		w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
-	} else {
-		// When we are not using form_post, then return HTTP 405 for anything that's not a GET.
-		if r.Method != http.MethodGet {
-			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return nil // keep listening for more requests
-		}
-
+	case http.MethodGet:
 		// Pull response parameters from the URL query string.
-		params = r.URL.Query()
+		params = r.URL.Query() // grab the params and continue handling this request below
+
+	default:
+		// Return HTTP 405 for anything that's not a POST, GET, or an OPTIONS request.
+		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return nil // keep listening for more requests
 	}
+
+	// Allow CORS requests for POST so our Javascript code can use the fetch API's mode "cors" (see form_post.js)
+	// to allow the JS code see the true http response status from this endpoint. Note that the POST response
+	// does not need to set as many CORS headers as the OPTIONS preflight response.
+	w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+	w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
 
 	// At this point, it doesn't matter if we got the params from a form_post POST request or a regular GET request.
 	// Next, validate the params, and if we got an authcode then try to use it to complete the login.

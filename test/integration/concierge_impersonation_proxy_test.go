@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -258,7 +258,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// Check that no load balancer has been created by the impersonator's "auto" mode.
 		testlib.RequireNeverWithoutError(t, func() (bool, error) {
 			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
-		}, 10*time.Second, 500*time.Millisecond)
+		}, 10*time.Second, 500*time.Millisecond, "there should not be a service for the impersonation proxy")
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet.
 		_, err = impersonationProxyViaSquidKubeClientWithoutCredential(t, proxyServiceEndpoint).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -270,6 +270,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				},
 			},
 		})
 	}
@@ -277,8 +280,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// At this point the impersonator should be starting/running. When it is ready, the CredentialIssuer's
 	// strategies array should be updated to include a successful impersonation strategy which can be used
 	// to discover the impersonator's URL and CA certificate. Until it has finished starting, it may not be included
-	// in the strategies array or it may be included in an error state. It can be in an error state for
-	// awhile when it is waiting for the load balancer to be assigned an ip/hostname.
+	// in the strategies array, or it may be included in an error state. It can be in an error state for
+	// a while when it is waiting for the load balancer to be assigned an ip/hostname.
 	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 	if !clusterSupportsLoadBalancers {
 		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
@@ -1004,12 +1007,16 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				expectedWhoAmIRequestResponse(
 					expectedUsername,
 					expectedGroups,
-					map[string]identityv1alpha1.ExtraValue{
-						"authentication.kubernetes.io/pod-name": {pod.Name},
-						"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
-					},
+					whoAmITokenReq.Status.KubernetesUserInfo.User.Extra, // This will be a dynamic assertion below based on the version of K8s
 				),
 				whoAmITokenReq,
+			)
+
+			testutil.CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[map[string]identityv1alpha1.ExtraValue](
+				t,
+				adminClient.Discovery(),
+				whoAmITokenReq.Status.KubernetesUserInfo.User.Extra,
+				pod,
 			)
 
 			// allow the test SA to create CSRs
@@ -1050,10 +1057,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				require.Equal(t, expectedUsername, saCSR.Spec.Username)
 				require.Equal(t, expectedUID, saCSR.Spec.UID)
 				require.Equal(t, expectedGroups, saCSR.Spec.Groups)
-				require.Equal(t, map[string]certificatesv1.ExtraValue{
-					"authentication.kubernetes.io/pod-name": {pod.Name},
-					"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
-				}, saCSR.Spec.Extra)
+				testutil.CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[map[string]certificatesv1.ExtraValue](
+					t,
+					adminClient.Discovery(),
+					saCSR.Spec.Extra,
+					pod,
+				)
 			} else {
 				// On old Kubernetes clusters use CertificatesV1beta1
 				saCSR, err := impersonationProxySAClient.Kubernetes.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
@@ -1064,10 +1073,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				require.Equal(t, expectedUsername, saCSR.Spec.Username)
 				require.Equal(t, expectedUID, saCSR.Spec.UID)
 				require.Equal(t, expectedGroups, saCSR.Spec.Groups)
-				require.Equal(t, map[string]certificatesv1beta1.ExtraValue{
-					"authentication.kubernetes.io/pod-name": {pod.Name},
-					"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
-				}, saCSR.Spec.Extra)
+				testutil.CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[map[string]certificatesv1beta1.ExtraValue](
+					t,
+					adminClient.Discovery(),
+					saCSR.Spec.Extra,
+					pod,
+				)
 			}
 		})
 
@@ -2187,7 +2198,7 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 				}
 			}
 		}
-		t.Log("Did not find any impersonation proxy strategy on CredentialIssuer")
+		t.Log("Did not find any successful impersonation proxy strategy on CredentialIssuer")
 		return false, nil // didn't find it, but keep trying
 	}, 10*time.Minute, 10*time.Second)
 
@@ -2282,6 +2293,7 @@ func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.Test
 		if err != nil {
 			return err
 		}
+
 		spec.DeepCopyInto(&newCredentialIssuer.Spec)
 		_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, newCredentialIssuer, metav1.UpdateOptions{})
 		return err

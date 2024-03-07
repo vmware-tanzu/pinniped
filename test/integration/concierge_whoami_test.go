@@ -254,27 +254,12 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 		whoAmITokenReq,
 	)
 
-	require.Equal(t, whoAmIUser.Extra["authentication.kubernetes.io/pod-name"], identityv1alpha1.ExtraValue{pod.Name})
-	require.Equal(t, whoAmIUser.Extra["authentication.kubernetes.io/pod-uid"], identityv1alpha1.ExtraValue{string(pod.UID)})
-
-	if testutil.KubeServerMinorVersionAtLeastInclusive(t, kubeClient.Discovery(), 30) {
-		// Starting in K8s 1.30, three additional `Extra` fields were added with unpredictable values.
-		// This is because the following three feature gates were enabled by default in 1.30.
-		// https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/
-		// - ServiceAccountTokenJTI
-		// - ServiceAccountTokenNodeBindingValidation
-		// - ServiceAccountTokenPodNodeInfo
-		// These were added in source code in 1.29 but not enabled by default until 1.30.
-		// <1.29: https://pkg.go.dev/k8s.io/apiserver@v0.28.7/pkg/authentication/serviceaccount
-		// 1.29+: https://pkg.go.dev/k8s.io/apiserver@v0.29.0/pkg/authentication/serviceaccount
-
-		require.Equal(t, 5, len(whoAmIUser.Extra))
-		require.NotEmpty(t, whoAmIUser.Extra["authentication.kubernetes.io/credential-id"])
-		require.NotEmpty(t, whoAmIUser.Extra["authentication.kubernetes.io/node-name"])
-		require.NotEmpty(t, whoAmIUser.Extra["authentication.kubernetes.io/node-uid"])
-	} else {
-		require.Equal(t, 2, len(whoAmIUser.Extra))
-	}
+	testutil.CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[map[string]identityv1alpha1.ExtraValue](
+		t,
+		kubeClient.Discovery(),
+		whoAmIUser.Extra,
+		pod,
+	)
 }
 
 // whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -41,6 +41,7 @@ fi
 ytt ${use_kind_registry} ${use_contour_registry} --file="${ROOT}"/hack/lib/kind-config/single-node.yaml >/tmp/kind-config.yaml
 
 # To choose a specific version of kube, add this option to the command below: `--image kindest/node:v1.28.0`.
+# To use the "latest-main" version of kubernetes builds by the pipeline, use `--image ghcr.io/pinniped-ci-bot/kind-node-image:latest`
 # To debug the kind config, add this option to the command below: `-v 10`
 kind create cluster --config /tmp/kind-config.yaml --name pinniped
 

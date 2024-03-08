@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -151,9 +151,10 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
+	kubeClient := testlib.NewKubernetesClientset(t)
+	coreV1client := kubeClient.CoreV1()
 
-	ns, err := kubeClient.Namespaces().Create(ctx, &corev1.Namespace{
+	ns, err := coreV1client.Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-whoami-",
 		},
@@ -161,17 +162,17 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		require.NoError(t, kubeClient.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
+		require.NoError(t, coreV1client.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
 	})
 
-	sa, err := kubeClient.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
+	sa, err := coreV1client.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-whoami-",
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	_, tokenRequestProbeErr := kubeClient.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
+	_, tokenRequestProbeErr := coreV1client.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
 	if errors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
 		return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 	}
@@ -191,7 +192,7 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 			ServiceAccountName: sa.Name,
 		})
 
-	tokenRequestBadAudience, err := kubeClient.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
+	tokenRequestBadAudience, err := coreV1client.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
 			Audiences: []string{"should-fail-because-wrong-audience"}, // anything that is not an API server audience
 			BoundObjectRef: &authenticationv1.BoundObjectReference{
@@ -211,7 +212,7 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.True(t, errors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
 
-	tokenRequest, err := kubeClient.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
+	tokenRequest, err := coreV1client.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
 			Audiences: []string{},
 			BoundObjectRef: &authenticationv1.BoundObjectReference{
@@ -231,7 +232,8 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err, testlib.Sdump(err))
 
-	// new service account tokens include the pod info in the extra fields
+	whoAmIUser := whoAmITokenReq.Status.KubernetesUserInfo.User
+
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
 			Status: identityv1alpha1.WhoAmIRequestStatus{
@@ -244,15 +246,19 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 							"system:serviceaccounts:" + ns.Name,
 							"system:authenticated",
 						},
-						Extra: map[string]identityv1alpha1.ExtraValue{
-							"authentication.kubernetes.io/pod-name": {pod.Name},
-							"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
-						},
+						Extra: whoAmIUser.Extra, // This will be a dynamic assertion below based on the version of K8s
 					},
 				},
 			},
 		},
 		whoAmITokenReq,
+	)
+
+	testutil.CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[map[string]identityv1alpha1.ExtraValue](
+		t,
+		kubeClient.Discovery(),
+		whoAmIUser.Extra,
+		pod,
 	)
 }
 

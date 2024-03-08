@@ -7,7 +7,7 @@ toolchain go1.22.0
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
 
-// Fostite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
+// ory/fosite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
 // Where they clash and cause "go mod tidy" to fail, use replace directives to make it work.
 // Copied from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L28-L33.
 replace (
@@ -23,9 +23,11 @@ replace (
 // to resolve the clashes with ory/x, so use the same version that kubernetes/apiserver chooses for opentelemetry.
 replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
 
-// This is an indirect dep which is currently at v0.42.0 (see below), but scanners report that version
-// has CVE-2023-45142, so replace it with the fixed version.
+// This is an indirect dep which has CVE-2023-45142, so replace it with the fixed version.
 replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
+
+// This is an indirect dep which has CVE-2024-24786, so replace it with a fixed version
+replace google.golang.org/protobuf => google.golang.org/protobuf v1.33.0
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1

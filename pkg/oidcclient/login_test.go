@@ -2673,12 +2673,6 @@ func TestHandlePasteCallback(t *testing.T) {
 func TestHandleAuthCodeCallback(t *testing.T) {
 	const testRedirectURI = "http://127.0.0.1:12324/callback"
 
-	withFormPostMode := func(t *testing.T) Option {
-		return func(h *handlerState) error {
-			h.useFormPost = true
-			return nil
-		}
-	}
 	tests := []struct {
 		name    string
 		method  string
@@ -2694,17 +2688,8 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 	}{
 		{
 			name:            "wrong method returns an error but keeps listening",
-			method:          http.MethodPost,
+			method:          http.MethodHead,
 			query:           "",
-			wantNoCallbacks: true,
-			wantHeaders:     map[string][]string{},
-			wantHTTPStatus:  http.StatusMethodNotAllowed,
-		},
-		{
-			name:            "wrong method for form_post returns an error but keeps listening",
-			method:          http.MethodGet,
-			query:           "",
-			opt:             withFormPostMode,
 			wantNoCallbacks: true,
 			wantHeaders:     map[string][]string{},
 			wantHTTPStatus:  http.StatusMethodNotAllowed,
@@ -2715,34 +2700,45 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			query:          "",
 			headers:        map[string][]string{"Content-Type": {"application/x-www-form-urlencoded"}},
 			body:           []byte(`%`),
-			opt:            withFormPostMode,
 			wantErr:        `invalid form: invalid URL escape "%"`,
 			wantHeaders:    map[string][]string{},
 			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "invalid state",
-			query:          "state=invalid",
-			wantErr:        "missing or invalid state parameter",
-			wantHeaders:    map[string][]string{},
+			name:    "invalid state",
+			method:  http.MethodGet,
+			query:   "state=invalid",
+			wantErr: "missing or invalid state parameter",
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Origin": {"https://valid-issuer.com"},
+				"Vary":                        {"*"},
+			},
 			wantHTTPStatus: http.StatusForbidden,
 		},
 		{
-			name:           "error code from provider",
-			query:          "state=test-state&error=some_error",
-			wantErr:        `login failed with code "some_error"`,
-			wantHeaders:    map[string][]string{},
+			name:    "error code from provider",
+			method:  http.MethodGet,
+			query:   "state=test-state&error=some_error",
+			wantErr: `login failed with code "some_error"`,
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Origin": {"https://valid-issuer.com"},
+				"Vary":                        {"*"},
+			},
 			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "error code with a description from provider",
-			query:          "state=test-state&error=some_error&error_description=optional%20error%20description",
-			wantErr:        `login failed with code "some_error": optional error description`,
-			wantHeaders:    map[string][]string{},
+			name:    "error code with a description from provider",
+			method:  http.MethodGet,
+			query:   "state=test-state&error=some_error&error_description=optional%20error%20description",
+			wantErr: `login failed with code "some_error": optional error description`,
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Origin": {"https://valid-issuer.com"},
+				"Vary":                        {"*"},
+			},
 			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "in form post mode, invalid issuer url config during CORS preflight request returns an error",
+			name:           "invalid issuer url config during CORS preflight request returns an error",
 			method:         http.MethodOptions,
 			query:          "",
 			headers:        map[string][]string{"Origin": {"https://some-origin.com"}},
@@ -2751,14 +2747,13 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusInternalServerError,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.issuer = "://bad-url"
 					return nil
 				}
 			},
 		},
 		{
-			name:           "in form post mode, invalid issuer url config during POST request returns an error",
+			name:           "invalid issuer url config during POST request returns an error",
 			method:         http.MethodPost,
 			query:          "",
 			headers:        map[string][]string{"Origin": {"https://some-origin.com"}},
@@ -2767,23 +2762,36 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusInternalServerError,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.issuer = "://bad-url"
 					return nil
 				}
 			},
 		},
 		{
-			name:            "in form post mode, options request is missing origin header results in 400 and keeps listener running",
+			name:           "invalid issuer url config during GET request returns an error",
+			method:         http.MethodGet,
+			query:          "code=foo",
+			headers:        map[string][]string{},
+			wantErr:        `invalid issuer url: parse "://bad-url": missing protocol scheme`,
+			wantHeaders:    map[string][]string{},
+			wantHTTPStatus: http.StatusInternalServerError,
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.issuer = "://bad-url"
+					return nil
+				}
+			},
+		},
+		{
+			name:            "options request is missing origin header results in 400 and keeps listener running",
 			method:          http.MethodOptions,
 			query:           "",
-			opt:             withFormPostMode,
 			wantNoCallbacks: true,
 			wantHeaders:     map[string][]string{},
 			wantHTTPStatus:  http.StatusBadRequest,
 		},
 		{
-			name:            "in form post mode, valid CORS request responds with 402 and CORS headers and keeps listener running",
+			name:            "valid CORS request responds with 402 and CORS headers and keeps listener running",
 			method:          http.MethodOptions,
 			query:           "",
 			headers:         map[string][]string{"Origin": {"https://some-origin.com"}},
@@ -2791,21 +2799,20 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus:  http.StatusNoContent,
 			wantHeaders: map[string][]string{
 				"Access-Control-Allow-Credentials":     {"false"},
-				"Access-Control-Allow-Methods":         {"POST, OPTIONS"},
+				"Access-Control-Allow-Methods":         {"GET, POST, OPTIONS"},
 				"Access-Control-Allow-Origin":          {"https://valid-issuer.com"},
 				"Vary":                                 {"*"},
 				"Access-Control-Allow-Private-Network": {"true"},
 			},
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.issuer = "https://valid-issuer.com/with/some/path"
 					return nil
 				}
 			},
 		},
 		{
-			name:   "in form post mode, valid CORS request with Access-Control-Request-Headers responds with 402 and CORS headers including Access-Control-Allow-Headers and keeps listener running",
+			name:   "valid CORS request with Access-Control-Request-Headers responds with 402 and CORS headers including Access-Control-Allow-Headers and keeps listener running",
 			method: http.MethodOptions,
 			query:  "",
 			headers: map[string][]string{
@@ -2816,7 +2823,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus:  http.StatusNoContent,
 			wantHeaders: map[string][]string{
 				"Access-Control-Allow-Credentials":     {"false"},
-				"Access-Control-Allow-Methods":         {"POST, OPTIONS"},
+				"Access-Control-Allow-Methods":         {"GET, POST, OPTIONS"},
 				"Access-Control-Allow-Origin":          {"https://valid-issuer.com"},
 				"Vary":                                 {"*"},
 				"Access-Control-Allow-Private-Network": {"true"},
@@ -2824,17 +2831,20 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			},
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.issuer = "https://valid-issuer.com/with/some/path"
 					return nil
 				}
 			},
 		},
 		{
-			name:           "invalid code",
-			query:          "state=test-state&code=invalid",
-			wantErr:        "could not complete authorization code exchange: some exchange error",
-			wantHeaders:    map[string][]string{},
+			name:    "invalid code",
+			method:  http.MethodGet,
+			query:   "state=test-state&code=invalid",
+			wantErr: "could not complete authorization code exchange: some exchange error",
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Origin": {"https://valid-issuer.com"},
+				"Vary":                        {"*"},
+			},
 			wantHTTPStatus: http.StatusBadRequest,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -2852,9 +2862,14 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 		},
 		{
 			name:           "valid",
+			method:         http.MethodGet,
 			query:          "state=test-state&code=valid",
 			wantHTTPStatus: http.StatusOK,
-			wantHeaders:    map[string][]string{"Content-Type": {"text/plain; charset=utf-8"}},
+			wantHeaders: map[string][]string{
+				"Access-Control-Allow-Origin": {"https://valid-issuer.com"},
+				"Vary":                        {"*"},
+				"Content-Type":                {"text/plain; charset=utf-8"},
+			},
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
@@ -2882,7 +2897,6 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusOK,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
 					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
@@ -2911,7 +2925,6 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusOK,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.useFormPost = true
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
 					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
@@ -2925,6 +2938,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -2948,10 +2962,11 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			resp := httptest.NewRecorder()
 			req, err := http.NewRequestWithContext(ctx, "GET", "/test-callback", bytes.NewBuffer(tt.body))
 			require.NoError(t, err)
+
+			require.NotEmptyf(t, tt.method, "test author mistake: method is required on the test table entry")
+			req.Method = tt.method
+
 			req.URL.RawQuery = tt.query
-			if tt.method != "" {
-				req.Method = tt.method
-			}
 			if tt.headers != nil {
 				req.Header = tt.headers
 			}

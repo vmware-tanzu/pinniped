@@ -2966,13 +2966,29 @@ func startLocalCallbackServer(t *testing.T) *localCallbackServer {
 	// Handle the callback by sending the *http.Request object back through a channel.
 	callbacks := make(chan *http.Request, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("got request at localhost callback listener with method %s, URL %s headers: %#v", r.Method, r.URL.String(), r.Header)
+		t.Logf("got request at localhost callback listener with method %s, URL %s, and headers: %#v",
+			r.Method, testlib.MaskTokens(r.URL.String()), r.Header)
 
 		if r.Method == http.MethodGet && r.URL.Path == "/favicon.ico" {
 			// Chrome will request favicons. The favicon request will come after the authcode request.
 			// 404 those requests rather than hanging on the channel send below.
 			w.WriteHeader(http.StatusNotFound)
-			return
+			return // keep listening for more requests
+		}
+
+		// Starting in Chrome Beta v123, Chrome will make CORS requests for GET redirects when
+		// the redirect comes from an HTTPS web site running on a public IP (e.g. Okta) to a
+		// private IP like this localhost listener. Respond to these CORS requests here,
+		// similar to how the Pinniped CLI's localhost listener would really do it.
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+			w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
+			w.Header().Set("Access-Control-Allow-Credentials", "false")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Private-Network", "true")
+			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+			w.WriteHeader(http.StatusNoContent)
+			return // keep listening for more requests
 		}
 
 		callbacks <- r

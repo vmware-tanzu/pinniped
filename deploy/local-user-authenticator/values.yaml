@@ -1,4 +1,4 @@
-#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values-schema
@@ -6,7 +6,7 @@
 #@schema/title "Image repo"
 #@schema/desc "The repository for the local-user-authenticator container image."
 #@schema/validation min_len=1
-image_repo: projects.registry.vmware.com/pinniped/pinniped-server
+image_repo: ghcr.io/vmware-tanzu/pinniped/pinniped-server
 
 #@schema/title "Image digest"
 #@schema/desc "The image digest for the local-user-authenticator container image. If both image_digest or an image_tag are given, only image_digest will be used."

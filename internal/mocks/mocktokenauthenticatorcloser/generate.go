@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package mocktokenauthenticatorcloser
@@ -9,7 +9,7 @@ import (
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 )
 
-//go:generate go run -v github.com/golang/mock/mockgen  -destination=mocktokenauthenticatorcloser.go -package=mocktokenauthenticatorcloser -copyright_file=../../../hack/header.txt . TokenAuthenticatorCloser
+//go:generate go run -v go.uber.org/mock/mockgen  -destination=mocktokenauthenticatorcloser.go -package=mocktokenauthenticatorcloser -copyright_file=../../../hack/header.txt . TokenAuthenticatorCloser
 
 // TokenAuthenticatorCloser is a type that can authenticate tokens and be closed idempotently.
 //

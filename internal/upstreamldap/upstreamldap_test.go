@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"go.pinniped.dev/internal/authenticators"

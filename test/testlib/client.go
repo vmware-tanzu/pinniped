@@ -36,6 +36,7 @@ import (
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
+
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"

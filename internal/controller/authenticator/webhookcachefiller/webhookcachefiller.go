@@ -39,24 +39,24 @@ import (
 )
 
 const (
-	controllerName                   = "webhookcachefiller-controller"
-	typeReady                        = "Ready"
-	typeTLSBundleValid               = "TLSBundleValid"
-	typeTLSConnetionNegotiationValid = "TLSConnetionNegotiationValid"
-	typeEndpointURLValid             = "EndpointURLValid"
-	typeAuthenticatorValid           = "AuthenticatorValid"
-	reasonSuccess                    = "Success"
-	reasonNotReady                   = "NotReady"
-	reasonUnableToValidate           = "UnableToValidate"
-	reasonUnableToCreateTempFile     = "UnableToCreateTempFile"
-	reasonUnableToMarshallKubeconfig = "UnableToMarshallKubeconfig"
-	reasonUnableToLoadKubeconfig     = "UnableToLoadKubeconfig"
-	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
-	reasonInvalidTLSConfiguration    = "InvalidTLSConfiguration"
-	reasonInvalidEndpointURL         = "InvalidEndpointURL"
-	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
-	reasonUnableToDialServer         = "UnableToDialServer"
-	msgUnableToValidate              = "unable to validate; see other conditions for details"
+	controllerName                    = "webhookcachefiller-controller"
+	typeReady                         = "Ready"
+	typeTLSConfigurationValid         = "TLSConfigurationValid"
+	typeTLSConnectionNegotiationValid = "TLSConnectionNegotiationValid"
+	typeEndpointURLValid              = "EndpointURLValid"
+	typeAuthenticatorValid            = "AuthenticatorValid"
+	reasonSuccess                     = "Success"
+	reasonNotReady                    = "NotReady"
+	reasonUnableToValidate            = "UnableToValidate"
+	reasonUnableToCreateTempFile      = "UnableToCreateTempFile"
+	reasonUnableToMarshallKubeconfig  = "UnableToMarshallKubeconfig"
+	reasonUnableToLoadKubeconfig      = "UnableToLoadKubeconfig"
+	reasonUnableToInstantiateWebhook  = "UnableToInstantiateWebhook"
+	reasonInvalidTLSConfiguration     = "InvalidTLSConfiguration"
+	reasonInvalidEndpointURL          = "InvalidEndpointURL"
+	reasonInvalidEndpointURLScheme    = "InvalidEndpointURLScheme"
+	reasonUnableToDialServer          = "UnableToDialServer"
+	msgUnableToValidate               = "unable to validate; see other conditions for details"
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
@@ -281,7 +281,7 @@ func newWebhookAuthenticator(
 func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.CertPool, endpointURL *url.URL, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConnetionNegotiationValid,
+			Type:    typeTLSConnectionNegotiationValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  reasonUnableToValidate,
 			Message: msgUnableToValidate,
@@ -307,7 +307,7 @@ func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.Cer
 		errText := "cannot dial server"
 		msg := fmt.Sprintf("%s: %s", errText, dialErr.Error())
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConnetionNegotiationValid,
+			Type:    typeTLSConnectionNegotiationValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonUnableToDialServer,
 			Message: msg,
@@ -322,7 +322,7 @@ func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.Cer
 	}
 
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSConnetionNegotiationValid,
+		Type:    typeTLSConnectionNegotiationValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: "tls verified",
@@ -335,7 +335,7 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TL
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSBundleValid,
+			Type:    typeTLSConfigurationValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidTLSConfiguration,
 			Message: msg,
@@ -347,7 +347,7 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TL
 		msg = "no CA bundle specified"
 	}
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSBundleValid,
+		Type:    typeTLSConfigurationValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: msg,

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/test/testlib"
@@ -58,7 +59,7 @@ func TestClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	webhook := testlib.CreateTestWebhookAuthenticator(ctx, t)
+	webhook := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, v1alpha1.WebhookAuthenticatorPhaseReady)
 
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
 	invalidClient := testlib.NewClientsetWithCertAndKey(t, testCert, testKey)

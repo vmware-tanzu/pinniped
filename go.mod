@@ -31,7 +31,7 @@ replace google.golang.org/protobuf => google.golang.org/protobuf v1.33.0
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240304214822-eeb3d13057c9
+	github.com/chromedp/cdproto v0.0.0-20240312231614-1e5096e63154
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/coreos/go-semver v0.3.1

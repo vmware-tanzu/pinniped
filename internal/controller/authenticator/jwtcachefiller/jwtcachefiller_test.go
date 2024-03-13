@@ -87,6 +87,20 @@ func TestController(t *testing.T) {
 		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, goodOIDCIssuerServer.URL, goodOIDCIssuerServer.URL+"/jwks.json")
 		require.NoError(t, err)
 	}))
+	goodMux.Handle("/path/to/not/found", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		require.NoError(t, err)
+	}))
+	goodMux.Handle("/path/to/not/found/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, err := fmt.Fprintf(w, `<html>
+		  	<head><title>%s</title></head>
+			<body>%s</body>
+		</html>`, "404 not found page", "lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz should not reach end of string")
+		require.NoError(t, err)
+	}))
 	goodMux.Handle("/jwks.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ecJWK := jose.JSONWebKey{
 			Key:       goodECSigningKey,
@@ -360,6 +374,39 @@ func TestController(t *testing.T) {
 		}
 	}
 
+	sadIssuerURLValidInvalidFragment := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidIssuerURLContainsFragment",
+			Message:            fmt.Sprintf("spec.issuer %s cannot include fragment", issuer),
+		}
+	}
+
+	sadIssuerURLValidInvalidQueryParams := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidIssuerURLContainsQueryParams",
+			Message:            fmt.Sprintf("spec.issuer %s cannot include query params", issuer),
+		}
+	}
+
+	sadIssuerURLValidInvalidWellKnownEndpoint := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "IssuerURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidIssuerURLContainsWellKnownEndpoint",
+			Message:            fmt.Sprintf("spec.issuer %s cannot include path '/.well-known/openid-configuration'", issuer),
+		}
+	}
+
 	happyAuthenticatorValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "AuthenticatorValid",
@@ -425,6 +472,17 @@ func TestController(t *testing.T) {
 			LastTransitionTime: time,
 			Reason:             "InvalidDiscoveryProbe",
 			Message:            fmt.Sprintf(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, issuer),
+		}
+	}
+
+	sadDiscoveryURLValidExcessiveLongError := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "DiscoveryURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidDiscoveryProbe",
+			Message:            "could not perform oidc discovery on provider issuer: 404 Not Found: <html>\n\t\t  \t<head><title>404 not found page</title></head>\n\t\t\t<body>lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 charact [truncated 534 chars]",
 		}
 	}
 
@@ -1096,6 +1154,147 @@ func TestController(t *testing.T) {
 				}
 			},
 		}, {
+			name: "validateIssuer: issuer cannot include fragment: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalidFragment("https://www.example.com/foo/bar/#do-not-include-fragment", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+		}, {
+			name: "validateIssuer: issuer cannot include query params: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalidQueryParams("https://www.example.com/foo/bar/?query-params=not-allowed", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+		}, {
+			name: "validateIssuer: issuer cannot include .well-known in path: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalidWellKnownEndpoint("https://www.example.com/foo/bar/.well-known/openid-configuration", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+		}, {
 			name: "validateProviderDiscovery: could not perform oidc discovery on provider issuer: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -1136,6 +1335,56 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
+		}, {
+			name: "validateProviderDiscovery: excessively long errors truncated: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   goodIssuer + "/path/to/not/found",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   goodIssuer + "/path/to/not/found",
+						Audience: goodAudience,
+						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+					},
+					Status: auth1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadDiscoveryURLValidExcessiveLongError(goodIssuer+"/path/to/not/found", frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+								happyTLSConfigurationValidCAParsed(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			// not currently truncating the logged err
+			wantSyncLoopErr: testutil.WantExactErrorString("could not perform oidc discovery on provider issuer: 404 Not Found: <html>\n\t\t  \t<head><title>404 not found page</title></head>\n\t\t\t<body>lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz should not reach end of string</body>\n\t\t</html>"),
 		},
 		// cannot be tested currently the way the coreos lib works.
 		// the constructor requires an issuer in the payload and validates the issuer matches the actual issuer,

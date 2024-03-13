@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcupstreamwatcher implements a controller which watches OIDCIdentityProviders.
@@ -342,7 +342,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  metav1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
 			}
 		}
 
@@ -361,7 +361,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 			Type:    typeOIDCDiscoverySucceeded,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidResponse,
-			Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, truncateMostLongErr(err)),
+			Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
 		}
 	}
 	if additionalDiscoveryClaims.RevocationEndpoint != "" {
@@ -473,18 +473,6 @@ func computeScopes(additionalScopes []string) []string {
 	return set.List()
 }
 
-func truncateMostLongErr(err error) string {
-	const max = 300
-	msg := err.Error()
-
-	// always log oidc and x509 errors completely
-	if len(msg) <= max || strings.Contains(msg, "oidc:") || strings.Contains(msg, "x509:") {
-		return msg
-	}
-
-	return msg[:max] + fmt.Sprintf(" [truncated %d chars]", len(msg)-max)
-}
-
 func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *metav1.Condition) {
 	parsedURL, err := url.Parse(maybeHTTPSURL)
 	if err != nil {
@@ -492,7 +480,7 @@ func validateHTTPSURL(maybeHTTPSURL, endpointType, reason string) (*url.URL, *me
 			Type:    typeOIDCDiscoverySucceeded,
 			Status:  metav1.ConditionFalse,
 			Reason:  reason,
-			Message: fmt.Sprintf("failed to parse %s URL: %v", endpointType, truncateMostLongErr(err)),
+			Message: fmt.Sprintf("failed to parse %s URL: %v", endpointType, pinnipedcontroller.TruncateMostLongErr(err)),
 		}
 	}
 	if parsedURL.Scheme != "https" {

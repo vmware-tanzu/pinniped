@@ -39,6 +39,18 @@ const (
 	// which specifies "cli_password" when using an IDE plugin where there is no interactive CLI available. This allows
 	// the user to use one kubeconfig file for both flows.
 	upstreamIdentityProviderFlowEnvVarName = "PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW"
+
+	// When using a browser-based login flow, the user may skip printing the login URL to the screen in the case
+	// where the browser was launched with the login URL. This can be useful, for example, when using a console-based
+	// UI like k9s, to avoid having any output to stderr which may confuse the UI. Set this env var to "true" to
+	// skip printing the URL.
+	skipPrintLoginURLEnvVarName = "PINNIPED_SKIP_PRINT_LOGIN_URL"
+
+	// Set this env var to "true" to cause debug logs to be printed to stderr.
+	debugEnvVarName = "PINNIPED_DEBUG"
+
+	// The value to use for true/false env vars to enable the behavior caused by the env var.
+	envVarTruthyValue = "true"
 )
 
 //nolint:gochecknoinits
@@ -167,6 +179,11 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		oidcclient.WithLogger(plog.Logr()), //nolint:staticcheck // old code with lots of log statements
 		oidcclient.WithScopes(flags.scopes),
 		oidcclient.WithSessionCache(sessionCache),
+	}
+
+	skipPrintLoginURL, _ := deps.lookupEnv(skipPrintLoginURLEnvVarName)
+	if skipPrintLoginURL == envVarTruthyValue {
+		opts = append(opts, oidcclient.WithSkipPrintLoginURL())
 	}
 
 	if flags.listenPort != 0 {
@@ -361,8 +378,8 @@ func tokenCredential(idToken *oidctypes.IDToken) *clientauthv1beta1.ExecCredenti
 }
 
 func SetLogLevel(ctx context.Context, lookupEnv func(string) (string, bool)) (plog.Logger, error) {
-	debug, _ := lookupEnv("PINNIPED_DEBUG")
-	if debug == "true" {
+	debug, _ := lookupEnv(debugEnvVarName)
+	if debug == envVarTruthyValue {
 		err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, plog.LogSpec{Level: plog.LevelDebug, Format: plog.FormatCLI})
 		if err != nil {
 			return nil, err

@@ -1366,6 +1366,195 @@ Status of an Active Directory identity provider.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githuballowalluserstologinspec"]
+==== GitHubAllowAllUsersToLoginSpec (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubapiconfig"]
+==== GitHubApiConfig 
+
+GitHubApiConfig allows configuration for GitHub Enterprise Server
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`host`* __string__ | Host is required only for GitHub Enterprise Server. Defaults to using GitHub's public API (github.com).
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for GitHub Enterprise Server.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclaims"]
+==== GitHubClaims 
+
+GitHubClaims allows customization of the username and groups claims
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`username`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubusernameclaimspec[$$GitHubUsernameClaimSpec$$]__ | Username configures which property of the GitHub user record shall determine the username in Kubernetes. +
+
+Can be either "id", "login", or "login:id". Defaults to "login:id". +
+
+GitHub's user login attributes can only contain alphanumeric characters and non-repeating hyphens, and may not start or end with hyphens. GitHub users are allowed to change their login name, although it is inconvenient. If a GitHub user changed their login name from "foo" to "bar", then a second user might change their name from "baz" to "foo" in order to take the old username of the first user. For this reason, it is not as safe to make authorization decisions based only on the user's login attribute. +
+
+If desired, an admin could configure identity transformation expressions on a FederationDomain to further customize how these usernames are presented to Kubernetes. +
+
+Defaults to "login:id", which is the user login attribute, followed by a colon, followed by the unique and unchanging integer ID number attribute. This blends human-readable login names with the unchanging ID value from GitHub. Note that colons are not allowed in GitHub login attributes or ID numbers, so the colon in the "login:id" name will always be the login:id separator colon.
+| *`groups`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubgroupnamesspec[$$GitHubGroupNamesSpec$$]__ | Groups configures which property of the GitHub team record shall determine the group names in Kubernetes. +
+
+Can be either "name" or "slug". Defaults to "slug". +
+
+GitHub team names can contain upper and lower case characters, whitespace, and punctuation (e.g. "Kube admins!"). +
+
+GitHub team slugs are lower case alphanumeric characters and may contain dashes (e.g. "kube-admins"). +
+
+Either way, group names as presented to Kubernetes will always be prefixed by the GitHub organization name followed by a forward slash (e.g. "my-org/my-team"). GitHub organization login names can only contain alphanumeric characters or single hyphens, so the first forward slash `/` will be the separator between the organization login name and the team name or slug. +
+
+If desired, an admin could configure identity transformation expressions on a FederationDomain to further customize how these group names are presented to Kubernetes.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclientspec"]
+==== GitHubClientSpec 
+
+GitHubClientSpec contains information about the GitHub client that this identity provider will use for web-based login flows.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the clientID and clientSecret for an GitHub App or GitHub OAuth2 client. +
+
+This secret must be of type "secrets.pinniped.dev/github-client" with keys "clientID" and "clientSecret".
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubgroupnamesspec"]
+==== GitHubGroupNamesSpec (string) 
+
+GitHubGroupNamesSpec allows the user to specify which attribute from GitHub to use for the downstream groups. See the response for https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityprovider"]
+==== GitHubIdentityProvider 
+
+GitHubIdentityProvider describes the configuration of an upstream GitHub identity provider. This upstream provider can be configured with either a GitHub App or a GitHub OAuth2 App. 
+ Right now, only web-based logins are supported, for both the pinniped-cli client and dynamic clients.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderlist[$$GitHubIdentityProviderList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]__ | Status of the identity provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderphase"]
+==== GitHubIdentityProviderPhase (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderspec"]
+==== GitHubIdentityProviderSpec 
+
+GitHubIdentityProviderSpec is the spec for configuring an GitHub identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`github_api`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubApiConfig$$]__ | GitHubApi allows configuration for GitHub Enterprise Server
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]__ | Claims allows customization of the username and groups claims
+| *`allowedOrganizations`* __string array__ | AllowedOrganizations, when specified, indicates that only users with membership in at least one of the listed GitHub organizations may log in. In addition, the group membership presented to Kubernetes will only include teams within the listed GitHub organizations. Additional login rules or group filtering can optionally be provided as policy expression on any FederationDomain that includes this IDP. +
+
+The configured GitHub App or GitHub OAuth App must be allowed to see membership in the listed organizations, otherwise Pinniped will not be aware that the user belongs to the listed organization or any teams within that organization. +
+
+If no organizations are listed, you must set allowAllUsersToLogin to "Allow".
+| *`allowAllUsersToLogin`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githuballowalluserstologinspec[$$GitHubAllowAllUsersToLoginSpec$$]__ | AllowAllUsersToLogin must be set to "Allow" if allowedOrganizations is empty. +
+
+This field only exists to ensure that Pinniped administrators are aware that an empty list of allowedOrganizations means all GitHub users are allowed to log in.
+| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclientspec[$$GitHubClientSpec$$]__ | Client identifies the secret with credentials for a GitHub App or GitHub OAuth2 App (a GitHub client).
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus"]
+==== GitHubIdentityProviderStatus 
+
+GitHubIdentityProviderStatus is the status of an GitHub identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubidentityproviderphase[$$GitHubIdentityProviderPhase$$]__ | Phase summarizes the overall status of the GitHubIdentityProvider.
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#condition-v1-meta[$$Condition$$] array__ | Conditions represents the observations of an identity provider's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubusernameclaimspec"]
+==== GitHubUsernameClaimSpec (string) 
+
+GitHubUsernameClaimSpec allows the user to specify which attribute(s) from GitHub to use for the downstream username. See the response for https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
+****
+
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-ldapidentityprovider"]
 ==== LDAPIdentityProvider 
 
@@ -1686,11 +1875,12 @@ Parameter is a key/value pair which represents a parameter in an HTTP request.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
-Configuration for TLS parameters related to identity provider integration.
+TLSSpec provides TLS configuration for identity provider integration.
 
 .Appears In:
 ****
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubApiConfig$$]
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-25-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
 ****

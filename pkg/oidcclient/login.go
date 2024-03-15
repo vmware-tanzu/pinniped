@@ -76,9 +76,6 @@ const (
 // stdin returns the file descriptor for stdin as an int.
 func stdin() int { return int(os.Stdin.Fd()) }
 
-// stderr returns the file descriptor for stderr as an int.
-func stderr() int { return int(os.Stderr.Fd()) }
-
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
@@ -94,6 +91,7 @@ type handlerState struct {
 	upstreamIdentityProviderType string
 	cliToSendCredentials         bool
 	skipBrowser                  bool
+	skipPrintLoginURL            bool
 	requestedAudience            string
 	httpClient                   *http.Client
 
@@ -117,7 +115,6 @@ type handlerState struct {
 	getEnv          func(key string) string
 	listen          func(string, string) (net.Listener, error)
 	stdinIsTTY      func() bool
-	stderrIsTTY     func() bool
 	getProvider     func(*oauth2.Config, *coreosoidc.Provider, *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error)
 	promptForValue  func(ctx context.Context, promptLabel string, out io.Writer) (string, error)
@@ -198,10 +195,18 @@ func WithSkipBrowserOpen() Option {
 	}
 }
 
-// WithSkipListen causes the login skip starting the localhost listener, forcing the manual copy/paste login flow.
+// WithSkipListen causes the login to skip starting the localhost listener, forcing the manual copy/paste login flow.
 func WithSkipListen() Option {
 	return func(h *handlerState) error {
 		h.listen = func(string, string) (net.Listener, error) { return nil, nil }
+		return nil
+	}
+}
+
+// WithSkipPrintLoginURL causes the login to skip printing the login URL when the browser opens to that URL.
+func WithSkipPrintLoginURL() Option {
+	return func(h *handlerState) error {
+		h.skipPrintLoginURL = true
 		return nil
 	}
 }
@@ -298,7 +303,6 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		getEnv:        os.Getenv,
 		listen:        net.Listen,
 		stdinIsTTY:    func() bool { return term.IsTerminal(stdin()) },
-		stderrIsTTY:   func() bool { return term.IsTerminal(stderr()) },
 		getProvider:   upstreamoidc.New,
 		validateIDToken: func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 			return provider.Verifier(&coreosoidc.Config{ClientID: audience}).Verify(ctx, token)
@@ -635,19 +639,11 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 		openedBrowser = false
 	}
 
-	// Always print the URL for ttys. This is the case when we were invoked by kubectl.
-	// For a non-tty, when the browser has opened, skip printing this, because printing it may confuse
-	// a console-based UI program like k9s which invoked this. The browser already has the URL in this case.
-	// For a non-tty, if the browser did not open, then the user has no way to login without the URL,
-	// so print it even though it may confuse apps like k9s.
-	//
-	// Note that there can be other reasons why stderr is not a tty. For example, when using bash redirects
-	// to combine stderr into stdout, e.g. "cmd1 2>&1 | cmd2", then stderr is not a tty for cmd1.
-	// If this hurts someone's ability to write scripts then we may want to instead introduce a command-line
-	// option or env var to control when this printing is skipped. For now, it seems unlikely that someone
-	// would be trying to script interactive logins, especially since they could use the CLI-based
-	// username/password prompts and env vars for scripting).
-	printAuthorizeURL := h.stderrIsTTY() || !openedBrowser
+	// Allow optionally skipping printing the login URL, for example because printing it may confuse
+	// a console-based UI program like k9s which invoked this. If the browser was opened, the browser
+	// already has the URL. If the browser did not open, then the user has no way to login without the URL,
+	// so print it anyway, even though it may confuse apps like k9s.
+	printAuthorizeURL := !openedBrowser || !h.skipPrintLoginURL
 
 	// Prompt the user to visit the authorize URL, and to paste a manually-copied auth code (if possible).
 	ctx, cancel := context.WithCancel(h.ctx)

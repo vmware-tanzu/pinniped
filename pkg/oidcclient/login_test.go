@@ -622,7 +622,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
 					h.stdinIsTTY = func() bool { return false }
-					h.stderrIsTTY = func() bool { return true }
 					return nil
 				}
 			},
@@ -694,7 +693,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						return nil, fmt.Errorf("some listen error")
 					}
 					h.stdinIsTTY = func() bool { return false }
-					h.stderrIsTTY = func() bool { return true }
 					return nil
 				}
 			},
@@ -713,7 +711,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					require.NoError(t, WithSkipListen()(h))
 					h.openURL = func(authorizeURL string) error {
@@ -753,7 +750,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
 					h.openURL = func(authorizeURL string) error {
@@ -793,7 +789,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 
@@ -829,7 +824,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(newClientForServer(successServer))(h))
 					h.openURL = func(_ string) error {
 						go func() {
@@ -864,7 +858,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -929,7 +922,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
-			name:     "callback returns success, without stderr tty and with opening the browser, did not show authorize URL on stderr",
+			name:     "callback returns success, with skipPrintLoginURL and with opening the browser, did not show authorize URL on stderr",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -938,7 +931,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+					h.skipPrintLoginURL = true
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -995,7 +988,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken:  &testToken,
 		},
 		{
-			name:     "callback returns success, without stderr tty but there was an error when opening the browser, did show authorize URL on stderr",
+			name:     "callback returns success, with skipPrintLoginURL but there was an error when opening the browser, did show authorize URL on stderr",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -1004,7 +997,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+					h.skipPrintLoginURL = true
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -1073,7 +1066,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
-			name:     "callback returns success, without stderr tty and with skipping the browser, did show authorize URL on stderr",
+			name:     "callback returns success, with skipPrintLoginURL and with skipping the browser, did show authorize URL on stderr",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
@@ -1082,7 +1075,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return false } // stderr is not a tty
+					h.skipPrintLoginURL = true
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{
@@ -1157,7 +1150,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 
 					// Because response_mode=form_post, the Login function is going to prompt the user
 					// to paste their authcode. This test needs to handle that prompt.
@@ -1249,7 +1241,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
 					h.stdinIsTTY = func() bool { return true }
-					h.stderrIsTTY = func() bool { return true }
 
 					cache := &mockSessionCache{t: t, getReturnsToken: nil}
 					cacheKey := SessionCacheKey{

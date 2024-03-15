@@ -16,6 +16,7 @@ import (
 type IDPV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ActiveDirectoryIdentityProvidersGetter
+	GitHubIdentityProvidersGetter
 	LDAPIdentityProvidersGetter
 	OIDCIdentityProvidersGetter
 }
@@ -27,6 +28,10 @@ type IDPV1alpha1Client struct {
 
 func (c *IDPV1alpha1Client) ActiveDirectoryIdentityProviders(namespace string) ActiveDirectoryIdentityProviderInterface {
 	return newActiveDirectoryIdentityProviders(c, namespace)
+}
+
+func (c *IDPV1alpha1Client) GitHubIdentityProviders(namespace string) GitHubIdentityProviderInterface {
+	return newGitHubIdentityProviders(c, namespace)
 }
 
 func (c *IDPV1alpha1Client) LDAPIdentityProviders(namespace string) LDAPIdentityProviderInterface {

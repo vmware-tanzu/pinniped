@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// ActiveDirectoryIdentityProviders returns a ActiveDirectoryIdentityProviderInformer.
 	ActiveDirectoryIdentityProviders() ActiveDirectoryIdentityProviderInformer
+	// GitHubIdentityProviders returns a GitHubIdentityProviderInformer.
+	GitHubIdentityProviders() GitHubIdentityProviderInformer
 	// LDAPIdentityProviders returns a LDAPIdentityProviderInformer.
 	LDAPIdentityProviders() LDAPIdentityProviderInformer
 	// OIDCIdentityProviders returns a OIDCIdentityProviderInformer.
@@ -33,6 +35,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ActiveDirectoryIdentityProviders returns a ActiveDirectoryIdentityProviderInformer.
 func (v *version) ActiveDirectoryIdentityProviders() ActiveDirectoryIdentityProviderInformer {
 	return &activeDirectoryIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// GitHubIdentityProviders returns a GitHubIdentityProviderInformer.
+func (v *version) GitHubIdentityProviders() GitHubIdentityProviderInformer {
+	return &gitHubIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // LDAPIdentityProviders returns a LDAPIdentityProviderInformer.

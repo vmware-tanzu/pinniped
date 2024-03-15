@@ -248,6 +248,20 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 						Kind:       "ActiveDirectoryIdentityProvider",
 						Verbs:      []string{"get", "patch", "update"},
 					},
+					{
+						Name:         "githubidentityproviders",
+						SingularName: "githubidentityprovider",
+						Namespaced:   true,
+						Kind:         "GitHubIdentityProvider",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						Categories:   []string{"pinniped", "pinniped-idp", "pinniped-idps"},
+					},
+					{
+						Name:       "githubidentityproviders/status",
+						Namespaced: true,
+						Kind:       "GitHubIdentityProvider",
+						Verbs:      []string{"get", "patch", "update"},
+					},
 				},
 			},
 		},
@@ -438,7 +452,7 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 		}
 
 		// manually update this value whenever you add additional fields to an API resource and then run the generator
-		totalExpectedAPIFields := 261
+		totalExpectedAPIFields := 287
 
 		// Because we are parsing text from `kubectl explain` and because the format of that text can change
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
@@ -579,6 +593,13 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
+		addSuffix("githubidentityproviders.idp.supervisor"): {
+			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
+				{Name: "Host", Type: "string", JSONPath: ".spec.gitHubAPI.host"},
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
+				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
+			},
+		},
 		addSuffix("oidcclients.config.supervisor"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Privileged Scopes", Type: "string", JSONPath: `.spec.allowedScopes[?(@ == "pinniped:request-audience")]`},
@@ -589,8 +610,20 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		},
 	}
 
-	actualPinnipedCRDCount := 0
-	expectedPinnipedCRDCount := 8 // the current number of CRDs that we ship as part of Pinniped
+	// the current CRDs that we ship as part of Pinniped
+	expectedPinnipedCRDNames := []string{
+		"activedirectoryidentityproviders.idp.supervisor." + env.APIGroupSuffix,
+		"credentialissuers.config.concierge." + env.APIGroupSuffix,
+		"federationdomains.config.supervisor." + env.APIGroupSuffix,
+		"githubidentityproviders.idp.supervisor." + env.APIGroupSuffix,
+		"jwtauthenticators.authentication.concierge." + env.APIGroupSuffix,
+		"ldapidentityproviders.idp.supervisor." + env.APIGroupSuffix,
+		"oidcclients.config.supervisor." + env.APIGroupSuffix,
+		"oidcidentityproviders.idp.supervisor." + env.APIGroupSuffix,
+		"webhookauthenticators.authentication.concierge." + env.APIGroupSuffix,
+	}
+
+	actualPinnipedCRDNames := make([]string, 0)
 
 	for _, crd := range crdList.Items {
 		if !strings.Contains(crd.Spec.Group, env.APIGroupSuffix) {
@@ -598,7 +631,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		}
 
 		// Found a Pinniped CRD, so let's check it for AdditionalPrinterColumns.
-		actualPinnipedCRDCount++
+		actualPinnipedCRDNames = append(actualPinnipedCRDNames, crd.Name)
 
 		for _, version := range crd.Spec.Versions {
 			expectedColumns, ok := expectedColumnsPerCRDVersion[crd.Name][version.Name]
@@ -612,7 +645,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 	}
 
 	// Make sure that the logic of this test did not accidentally skip a CRD that it should have interrogated.
-	require.Equal(t, expectedPinnipedCRDCount, actualPinnipedCRDCount,
+	require.ElementsMatch(t, expectedPinnipedCRDNames, actualPinnipedCRDNames,
 		"did not find expected number of Pinniped CRDs to check for additionalPrinterColumns")
 }
 

@@ -45,7 +45,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/testutil/stringutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -208,12 +208,12 @@ func TestController(t *testing.T) {
 	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 	someJWTAuthenticatorSpecWithUsernameClaim := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 		Claims: auth1alpha1.JWTTokenClaims{
 			Username: "my-custom-username-claim",
 		},
@@ -221,7 +221,7 @@ func TestController(t *testing.T) {
 	someJWTAuthenticatorSpecWithGroupsClaim := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 		Claims: auth1alpha1.JWTTokenClaims{
 			Groups: customGroupsClaim,
 		},
@@ -247,12 +247,12 @@ func TestController(t *testing.T) {
 	invalidIssuerJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://.café   .com/café/café/café/coffee",
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 	invalidIssuerSchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "http://.café.com/café/café/café/coffee",
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 
 	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
@@ -262,18 +262,18 @@ func TestController(t *testing.T) {
 	badIssuerJWKSURIJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURI,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
 	}
 	badIssuerJWKSURISchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURIScheme,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
 	}
 
 	jwksFetchShouldFailJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   jwksFetchShouldFailServer.URL,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
 	}
 
 	happyReadyCondition := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -1454,7 +1454,7 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			actualLogLines := testlogger.LogLines(log.String())
+			actualLogLines := stringutil.SplitByNewline(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {

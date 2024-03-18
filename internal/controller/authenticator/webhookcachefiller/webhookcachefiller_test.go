@@ -42,7 +42,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/testutil/stringutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -162,7 +162,7 @@ func TestController(t *testing.T) {
 
 	goodWebhookAuthenticatorSpecWithCA := auth1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodEndpoint,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodWebhookServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodWebhookServer.TLS),
 	}
 	localhostWebhookAuthenticatorSpecWithCA := auth1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: localhostEndpointURL,
@@ -185,7 +185,7 @@ func TestController(t *testing.T) {
 	}
 	goodWebhookAuthenticatorSpecWith404Endpoint := auth1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodEndpointBut404,
-		TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodWebhookServer.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodWebhookServer.TLS),
 	}
 	badWebhookAuthenticatorSpecInvalidTLS := auth1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodEndpoint,
@@ -933,7 +933,7 @@ func TestController(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			actualLogLines := testlogger.LogLines(log.String())
+			actualLogLines := stringutil.SplitByNewline(log.String())
 			require.Equal(t, len(actualLogLines), len(tt.wantLogs), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {

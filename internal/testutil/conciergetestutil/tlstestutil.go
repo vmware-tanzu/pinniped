@@ -11,7 +11,7 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
-func TlsSpecFromTLSConfig(tls *tls.Config) *auth1alpha1.TLSSpec {
+func TLSSpecFromTLSConfig(tls *tls.Config) *auth1alpha1.TLSSpec {
 	pemData := make([]byte, 0)
 	for _, certificate := range tls.Certificates {
 		// this is the public part of the certificate, the private is the certificate.PrivateKey

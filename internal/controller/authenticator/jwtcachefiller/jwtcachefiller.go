@@ -606,5 +606,8 @@ func (c *jwtCacheFillerController) updateStatus(
 		return nil
 	}
 	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	if err != nil {
+		c.log.Info(fmt.Sprintf("ERROR: %v", err))
+	}
 	return err
 }

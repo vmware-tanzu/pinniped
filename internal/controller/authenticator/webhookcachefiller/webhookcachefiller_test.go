@@ -365,9 +365,11 @@ func TestController(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		syncKey          controllerlib.Key
-		webhooks         []runtime.Object
+		name     string
+		syncKey  controllerlib.Key
+		webhooks []runtime.Object
+		// for modifying the clients to hack in arbitrary api responses
+		configClient     func(*pinnipedfake.Clientset)
 		tlsDialerFunc    func(network string, addr string, config *tls.Config) (*tls.Conn, error)
 		wantSyncLoopErr  testutil.RequireErrorStringFunc
 		wantLogs         []map[string]any
@@ -895,6 +897,157 @@ func TestController(t *testing.T) {
 			},
 			wantCacheEntries: 0,
 			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
+		}, {
+			name:    "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			webhooks: []runtime.Object{
+				&auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "webhookcachefiller-controller",
+					"message":   "added new webhook authenticator",
+					"endpoint":  goodWebhookServer.URL,
+					"webhook": map[string]interface{}{
+						"name": "test-name",
+					},
+				},
+			},
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+				}
+			},
+			wantCacheEntries: 1,
+		}, {
+			name:    "updateStatus: called with different original and updated conditions: will make request to update conditions",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			webhooks: []runtime.Object{
+				&auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "SomethingBeforeUpdating",
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "webhookcachefiller-controller",
+					"message":   "added new webhook authenticator",
+					"endpoint":  goodWebhookServer.URL,
+					"webhook": map[string]interface{}{
+						"name": "test-name",
+					},
+				},
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantCacheEntries: 1,
+		}, {
+			name:    "updateStatus: when update request fails: error will enqueue a resync",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			configClient: func(client *pinnipedfake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"webhookauthenticators",
+					func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("some update error")
+					},
+				)
+			},
+			webhooks: []runtime.Object{
+				&auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "SomethingBeforeUpdating",
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "webhookcachefiller-controller",
+					"message":   "added new webhook authenticator",
+					"endpoint":  goodWebhookServer.URL,
+					"webhook": map[string]interface{}{
+						"name": "test-name",
+					},
+				}, {
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "webhookcachefiller-controller",
+					"message":   "ERROR: some update error",
+				},
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
+			wantCacheEntries: 1,
 		},
 	}
 	for _, tt := range tests {
@@ -903,6 +1056,9 @@ func TestController(t *testing.T) {
 			t.Parallel()
 
 			pinnipedAPIClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
+			if tt.configClient != nil {
+				tt.configClient(pinnipedAPIClient)
+			}
 			informers := pinnipedinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
 			cache := authncache.New()
 

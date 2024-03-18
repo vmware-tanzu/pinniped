@@ -59,7 +59,7 @@ func TestClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	webhook := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, v1alpha1.WebhookAuthenticatorPhaseReady)
+	webhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
 
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
 	invalidClient := testlib.NewClientsetWithCertAndKey(t, testCert, testKey)

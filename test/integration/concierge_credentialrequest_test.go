@@ -62,12 +62,7 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 		{
 			name: "webhook",
 			authenticator: func(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
-				authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, auth1alpha1.WebhookAuthenticatorPhaseReady)
-				return corev1.TypedLocalObjectReference{
-					APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-					Kind:     "WebhookAuthenticator",
-					Name:     authenticator.Name,
-				}
+				return testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
 			},
 			token: func(t *testing.T) (string, string, []string) {
 				return testlib.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
@@ -155,7 +150,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, auth1alpha1.WebhookAuthenticatorPhaseReady)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
 
 	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
@@ -176,7 +171,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken_Parallel(t *
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, auth1alpha1.WebhookAuthenticatorPhaseReady)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
 
 	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "", Authenticator: testWebhook},

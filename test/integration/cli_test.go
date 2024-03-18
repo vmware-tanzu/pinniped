@@ -43,7 +43,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
-	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, v1alpha1.WebhookAuthenticatorPhaseReady)
+	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)

@@ -99,7 +99,6 @@ func TestController(t *testing.T) {
 	}), func(thisServer *httptest.Server) {
 		thisTLSConfig := ptls.Default(nil)
 		thisTLSConfig.Certificates = []tls.Certificate{
-			// public and private key pair, but server will only use private for serving
 			*hostAsLocalhostServingCert,
 		}
 		thisServer.TLS = thisTLSConfig
@@ -219,6 +218,7 @@ func TestController(t *testing.T) {
 			Message:            "the WebhookAuthenticator is not ready: see other conditions for details",
 		}
 	}
+
 	happyAuthenticatorValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "AuthenticatorValid",
@@ -1038,8 +1038,6 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			},
 		}, conditions)
 		require.Nil(t, res)
-		// TODO: should this trigger the sync loop again with an error, or should this have been only
-		// status and log, indicating user must correct?
 		require.EqualError(t, err, "invalid TLS configuration: illegal base64 data at input byte 7")
 	})
 
@@ -1079,8 +1077,6 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	})
 
 	t.Run("success, webhook authenticator created", func(t *testing.T) {
-		// TODO(BEN): when enhancing webhook authenticator integration test, can prob
-		// steal this and create a super simpler server
 		caBundle, url := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)

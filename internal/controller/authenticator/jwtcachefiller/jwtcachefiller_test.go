@@ -1163,7 +1163,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 				},
 			},
@@ -1176,7 +1176,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
@@ -1210,7 +1210,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 				},
 			},
@@ -1223,7 +1223,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
@@ -1257,7 +1257,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 				},
 			},
@@ -1270,7 +1270,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
@@ -1345,7 +1345,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   goodIssuer + "/path/to/not/found",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 				},
 			},
@@ -1358,7 +1358,7 @@ func TestController(t *testing.T) {
 					Spec: auth1alpha1.JWTAuthenticatorSpec{
 						Issuer:   goodIssuer + "/path/to/not/found",
 						Audience: goodAudience,
-						TLS:      conciergetestutil.TlsSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
+						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(

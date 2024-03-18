@@ -177,17 +177,12 @@ func CreateTestWebhookAuthenticator(
 	webhookSpec *auth1alpha1.WebhookAuthenticatorSpec,
 	expectedStatus auth1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
 	t.Helper()
-	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
 	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
 
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-
-	if webhookSpec == nil {
-		webhookSpec = &testEnv.TestWebhook
-	}
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
 		ObjectMeta: testObjectMeta(t, "webhook"),

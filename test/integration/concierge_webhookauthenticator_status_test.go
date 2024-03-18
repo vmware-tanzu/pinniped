@@ -31,7 +31,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 				webhookAuthenticator := testlib.CreateTestWebhookAuthenticator(
 					ctx,
 					t,
-					nil,
+					&testlib.IntegrationEnv(t).TestWebhook,
 					v1alpha1.WebhookAuthenticatorPhaseReady)
 
 				testlib.WaitForWebhookAuthenticatorStatusConditions(
@@ -232,6 +232,18 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "valid authenticator can have empty TLS CertificateAuthorityData",
+			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
+				Spec: v1alpha1.WebhookAuthenticatorSpec{
+					Endpoint: "https://localhost/webhook-isnt-actually-here",
+					TLS: &v1alpha1.TLSSpec{
+						CertificateAuthorityData: "",
+					},
+				},
+			},
+		}, {
+			// since the CRD validations do not assess fitness of the value provided
+			name: "valid authenticator can have TLS CertificateAuthorityData string that is an invalid certificate",
 			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
 				Spec: v1alpha1.WebhookAuthenticatorSpec{

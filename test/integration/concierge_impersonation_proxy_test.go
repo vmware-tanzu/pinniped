@@ -121,7 +121,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// Create a WebhookAuthenticator and prepare a TokenCredentialRequestSpec using the authenticator for use later.
 	credentialRequestSpecWithWorkingCredentials := loginv1alpha1.TokenCredentialRequestSpec{
 		Token:         env.TestUser.Token,
-		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, nil, v1alpha1.WebhookAuthenticatorPhaseReady),
+		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady),
 	}
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).

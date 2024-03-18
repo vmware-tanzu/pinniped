@@ -84,7 +84,7 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 
 			// Create a testWebhook so we have a legitimate authenticator to pass to the
 			// TokenCredentialRequest API.
-			testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, nil, v1alpha1.WebhookAuthenticatorPhaseReady)
+			testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})

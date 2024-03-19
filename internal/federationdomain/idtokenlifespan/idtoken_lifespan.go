@@ -26,6 +26,15 @@ func OpenIDConnectExplicitFactory(config fosite.Configurator, storage interface{
 	return openIDConnectExplicitHandler
 }
 
+// OpenIDConnectRefreshFactory is similar to the function of the same name in the fosite compose package,
+// except it allows wrapping the IDTokenLifespanProvider.
+func OpenIDConnectRefreshFactory(config fosite.Configurator, _ interface{}, strategy interface{}) interface{} {
+	openIDConnectRefreshHandler := compose.OpenIDConnectRefreshFactory(config, nil, strategy).(*openid.OpenIDConnectRefreshHandler)
+	// Overwrite the config with a wrapper around the fosite.IDTokenLifespanProvider.
+	openIDConnectRefreshHandler.Config = &contextAwareIDTokenLifespanProvider{DelegateConfig: config}
+	return openIDConnectRefreshHandler
+}
+
 var _ fosite.IDTokenLifespanProvider = (*contextAwareIDTokenLifespanProvider)(nil)
 
 type contextAwareIDTokenLifespanProvider struct {

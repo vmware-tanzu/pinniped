@@ -395,9 +395,6 @@ func TestController(t *testing.T) {
 			},
 			wantCacheEntries: 0,
 		},
-		// Existing code that was never tested. We would likely have to create a server with bad clients to
-		// simulate this.
-		// { name: "non-404 `failed to get webhook authenticator` for other API server reasons" }
 		{
 			name:    "Sync: valid and unchanged WebhookAuthenticator: loop will preserve existing status conditions",
 			syncKey: controllerlib.Key{Name: "test-name"},
@@ -443,10 +440,10 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 0),
+							allHappyConditionsSuccess(goodEndpoint, frozenMetav1Now, 666),
 							[]metav1.Condition{
-								sadReadyCondition(frozenTimeInThePast, 0),
-								happyEndpointURLValid(frozenTimeInThePast, 0),
+								sadReadyCondition(frozenTimeInThePast, 777),
+								happyEndpointURLValid(frozenTimeInThePast, 888),
 							},
 						),
 						Phase: "Ready",
@@ -1119,7 +1116,7 @@ func TestController(t *testing.T) {
 					require.Fail(t, cmp.Diff(tt.wantActions(), pinnipedAPIClient.Actions()), "actions should be exactly the expected number of actions and also contain the correct resources")
 				}
 			} else {
-				require.Error(t, errors.New("wantActions is required for test "+tt.name))
+				require.Fail(t, "wantActions is required for test "+tt.name)
 			}
 
 			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))
@@ -1132,7 +1129,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 
 	t.Run("prerequisites not ready, cannot create webhook authenticator", func(t *testing.T) {
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, os.CreateTemp, clientcmd.WriteToFile, conditions, false)
+		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), os.CreateTemp, clientcmd.WriteToFile, conditions, false)
 		require.Equal(t, []*metav1.Condition{
 			{
 				Type:    "AuthenticatorValid",
@@ -1142,13 +1139,13 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			},
 		}, conditions)
 		require.Nil(t, res)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("temp file failure, cannot create webhook authenticator", func(t *testing.T) {
 		brokenTempFile := func(_ string, _ string) (*os.File, error) { return nil, fmt.Errorf("some temp file error") }
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(nil, brokenTempFile, clientcmd.WriteToFile, conditions, true)
+		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), brokenTempFile, clientcmd.WriteToFile, conditions, true)
 		require.Equal(t, []*metav1.Condition{
 			{
 				Type:    "AuthenticatorValid",
@@ -1164,7 +1161,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	t.Run("marshal failure, cannot create webhook authenticator", func(t *testing.T) {
 		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, os.CreateTemp, marshalError, conditions, true)
+		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), os.CreateTemp, marshalError, conditions, true)
 		require.Equal(t, []*metav1.Condition{
 			{
 				Type:    "AuthenticatorValid",
@@ -1177,49 +1174,24 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
 	})
 
-	// t.Run("load kubeconfig err, not currently tested, may not be necessary to test?")
-
-	t.Run("invalid TLS config, base64 encoding err, cannot create webhook authenticator", func(t *testing.T) {
+	t.Run("invalid pem data, unable to parse bytes as PEM block", func(t *testing.T) {
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
-			Endpoint: goodEndpoint,
-			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
-		}, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
+		res, conditions, err := newWebhookAuthenticator(goodEndpoint, []byte("invalid-bas64"), os.CreateTemp, clientcmd.WriteToFile, conditions, true)
 		require.Equal(t, []*metav1.Condition{
 			{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
-				Reason:  "InvalidTLSConfiguration",
-				Message: "invalid TLS configuration: illegal base64 data at input byte 7",
+				Reason:  "UnableToInstantiateWebhook",
+				Message: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
 			},
 		}, conditions)
 		require.Nil(t, res)
-		require.EqualError(t, err, "invalid TLS configuration: illegal base64 data at input byte 7")
-	})
-
-	t.Run("invalid pem data, cannot create webhook authenticator", func(t *testing.T) {
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
-			Endpoint: goodEndpoint,
-			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("bad data"))},
-		}, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
-		require.Equal(t, []*metav1.Condition{
-			{
-				Type:    "AuthenticatorValid",
-				Status:  "False",
-				Reason:  "InvalidTLSConfiguration",
-				Message: "invalid TLS configuration: certificateAuthorityData is not valid PEM: data does not contain any valid RSA or ECDSA certificates",
-			},
-		}, conditions)
-		require.Nil(t, res)
-		require.EqualError(t, err, "invalid TLS configuration: certificateAuthorityData is not valid PEM: data does not contain any valid RSA or ECDSA certificates")
+		require.EqualError(t, err, "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block")
 	})
 
 	t.Run("valid config with no TLS spec, webhook authenticator created", func(t *testing.T) {
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
-			Endpoint: goodEndpoint,
-		}, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
+		res, conditions, err := newWebhookAuthenticator(goodEndpoint, nil, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
 		require.Equal(t, []*metav1.Condition{
 			{
 				Type:    "AuthenticatorValid",
@@ -1240,14 +1212,8 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			_, err = w.Write([]byte(`{}`))
 			require.NoError(t, err)
 		})
-		spec := &auth1alpha1.WebhookAuthenticatorSpec{
-			Endpoint: url,
-			TLS: &auth1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),
-			},
-		}
 		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(spec, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
+		res, conditions, err := newWebhookAuthenticator(url, []byte(caBundle), os.CreateTemp, clientcmd.WriteToFile, conditions, true)
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		require.Equal(t, []*metav1.Condition{

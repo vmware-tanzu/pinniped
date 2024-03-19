@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/net"
+	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	webhookutil "k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
@@ -112,7 +112,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	specCopy := obj.Spec.DeepCopy()
 	var errs []error
 
-	certPool, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
+	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
 	endpointURL, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 	conditions, tlsNegotiateErr := c.validateTLSNegotiation(certPool, endpointURL, conditions, okSoFar)
@@ -120,7 +120,8 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
 	webhookAuthenticator, conditions, err := newWebhookAuthenticator(
-		&obj.Spec,
+		specCopy.Endpoint,
+		pemBytes,
 		os.CreateTemp,
 		clientcmd.WriteToFile,
 		conditions,
@@ -151,7 +152,8 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
 func newWebhookAuthenticator(
-	spec *auth1alpha1.WebhookAuthenticatorSpec,
+	endpoint string,
+	pemBytes []byte,
 	tempfileFunc func(string, string) (*os.File, error),
 	marshalFunc func(clientcmdapi.Config, string) error,
 	conditions []*metav1.Condition,
@@ -180,19 +182,8 @@ func newWebhookAuthenticator(
 	}
 	defer func() { _ = os.Remove(temp.Name()) }()
 
-	cluster := &clientcmdapi.Cluster{Server: spec.Endpoint}
-	_, cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
-	if err != nil {
-		errText := "invalid TLS configuration"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeAuthenticatorValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidTLSConfiguration,
-			Message: msg,
-		})
-		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
-	}
+	cluster := &clientcmdapi.Cluster{Server: endpoint}
+	cluster.CertificateAuthorityData = pemBytes
 
 	kubeconfig := clientcmdapi.NewConfig()
 	kubeconfig.Clusters["anonymous-cluster"] = cluster
@@ -222,7 +213,7 @@ func newWebhookAuthenticator(
 
 	// We set this to nil because we would only need this to support some of the
 	// custom proxy stuff used by the API server.
-	var customDial net.DialFunc
+	var customDial k8snetutil.DialFunc
 
 	// TODO refactor this code to directly construct the rest.Config
 	//  ideally we would keep rest config generation contained to the kubeclient package
@@ -242,6 +233,7 @@ func newWebhookAuthenticator(
 	//  then use client.JSONConfig as clientConfig
 	clientConfig, err := webhookutil.LoadKubeconfig(temp.Name(), customDial)
 	if err != nil {
+		// no unit test for this failure.
 		errText := "unable to load kubeconfig"
 		msg := fmt.Sprintf("%s: %s", errText, err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -258,6 +250,7 @@ func newWebhookAuthenticator(
 	//   NOTE: looks like the above was merged on Mar 18, 2022
 	webhookA, err := webhook.New(clientConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
 	if err != nil {
+		// no unit test for this failure.
 		errText := "unable to instantiate webhook"
 		msg := fmt.Sprintf("%s: %s", errText, err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -330,8 +323,8 @@ func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.Cer
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+	rootCAs, pemBytes, err := pinnipedauthenticator.CABundle(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -340,7 +333,7 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TL
 			Reason:  reasonInvalidTLSConfiguration,
 			Message: msg,
 		})
-		return rootCAs, conditions, false
+		return rootCAs, pemBytes, conditions, false
 	}
 	msg := "successfully parsed specified CA bundle"
 	if rootCAs == nil {
@@ -352,7 +345,7 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TL
 		Reason:  reasonSuccess,
 		Message: msg,
 	})
-	return rootCAs, conditions, true
+	return rootCAs, pemBytes, conditions, true
 }
 
 func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {
@@ -395,7 +388,7 @@ func (c *webhookCacheFillerController) updateStatus(
 ) error {
 	updated := original.DeepCopy()
 
-	if hadErrorCondition(conditions) {
+	if conditionsutil.HadErrorCondition(conditions) {
 		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
@@ -430,13 +423,4 @@ func (c *webhookCacheFillerController) updateStatus(
 		c.log.Info(fmt.Sprintf("ERROR: %v", err))
 	}
 	return err
-}
-
-func hadErrorCondition(conditions []*metav1.Condition) bool {
-	for _, c := range conditions {
-		if c.Status != metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
 }

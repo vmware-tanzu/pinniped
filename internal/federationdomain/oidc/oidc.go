@@ -7,8 +7,10 @@ package oidc
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/felixge/httpsnoop"
@@ -17,6 +19,7 @@ import (
 	errorsx "github.com/pkg/errors"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/endpoints/tokenexchange"
@@ -195,6 +198,22 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 
 		IDTokenLifespan: idTokenLifespan,
 		OverrideDefaultIDTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+			client := accessRequest.GetClient()
+			// Don't allow OIDCClients to override the default lifetime for ID tokens returned
+			// by RFC8693 token exchange. This is not user configurable for now.
+			if !accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange) {
+				if castClient, ok := client.(*clientregistry.Client); !ok {
+					// All clients returned by our client registry implement clientregistry.Client,
+					// so this should be a safe cast in practice.
+					plog.Error("could not check if client overrides token lifetimes",
+						errors.New("could not cast client to *clientregistry.Client"),
+						"clientID", client.GetID(), "clientType", reflect.TypeOf(client))
+				} else if castClient.IDTokenLifetimeConfiguration > 0 {
+					// An OIDCClient resource has provided an override, so use it.
+					return true, castClient.IDTokenLifetimeConfiguration
+				}
+			}
+
 			if isGitHubSessionBasedOnPAT(accessRequest) {
 				return true, gitHubPATBasedIDTokenLifespan
 			}
@@ -297,9 +316,10 @@ func FositeOauth2Helper(
 		},
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
-		// use a custom factory here, so we can allow selective overrides of the ID token lifespan
+		// Use a custom factory to allow selective overrides of the ID token lifespan during authcode exchange.
 		idtokenlifespan.OpenIDConnectExplicitFactory,
-		compose.OpenIDConnectRefreshFactory,
+		// Use a custom factory to allow selective overrides of the ID token lifespan during refresh.
+		idtokenlifespan.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 		tokenexchange.HandlerFactory, // handle the "urn:ietf:params:oauth:grant-type:token-exchange" grant type
 	)

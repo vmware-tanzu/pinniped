@@ -34,6 +34,11 @@ type Configuration struct {
 	AccessTokenLifespan time.Duration
 
 	// Optionally override the default AccessTokenLifespan depending on the specific request.
+	// Note that access tokens can be issued by authcode exchanges and refreshes (with different grant types on the
+	// request), so implementations of this method should handle choosing lifespans for both cases as desired.
+	// Note that fosite offers the fosite.ClientWithCustomTokenLifespans interface, but that interface does not
+	// pass the full request details to the GetEffectiveLifespan() function, so it does not suit our needs,
+	// and we use this technique instead.
 	OverrideDefaultAccessTokenLifespan OverrideLifespan
 
 	// The lifetime of an downstream ID token issued by the token endpoint. This should generally be the same
@@ -42,6 +47,12 @@ type Configuration struct {
 	IDTokenLifespan time.Duration
 
 	// Optionally override the default IDTokenLifespan depending on the specific request.
+	// Note that ID tokens can be issued by authcode exchanges, refreshes, and RFC8693 token exchanges
+	// (with different grant types on the request), so implementations of this method should handle choosing
+	// lifespans for all three cases as desired.
+	// Note that fosite offers the fosite.ClientWithCustomTokenLifespans interface, but that interface does not
+	// pass the full request details to the GetEffectiveLifespan() function, so it does not suit our needs,
+	// and we use this technique instead.
 	OverrideDefaultIDTokenLifespan OverrideLifespan
 
 	// The lifetime of an downstream refresh token issued by the token endpoint. This should generally be

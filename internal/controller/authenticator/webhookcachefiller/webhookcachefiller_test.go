@@ -267,9 +267,9 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	happyTLSConnectionNegotiationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	happyConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "TLSConnectionNegotiationValid",
+			Type:               "ConnectionProbeValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -277,9 +277,9 @@ func TestController(t *testing.T) {
 			Message:            "tls verified",
 		}
 	}
-	unknownTLSConnectionNegotiationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	unknownConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "TLSConnectionNegotiationValid",
+			Type:               "ConnectionProbeValid",
 			Status:             "Unknown",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -287,9 +287,9 @@ func TestController(t *testing.T) {
 			Message:            "unable to validate; see other conditions for details",
 		}
 	}
-	sadTLSConnectionNegotiationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	sadConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "TLSConnectionNegotiationValid",
+			Type:               "ConnectionProbeValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -297,9 +297,9 @@ func TestController(t *testing.T) {
 			Message:            "cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority",
 		}
 	}
-	sadTLSConnectionNegotiationNoIPSANs := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	sadConnectionProbeValidNoIPSANs := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "TLSConnectionNegotiationValid",
+			Type:               "ConnectionProbeValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -343,7 +343,7 @@ func TestController(t *testing.T) {
 		return conditionstestutil.SortByType([]metav1.Condition{
 			happyTLSConfigurationValidCAParsed(someTime, observedGeneration),
 			happyEndpointURLValid(someTime, observedGeneration),
-			happyTLSConnectionNegotiationValid(someTime, observedGeneration),
+			happyConnectionProbeValid(someTime, observedGeneration),
 			happyAuthenticatorValid(someTime, observedGeneration),
 			happyReadyCondition(someTime, observedGeneration),
 		})
@@ -547,7 +547,7 @@ func TestController(t *testing.T) {
 							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
-								sadTLSConnectionNegotiationValid(frozenMetav1Now, 0),
+								sadConnectionProbeValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -587,7 +587,7 @@ func TestController(t *testing.T) {
 							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								sadTLSConfigurationValid(frozenMetav1Now, 0),
-								unknownTLSConnectionNegotiationValid(frozenMetav1Now, 0),
+								unknownConnectionProbeValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -631,7 +631,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 								sadEndpointURLValid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
-								unknownTLSConnectionNegotiationValid(frozenMetav1Now, 0),
+								unknownConnectionProbeValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -674,7 +674,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 								sadEndpointURLValidHTTPS("http://localhost", frozenMetav1Now, 0),
-								unknownTLSConnectionNegotiationValid(frozenMetav1Now, 0),
+								unknownConnectionProbeValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -715,7 +715,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
-								sadTLSConnectionNegotiationValid(frozenMetav1Now, 0),
+								sadConnectionProbeValid(frozenMetav1Now, 0),
 							},
 						),
 						Phase: "Error",
@@ -939,7 +939,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(hostLocalWithExampleDotComCertServer.URL, frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadTLSConnectionNegotiationNoIPSANs(frozenMetav1Now, 0),
+								sadConnectionProbeValidNoIPSANs(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},

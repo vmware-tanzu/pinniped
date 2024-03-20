@@ -1189,106 +1189,142 @@ func TestController(t *testing.T) {
 func TestNewWebhookAuthenticator(t *testing.T) {
 	goodEndpoint := "https://example.com"
 
-	t.Run("prerequisites not ready, cannot create webhook authenticator", func(t *testing.T) {
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), os.CreateTemp, clientcmd.WriteToFile, conditions, false)
-		require.Equal(t, []*metav1.Condition{
-			{
+	testServerCABundle, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.Contains(t, string(body), "test-token")
+		_, err = w.Write([]byte(`{}`))
+		require.NoError(t, err)
+	})
+
+	tests := []struct {
+		name                            string
+		endpoint                        string
+		pemBytes                        []byte
+		tempFileFunc                    func(dir string, pattern string) (*os.File, error)
+		marshallFunc                    func(config clientcmdapi.Config, filename string) error
+		prereqOk                        bool
+		wantConditions                  []*metav1.Condition
+		wantWebhook                     bool
+		wantErr                         string
+		testCreatedWebhookWithFakeToken bool
+	}{
+		{
+			name:         "prerequisites not ready, cannot create webhook authenticator",
+			endpoint:     "",
+			pemBytes:     []byte("irrelevant pem bytes"),
+			tempFileFunc: os.CreateTemp,
+			marshallFunc: clientcmd.WriteToFile,
+			wantErr:      "",
+			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "Unknown",
 				Reason:  "UnableToValidate",
 				Message: "unable to validate; see other conditions for details",
+			}},
+			prereqOk: false,
+		}, {
+			name:     "temp file failure, cannot create webhook authenticator",
+			endpoint: "",
+			pemBytes: []byte("irrelevant pem bytes"),
+			tempFileFunc: func(_ string, _ string) (*os.File, error) {
+				return nil, fmt.Errorf("some temp file error")
 			},
-		}, conditions)
-		require.Nil(t, res)
-		require.NoError(t, err)
-	})
-
-	t.Run("temp file failure, cannot create webhook authenticator", func(t *testing.T) {
-		brokenTempFile := func(_ string, _ string) (*os.File, error) { return nil, fmt.Errorf("some temp file error") }
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), brokenTempFile, clientcmd.WriteToFile, conditions, true)
-		require.Equal(t, []*metav1.Condition{
-			{
+			marshallFunc: clientcmd.WriteToFile,
+			prereqOk:     true,
+			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
 				Reason:  "UnableToCreateTempFile",
 				Message: "unable to create temporary file: some temp file error",
+			}},
+			wantErr: "unable to create temporary file: some temp file error",
+		}, {
+			name:         "marshal failure, cannot create webhook authenticator",
+			endpoint:     "",
+			pemBytes:     []byte("irrelevant pem bytes"),
+			tempFileFunc: os.CreateTemp,
+			marshallFunc: func(_ clientcmdapi.Config, _ string) error {
+				return fmt.Errorf("some marshal error")
 			},
-		}, conditions)
-		require.Nil(t, res)
-		require.EqualError(t, err, "unable to create temporary file: some temp file error")
-	})
-
-	t.Run("marshal failure, cannot create webhook authenticator", func(t *testing.T) {
-		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator("", []byte("some pem bytes"), os.CreateTemp, marshalError, conditions, true)
-		require.Equal(t, []*metav1.Condition{
-			{
+			prereqOk: true,
+			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
 				Reason:  "UnableToMarshallKubeconfig",
 				Message: "unable to marshal kubeconfig: some marshal error",
-			},
-		}, conditions)
-		require.Nil(t, res)
-		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
-	})
-
-	t.Run("invalid pem data, unable to parse bytes as PEM block", func(t *testing.T) {
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(goodEndpoint, []byte("invalid-bas64"), os.CreateTemp, clientcmd.WriteToFile, conditions, true)
-		require.Equal(t, []*metav1.Condition{
-			{
+			}},
+			wantErr: "unable to marshal kubeconfig: some marshal error",
+		}, {
+			name:         "invalid pem data, unable to parse bytes as PEM block",
+			endpoint:     goodEndpoint,
+			pemBytes:     []byte("invalid-bas64"),
+			tempFileFunc: os.CreateTemp,
+			marshallFunc: clientcmd.WriteToFile,
+			prereqOk:     true,
+			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
 				Reason:  "UnableToInstantiateWebhook",
 				Message: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
-			},
-		}, conditions)
-		require.Nil(t, res)
-		require.EqualError(t, err, "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block")
-	})
-
-	t.Run("valid config with no TLS spec, webhook authenticator created", func(t *testing.T) {
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(goodEndpoint, nil, os.CreateTemp, clientcmd.WriteToFile, conditions, true)
-		require.Equal(t, []*metav1.Condition{
-			{
+			}},
+			wantErr: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
+		}, {
+			name:         "valid config with no TLS spec, webhook authenticator created",
+			endpoint:     goodEndpoint,
+			pemBytes:     nil,
+			tempFileFunc: os.CreateTemp,
+			marshallFunc: clientcmd.WriteToFile,
+			prereqOk:     true,
+			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "True",
 				Reason:  "Success",
 				Message: "authenticator initialized",
-			},
-		}, conditions)
-		require.NotNil(t, res)
-		require.NoError(t, err)
-	})
+			}},
+			wantWebhook: true,
+		}, {
+			name:         "success, webhook authenticator created",
+			endpoint:     testServerURL,
+			pemBytes:     []byte(testServerCABundle),
+			tempFileFunc: os.CreateTemp,
+			marshallFunc: clientcmd.WriteToFile,
+			prereqOk:     true,
+			wantConditions: []*metav1.Condition{{
+				Type:    "AuthenticatorValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: "authenticator initialized",
+			}},
+			testCreatedWebhookWithFakeToken: true,
+		},
+	}
 
-	t.Run("success, webhook authenticator created", func(t *testing.T) {
-		caBundle, url := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			body, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			require.Contains(t, string(body), "test-token")
-			_, err = w.Write([]byte(`{}`))
-			require.NoError(t, err)
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var conditions []*metav1.Condition
+			webhook, conditions, err := newWebhookAuthenticator(tt.endpoint, tt.pemBytes, tt.tempFileFunc, tt.marshallFunc, conditions, tt.prereqOk)
+
+			require.Equal(t, tt.wantConditions, conditions)
+
+			if tt.wantWebhook {
+				require.NotNil(t, webhook)
+			}
+
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tt.testCreatedWebhookWithFakeToken {
+				authResp, isAuthenticated, err := webhook.AuthenticateToken(context.Background(), "test-token")
+				require.NoError(t, err)
+				require.Nil(t, authResp)
+				require.False(t, isAuthenticated)
+			}
 		})
-		conditions := []*metav1.Condition{}
-		res, conditions, err := newWebhookAuthenticator(url, []byte(caBundle), os.CreateTemp, clientcmd.WriteToFile, conditions, true)
-		require.NoError(t, err)
-		require.NotNil(t, res)
-		require.Equal(t, []*metav1.Condition{
-			{
-				Type:    "AuthenticatorValid",
-				Status:  "True",
-				Reason:  "Success",
-				Message: "authenticator initialized",
-			},
-		}, conditions)
-		resp, authenticated, err := res.AuthenticateToken(context.Background(), "test-token")
-		require.NoError(t, err)
-		require.Nil(t, resp)
-		require.False(t, authenticated)
-	})
+	}
 }

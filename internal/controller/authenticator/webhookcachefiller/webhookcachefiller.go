@@ -113,9 +113,9 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	var errs []error
 
 	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
-	endpointURL, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
+	endpointHostPort, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
-	conditions, tlsNegotiateErr := c.validateTLSNegotiation(certPool, endpointURL, conditions, okSoFar)
+	conditions, tlsNegotiateErr := c.validateConnectionProbe(certPool, endpointHostPort, conditions, okSoFar)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -271,7 +271,7 @@ func newWebhookAuthenticator(
 	return webhookA, conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.CertPool, endpointURL *url.URL, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
+func (c *webhookCacheFillerController) validateConnectionProbe(certPool *x509.CertPool, endpointHostPort *endpointaddr.HostPort, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeConnectionProbeValid,
@@ -282,30 +282,22 @@ func (c *webhookCacheFillerController) validateTLSNegotiation(certPool *x509.Cer
 		return conditions, nil
 	}
 
-	// dial requires domain, IPv4 or IPv6 w/o protocol
-	endpointHostPort, err := endpointaddr.Parse(endpointURL.Host, 443)
-	if err != nil {
-		// we have already validated the endpoint with url.Parse(endpoint) in c.validateEndpoint()
-		// so there is no reason to have a parsing error here.
-		c.log.Error("error parsing endpoint", err)
-	}
-
-	conn, dialErr := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), &tls.Config{
+	conn, err := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// If certPool is nil then RootCAs will be set to nil and TLS will use the host's root CA set automatically.
 		RootCAs: certPool,
 	})
 
-	if dialErr != nil {
+	if err != nil {
 		errText := "cannot dial server"
-		msg := fmt.Sprintf("%s: %s", errText, dialErr.Error())
+		msg := fmt.Sprintf("%s: %s", errText, err.Error())
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeConnectionProbeValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonUnableToDialServer,
 			Message: msg,
 		})
-		return conditions, fmt.Errorf("%s: %w", errText, dialErr)
+		return conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
 	// this error should never be significant
@@ -348,10 +340,10 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TL
 	return rootCAs, pemBytes, conditions, true
 }
 
-func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*endpointaddr.HostPort, []*metav1.Condition, bool) {
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL is invalid", err.Error())
+		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL cannot be parsed", err.Error())
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeEndpointURLValid,
 			Status:  metav1.ConditionFalse,
@@ -360,13 +352,26 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		})
 		return nil, conditions, false
 	}
+
 	// handles empty string and other issues as well.
 	if endpointURL.Scheme != "https" {
-		msg := fmt.Sprintf("spec.endpoint %s has invalid scheme, require 'https'", endpoint)
+		msg := fmt.Sprintf("spec.endpoint URL %s has invalid scheme, require 'https'", endpoint)
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeEndpointURLValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonInvalidEndpointURLScheme,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	endpointHostPort, err := endpointaddr.ParseFromURL(endpointURL, 443)
+	if err != nil {
+		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL is not valid", err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeEndpointURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidEndpointURL,
 			Message: msg,
 		})
 		return nil, conditions, false
@@ -378,7 +383,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		Reason:  reasonSuccess,
 		Message: "endpoint is a valid URL",
 	})
-	return endpointURL, conditions, true
+	return &endpointHostPort, conditions, true
 }
 
 func (c *webhookCacheFillerController) updateStatus(

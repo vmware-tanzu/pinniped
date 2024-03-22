@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package endpointaddr implements parsing and validation of "<host>[:<port>]" strings for Pinniped APIs.
@@ -7,7 +7,9 @@ package endpointaddr
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -38,7 +40,7 @@ func (h *HostPort) Endpoint() string {
 // - "<IPv4>:<port>"     (IPv4 address with port)
 // - "[<IPv6>]:<port>"   (IPv6 address with port, brackets are required)
 //
-// If the input does not not specify a port number, then defaultPort will be used.
+// If the input does not specify a port number, then defaultPort will be used.
 func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 	// Try parsing it both with and without an implicit port 443 at the end.
 	host, port, err := net.SplitHostPort(endpoint)
@@ -68,4 +70,37 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 	}
 
 	return HostPort{Host: host, Port: uint16(integerPort)}, nil
+}
+
+// ParseFromURL wraps Parse but specifically takes a url.URL instead of an endpoint string.
+// ParseFromURL differs from Parse in that a URL will contain a protocol, and IPv6 addresses
+// may or may not be wrapped in brackets (but require them when a port is provided):
+//
+// - "https://<hostname>"        (DNS hostname)
+// - "https://<IPv4>"            (IPv4 address)
+// - "https://<IPv6>"            (IPv6 address)
+// - "https://[<IPv6>]"          (IPv6 address without port, brackets should be used but are not strictly required)
+// - "https://<hostname>:<port>" (DNS hostname with port)
+// - "https://<IPv4>:<port>"     (IPv4 address with port)
+// - "https://[<IPv6>]:<port>"   (IPv6 address with port, brackets are required)
+//
+// If the input does not specify a port number, then defaultPort will be used.
+//
+// The rfc for literal IPv6 addresses in URLs indicates that brackets
+// - must be used when a port is provided
+// - should be used when a port is not provided, but does not indicate "must"
+//
+// Since url.Parse does not inspect the host, it will accept IPv6 hosts without
+// brackets and without port, which may result in errors that are not immediately obvious.
+// Therefore, this helper will normalize the bracketed use case.  Note that this is
+// because ParseFromURL returns a HostPort which has an Endpoint() method which will
+// return a properly constructed URL with brackets when appropriate.
+//
+// See RFC: https://datatracker.ietf.org/doc/html/rfc2732#section-2
+func ParseFromURL(u *url.URL, defaultPort uint16) (HostPort, error) {
+	host := u.Host
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	}
+	return Parse(host, defaultPort)
 }

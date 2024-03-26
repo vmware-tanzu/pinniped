@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamicupstreamprovider
@@ -17,12 +17,15 @@ type DynamicUpstreamIDPProvider interface {
 	GetLDAPIdentityProviders() []upstreamprovider.UpstreamLDAPIdentityProviderI
 	SetActiveDirectoryIdentityProviders(adIDPs []upstreamprovider.UpstreamLDAPIdentityProviderI)
 	GetActiveDirectoryIdentityProviders() []upstreamprovider.UpstreamLDAPIdentityProviderI
+	SetGitHubIdentityProviders(gitHubIDPs []upstreamprovider.UpstreamGithubIdentityProviderI)
+	GetGitHubIdentityProviders() []upstreamprovider.UpstreamGithubIdentityProviderI
 }
 
 type dynamicUpstreamIDPProvider struct {
 	oidcUpstreams            []upstreamprovider.UpstreamOIDCIdentityProviderI
 	ldapUpstreams            []upstreamprovider.UpstreamLDAPIdentityProviderI
 	activeDirectoryUpstreams []upstreamprovider.UpstreamLDAPIdentityProviderI
+	gitHubUpstreams          []upstreamprovider.UpstreamGithubIdentityProviderI
 	mutex                    sync.RWMutex
 }
 
@@ -31,6 +34,7 @@ func NewDynamicUpstreamIDPProvider() DynamicUpstreamIDPProvider {
 		oidcUpstreams:            []upstreamprovider.UpstreamOIDCIdentityProviderI{},
 		ldapUpstreams:            []upstreamprovider.UpstreamLDAPIdentityProviderI{},
 		activeDirectoryUpstreams: []upstreamprovider.UpstreamLDAPIdentityProviderI{},
+		gitHubUpstreams:          []upstreamprovider.UpstreamGithubIdentityProviderI{},
 	}
 }
 
@@ -68,6 +72,18 @@ func (p *dynamicUpstreamIDPProvider) GetActiveDirectoryIdentityProviders() []ups
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
 	return p.activeDirectoryUpstreams
+}
+
+func (p *dynamicUpstreamIDPProvider) SetGitHubIdentityProviders(gitHubIDPs []upstreamprovider.UpstreamGithubIdentityProviderI) {
+	p.mutex.Lock() // acquire a write lock
+	defer p.mutex.Unlock()
+	p.gitHubUpstreams = gitHubIDPs
+}
+
+func (p *dynamicUpstreamIDPProvider) GetGitHubIdentityProviders() []upstreamprovider.UpstreamGithubIdentityProviderI {
+	p.mutex.RLock() // acquire a read lock
+	defer p.mutex.RUnlock()
+	return p.gitHubUpstreams
 }
 
 type RetryableRevocationError struct {

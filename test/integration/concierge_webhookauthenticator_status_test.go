@@ -37,7 +37,8 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 			},
 			initialPhase:    v1alpha1.WebhookAuthenticatorPhaseReady,
 			finalConditions: allSuccessfulWebhookAuthenticatorConditions(),
-		}, {
+		},
+		{
 			name: "valid spec with invalid CA in TLS config will result in a WebhookAuthenticator that is not ready",
 			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
 				caBundleString := "invalid base64-encoded data"
@@ -74,7 +75,8 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 					},
 				},
 			),
-		}, {
+		},
+		{
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a WebhookAuthenticator that is not ready",
 			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
 				webhookSpec := testEnv.TestWebhook.DeepCopy()
@@ -105,7 +107,8 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 					},
 				},
 			),
-		}, {
+		},
+		{
 			name: "invalid with unresponsive endpoint will result in a WebhookAuthenticator that is not ready",
 			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
 				webhookSpec := testEnv.TestWebhook.DeepCopy()
@@ -223,7 +226,8 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-		}, {
+		},
+		{
 			// since the CRD validations do not assess fitness of the value provided
 			name: "valid authenticator can have TLS CertificateAuthorityData string that is an invalid certificate",
 			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
@@ -260,31 +264,37 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		})
 	}
 }
+
 func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 	return []metav1.Condition{{
 		Type:    "AuthenticatorValid",
 		Status:  "True",
 		Reason:  "Success",
 		Message: "authenticator initialized",
-	}, {
-		Type:    "EndpointURLValid",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "endpoint is a valid URL",
-	}, {
-		Type:    "Ready",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "the WebhookAuthenticator is ready",
-	}, {
-		Type:    "TLSConfigurationValid",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "successfully parsed specified CA bundle",
-	}, {
-		Type:    "WebhookConnectionValid",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "tls verified",
-	}}
+	},
+		{
+			Type:    "EndpointURLValid",
+			Status:  "True",
+			Reason:  "Success",
+			Message: "endpoint is a valid URL",
+		},
+		{
+			Type:    "Ready",
+			Status:  "True",
+			Reason:  "Success",
+			Message: "the WebhookAuthenticator is ready",
+		},
+		{
+			Type:    "TLSConfigurationValid",
+			Status:  "True",
+			Reason:  "Success",
+			Message: "successfully parsed specified CA bundle",
+		},
+		{
+			Type:    "WebhookConnectionValid",
+			Status:  "True",
+			Reason:  "Success",
+			Message: "tls verified",
+		},
+	}
 }

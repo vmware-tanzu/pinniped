@@ -21,7 +21,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/testutil/stringutil"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -596,7 +596,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 			require.Len(t, gotOptions, tt.wantOptionsCount)
 
-			require.Equal(t, tt.wantLogs, stringutil.SplitByNewline(buf.String()))
+			require.Equal(t, tt.wantLogs, testutil.SplitByNewline(buf.String()))
 		})
 	}
 }

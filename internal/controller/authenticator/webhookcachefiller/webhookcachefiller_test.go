@@ -42,7 +42,6 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
-	"go.pinniped.dev/internal/testutil/stringutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -450,15 +449,16 @@ func TestController(t *testing.T) {
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name:       "test-name",
+						Generation: 1234,
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 666),
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1233),
 							[]metav1.Condition{
-								sadReadyCondition(frozenTimeInThePast, 777),
-								happyEndpointURLValid(frozenTimeInThePast, 888),
+								sadReadyCondition(frozenTimeInThePast, 1232),
+								happyEndpointURLValid(frozenTimeInThePast, 1231),
 							},
 						),
 						Phase: "Ready",
@@ -480,14 +480,15 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name:       "test-name",
+						Generation: 1234,
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
 							[]metav1.Condition{
-								happyEndpointURLValid(frozenTimeInThePast, 0),
+								happyEndpointURLValid(frozenTimeInThePast, 1234),
 							},
 						),
 						Phase: "Ready",
@@ -1333,7 +1334,7 @@ func TestController(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			actualLogLines := stringutil.SplitByNewline(log.String())
+			actualLogLines := testutil.SplitByNewline(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {

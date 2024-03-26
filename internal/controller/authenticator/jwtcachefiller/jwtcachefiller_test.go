@@ -45,7 +45,6 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
-	"go.pinniped.dev/internal/testutil/stringutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -654,21 +653,22 @@ func TestController(t *testing.T) {
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name:       "test-name",
+						Generation: 1234,
 					},
 					Spec: *someJWTAuthenticatorSpec,
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 1233),
 							[]metav1.Condition{
 								// sad and unknwn will update with new statuses and timestamps
-								sadReadyCondition(frozenTimeInThePast, 0),
-								sadDiscoveryURLValidx509(goodIssuer, frozenTimeInThePast, 0),
-								unknownAuthenticatorValid(frozenTimeInThePast, 0),
-								unknownJWKSURLValid(frozenTimeInThePast, 0),
-								unknownJWKSFetch(frozenTimeInThePast, 0),
+								sadReadyCondition(frozenTimeInThePast, 1232),
+								sadDiscoveryURLValidx509(goodIssuer, frozenTimeInThePast, 1231),
+								unknownAuthenticatorValid(frozenTimeInThePast, 1232),
+								unknownJWKSURLValid(frozenTimeInThePast, 1111),
+								unknownJWKSFetch(frozenTimeInThePast, 1122),
 								// this one will remain unchanged as it was good to begin with
-								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 0),
+								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 4321),
 							},
 						),
 						Phase: "Error",
@@ -688,15 +688,16 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name:       "test-name",
+						Generation: 1234,
 					},
 					Spec: *someJWTAuthenticatorSpec,
 					Status: auth1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 1234),
 							[]metav1.Condition{
 								// this timestamp should not have updated, it didn't change.
-								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 0),
+								happyTLSConfigurationValidCAParsed(frozenTimeInThePast, 1234),
 							},
 						),
 						Phase: "Ready",
@@ -1703,7 +1704,7 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			actualLogLines := stringutil.SplitByNewline(log.String())
+			actualLogLines := testutil.SplitByNewline(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
 			for logLineNum, logLine := range actualLogLines {

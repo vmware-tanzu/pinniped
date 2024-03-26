@@ -49,6 +49,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=idp.supervisor.pinniped.dev, Version=v1alpha1
 	case idpv1alpha1.SchemeGroupVersion.WithResource("activedirectoryidentityproviders"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().ActiveDirectoryIdentityProviders().Informer()}, nil
+	case idpv1alpha1.SchemeGroupVersion.WithResource("githubidentityproviders"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().GitHubIdentityProviders().Informer()}, nil
 	case idpv1alpha1.SchemeGroupVersion.WithResource("ldapidentityproviders"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().LDAPIdentityProviders().Informer()}, nil
 	case idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"):

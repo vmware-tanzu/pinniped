@@ -13,6 +13,14 @@ type ActiveDirectoryIdentityProviderListerExpansion interface{}
 // ActiveDirectoryIdentityProviderNamespaceLister.
 type ActiveDirectoryIdentityProviderNamespaceListerExpansion interface{}
 
+// GitHubIdentityProviderListerExpansion allows custom methods to be added to
+// GitHubIdentityProviderLister.
+type GitHubIdentityProviderListerExpansion interface{}
+
+// GitHubIdentityProviderNamespaceListerExpansion allows custom methods to be added to
+// GitHubIdentityProviderNamespaceLister.
+type GitHubIdentityProviderNamespaceListerExpansion interface{}
+
 // LDAPIdentityProviderListerExpansion allows custom methods to be added to
 // LDAPIdentityProviderLister.
 type LDAPIdentityProviderListerExpansion interface{}

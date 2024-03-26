@@ -42,7 +42,7 @@ const (
 	controllerName                   = "webhookcachefiller-controller"
 	typeReady                        = "Ready"
 	typeTLSConfigurationValid        = "TLSConfigurationValid"
-	typeConnectionProbeValid         = "ConnectionProbeValid"
+	typeWebhookConnectionValid       = "WebhookConnectionValid"
 	typeEndpointURLValid             = "EndpointURLValid"
 	typeAuthenticatorValid           = "AuthenticatorValid"
 	reasonSuccess                    = "Success"
@@ -115,7 +115,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
 	endpointHostPort, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
-	conditions, tlsNegotiateErr := c.validateConnectionProbe(certPool, endpointHostPort, conditions, okSoFar)
+	conditions, tlsNegotiateErr := c.validateConnection(certPool, endpointHostPort, conditions, okSoFar)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -271,10 +271,10 @@ func newWebhookAuthenticator(
 	return webhookA, conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateConnectionProbe(certPool *x509.CertPool, endpointHostPort *endpointaddr.HostPort, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
+func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPool, endpointHostPort *endpointaddr.HostPort, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeConnectionProbeValid,
+			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  reasonUnableToValidate,
 			Message: msgUnableToValidate,
@@ -292,7 +292,7 @@ func (c *webhookCacheFillerController) validateConnectionProbe(certPool *x509.Ce
 		errText := "cannot dial server"
 		msg := fmt.Sprintf("%s: %s", errText, err.Error())
 		conditions = append(conditions, &metav1.Condition{
-			Type:    typeConnectionProbeValid,
+			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  reasonUnableToDialServer,
 			Message: msg,
@@ -307,7 +307,7 @@ func (c *webhookCacheFillerController) validateConnectionProbe(certPool *x509.Ce
 	}
 
 	conditions = append(conditions, &metav1.Condition{
-		Type:    typeConnectionProbeValid,
+		Type:    typeWebhookConnectionValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: "tls verified",
@@ -424,8 +424,5 @@ func (c *webhookCacheFillerController) updateStatus(
 	}
 
 	_, err := c.client.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
-	if err != nil {
-		c.log.Info(fmt.Sprintf("ERROR: %v", err))
-	}
 	return err
 }

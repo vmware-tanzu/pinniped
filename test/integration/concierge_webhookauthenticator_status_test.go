@@ -67,7 +67,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 						Reason:  "InvalidTLSConfiguration",
 						Message: "invalid TLS configuration: illegal base64 data at input byte 7",
 					}, {
-						Type:    "ConnectionProbeValid",
+						Type:    "WebhookConnectionValid",
 						Status:  "Unknown",
 						Reason:  "UnableToValidate",
 						Message: "unable to validate; see other conditions for details",
@@ -98,7 +98,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 						Reason:  "UnableToValidate",
 						Message: "unable to validate; see other conditions for details",
 					}, {
-						Type:    "ConnectionProbeValid",
+						Type:    "WebhookConnectionValid",
 						Status:  "False",
 						Reason:  "UnableToDialServer",
 						Message: "cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority",
@@ -130,7 +130,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 						Reason:  "UnableToValidate",
 						Message: "unable to validate; see other conditions for details",
 					}, {
-						Type:    "ConnectionProbeValid",
+						Type:    "WebhookConnectionValid",
 						Status:  "False",
 						Reason:  "UnableToDialServer",
 						Message: "cannot dial server: dial tcp 127.0.0.1:443: connect: connection refused",
@@ -267,11 +267,6 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 		Reason:  "Success",
 		Message: "authenticator initialized",
 	}, {
-		Type:    "ConnectionProbeValid",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "tls verified",
-	}, {
 		Type:    "EndpointURLValid",
 		Status:  "True",
 		Reason:  "Success",
@@ -286,5 +281,10 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 		Status:  "True",
 		Reason:  "Success",
 		Message: "successfully parsed specified CA bundle",
+	}, {
+		Type:    "WebhookConnectionValid",
+		Status:  "True",
+		Reason:  "Success",
+		Message: "tls verified",
 	}}
 }

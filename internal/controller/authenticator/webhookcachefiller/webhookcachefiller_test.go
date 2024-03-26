@@ -264,9 +264,9 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	happyConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	happyWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "ConnectionProbeValid",
+			Type:               "WebhookConnectionValid",
 			Status:             "True",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -274,9 +274,9 @@ func TestController(t *testing.T) {
 			Message:            "tls verified",
 		}
 	}
-	unknownConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	unknownWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "ConnectionProbeValid",
+			Type:               "WebhookConnectionValid",
 			Status:             "Unknown",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -284,9 +284,9 @@ func TestController(t *testing.T) {
 			Message:            "unable to validate; see other conditions for details",
 		}
 	}
-	sadConnectionProbeValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	sadWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "ConnectionProbeValid",
+			Type:               "WebhookConnectionValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -294,9 +294,9 @@ func TestController(t *testing.T) {
 			Message:            "cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority",
 		}
 	}
-	sadConnectionProbeValidNoIPSANs := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	sadWebhookConnectionValidNoIPSANs := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
-			Type:               "ConnectionProbeValid",
+			Type:               "WebhookConnectionValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -304,9 +304,9 @@ func TestController(t *testing.T) {
 			Message:            "cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs",
 		}
 	}
-	sadConnectionProbeValidWithMessage := func(time metav1.Time, observedGeneration int64, msg string) metav1.Condition {
+	sadWebhookConnectionValidWithMessage := func(time metav1.Time, observedGeneration int64, msg string) metav1.Condition {
 		return metav1.Condition{
-			Type:               "ConnectionProbeValid",
+			Type:               "WebhookConnectionValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
@@ -361,7 +361,7 @@ func TestController(t *testing.T) {
 		return conditionstestutil.SortByType([]metav1.Condition{
 			happyTLSConfigurationValidCAParsed(someTime, observedGeneration),
 			happyEndpointURLValid(someTime, observedGeneration),
-			happyConnectionProbeValid(someTime, observedGeneration),
+			happyWebhookConnectionValid(someTime, observedGeneration),
 			happyAuthenticatorValid(someTime, observedGeneration),
 			happyReadyCondition(someTime, observedGeneration),
 		})
@@ -567,7 +567,7 @@ func TestController(t *testing.T) {
 							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
-								sadConnectionProbeValid(frozenMetav1Now, 0),
+								sadWebhookConnectionValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -607,7 +607,7 @@ func TestController(t *testing.T) {
 							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
 							[]metav1.Condition{
 								sadTLSConfigurationValid(frozenMetav1Now, 0),
-								unknownConnectionProbeValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -651,7 +651,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 								sadEndpointURLValid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
-								unknownConnectionProbeValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -695,7 +695,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
 								sadEndpointURLValidHTTPS("http://localhost", frozenMetav1Now, 0),
-								unknownConnectionProbeValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -748,7 +748,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								sadEndpointURLValidWithMessage(frozenMetav1Now, 0, `spec.endpoint URL is not valid: invalid port "69999"`),
 								sadReadyCondition(frozenMetav1Now, 0),
-								unknownConnectionProbeValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
 						),
@@ -765,7 +765,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 0,
 		},
 		{
-			name:    "validateConnectionProbe: CA does not validate serving certificate for host, the dialer will error, will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
+			name:    "validateConnection: CA does not validate serving certificate for host, the dialer will error, will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -788,7 +788,7 @@ func TestController(t *testing.T) {
 							[]metav1.Condition{
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
-								sadConnectionProbeValid(frozenMetav1Now, 0),
+								sadWebhookConnectionValid(frozenMetav1Now, 0),
 							},
 						),
 						Phase: "Error",
@@ -805,9 +805,9 @@ func TestController(t *testing.T) {
 		},
 		// No unit test for system roots.  We don't test the JWTAuthenticator's use of system roots either.
 		// We would have to find a way to mock out roots by adding a dummy cert in order to test this
-		// { name: "validateConnectionProbe: TLS bundle not provided should use system roots to validate server cert signed by a well-known CA",},
+		// { name: "validateConnection: TLS bundle not provided should use system roots to validate server cert signed by a well-known CA",},
 		{
-			name:    "validateConnectionProbe: 404 endpoint on a valid server will still validate server certificate, will complete sync loop successfully with success conditions and ready phase",
+			name:    "validateConnection: 404 endpoint on a valid server will still validate server certificate, will complete sync loop successfully with success conditions and ready phase",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -850,7 +850,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name:    "validateConnectionProbe: localhost hostname instead of 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4",
+			name:    "validateConnection: localhost hostname instead of 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -891,7 +891,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name:    "validateConnectionProbe: IPv6 address with port: should call dialer func with correct arguments",
+			name:    "validateConnection: IPv6 address with port: should call dialer func with correct arguments",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
@@ -929,7 +929,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]:4242/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadConnectionProbeValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -948,7 +948,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 0,
 		},
 		{
-			name:    "validateConnectionProbe: IPv6 address without port: should call dialer func with correct arguments",
+			name:    "validateConnection: IPv6 address without port: should call dialer func with correct arguments",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
@@ -986,7 +986,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadConnectionProbeValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1005,7 +1005,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 0,
 		},
 		{
-			name:    "validateConnectionProbe: localhost as IP address 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4 and IPv6 addresses",
+			name:    "validateConnection: localhost as IP address 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4 and IPv6 addresses",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -1045,7 +1045,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name:    "validateConnectionProbe: CA for example.com, serving cert for example.com, but endpoint 127.0.0.1 will fail to validate certificate and will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			name:    "validateConnection: CA for example.com, serving cert for example.com, but endpoint 127.0.0.1 will fail to validate certificate and will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -1069,7 +1069,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(hostLocalWithExampleDotComCertServer.URL, frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadConnectionProbeValidNoIPSANs(frozenMetav1Now, 0),
+								sadWebhookConnectionValidNoIPSANs(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 							},
@@ -1088,7 +1088,7 @@ func TestController(t *testing.T) {
 			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
 		},
 		{
-			name:    "validateConnectionProbe: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
+			name:    "validateConnection: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
@@ -1126,7 +1126,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://0:0:0:0:0:0:0:1/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadConnectionProbeValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1270,11 +1270,6 @@ func TestController(t *testing.T) {
 					"webhook": map[string]interface{}{
 						"name": "test-name",
 					},
-				}, {
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "ERROR: some update error",
 				},
 			},
 			wantActions: func() []coretesting.Action {

@@ -1652,12 +1652,6 @@ func TestController(t *testing.T) {
 				"jwtAuthenticator": map[string]interface{}{
 					"name": "test-name",
 				},
-			}, {
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "ERROR: some update error",
-				"issuer":    goodIssuer,
 			}},
 			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
 			wantCacheEntries: 1,

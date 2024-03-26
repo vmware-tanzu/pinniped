@@ -73,30 +73,22 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 }
 
 // ParseFromURL wraps Parse but specifically takes a url.URL instead of an endpoint string.
-// ParseFromURL differs from Parse in that a URL will contain a protocol, and IPv6 addresses
-// may or may not be wrapped in brackets (but require them when a port is provided):
-//
-// - "https://<hostname>"        (DNS hostname)
-// - "https://<IPv4>"            (IPv4 address)
-// - "https://<IPv6>"            (IPv6 address)
-// - "https://[<IPv6>]"          (IPv6 address without port, brackets should be used but are not strictly required)
-// - "https://<hostname>:<port>" (DNS hostname with port)
-// - "https://<IPv4>:<port>"     (IPv4 address with port)
-// - "https://[<IPv6>]:<port>"   (IPv6 address with port, brackets are required)
+// ParseFromURL differs from Parse in that IPv6 addresses must be wrapped in brackets
+// when used in a URL (even when used without a port).
 //
 // If the input does not specify a port number, then defaultPort will be used.
 //
-// The rfc for literal IPv6 addresses in URLs indicates that brackets
+// The RFC for literal IPv6 addresses in URLs indicates that brackets
 // - must be used when a port is provided
 // - should be used when a port is not provided, but does not indicate "must"
+// See https://datatracker.ietf.org/doc/html/rfc2732#section-2
 //
-// Since url.Parse does not inspect the host, it will accept IPv6 hosts without
-// brackets and without port, which may result in errors that are not immediately obvious.
-// Therefore, this helper will normalize the bracketed use case.  Note that this is
-// because ParseFromURL returns a HostPort which has an Endpoint() method which will
-// return a properly constructed URL with brackets when appropriate.
+// However, the Golang docs make it clear that IPv6 addresses must be wrapped
+// in brackets when used in a URL.
+// See https://pkg.go.dev/net/url#URL
 //
-// See RFC: https://datatracker.ietf.org/doc/html/rfc2732#section-2
+// Note that ParseFromURL returns a HostPort which has an Endpoint() method which
+// will return a properly constructed URL with brackets when appropriate.
 func ParseFromURL(u *url.URL, defaultPort uint16) (HostPort, error) {
 	host := u.Host
 	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {

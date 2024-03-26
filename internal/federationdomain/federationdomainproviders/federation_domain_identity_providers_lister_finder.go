@@ -144,6 +144,8 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() [
 	cachedOIDCProviders := u.wrappedLister.GetOIDCIdentityProviders()
 	cachedLDAPProviders := u.wrappedLister.GetLDAPIdentityProviders()
 	cachedADProviders := u.wrappedLister.GetActiveDirectoryIdentityProviders()
+	// TODO(BEN): Add GetGithubIdentityProvider() to this func.
+
 	providers := []resolvedprovider.FederationDomainResolvedIdentityProvider{}
 	// Every configured identityProvider on the FederationDomain uses an objetRef to an underlying IDP CR that might
 	// be available as a provider in the wrapped cache. For each configured identityProvider/displayName...
@@ -184,6 +186,7 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() [
 				})
 			}
 		}
+		// TODO(BEN): add another loop here for GitHub.
 	}
 	return providers
 }

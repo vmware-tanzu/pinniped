@@ -47,6 +47,12 @@ type UpstreamIdentityProviderI interface {
 	GetResourceUID() types.UID
 }
 
+// TODO(BEN): this is the thing put into the cache.
+// I'll have to create an UpstreamGithubIdentityProviderI
+// This creates the layer abstraction away from kubernetes
+// Github will have its own set of methods, not this set of methods.  This is specific to OIDCIdP.
+// - real version for production code
+// - fake version for unit tests
 type UpstreamOIDCIdentityProviderI interface {
 	UpstreamIdentityProviderI
 

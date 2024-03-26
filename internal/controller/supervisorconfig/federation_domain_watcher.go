@@ -106,6 +106,7 @@ func NewFederationDomainWatcherController(
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
+	// TODO(BEN): will need to add GitHub here.
 	allowedKinds := sets.New(kindActiveDirectoryIdentityProvider, kindLDAPIdentityProvider, kindOIDCIdentityProvider)
 	return controllerlib.New(
 		controllerlib.Config{
@@ -148,6 +149,7 @@ func NewFederationDomainWatcherController(
 			pinnipedcontroller.MatchAnythingIgnoringUpdatesFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
+		// TODO(BEN): Add GitHubIdP Informer...
 	)
 }
 

@@ -45,6 +45,9 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
+// TODO(BEN): this tests the authorize endpoint, part of logging in.  Tests for AD, OIDC, LDAP, but makes no real calls
+// to any of these servers.  This tests mocks all the implementations.  We need to add GitHub to this test, as well as
+// the other endpoints.
 func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	const (
 		oidcUpstreamName                     = "some-oidc-idp"
@@ -55,7 +58,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		ldapUpstreamResourceUID              = "ldap-resource-uid"
 		activeDirectoryUpstreamName          = "some-active-directory-idp"
 		activeDirectoryUpstreamResourceUID   = "active-directory-resource-uid"
-
+		// TODO(BEN): GitHub can take inspiration from the OIDC config here for testing.
 		oidcUpstreamIssuer                    = "https://my-upstream-issuer.com"
 		oidcUpstreamSubject                   = "abc123-some guid" // has a space character which should get escaped in URL
 		oidcUpstreamSubjectQueryEscaped       = "abc123-some+guid"
@@ -290,7 +293,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			WithAdditionalAuthcodeParams(map[string]string{}).
 			WithPasswordGrantError(errors.New("should not have used password grant on this instance"))
 	}
-
+	// TODO(BEN): make a builder for GitHub so we can easily create Mocks for testing
 	passwordGrantUpstreamOIDCIdentityProviderBuilder := func() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
 		return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 			WithName(oidcPasswordGrantUpstreamName).

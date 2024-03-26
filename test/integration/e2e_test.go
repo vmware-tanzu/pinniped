@@ -918,6 +918,9 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
+	// TODO(BEN): note that SkipTestWhenActiveDirectoryIsUnavailable, but do this for GitHub unavailable.  Check the `env` again.
+	// - pass in the GitHub Env vars and run the tests. check host, or username, skip if missing.
+	//
 	// Add an Active Directory upstream IDP and try using it to authenticate during kubectl commands
 	// by interacting with the CLI's username and password prompts.
 	t.Run("with Supervisor ActiveDirectory upstream IDP using username and password prompts", func(t *testing.T) {

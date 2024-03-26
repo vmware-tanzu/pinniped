@@ -64,6 +64,7 @@ type ValidateTokenAndMergeWithUserInfoArgs struct {
 	RequireUserInfo      bool
 }
 
+// TODO(BEN): replicate for GitHub
 type TestUpstreamOIDCIdentityProvider struct {
 	Name                           string
 	ClientID                       string
@@ -288,6 +289,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ValidateTokenAndMergeWithUserInfoArgs
 	return u.validateTokenAndMergeWithUserInfoArgs[call]
 }
 
+// TODO(BEN): impl this for GitHub mock builder
 type TestUpstreamOIDCIdentityProviderBuilder struct {
 	name                                 string
 	resourceUID                          types.UID

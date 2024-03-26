@@ -64,7 +64,6 @@ type GitHubAPIConfig struct {
 	// +optional
 	Host *string `json:"host"`
 
-	// TLS configuration for GitHub Enterprise Server.
 	//
 	// +optional
 	TLS *TLSSpec `json:"tls,omitempty"`
@@ -143,13 +142,13 @@ type GitHubClaims struct {
 	// the team name or slug.
 	//
 	// If desired, an admin could configure identity transformation expressions on the Pinniped Supervisor's
-	// FederationDomain to further customize how these group names are presented to Kubernetes.
+	// FederationDomain to further cuEnumstomize how these group names are presented to Kubernetes.
 	//
 	// See the response schema for
 	// [List teams for the authenticated user](https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user).
 	//
 	// +kubebuilder:default=slug
-	// +kubebuilder:validation:Enum=name;slug
+	// +kubebuilder:validation:=name;slug
 	// +optional
 	Groups *GitHubGroupNameAttribute `json:"groups"`
 }

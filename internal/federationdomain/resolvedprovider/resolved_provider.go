@@ -91,6 +91,7 @@ type UpstreamAuthorizeRequestState struct {
 	Nonce             nonce.Nonce
 }
 
+// TODO(BEN): Implement this for GitHub IdP.  Read Comments of each
 type FederationDomainResolvedIdentityProvider interface {
 	// GetDisplayName returns the display name of this identity provider, as configured in the FederationDomain.
 	GetDisplayName() string

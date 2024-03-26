@@ -74,6 +74,8 @@ type CustomSessionData struct {
 
 	// Only used when ProviderType == "activedirectory".
 	ActiveDirectory *ActiveDirectorySessionData `json:"activedirectory,omitempty"`
+
+	// TODO(BEN): Add GitHub here.
 }
 
 type ProviderType string
@@ -82,7 +84,25 @@ const (
 	ProviderTypeOIDC            ProviderType = "oidc"
 	ProviderTypeLDAP            ProviderType = "ldap"
 	ProviderTypeActiveDirectory ProviderType = "activedirectory"
+	// TODO(BEN): Need to IMPL this, check elsewhere to see what we need to add.
+	ProviderTypeGitHub ProviderType = "github"
 )
+
+// TODO(BEN): Will need a GitHubSessionData{} to track the specifics of what needs to be stored for GitHub.
+// This is after a login has been done, what do we need to remember so that we can implement refresh on behalf
+// of a user.  When a session should be refreshed we will need data to do additional checks.
+// Initially it can be empty:
+// During initial login will get an UpstreamAccessToken
+// For refresh, we will use the Access Token from the original login to get another token?
+// - our concept of "refresh" is "does this user still exist, same groups, etc".
+//   For GitHub, we use this token, call the API, and ask "what user, what groups belong to, etc" for this token.
+//   - There is user, group membership, organization APIs.  We will call each with the same token.
+
+type GitHubSessionData struct {
+	// UpstreamAccessToken will contain the access token returned by the upstream GitHub provider during initial
+	// authorization.
+	UpstreamAccessToken string `json:"upstreamAccessToken"`
+}
 
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
 type OIDCSessionData struct {

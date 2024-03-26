@@ -56,6 +56,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
 	}
 
+	// TODO(BEN): Duplicate this concept for GitHub, so we can add integration tests for GitHub to this file as well.
 	skipActiveDirectoryTests := func(t *testing.T) {
 		t.Helper()
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)

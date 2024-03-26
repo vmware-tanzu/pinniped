@@ -46,6 +46,12 @@ const (
 	emailVerifiedClaimFalseErr         = constable.Error("email_verified claim in upstream ID token has false value")
 )
 
+// TODO(BEN): Impl for GitHub IdP.  The UpstreamOIDCIdentityProviderI~ UpstreamGitHubdentityProviderI is the prev interface noted (
+//  the one that should know how to login to GitHub without understanding FederationDomains).
+//
+// This layers on top of the UpstreamGitHubIdentityProviderI (knows nothing bout FederationDomains) and layers on top the
+// understanding of FederationDomains. This means DisplayName, Transforms, etc.
+
 // FederationDomainResolvedOIDCIdentityProvider represents a FederationDomainIdentityProvider which has
 // been resolved dynamically based on the currently loaded IDP CRs to include the provider.UpstreamOIDCIdentityProviderI
 // and other metadata about the provider.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -58,6 +58,8 @@ while (("$#")); do
     api_group_suffix=$1
     shift
     ;;
+  # TODO(BEN): add a --get-github-vars flag here, to make it easy to run integration tests on our laptop with GitHub vars
+  # note that this should be fairly private, we don't want the public to know the set of vars, or our actual values.
   -a | --get-active-directory-vars)
     shift
     # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error

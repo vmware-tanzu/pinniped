@@ -132,15 +132,20 @@ Goals:
 Add a new CRD called GitHubIdentityProvider. Here is an example:
 
 ```yaml
+---
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: GitHubIdentityProvider
 metadata:
   namespace: supervisor
   name: github
 spec:
-  github_api:
+  githubAPI:
     # Required only for GitHub Enterprise Server (on-prem).
     # Defaults to using the GitHub's public API.
+    # Can be hostname, IPv4 address, or IPv6 address.
+    # May optionally end with `:port` for some port number.
+    # Note that an IPv6 address must not be surrounded by
+    # square brackets unless it has a port number.
     host: my.example.com
     # X.509 Certificate Authority (base64-encoded PEM bundle).
     # If omitted, a default set of system roots will be trusted.
@@ -175,56 +180,80 @@ spec:
     # Team names can contain upper and lower case characters,
     # whitespace, and punctuation (e.g. "Kube admins!").
     # Slug names are lower case alphanumeric characters and may
-    # contain dashes (e.g. "kube-admins").
+    # contain dashes and underscores (e.g. "kube-admins").
     # Either way, group names will always be prefixed by the
-    # GitHub org name followed by a colon (e.g. my-org:my-team).
-    # Note that colons are not allowed in GitHub org names,
-    # so the first colon in the group name will always be the
-    # org/team separator colon.
+    # GitHub org name followed by a slash (e.g. my-org/my-team).
+    # Note that slashes are not allowed in GitHub org names,
+    # so the first slash in the group name will always be the
+    # org/team separator slash.
+    # Groups names will only include the teams which are
+    # returned by the GitHub API's /user/teams endpoint,
+    # which are the teams to which the user directly belongs
+    # and the immediate parent teams of those teams
+    # (and Pinniped will remove duplicates from the list).
+    # The entire hierarchy of nested team memberships is not
+    # returned by the GitHub API, and so will not be
+    # reflected in the user's group memberships.
+    # Also, the GitHub OAuth App or GitHub App must have
+    # permission to see the teams in a particular org,
+    # or else none of the teams from that org will be
+    # reflected in the user's group memberships.
     # If desired, an admin could configure identity
     # transformation expressions on a FederationDomain to
     # further customize these group names.
     # Defaults to "slug".
     groups: slug
-  # Optionally reject any user who attempts to authenticate
-  # unless they belong to one of these GitHub orgs.
-  # The GitHub App or GitHub OAuth App provided in the
-  # spec.client.secretName must be allowed by the org
-  # owners to view org memberships, or else the
-  # user will not be considered to belong to that org
-  # or belong to any teams within that org.
-  # When specified, users' group memberships will be
-  # filtered to include only those GitHub teams which
-  # are owned by these orgs.
-  # If desired, an admin could configure identity
-  # policy expressions on a FederationDomain to
-  # further customize which users and groups are allowed
-  # to authenticate.
-  # When not set, any GitHub user can authenticate
-  # regardless of org membership, and all the team
-  # memberships returned by the GitHub API for that
-  # user will be reflected as groups regardless of
-  # which orgs own those teams.
-  allowOrganizations: [ vmware-tanzu, broadcom ]
-  # Allow or disallow users to use GitHub Personal Access Tokens
-  # for CLI-based (no web browser) authentication.
-  # Setting these both to false disables all non-interactive
-  # CLI-based auth, but still allows browser-based auth.
-  allowPersonalAccessTokens:
-    # Allow or disallow the use of GitHub Fine-grained PATs
-    # to authenticate to Kubernetes clusters. If they
-    # are disallowed for your GitHub org, then also
-    # disallow them here so your users can get a nice
-    # error message when trying to use a fine-grained PAT.
-    # Defaults to false.
-    fineGrained: true
-    # Allow or disallow the use of GitHub Classic PATs
-    # to authenticate to Kubernetes clusters. If they
-    # are disallowed for your GitHub org, then also
-    # disallow them here so your users can get a nice
-    # error message when trying to use a classic PAT.
-    # Defaults to false.
-    classic: false
+  allowAuthentication:
+    organizations:
+      # Optionally reject any user who attempts to authenticate
+      # unless they belong to one of these GitHub orgs.
+      # The GitHub App or GitHub OAuth App provided in the
+      # spec.client.secretName must be allowed by the org
+      # owners to view org memberships, or else the
+      # user will not be considered to belong to that org
+      # or belong to any teams within that org.
+      # When specified, users' group memberships will be
+      # filtered to include only those GitHub teams which
+      # are owned by these orgs. org membership comparisons
+      # shall be done as case-insensitive string comparisons,
+      # but case shall be preserved in the org names when
+      # they appear in downstream group names
+      # If desired, an admin could configure identity
+      # policy expressions on a FederationDomain to
+      # further customize which users and groups are allowed
+      # to authenticate.
+      allowed: [ vmware-tanzu, broadcom ]
+      # Policy decides how the allowed list will be used.
+      # Defaults to OnlyUsersFromAllowedOrganizations,
+      # which means that the user must belong to one
+      # of the allowed list, and the allow list must
+      # be non-empty. May be set to AllGitHubUsers,
+      # which means any GitHub user can authenticate
+      # regardless of org membership, and all the team
+      # memberships returned by the GitHub API for that
+      # user will be reflected as groups regardless of
+      # which orgs own those teams. When set to AllGitHubUsers,
+      # the allow list must be empty.
+      policy: OnlyUsersFromAllowedOrganizations
+    # Allow or disallow users to use GitHub Personal Access Tokens
+    # for CLI-based (no web browser) authentication.
+    # Setting these both to false disables all non-interactive
+    # CLI-based auth, but still allows browser-based auth.
+    personalAccessTokens:
+      # Allow or disallow the use of GitHub Fine-grained PATs
+      # to authenticate to Kubernetes clusters. If they
+      # are disallowed for your GitHub org, then also
+      # disallow them here so your users can get a nice
+      # error message when trying to use a fine-grained PAT.
+      # Defaults to false.
+      fineGrained: true
+      # Allow or disallow the use of GitHub Classic PATs
+      # to authenticate to Kubernetes clusters. If they
+      # are disallowed for your GitHub org, then also
+      # disallow them here so your users can get a nice
+      # error message when trying to use a classic PAT.
+      # Defaults to false.
+      classic: false
   client:
     # The name of Secret in the same namespace which holds the
     # client ID and client secret of a GitHub App or
@@ -233,9 +262,26 @@ spec:
     # Required.
     secretName: github-client-credentials
 status:
-  conditions: # conditions TBD. Shows validations, if any.
-  phase: # ready or error, if there are conditions.
+  conditions: # Discussed below.
+  phase: # Pending, Ready, or Error. To summarize the conditions.
+---
+apiVersion: v1
+kind: Secret
+type: secrets.pinniped.dev/github-client # must use this type
+metadata:
+  namespace: supervisor
+  name: github-client-credentials
+data:
+  clientID: <some-github-client-id>
+  clientSecret: <some-github-client-secret>
 ```
+
+The status conditions will be populated by a controller. The conditions will include:
+- `HostValid`. This is not a URL, so it must not contain `://`. It must be parsable as defined by our `endpointaddr.Parse()` helper function.
+- `TLSConfigurationValid`. The CA bundle can be parsed as a CA bundle.
+- `OrganizationsPolicyValid`. Use the same logic and same error text in CEL validations for this field, and repeat it in the controller in case an old version of Kubernetes is being used.
+- `ClientCredentialsValid`. This is what we call the same check in the OIDCIdentityProvider's status.
+- `GitHubConnectionValid`. Report if the host can be dialed with TLS verification. (In LDAPIdentityProvider we called this `LDAPConnectionValid`.)
 
 #### Web Browser-based Authentication using GitHubIdentityProvider
 
@@ -301,6 +347,10 @@ user's username and password from the user, and no web browser is needed.
 Note that CLI-based (non-interactive) authentication is only allowed on the `pinniped-cli` client, not on any
 configured third-party OIDCClient. This pre-existing limitation is to prevent 3rd party apps from directly handling
 the user's credential.
+
+This feature will not be included in the initial release of GitHub support. It is planned as a follow-up feature
+after web-browser based authentication is fully supported. Therefore, some of the details in this section may
+change before implementation. This section is meant to give an overview of the general intended approach.
 
 Since we will use the GitHub API to discover a user's identity, we could use a PAT provided by the user
 at the CLI to authenticate that user. To keep the experience (and code) similar to OIDC and LDAP/AD identity providers,
@@ -431,14 +481,15 @@ The implementation of these CLI commands would be as follows:
 3. The command would need to trigger a Pinniped login or refresh flow because it needs to be sure that it has a
    valid/non-expired Supervisor-issued access token. One way to do this would be for the CLI to invoke its own
    "pinniped oidc login" command in a subprocess, perhaps by using the same code that kubectl
-   would use to invoke it. It will need to change some of the options to this subprocess compared to the options
-   that were listed in the kubeconfig's credential exec spec:
+   would use to invoke it. Or it could invoke the implementation of that subcommand within the same process,
+   which might be safer than starting a new process. Either way, it will need to change some of the options
+   to this command compared to the options that were listed in the kubeconfig's credential exec spec:
     - It should remove the flag to enable the Concierge (if present), because it does
       not need an actual mTLS credential for the cluster.
     - It should add (or overwrite) the credential cache location flag to prevent credential caching
       (not session caching) so it does not overwrite the user's current credential in the
       user's credential cache (if they have one).
-    - It should explicitly set the PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW env var for the subprocess to force it
+    - It should explicitly set the PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW env var for the subcommand to force it
       to use a web-based flow for login, in case the kubeconfig was intended for a CLI-based (non-interactive)
       login.
     - It should leave intact (or add) the CLI flag to request a different audience, because that's the only way to force
@@ -447,14 +498,14 @@ The implementation of these CLI commands would be as follows:
       this is assuming that the related bug in the Pinniped CLI is fixed as outlined in
       [this PR](https://github.com/vmware-tanzu/pinniped/pull/1857).
     - It should take care to correctly handle unicode characters that might exist in flag values when
-      invoking the subprocess, e.g. emojis in the upstream IDP name flag.
-      As long as the subprocess is successful, its stdout results can be ignored, because we only care about
+      invoking the subcommand, e.g. emojis in the upstream IDP name flag.
+      As long as the subcommand is successful, its stdout results can be ignored, because we only care about
       what it cached in the session cache as a side effect.
 4. Now that the user is authenticated, the command will need to be able to construct a session cache key
-   exactly the same way that the "pinniped login oidc" subprocess did it, so it can be sure that it will be
+   exactly the same way that the "pinniped login oidc" subcommand did it, so it can be sure that it will be
    looking up the same session in the cache.
 5. Next, it could open the session cache and read the access token from it. This access token should still be
-   valid/non-expired because of the "pinniped login oidc" subprocess that just succeeded.
+   valid/non-expired because of the "pinniped login oidc" subcommand that just succeeded.
 6. Finally, it could call the new Supervisor API to add consent for the PAT by sending the access token
    for authentication and sending the SHA-256 hash of the PAT to add it to the allow list for the current user
    identified by the access token. Revoking consent for a specific PAT would be a similar request,
@@ -501,10 +552,6 @@ None.
 
 ## Open Questions
 
-- Needs investigation: How does the GitHub teams API deal with membership in nested teams? Does it flatten them for us?
-- Needs investigation: Does the GitHub API return org names with capital letters?
-  e.g. how does it return this org name? https://github.com/Broadcom (note the capital "B").
-  Should we treat the configured org names as case-sensitive?
 - Should consent for a PAT work across all GitHubIdentityProviders in a FederationDomain,
   or just one specific GitHubIdentityProvider in that FederationDomain?
 - Would it be helpful to offer a `GET` endpoint to list current PAT consents? What would a user do with this
@@ -518,11 +565,17 @@ None.
 - Are the three GitHub API endpoints that we intend to use different for GitHub Enterprise Server (on-prem)?
   Do they have different paths or different inputs and outputs? Need to check the GitHub docs.
 
+## Answered Questions
+
+- Does the GitHub Identity Provider need `additionalClaimMappings`? No. This feature was only added for
+  OIDCIdentityProvider, and not yet added for other identity provider types. Please raise an issue in
+  this repo if you need this feature.
+
 ## Implementation Plan
 
 The maintainers will most likely implement this proposal, if it is accepted.
 
 Community contributions to the effort would be welcomed. Contact the maintainers if you might wish to get involved.
 
-Implementing browser-based authentication could happen first. It is simpler and is a pre-requisite for
+Implementing browser-based authentication will happen first. It is simpler and is a pre-requisite for
 the PAT consent feature for CLI-based authentication.

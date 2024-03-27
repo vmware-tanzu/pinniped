@@ -1,9 +1,9 @@
 ---
 title: "Authenticating Users via GitHub"
 authors: [ "@cfryanr" ]
-status: "in-review"
+status: "accepted"
 sponsor: [ ]
-approval_date: ""
+approval_date: "March 27, 2024"
 ---
 
 *Disclaimer*: Proposals are point-in-time designs and decisions.

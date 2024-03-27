@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -1085,7 +1084,7 @@ func TestAgentController(t *testing.T) {
 			allAllowedErrors = append(allAllowedErrors, tt.alsoAllowUndesiredDistinctErrors...)
 			assert.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
-			assert.Equal(t, tt.wantDistinctLogs, deduplicate(logLines(buf.String())), "unexpected logs")
+			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(buf.String())), "unexpected logs")
 
 			// Assert on all actions that happened to deployments.
 			var actualDeploymentActionVerbs []string
@@ -1126,14 +1125,6 @@ func TestAgentController(t *testing.T) {
 			}
 		})
 	}
-}
-
-func logLines(logs string) []string {
-	if len(logs) == 0 {
-		return nil
-	}
-
-	return strings.Split(strings.TrimSpace(logs), "\n")
 }
 
 func TestMergeLabelsAndAnnotations(t *testing.T) {

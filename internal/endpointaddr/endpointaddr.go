@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package endpointaddr implements parsing and validation of "<host>[:<port>]" strings for Pinniped APIs.
@@ -7,7 +7,9 @@ package endpointaddr
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -38,7 +40,7 @@ func (h *HostPort) Endpoint() string {
 // - "<IPv4>:<port>"     (IPv4 address with port)
 // - "[<IPv6>]:<port>"   (IPv6 address with port, brackets are required)
 //
-// If the input does not not specify a port number, then defaultPort will be used.
+// If the input does not specify a port number, then defaultPort will be used.
 func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 	// Try parsing it both with and without an implicit port 443 at the end.
 	host, port, err := net.SplitHostPort(endpoint)
@@ -68,4 +70,29 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 	}
 
 	return HostPort{Host: host, Port: uint16(integerPort)}, nil
+}
+
+// ParseFromURL wraps Parse but specifically takes a url.URL instead of an endpoint string.
+// ParseFromURL differs from Parse in that IPv6 addresses must be wrapped in brackets
+// when used in a URL (even when used without a port).
+//
+// If the input does not specify a port number, then defaultPort will be used.
+//
+// The RFC for literal IPv6 addresses in URLs indicates that brackets
+// - must be used when a port is provided
+// - should be used when a port is not provided, but does not indicate "must"
+// See https://datatracker.ietf.org/doc/html/rfc2732#section-2
+//
+// However, the Golang docs make it clear that IPv6 addresses must be wrapped
+// in brackets when used in a URL.
+// See https://pkg.go.dev/net/url#URL
+//
+// Note that ParseFromURL returns a HostPort which has an Endpoint() method which
+// will return a properly constructed URL with brackets when appropriate.
+func ParseFromURL(u *url.URL, defaultPort uint16) (HostPort, error) {
+	host := u.Host
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	}
+	return Parse(host, defaultPort)
 }

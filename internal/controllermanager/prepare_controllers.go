@@ -6,6 +6,7 @@
 package controllermanager
 
 import (
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -236,8 +237,11 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		WithController(
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
+				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				clock.RealClock{},
+				plog.New(),
+				tls.Dial,
 			),
 			singletonWorker,
 		).

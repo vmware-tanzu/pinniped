@@ -171,9 +171,12 @@ func NewKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 // CreateTestWebhookAuthenticator creates and returns a test WebhookAuthenticator in $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be
 // automatically deleted at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which
 // describes the test webhook authenticator within the test namespace.
-func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+func CreateTestWebhookAuthenticator(
+	ctx context.Context,
+	t *testing.T,
+	webhookSpec *auth1alpha1.WebhookAuthenticatorSpec,
+	expectedStatus auth1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
 	t.Helper()
-	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
 	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
@@ -183,7 +186,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
 		ObjectMeta: testObjectMeta(t, "webhook"),
-		Spec:       testEnv.TestWebhook,
+		Spec:       *webhookSpec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
 	t.Logf("created test WebhookAuthenticator %s", webhook.Name)
@@ -197,11 +200,56 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 	})
 
+	if expectedStatus != "" {
+		WaitForWebhookAuthenticatorStatusPhase(ctx, t, webhook.Name, expectedStatus)
+	}
+
 	return corev1.TypedLocalObjectReference{
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
 	}
+}
+
+func WaitForWebhookAuthenticatorStatusPhase(
+	ctx context.Context,
+	t *testing.T,
+	webhookName string,
+	expectPhase auth1alpha1.WebhookAuthenticatorPhase) {
+	t.Helper()
+	webhookAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().WebhookAuthenticators()
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		webhookA, err := webhookAuthenticatorClientSet.Get(ctx, webhookName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+		requireEventually.Equalf(expectPhase, webhookA.Status.Phase, "actual status conditions were: %#v", webhookA.Status.Conditions)
+	}, 60*time.Second, 1*time.Second, "expected the WebhookAuthenticator to have status %q", expectPhase)
+}
+
+func WaitForWebhookAuthenticatorStatusConditions(ctx context.Context, t *testing.T, webhookName string, expectConditions []metav1.Condition) {
+	t.Helper()
+	webhookClient := NewConciergeClientset(t).AuthenticationV1alpha1().WebhookAuthenticators()
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		fd, err := webhookClient.Get(ctx, webhookName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+
+		requireEventually.Lenf(fd.Status.Conditions, len(expectConditions),
+			"wanted status conditions: %#v", expectConditions)
+
+		for i, wantCond := range expectConditions {
+			actualCond := fd.Status.Conditions[i]
+
+			// This is a cheat to avoid needing to make equality assertions on these fields.
+			requireEventually.NotZero(actualCond.LastTransitionTime)
+			wantCond.LastTransitionTime = actualCond.LastTransitionTime
+			requireEventually.NotZero(actualCond.ObservedGeneration)
+			wantCond.ObservedGeneration = actualCond.ObservedGeneration
+
+			requireEventually.Equalf(wantCond, actualCond,
+				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
+				expectConditions, fd.Status.Conditions, i)
+		}
+	}, 60*time.Second, 1*time.Second, "wanted WebhookAuthenticator conditions")
 }
 
 // CreateTestJWTAuthenticatorForCLIUpstream creates and returns a test JWTAuthenticator which will be automatically

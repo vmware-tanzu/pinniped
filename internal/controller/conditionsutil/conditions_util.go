@@ -66,7 +66,7 @@ func mergeIDPCondition(existing *[]metav1.Condition, new *metav1.Condition) bool
 	return false
 }
 
-// MergeConfigConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
+// MergeConfigConditions merges conditions into conditionsToUpdate. It returns true if it merged any error conditions.
 func MergeConfigConditions(conditions []*metav1.Condition, observedGeneration int64, conditionsToUpdate *[]metav1.Condition, log plog.MinLogger, now metav1.Time) bool {
 	hadErrorCondition := false
 	for i := range conditions {

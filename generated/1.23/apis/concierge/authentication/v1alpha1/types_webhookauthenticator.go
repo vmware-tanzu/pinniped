@@ -1,9 +1,22 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+type WebhookAuthenticatorPhase string
+
+const (
+	// WebhookAuthenticatorPhasePending is the default phase for newly-created WebhookAuthenticator resources.
+	WebhookAuthenticatorPhasePending WebhookAuthenticatorPhase = "Pending"
+
+	// WebhookAuthenticatorPhaseReady is the phase for an WebhookAuthenticator resource in a healthy state.
+	WebhookAuthenticatorPhaseReady WebhookAuthenticatorPhase = "Ready"
+
+	// WebhookAuthenticatorPhaseError is the phase for an WebhookAuthenticator in an unhealthy state.
+	WebhookAuthenticatorPhaseError WebhookAuthenticatorPhase = "Error"
+)
 
 // Status of a webhook authenticator.
 type WebhookAuthenticatorStatus struct {
@@ -13,6 +26,10 @@ type WebhookAuthenticatorStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// Phase summarizes the overall status of the WebhookAuthenticator.
+	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Error
+	Phase WebhookAuthenticatorPhase `json:"phase,omitempty"`
 }
 
 // Spec for configuring a webhook authenticator.

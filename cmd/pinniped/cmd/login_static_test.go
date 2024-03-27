@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
 )
 
@@ -215,7 +216,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 
-			require.Equal(t, tt.wantLogs, logLines(buf.String()))
+			require.Equal(t, tt.wantLogs, testutil.SplitByNewline(buf.String()))
 		})
 	}
 }

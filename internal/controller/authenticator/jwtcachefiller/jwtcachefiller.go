@@ -53,18 +53,21 @@ const (
 	typeJWKSFetchValid        = "JWKSFetchValid"
 	typeAuthenticatorValid    = "AuthenticatorValid"
 
-	reasonSuccess                      = "Success"
-	reasonNotReady                     = "NotReady"
-	reasonUnableToValidate             = "UnableToValidate"
-	reasonInvalidIssuerURL             = "InvalidIssuerURL"
-	reasonInvalidIssuerURLScheme       = "InvalidIssuerURLScheme"
-	reasonInvalidProviderJWKSURL       = "InvalidProviderJWKSURL"
-	reasonInvalidProviderJWKSURLScheme = "InvalidProviderJWKSURLScheme"
-	reasonInvalidTLSConfiguration      = "InvalidTLSConfiguration"
-	reasonInvalidDiscoveryProbe        = "InvalidDiscoveryProbe"
-	reasonInvalidAuthenticator         = "InvalidAuthenticator"
-	reasonInvalidTokenSigningFailure   = "InvalidTokenSigningFailure"
-	reasonInvalidCouldNotFetchJWKS     = "InvalidCouldNotFetchJWKS"
+	reasonSuccess                                   = "Success"
+	reasonNotReady                                  = "NotReady"
+	reasonUnableToValidate                          = "UnableToValidate"
+	reasonInvalidIssuerURL                          = "InvalidIssuerURL"
+	reasonInvalidIssuerURLScheme                    = "InvalidIssuerURLScheme"
+	reasonInvalidIssuerURLFragment                  = "InvalidIssuerURLContainsFragment"
+	reasonInvalidIssuerURLQueryParams               = "InvalidIssuerURLContainsQueryParams"
+	reasonInvalidIssuerURLContainsWellKnownEndpoint = "InvalidIssuerURLContainsWellKnownEndpoint"
+	reasonInvalidProviderJWKSURL                    = "InvalidProviderJWKSURL"
+	reasonInvalidProviderJWKSURLScheme              = "InvalidProviderJWKSURLScheme"
+	reasonInvalidTLSConfiguration                   = "InvalidTLSConfiguration"
+	reasonInvalidDiscoveryProbe                     = "InvalidDiscoveryProbe"
+	reasonInvalidAuthenticator                      = "InvalidAuthenticator"
+	reasonInvalidTokenSigningFailure                = "InvalidTokenSigningFailure"
+	reasonInvalidCouldNotFetchJWKS                  = "InvalidCouldNotFetchJWKS"
 
 	msgUnableToValidate = "unable to validate; see other conditions for details"
 
@@ -286,6 +289,39 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 		return nil, conditions, false
 	}
 
+	if strings.HasSuffix(issuerURL.Path, "/.well-known/openid-configuration") {
+		msg := fmt.Sprintf("spec.issuer %s cannot include path '/.well-known/openid-configuration'", issuer)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeIssuerURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidIssuerURLContainsWellKnownEndpoint,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	if len(issuerURL.Query()) != 0 {
+		msg := fmt.Sprintf("spec.issuer %s cannot include query params", issuer)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeIssuerURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidIssuerURLQueryParams,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
+	if issuerURL.Fragment != "" {
+		msg := fmt.Sprintf("spec.issuer %s cannot include fragment", issuer)
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeIssuerURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidIssuerURLFragment,
+			Message: msg,
+		})
+		return nil, conditions, false
+	}
+
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeIssuerURLValid,
 		Status:  metav1.ConditionTrue,
@@ -305,11 +341,12 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 		})
 		return nil, nil, conditions, nil
 	}
+
 	provider, err := coreosoidc.NewProvider(ctx, issuer)
 	pJSON := &providerJSON{}
 	if err != nil {
 		errText := "could not perform oidc discovery on provider issuer"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		msg := fmt.Sprintf("%s: %s", errText, pinnipedcontroller.TruncateMostLongErr(err))
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeDiscoveryValid,
 			Status:  metav1.ConditionFalse,
@@ -317,7 +354,7 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 			Message: msg,
 		})
 		// resync err, may be machine or other types of non-config error
-		return nil, nil, conditions, fmt.Errorf("%s: %w", errText, err)
+		return nil, nil, conditions, fmt.Errorf("%s: %s", errText, err)
 	}
 	msg := "discovery performed successfully"
 	conditions = append(conditions, &metav1.Condition{

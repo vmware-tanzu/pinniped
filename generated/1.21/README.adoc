@@ -154,6 +154,18 @@ WebhookAuthenticator describes the configuration of a webhook authenticator.
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase"]
+==== WebhookAuthenticatorPhase (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
+****
+
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec"]
 ==== WebhookAuthenticatorSpec 
 
@@ -186,6 +198,7 @@ Status of a webhook authenticator.
 |===
 | Field | Description
 | *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-21-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase[$$WebhookAuthenticatorPhase$$]__ | Phase summarizes the overall status of the WebhookAuthenticator.
 |===
 
 

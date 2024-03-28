@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -52,7 +52,9 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	defer cancel()
 
 	sessionStorageLifetime := 5 * time.Minute
-	storage := authorizationcode.New(secrets, time.Now, sessionStorageLifetime)
+	storage := authorizationcode.New(secrets, time.Now, func(requester fosite.Requester) time.Duration {
+		return sessionStorageLifetime
+	})
 
 	// the session for this signature should not exist yet
 	notFoundRequest, err := storage.GetAuthorizeCodeSession(ctx, signature, nil)
@@ -129,7 +131,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, stderrors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
 
-	// the data stored in Kube should be exactly the same but it should be marked as used
+	// the data stored in Kube should be exactly the same, but it should be marked as used
 	invalidatedSecret, err := secrets.Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
 	// InvalidateAuthorizeCodeSession() sets Active to false, so update the expected value accordingly.

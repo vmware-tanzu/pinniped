@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package crud
@@ -64,7 +64,6 @@ func TestStorage(t *testing.T) {
 		name        string
 		resource    string
 		mocks       func(*testing.T, mocker)
-		lifetime    func() time.Duration
 		run         func(*testing.T, Storage, *clocktesting.FakeClock) error
 		useNilClock bool
 		wantActions []coretesting.Action
@@ -123,7 +122,7 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, nil, nil)
+				rv1, err := storage.Create(ctx, signature, data, nil, nil, lifetime)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -183,14 +182,14 @@ func TestStorage(t *testing.T) {
 			mocks:    nil,
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				data := &testJSON{Data: "create1"}
-				rv1, err := storage.Create(ctx, "sig1", data, nil, nil)
+				rv1, err := storage.Create(ctx, "sig1", data, nil, nil, lifetime)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
 				fakeClock.Step(42 * time.Minute) // simulate that a known amount of time has passed
 
 				data = &testJSON{Data: "create2"}
-				rv1, err = storage.Create(ctx, "sig2", data, nil, nil)
+				rv1, err = storage.Create(ctx, "sig2", data, nil, nil, lifetime)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -299,7 +298,7 @@ func TestStorage(t *testing.T) {
 					Kind:       "some-kind",
 					Name:       "some-owner",
 					UID:        "123",
-				}})
+				}}, lifetime)
 				require.Equal(t, "1", rv1)
 				require.NoError(t, err)
 
@@ -1169,15 +1168,14 @@ func TestStorage(t *testing.T) {
 			name:     "create and get with infinite lifetime when lifetime is specified as zero",
 			resource: "access-tokens",
 			mocks:    nil,
-			lifetime: func() time.Duration { return 0 }, // 0 == infinity
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, nil, nil)
-				require.Empty(t, rv1) // fake client does not set this
+				rv1, err := storage.Create(ctx, signature, data, nil, nil, 0) // 0 == infinity
+				require.Empty(t, rv1)                                         // fake client does not set this
 				require.NoError(t, err)
 
 				out := &testJSON{}
@@ -1231,15 +1229,15 @@ func TestStorage(t *testing.T) {
 			resource:    "access-tokens",
 			useNilClock: true,
 			mocks:       nil,
-			lifetime:    func() time.Duration { return 0 }, // 0 == infinity
 			run: func(t *testing.T, storage Storage, fakeClock *clocktesting.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(context.Background(), authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data, nil, nil)
-				require.Empty(t, rv1) // fake client does not set this
+				// TODO: Note that this test will pass with just about any value for lifetime
+				rv1, err := storage.Create(ctx, signature, data, nil, nil, 0) // 0 == infinity
+				require.Empty(t, rv1)                                         // fake client does not set this
 				require.NoError(t, err)
 
 				out := &testJSON{}
@@ -1299,10 +1297,6 @@ func TestStorage(t *testing.T) {
 			if tt.mocks != nil {
 				tt.mocks(t, client)
 			}
-			useLifetime := lifetime
-			if tt.lifetime != nil {
-				useLifetime = tt.lifetime()
-			}
 			secrets := client.CoreV1().Secrets(namespace)
 
 			fakeClock := clocktesting.NewFakeClock(fakeNow)
@@ -1312,7 +1306,7 @@ func TestStorage(t *testing.T) {
 				clock = nil
 			}
 
-			storage := New(tt.resource, secrets, clock, useLifetime)
+			storage := New(tt.resource, secrets, clock)
 
 			err := tt.run(t, storage, fakeClock)
 

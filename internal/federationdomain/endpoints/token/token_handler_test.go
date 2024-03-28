@@ -4592,7 +4592,12 @@ func exchangeAuthcodeForTokens(
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
 	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
 
-	subject = NewHandler(idps, oauthHelper)
+	subject = NewHandler(
+		idps,
+		oauthHelper,
+		func(accessRequest fosite.AccessRequester) (bool, time.Duration) { return false, 0 },
+		func(accessRequest fosite.AccessRequester) (bool, time.Duration) { return false, 0 },
+	)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
 	expectedNumberOfIDSessionsStored := 0

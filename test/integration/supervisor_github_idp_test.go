@@ -224,7 +224,8 @@ func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: `spec.gitHubAPI.tls.certificateAuthorityData must be a PEM bundle starting with '-----BEGIN CERTIFICATE----' and then base64-encoded`,
+			usesCELValidation: true,
+			expectedErr:       `spec.gitHubAPI.tls.certificateAuthorityData must be a PEM bundle starting with '-----BEGIN CERTIFICATE----' and then base64-encoded`,
 		},
 	}
 	for _, tt := range tests {

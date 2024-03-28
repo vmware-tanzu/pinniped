@@ -1,7 +1,7 @@
 ---
 title: "Multiple Identity Providers"
 authors: [ "@cfryanr" ]
-status: "accepted"
+status: "implemented"
 sponsor: []
 approval_date: "July 12, 2023"
 ---

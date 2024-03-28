@@ -19,6 +19,10 @@ func (c *FakeIDPV1alpha1) ActiveDirectoryIdentityProviders(namespace string) v1a
 	return &FakeActiveDirectoryIdentityProviders{c, namespace}
 }
 
+func (c *FakeIDPV1alpha1) GitHubIdentityProviders(namespace string) v1alpha1.GitHubIdentityProviderInterface {
+	return &FakeGitHubIdentityProviders{c, namespace}
+}
+
 func (c *FakeIDPV1alpha1) LDAPIdentityProviders(namespace string) v1alpha1.LDAPIdentityProviderInterface {
 	return &FakeLDAPIdentityProviders{c, namespace}
 }

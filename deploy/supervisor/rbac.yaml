@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -55,6 +55,14 @@ rules:
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
     resources: [activedirectoryidentityproviders/status]
+    verbs: [get, patch, update]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
+    resources: [githubidentityproviders]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
+    resources: [githubidentityproviders/status]
     verbs: [get, patch, update]
     #! We want to be able to read pods/replicasets/deployment so we can learn who our deployment is to set
     #! as an owner reference.

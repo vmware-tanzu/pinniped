@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clientregistry
@@ -312,6 +312,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 		  "token_endpoint_auth_method": "none",
 		  "request_uris": null,
 		  "request_object_signing_alg": "",
-		  "token_endpoint_auth_signing_alg": "RS256"
+		  "token_endpoint_auth_signing_alg": "RS256",
+          "IDTokenLifetimeConfiguration": 0
 		}`, string(marshaled))
 }

@@ -263,130 +263,134 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				"Q7钎漡臧n栀,i"
 			],
 			"request_object_signing_alg": "廜+v,淬Ʋ4Dʧ呩锏緍场脋",
-			"token_endpoint_auth_signing_alg": "ưƓǴ罷ǹ~]ea胠Ĺĩv絹b垇I"
+			"token_endpoint_auth_signing_alg": "ưƓǴ罷ǹ~]ea胠Ĺĩv絹b垇I",
+			"IDTokenLifetimeConfiguration":2.593156354696909e+18
 		},
 		"scopes": [
-			"ĩǀŻQ'k頂箨J-a",
-			"ɓ啶#昏Q遐*\\髎bŸ1慂U"
+			"ǀŻQ'k頂箨J-",
+			"銈ɓ"
 		],
 		"grantedScopes": [
-			"ƼĮǡ鑻Z¥篚h°ʣ£ǖ%\"砬ʍ"
+			"#昏Q遐*\\髎bŸ1慂UFƼ",
+			"Oǹ冟[ǟ褾攚ŝlĆ",
+			"駳骪l拁乖¡J¿Ƈ妔M"
 		],
 		"form": {
-			"¡": [
-				"Ła卦牟懧¥ɂĵ",
-				"ɎǛƍdÚ慂+槰蚪i齥篗裢?霃谥vƘ:",
-				"/濔Aʉ\u003cS獾蔀OƭUǦ"
+			"¥": [
+				"碓ɎǛƍdÚ慂+槰蚪i齥篗裢?霃谥v"
 			],
-			"民撲ʓeŘ嬀j¤囡莒汗狲N\u003cCq": [
-				"5ȏ樛ȧ.mĔ櫓Ǩ療騃Ǐ}ɟ",
-				"潠[ĝU噤'",
-				"ŁȗɉY妶ǵ!ȁ"
+			"囡莒汗狲N": [
+				"霋Ɔ輡5ȏ樛ȧ.mĔ櫓Ǩ療",
+				"Ǉ/"
 			],
-			"褰ʎɰ癟VĎĢ婄磫绒u妔隤ʑƍš駎竪": [
-				"鱙翑ȲŻ麤ã桒嘞\\摗Ǘū稖咾鎅ǸÖ"
+			"礐jµ": [
+				"A",
+				"Jǽȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀",
+				"行"
 			]
 		},
 		"session": {
 			"fosite": {
 				"id_token_claims": {
-					"jti": "褗6巽ēđų蓼tùZ蛆鬣a\"ÙǞ0觢",
-					"iss": "j¦鲶H股ƲLŋZ-{",
-					"sub": "ehpƧ蓟",
+					"jti": "8",
+					"iss": "[ĝU噤'pX ʨ裄@",
+					"sub": "!ȁu狍ɶȳsčɦƦ诱ļ攬林Ñ",
 					"aud": [
-						"驜Ŗ~ů崧軒q腟u尿宲!"
+						"ƍ",
+						"¿o\u003e"
 					],
-					"nonce": "ǎ^嫯R忑隯ƗƋ*L\u0026",
-					"exp": "1989-06-02T14:40:29.613836765Z",
-					"iat": "2052-03-26T02:39:27.882495556Z",
-					"rat": "2038-04-06T10:46:24.698586972Z",
-					"auth_time": "2003-01-05T11:30:18.206004879Z",
-					"at_hash": "ğǫ\\aȊ4ț髄Al",
-					"acr": "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#",
+					"nonce": "ɔ闏À1#锰劝旣樎Ȱ",
+					"exp": "2008-03-21T05:57:43.261171532Z",
+					"iat": "2080-07-31T09:39:36.259602759Z",
+					"rat": "2093-01-01T11:32:44.398071123Z",
+					"auth_time": "2088-07-12T21:20:22.8199645Z",
+					"at_hash": "鎅ǸÖ绝TFǊĆw宵ɚe",
+					"acr": "ùZ蛆鬣a\"ÙǞ0觢Û±¤ǟaȭ_Ǣ",
 					"amr": [
-						"装ƹýĸŴB岺Ð嫹Sx镯荫őł疂ư墫"
+						"-{5£踉4"
 					],
-					"c_hash": "\u0026鶡",
+					"c_hash": "5^驜Ŗ~ů崧軒q腟u尿",
 					"ext": {
-						"rǓ\\BRë_g\"ʎ啴SƇMǃļū": {
-							"4撎胬龯,t猟i\u0026\u0026Q@ǤǟǗ": [
-								1239190737
+						"ğ": 1479850437,
+						"ǎ^嫯R忑隯ƗƋ*L\u0026": {
+							"4鞀腉篓ğǫ\\aȊ4ț髄AlȒ曓蓳n匟": [
+								1260036883
 							],
-							"飘ȱF?Ƈ畋": {
-								"劰û橸ɽ銐ƭ?}HƟ玈鳚": null,
-								"骲v0H晦XŘO溪V蔓Ȍ+~ē埅Ȝ": {
-									"4Ǟ": false
-								}
-							}
-						},
-						"鑳绪": 2738428764
-					}
-				},
-				"headers": {
-					"extra": {
-						"d謺錳4帳ŅǃĊ": 663773398,
-						"Ř鸨EJ": {
-							"Ǽǟ迍阊v\"豑觳翢砜": [
-								995342744
-							],
-							"ȏl鐉诳DT=3骜Ǹ": {
-								"厷ɁOƪ穋嶿鳈恱va|载ǰɱ汶C]ɲ": null,
-								"荤Ý呐ʣ®ǅȪǣǎǔ爣縗ɦü": {
-									"H :靥湤庤毩fɤȆʪ融ƆuŤn": true
+							"磹*金爃鶴滱ůĮǐ": {
+								"c3#\u0026PƢ曰l騌蘙螤": null,
+								"Ð嫹Sx镯荫őł": {
+									"鿞ČY\u0026鶡萷ɵ啜s攦Ɩ": true
 								}
 							}
 						}
 					}
 				},
-				"expires_at": {
-					"韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ": "1970-04-27T04:31:30.902468229Z"
+				"headers": {
+					"extra": {
+						"Rë_g\"": 573016912,
+						"啴SƇMǃļū@$": {
+							"i\u0026\u0026Q@Ǥ": {
+								"ĊƑ÷Ƒ螞费": null,
+								"Ƈ畋rɞ?Ɵ]旎Ȳ濡胉室癑勦e": {
+									"9ǍȬ劘$iA砳_": true
+								}
+							},
+							"胬龯,t": [
+								1355041984
+							]
+						}
+					}
 				},
-				"username": "髉龳ǽÙ",
-				"subject": "\u0026¥潝邎Ȗ莅ŝǔ盕戙鵮碡ʯiŬŽ"
+				"expires_at": {
+					"埅ȜʁɁ;Bd謺錳4帳Ņ": "1982-04-18T19:26:28.008651843Z",
+					"碼Ǫ": "2028-05-31T03:22:30.23394531Z"
+				},
+				"username": "鋖颤ōɓɡ Ǽǟ迍阊v\"豑觳翢砜",
+				"subject": "ɆƊ#XɗD愌铵ĸYų厷ɁOƪ"
 			},
 			"custom": {
-				"username": "Ĝ眧Ĭ",
-				"upstreamUsername": "ŉ2ƋŢ觛ǂ焺nŐǛ",
+				"username": "嶿鳈恱va|载ǰɱ汶C]ɲ'=ĸ",
+				"upstreamUsername": "ʣ®ǅȪǣǎǔ爣縗ɦüHêQ仏1őƖ2",
 				"upstreamGroups": [
-					"闣ʬ橳(ý綃ʃʚƟ覣k眐4Ĉt",
-					"ʃƸ澺淗a紽ǒ|鰽ŋ猊Ia瓕巈環_ɑ"
+					"Ȇ",
+					"ǞʜƢú4¶鎰"
 				],
-				"providerUID": "ƴŤȱʀļÂ?墖",
-				"providerName": "7就伒犘c钡",
-				"providerType": "k|鬌R蜚蠣麹概÷驣7Ʀ澉1æɽ誮",
+				"providerUID": "韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟ",
+				"providerName": "闺髉龳ǽÙ龦O亾EW莛8嘶×",
+				"providerType": "戙鵮碡ʯiŬŽ非Ĝ眧Ĭ葜SŦ",
 				"warnings": [
-					"鷞aŚB碠k9帴ʘ赱",
-					"ď逳鞪?3)藵睋邔\u0026Ű惫蜀Ģ¡圔"
+					"觛ǂ焺nŐǛ3}Ü#",
+					"(ý綃ʃʚƟ覣k眐4ĈtC嵽痊w©"
 				],
 				"oidc": {
-					"upstreamRefreshToken": "墀jMʥ",
-					"upstreamAccessToken": "+î艔垎0",
-					"upstreamSubject": "ĝ",
-					"upstreamIssuer": "ǢIȽ"
+					"upstreamRefreshToken": "榨Q|ôɵt毇",
+					"upstreamAccessToken": "瓕巈",
+					"upstreamSubject": "鉢緋uƴŤȱʀļÂ?",
+					"upstreamIssuer": "27就伒犘c钡ɏȫ"
 				},
 				"ldap": {
-					"userDN": "士b",
+					"userDN": "š%OpKȱ藚ɏ¬Ê蒭堜",
 					"extraRefreshAttributes": {
-						"O灞浛a齙\\蹼偦歛ơ 皦pSǬŝ": "ǅķ?吭匞饫Ƽĝ\"zvư",
-						"f跞@)¿,ɭS隑ip偶宾儮猷": "面@yȝƋ鬯犦獢9c5¤"
+						"1飞": "笿0D餹",
+						"誮rʨ鷞aŚB碠k9帴ʘ赱ŕ瑹xȢ~": ")藵睋邔\u0026Ű惫蜀Ģ¡圔鎥墀"
 					}
 				},
 				"activedirectory": {
-					"userDN": "置b",
+					"userDN": "êĝ",
 					"extraRefreshAttributes": {
-						"MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{鼐": "$+溪ŸȢŒų崓ļ憽",
-						"ĩŦʀ宍D挟": "q萮左/篣AÚƄŕ~čfVLPC諡}",
-						"姧骦:駝重EȫʆɵʮGɃ": "囤1+,Ȳ齠@ɍB鳛Nč乿ƔǴę鏶"
+						"IȽ齤士bEǎ": "跞@)¿,ɭS隑ip偶宾儮猷V麹",
+						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
 				}
 			}
 		},
 		"requestedAudience": [
-			"ň"
+			" 皦pSǬŝ社Vƅȭǝ*擦28ǅ",
+			"vư"
 		],
 		"grantedAudience": [
-			"â融貵捠ŉ",
-			"d鞕ȸ腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2"
+			"置b",
+			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
 		]
 	},
 	"version": "6"

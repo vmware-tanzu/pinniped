@@ -264,8 +264,12 @@ func isGitHubSessionBasedOnPAT(requester fosite.Requester) bool {
 	// TODO: only return true for GitHub sessions that were started by the piniped-cli client using a Personal Access Token.
 	//  Using LDAP sessions here as a temporary stand-in because GitHub auth is not implemented yet.
 	isPinnipedCLIClient := requester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI
-	isLDAPSession := requester.GetSession().(*psession.PinnipedSession).Custom.ProviderType == psession.ProviderTypeLDAP
-	return isPinnipedCLIClient && isLDAPSession
+	isLDAPSession := false
+	custom := requester.GetSession().(*psession.PinnipedSession).Custom
+	if custom != nil {
+		isLDAPSession = custom.ProviderType == psession.ProviderTypeLDAP
+	}
+	return false && isPinnipedCLIClient && isLDAPSession // Always return false since we don't use GitHub yet
 }
 
 func FositeOauth2Helper(

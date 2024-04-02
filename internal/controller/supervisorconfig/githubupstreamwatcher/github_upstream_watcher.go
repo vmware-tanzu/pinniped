@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -92,12 +93,15 @@ func (c *gitHubWatcherController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to list GitHubIdentityProviders: %w", err)
 	}
 
+	var errs []error
+
 	requeue := false
 	validatedUpstreams := make([]upstreamprovider.UpstreamGithubIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
-		valid := c.validateUpstream(ctx, upstream)
+		valid, err := c.validateUpstream(ctx, upstream)
 		if valid == nil {
 			requeue = true
+			errs = append(errs, err)
 		} else {
 			validatedUpstreams = append(validatedUpstreams, upstreamprovider.UpstreamGithubIdentityProviderI(valid))
 		}
@@ -106,10 +110,16 @@ func (c *gitHubWatcherController) Sync(ctx controllerlib.Context) error {
 	if requeue {
 		return controllerlib.ErrSyntheticRequeue
 	}
-	return nil
+
+	// Sync loop errors:
+	// - Should not be configuration errors. Config errors a user must correct belong on the .Status
+	//   object. The controller simply must wait for a user to correct before running again.
+	// - Other errors, such as networking errors, etc. are the types of errors that should return here
+	//   and signal the controller to retry the sync loop. These may be corrected by machines.
+	return errorsutil.NewAggregate(errs)
 }
 
-func (c *gitHubWatcherController) validateUpstream(ctx controllerlib.Context, upstream *v1alpha1.GitHubIdentityProvider) *upstreamgithub.ProviderConfig {
+func (c *gitHubWatcherController) validateUpstream(ctx controllerlib.Context, upstream *v1alpha1.GitHubIdentityProvider) (*upstreamgithub.ProviderConfig, error) {
 	result := upstreamgithub.ProviderConfig{
 		Name: upstream.Name,
 	}
@@ -127,9 +137,8 @@ func (c *gitHubWatcherController) validateUpstream(ctx controllerlib.Context, up
 		// c.validateClient(),
 	}
 
-	c.updateStatus(ctx.Context, upstream, conditions)
-
-	return &result
+	err := c.updateStatus(ctx.Context, upstream, conditions)
+	return &result, err
 }
 
 func (c *gitHubWatcherController) updateStatus(

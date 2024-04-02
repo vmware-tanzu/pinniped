@@ -125,3 +125,7 @@ type UpstreamLDAPIdentityProviderI interface {
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
 	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
 }
+
+type UpstreamGithubIdentityProviderI interface {
+	UpstreamIdentityProviderI
+}

@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamgithub"
 )
 
@@ -32,7 +32,7 @@ const (
 	// Constants related to the client credentials Secret.
 	gitHubClientSecretType corev1.SecretType = "secrets.pinniped.dev/github-client"
 
-	// // fixes lint to split from above group where const has explicit type
+	//
 	// clientIDDataKey     = "clientID"
 	// clientSecretDataKey = "clientSecret"
 	//
@@ -47,7 +47,7 @@ type UpstreamGitHubIdentityProviderICache interface {
 
 type gitHubWatcherController struct {
 	cache                          UpstreamGitHubIdentityProviderICache
-	log                            logr.Logger
+	log                            plog.Logger
 	client                         supervisorclientset.Interface
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer
 	secretInformer                 corev1informers.SecretInformer
@@ -59,7 +59,7 @@ func New(
 	client supervisorclientset.Interface,
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
-	log logr.Logger,
+	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
@@ -114,13 +114,16 @@ func (c *gitHubWatcherController) validateUpstream(ctx controllerlib.Context, up
 		Name: upstream.Name,
 	}
 
+	// TODO: once we firm up the proposal doc & merge, then firm up the CRD & merge, we can fill out these validations.
+	// The critical pattern to maintain is that every run of the sync loop will populate the exact number of the exact
+	// same set of conditions.  Conditions depending on other conditions should get Status:  metav1.ConditionUnknown, or
+	// Status:  metav1.ConditionFalse, never be omitted.
 	conditions := []*metav1.Condition{
-		// TODO: once we firm up the proposal doc & merge, then firm up the CRD & merge, we can
-		// fill out these validations.
-		// c.validateHost(),
-		// c.validateTLS(),
-		// c.validateAllowedOrganizations(),
-		// c.validateOrganizationLoginPolicy(),
+		// we may opt to split this up into smaller validation functions.
+		// Each function should be responsible for validating one logical unit and setting one condition.
+		// c.validateGitHubAPI(),
+		// c.validateClaims(),
+		// c.validateAllowedAuthentication(),
 		// c.validateClient(),
 	}
 
@@ -129,7 +132,10 @@ func (c *gitHubWatcherController) validateUpstream(ctx controllerlib.Context, up
 	return &result
 }
 
-func (c *gitHubWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.GitHubIdentityProvider, conditions []*metav1.Condition) {
+func (c *gitHubWatcherController) updateStatus(
+	ctx context.Context,
+	upstream *v1alpha1.GitHubIdentityProvider,
+	conditions []*metav1.Condition) error {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
@@ -141,14 +147,12 @@ func (c *gitHubWatcherController) updateStatus(ctx context.Context, upstream *v1
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
-		return
+		return nil
 	}
 
 	_, err := c.client.
 		IDPV1alpha1().
 		GitHubIdentityProviders(upstream.Namespace).
 		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error(err, "failed to update status")
-	}
+	return err
 }

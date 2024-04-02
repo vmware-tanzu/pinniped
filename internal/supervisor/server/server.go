@@ -329,9 +329,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
-				// TODO: need to swap this out for plog.New()
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
-				// plog.New(),
+				plog.New(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker).

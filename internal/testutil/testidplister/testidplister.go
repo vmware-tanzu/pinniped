@@ -11,6 +11,7 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedgithub"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -24,6 +25,7 @@ type TestFederationDomainIdentityProvidersListerFinder struct {
 	upstreamOIDCIdentityProviders            []*oidctestutil.TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*oidctestutil.TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*oidctestutil.TestUpstreamLDAPIdentityProvider
+	upstreamGitHubIdentityProviders          []*oidctestutil.TestUpstreamGitHubIdentityProvider
 	defaultIDPDisplayName                    string
 }
 
@@ -64,6 +66,16 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetIdentityProviders
 			DisplayName:         testIDP.DisplayNameForFederationDomain,
 			Provider:            testIDP,
 			SessionProviderType: psession.ProviderTypeActiveDirectory,
+			Transforms:          testIDP.TransformsForFederationDomain,
+		}
+		fdIDPs[i] = fdIDP
+		i++
+	}
+	for _, testIDP := range t.upstreamGitHubIdentityProviders {
+		fdIDP := &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+			DisplayName:         testIDP.DisplayNameForFederationDomain,
+			Provider:            testIDP,
+			SessionProviderType: psession.ProviderTypeGitHub,
 			Transforms:          testIDP.TransformsForFederationDomain,
 		}
 		fdIDPs[i] = fdIDP
@@ -110,6 +122,16 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDis
 			}, nil
 		}
 	}
+	for _, testIDP := range t.upstreamGitHubIdentityProviders {
+		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
+			return &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+				DisplayName:         testIDP.DisplayNameForFederationDomain,
+				Provider:            testIDP,
+				SessionProviderType: psession.ProviderTypeGitHub,
+				Transforms:          testIDP.TransformsForFederationDomain,
+			}, nil
+		}
+	}
 	return nil, fmt.Errorf("did not find IDP with name %q", upstreamIDPDisplayName)
 }
 
@@ -125,12 +147,17 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) SetActiveDirectoryId
 	t.upstreamActiveDirectoryIdentityProviders = providers
 }
 
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetGitHubIdentityProviders(providers []*oidctestutil.TestUpstreamGitHubIdentityProvider) {
+	t.upstreamGitHubIdentityProviders = providers
+}
+
 // UpstreamIDPListerBuilder can be used to build either a dynamicupstreamprovider.DynamicUpstreamIDPProvider
 // or a FederationDomainIdentityProvidersListerFinderI for testing.
 type UpstreamIDPListerBuilder struct {
 	upstreamOIDCIdentityProviders            []*oidctestutil.TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*oidctestutil.TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*oidctestutil.TestUpstreamLDAPIdentityProvider
+	upstreamGitHubIdentityProviders          []*oidctestutil.TestUpstreamGitHubIdentityProvider
 	defaultIDPDisplayName                    string
 }
 
@@ -149,6 +176,11 @@ func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryId
 	return b
 }
 
+func (b *UpstreamIDPListerBuilder) WithGitHub(upstreamGithubIdentityProviders ...*oidctestutil.TestUpstreamGitHubIdentityProvider) *UpstreamIDPListerBuilder {
+	b.upstreamGitHubIdentityProviders = append(b.upstreamGitHubIdentityProviders, upstreamGithubIdentityProviders...)
+	return b
+}
+
 func (b *UpstreamIDPListerBuilder) WithDefaultIDPDisplayName(defaultIDPDisplayName string) *UpstreamIDPListerBuilder {
 	b.defaultIDPDisplayName = defaultIDPDisplayName
 	return b
@@ -159,6 +191,7 @@ func (b *UpstreamIDPListerBuilder) BuildFederationDomainIdentityProvidersListerF
 		upstreamOIDCIdentityProviders:            b.upstreamOIDCIdentityProviders,
 		upstreamLDAPIdentityProviders:            b.upstreamLDAPIdentityProviders,
 		upstreamActiveDirectoryIdentityProviders: b.upstreamActiveDirectoryIdentityProviders,
+		upstreamGitHubIdentityProviders:          b.upstreamGitHubIdentityProviders,
 		defaultIDPDisplayName:                    b.defaultIDPDisplayName,
 	}
 }
@@ -184,6 +217,12 @@ func (b *UpstreamIDPListerBuilder) BuildDynamicUpstreamIDPProvider() dynamicupst
 	}
 	idpProvider.SetActiveDirectoryIdentityProviders(adUpstreams)
 
+	githubUpstreams := make([]upstreamprovider.UpstreamGithubIdentityProviderI, len(b.upstreamGitHubIdentityProviders))
+	for i := range b.upstreamGitHubIdentityProviders {
+		githubUpstreams[i] = upstreamprovider.UpstreamGithubIdentityProviderI(b.upstreamGitHubIdentityProviders[i])
+	}
+	idpProvider.SetGitHubIdentityProviders(githubUpstreams)
+
 	return idpProvider
 }
 
@@ -204,6 +243,8 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPasswordCredentialsGra
 			actualArgs = upstreamOIDC.PasswordCredentialsGrantAndValidateTokensArgs(0)
 		}
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
+
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to PasswordCredentialsGrantAndValidateTokens() by all OIDC upstreams",
 	)
@@ -219,6 +260,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPasswordCredentialsG
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.PasswordCredentialsGrantAndValidateTokensCallCount()
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to PasswordCredentialsGrantAndValidateTokens()",
 	)
@@ -241,6 +283,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndVal
 			actualArgs = upstreamOIDC.ExchangeAuthcodeAndValidateTokensArgs(0)
 		}
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to ExchangeAuthcodeAndValidateTokens() by all OIDC upstreams",
 	)
@@ -256,6 +299,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndV
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to ExchangeAuthcodeAndValidateTokens()",
 	)
@@ -294,6 +338,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
 			actualArgs = upstreamAD.PerformRefreshArgs(0)
 		}
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
 		"should have been exactly one call to PerformRefresh() by all upstreams",
 	)
@@ -315,6 +360,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *te
 	for _, upstreamActiveDirectory := range b.upstreamActiveDirectoryIdentityProviders {
 		actualCallCountAcrossAllUpstreams += upstreamActiveDirectory.PerformRefreshCallCount()
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 
 	require.Equal(t, 0, actualCallCountAcrossAllUpstreams,
 		"expected exactly zero calls to PerformRefresh()",
@@ -338,6 +384,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
 			actualArgs = upstreamOIDC.ValidateTokenAndMergeWithUserInfoArgs(0)
 		}
 	}
+	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to ValidateTokenAndMergeWithUserInfo() by all OIDC upstreams",
 	)
@@ -353,6 +400,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ValidateTokenAndMergeWithUserInfoCallCount()
 	}
+	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to ValidateTokenAndMergeWithUserInfo()",
 	)
@@ -375,6 +423,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToRevokeToken(
 			actualArgs = upstreamOIDC.RevokeTokenArgs(0)
 		}
 	}
+	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to RevokeToken() by all OIDC upstreams",
 	)
@@ -390,6 +439,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToRevokeToken(t *testi
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.RevokeTokenCallCount()
 	}
+	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to RevokeToken()",
 	)

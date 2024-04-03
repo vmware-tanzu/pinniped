@@ -128,6 +128,7 @@ type UpstreamLDAPIdentityProviderI interface {
 	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
 }
 
+// TODO: Impl this interface thoroughly to support GitHub login.
 type UpstreamGithubIdentityProviderI interface {
 	UpstreamIdentityProviderI
 

@@ -189,7 +189,10 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() [
 		for _, p := range cachedGitHubProviders {
 			if idp.UID == p.GetResourceUID() {
 				providers = append(providers, &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
-					// TODO: fill this out.
+					DisplayName:         idp.DisplayName,
+					Provider:            p,
+					SessionProviderType: psession.ProviderTypeGitHub,
+					Transforms:          idp.Transforms,
 				})
 			}
 		}

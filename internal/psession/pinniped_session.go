@@ -85,6 +85,7 @@ const (
 	ProviderTypeOIDC            ProviderType = "oidc"
 	ProviderTypeLDAP            ProviderType = "ldap"
 	ProviderTypeActiveDirectory ProviderType = "activedirectory"
+	ProviderTypeGitHub          ProviderType = "github"
 )
 
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
@@ -143,8 +144,9 @@ func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
 	}
 }
 
+// TODO: flesh this out, GitHub will need additional data.
 type GitHubSessionData struct {
-	// TODO: flesh this out
+	// TODO: flesh this out.
 }
 
 func (s *GitHubSessionData) Clone() *GitHubSessionData {

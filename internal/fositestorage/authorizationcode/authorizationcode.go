@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -190,6 +190,7 @@ func (e *errSerializationFailureWithCause) Error() string {
 	return fmt.Sprintf("%s: %s", fosite.ErrSerializationFailure, e.cause)
 }
 
+// TODO: need to revisit this, there is a unit test now failing.
 // ExpectedAuthorizeCodeSessionJSONFromFuzzing is used for round tripping tests.
 // It is exported to allow integration tests to use it.
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{

@@ -5,12 +5,15 @@
 package upstreamgithub
 
 import (
+	"context"
 	"net/http"
 
 	"golang.org/x/oauth2"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 )
 
@@ -28,44 +31,74 @@ type ProviderConfig struct {
 	HttpClient              *http.Client
 }
 
-var _ upstreamprovider.UpstreamGithubIdentityProviderI = (*ProviderConfig)(nil)
-
-func (p *ProviderConfig) GetResourceUID() types.UID {
-	return p.ResourceUID
+type Provider struct {
+	c ProviderConfig
 }
 
-func (p *ProviderConfig) GetName() string {
-	return p.Name
+var _ upstreamprovider.UpstreamGithubIdentityProviderI = &Provider{}
+var _ authenticators.UserAuthenticator = &Provider{}
+
+// New creates a Provider. The config is not a pointer to ensure that a copy of the config is created,
+// making the resulting Provider use an effectively read-only configuration.
+func New(config ProviderConfig) *Provider {
+	return &Provider{c: config}
 }
 
-func (p *ProviderConfig) GetClientID() string {
-	return p.OAuth2Config.ClientID
+// GetConfig is a reader for the config. Returns a copy of the config to keep the underlying config read-only.
+func (p *Provider) GetConfig() ProviderConfig {
+	return p.c
 }
 
-func (p *ProviderConfig) GetHost() string {
-	return p.Host
+// GetName returns a name for this upstream provider.
+func (p *Provider) GetName() string {
+	return p.c.Name
 }
 
-func (p *ProviderConfig) GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute {
-	return p.UsernameAttribute
+func (p *Provider) GetResourceUID() types.UID {
+	return p.c.ResourceUID
 }
 
-func (p *ProviderConfig) GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute {
-	return p.GroupNameAttribute
+func (p *Provider) GetClientID() string {
+	return p.c.OAuth2Config.ClientID
 }
 
-func (p *ProviderConfig) GetAllowedOrganizations() []string {
-	return p.AllowedOrganizations
+func (p *Provider) GetOAuth2Config() *oauth2.Config {
+	return p.c.OAuth2Config
 }
 
-func (p *ProviderConfig) GetOrganizationLoginPolicy() v1alpha1.GitHubAllowedAuthOrganizationsPolicy {
-	return p.OrganizationLoginPolicy
+func (p *Provider) GetHost() string {
+	return p.c.Host
 }
 
-func (p *ProviderConfig) GetAuthorizationURL() string {
-	return p.AuthorizationURL
+func (p *Provider) GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute {
+	return p.c.UsernameAttribute
 }
 
-func (p *ProviderConfig) GetHttpClient() *http.Client {
-	return p.HttpClient
+func (p *Provider) GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute {
+	return p.c.GroupNameAttribute
+}
+
+func (p *Provider) GetAllowedOrganizations() []string {
+	return p.c.AllowedOrganizations
+}
+
+func (p *Provider) GetOrganizationLoginPolicy() v1alpha1.GitHubAllowedAuthOrganizationsPolicy {
+	return p.c.OrganizationLoginPolicy
+}
+
+func (p *Provider) GetAuthorizationURL() string {
+	return p.c.AuthorizationURL
+}
+
+func (p *Provider) GetHttpClient() *http.Client {
+	return p.c.HttpClient
+}
+
+// AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
+func (p *Provider) AuthenticateUser(
+	ctx context.Context, //nolint:all
+	username, password string, //nolint:all
+) (*authenticators.Response, bool, error) {
+	// TODO: implement this, currently just placeholder to satisfy UserAuthenticator interface above
+	return nil, false, nil
 }

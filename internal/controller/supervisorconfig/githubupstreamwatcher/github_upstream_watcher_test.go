@@ -371,7 +371,8 @@ func TestController(t *testing.T) {
 		wantErr                 string
 		wantLogs                []string
 		wantResultingCache      []*upstreamgithub.ProviderConfig
-		wantResultingUpstreams  []v1alpha1.GitHubIdentityProvider
+		// wantResultingCache      []*oidctestutil.TestUpstreamGitHubIdentityProvider
+		wantResultingUpstreams []v1alpha1.GitHubIdentityProvider
 	}{
 		{
 			name: "no GitHubIdentityProviders",
@@ -1717,7 +1718,9 @@ func TestController(t *testing.T) {
 
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 			cache.SetGitHubIdentityProviders([]upstreamprovider.UpstreamGithubIdentityProviderI{
-				&upstreamgithub.ProviderConfig{Name: "initial-entry-to-remove"},
+				upstreamgithub.New(
+					upstreamgithub.ProviderConfig{Name: "initial-entry-to-remove"},
+				),
 			})
 
 			var log bytes.Buffer
@@ -1757,12 +1760,12 @@ func TestController(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := 0; i < len(tt.wantResultingCache); i++ {
 				// Do not expect any particular order in the cache
-				var actualIDP *upstreamgithub.ProviderConfig
+				var actualIDP *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
 					if possibleIDP.GetName() == tt.wantResultingCache[i].Name {
 						// For this check, we know that the actual IDPs are going to have type upstreamgithub.ProviderConfig
 						var ok bool
-						actualIDP, ok = possibleIDP.(*upstreamgithub.ProviderConfig)
+						actualIDP, ok = possibleIDP.(*upstreamgithub.Provider)
 						require.True(t, ok)
 						break
 					}
@@ -1785,7 +1788,8 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 
 				compareTLSClientConfigWithinHttpClients(t, phttp.Default(certPool), actualIDP.GetHttpClient())
-				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualIDP.OAuth2Config)
+				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualIDP.GetOAuth2Config())
+
 			}
 
 			// Verify the status conditions as reported in Kubernetes

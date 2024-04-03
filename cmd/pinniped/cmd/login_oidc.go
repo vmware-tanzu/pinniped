@@ -328,6 +328,9 @@ func flowOptions(
 				flowSource, requestedIDPType, requestedFlow,
 				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
 		}
+	// TODO: implement this
+	case idpdiscoveryv1alpha1.IDPTypeGitHub:
+		panic("GitHub has not been implemented yet.")
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
 		return nil, fmt.Errorf(

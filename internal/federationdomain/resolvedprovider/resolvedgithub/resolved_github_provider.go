@@ -1,3 +1,6 @@
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package resolvedgithub
 
 import (
@@ -60,34 +63,37 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) ApplyIDPSpecificSession
 	session.GitHub = idpSpecificSessionData.(*psession.GitHubSessionData)
 }
 
-func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedirectURL(state *resolvedprovider.UpstreamAuthorizeRequestState, downstreamIssuerURL string) (string, error) {
+func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedirectURL(
+	state *resolvedprovider.UpstreamAuthorizeRequestState, //nolint:all
+	downstreamIssuerURL string, //nolint:all
+) (string, error) {
 	// TODO: implement
 	return "", nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
-	ctx context.Context,
-	submittedUsername string,
-	submittedPassword string,
+	ctx context.Context, //nolint:all
+	submittedUsername string, //nolint:all
+	submittedPassword string, //nolint:all
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
 	return nil, nil, nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
-	ctx context.Context,
-	authCode string,
-	pkce pkce.Code,
-	nonce nonce.Nonce,
-	redirectURI string,
+	ctx context.Context, //nolint:all
+	authCode string, //nolint:all
+	pkce pkce.Code, //nolint:all
+	nonce nonce.Nonce, //nolint:all
+	redirectURI string, //nolint:all
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
 	return nil, nil, nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
-	ctx context.Context,
-	identity *resolvedprovider.Identity,
+	ctx context.Context, //nolint:all
+	identity *resolvedprovider.Identity, //nolint:all
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	// TODO: implement
 	return nil, nil

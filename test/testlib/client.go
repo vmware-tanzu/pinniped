@@ -34,6 +34,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	alpha1 "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 
@@ -834,6 +835,59 @@ func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldH
 		}
 		return subjectAccessReview.Status.Allowed, nil
 	}, time.Minute, 500*time.Millisecond)
+}
+
+func WaitForGitHubIDPPhase(
+	ctx context.Context,
+	t *testing.T,
+	client alpha1.GitHubIdentityProviderInterface,
+	gitHubIDPName string,
+	expectPhase idpv1alpha1.GitHubIdentityProviderPhase,
+) {
+	t.Helper()
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		idp, err := client.Get(ctx, gitHubIDPName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+		requireEventually.Equalf(expectPhase, idp.Status.Phase, "actual status conditions were: %#v", idp.Status.Conditions)
+	}, 60*time.Second, 1*time.Second, "expected the GitHubIDP to have status %q", expectPhase)
+}
+
+func WaitForGitHubIdentityProviderStatusConditions(
+	ctx context.Context,
+	t *testing.T,
+	client alpha1.GitHubIdentityProviderInterface,
+	gitHubIDPName string,
+	expectConditions []*metav1.Condition,
+) {
+	t.Helper()
+
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		idp, err := client.Get(ctx, gitHubIDPName, metav1.GetOptions{})
+		requireEventually.NoError(err)
+
+		actualConditions := make([]*metav1.Condition, len(idp.Status.Conditions))
+		for i, c := range idp.Status.Conditions {
+			actualConditions[i] = c.DeepCopy()
+		}
+
+		requireEventually.Lenf(actualConditions, len(expectConditions),
+			"wanted status conditions: %#v", expectConditions)
+
+		for i, wantCond := range expectConditions {
+			actualCond := actualConditions[i]
+
+			// This is a cheat to avoid needing to make equality assertions on these fields.
+			requireEventually.NotZero(actualCond.LastTransitionTime)
+			wantCond.LastTransitionTime = actualCond.LastTransitionTime
+			requireEventually.NotZero(actualCond.ObservedGeneration)
+			wantCond.ObservedGeneration = actualCond.ObservedGeneration
+
+			requireEventually.Equalf(wantCond, actualCond,
+				"wanted status conditions: %#v\nactual status conditions were: %#v\nnot equal at index %d",
+				expectConditions, &actualConditions, i)
+		}
+	}, 60*time.Second, 1*time.Second, "wanted conditions for GitHubIdentityProvider %q", gitHubIDPName)
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

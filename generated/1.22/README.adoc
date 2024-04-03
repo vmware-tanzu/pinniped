@@ -1392,7 +1392,7 @@ GitHubAPIConfig allows configuration for GitHub Enterprise Server
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`host`* __string__ | Host is required only for GitHub Enterprise Server. Defaults to using GitHub's public API (github.com). Do not specify a protocol or scheme since 'https://' will always be used.
+| *`host`* __string__ | Host is required only for GitHub Enterprise Server. Defaults to using GitHub's public API ("github.com"). Do not specify a protocol or scheme since "https://" will always be used. Port is optional. Do not specify a path, query, fragment, or userinfo. Only domain name or IP address, subdomains (optional), and port (optional). IPv4 and IPv6 are supported. If using an IPv6 address with a port, you must enclose the IPv6 address in square brackets. Example: "[::1]:443".
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-22-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for GitHub Enterprise Server.
 |===
 

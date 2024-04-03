@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientwatcher
@@ -133,7 +133,7 @@ func (c *oidcClientWatcherController) updateStatus(
 ) error {
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeConfigConditions(conditions,
+	hadErrorCondition := conditionsutil.MergeConditions(conditions,
 		upstream.Generation, &updated.Status.Conditions, plog.New(), metav1.Now())
 
 	updated.Status.Phase = v1alpha1.OIDCClientPhaseReady

@@ -813,7 +813,7 @@ func (c *federationDomainWatcherController) updateStatus(
 		})
 	}
 
-	_ = conditionsutil.MergeConfigConditions(conditions,
+	_ = conditionsutil.MergeConditions(conditions,
 		federationDomain.Generation, &updated.Status.Conditions, plog.New().WithName(controllerName), metav1.NewTime(c.clock.Now()))
 
 	if equality.Semantic.DeepEqual(federationDomain, updated) {

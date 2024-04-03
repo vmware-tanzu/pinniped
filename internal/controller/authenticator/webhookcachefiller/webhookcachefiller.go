@@ -30,7 +30,6 @@ import (
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
-	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
@@ -316,7 +315,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 }
 
 func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
-	rootCAs, pemBytes, err := pinnipedauthenticator.CABundle(tlsSpec)
+	rootCAs, pemBytes, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -411,7 +410,7 @@ func (c *webhookCacheFillerController) updateStatus(
 		})
 	}
 
-	_ = conditionsutil.MergeConfigConditions(
+	_ = conditionsutil.MergeConditions(
 		conditions,
 		original.Generation,
 		&updated.Status.Conditions,

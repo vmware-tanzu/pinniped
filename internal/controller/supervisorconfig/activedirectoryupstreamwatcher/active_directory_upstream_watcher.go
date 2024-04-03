@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package activedirectoryupstreamwatcher implements a controller which watches ActiveDirectoryIdentityProviders.
@@ -368,7 +368,7 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
 	updated.Status.Phase = v1alpha1.ActiveDirectoryPhaseReady
 	if hadErrorCondition {

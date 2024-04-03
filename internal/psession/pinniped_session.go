@@ -74,6 +74,9 @@ type CustomSessionData struct {
 
 	// Only used when ProviderType == "activedirectory".
 	ActiveDirectory *ActiveDirectorySessionData `json:"activedirectory,omitempty"`
+
+	// Only used when ProviderType == "github".
+	GitHub *GitHubSessionData `json:"github,omitempty"`
 }
 
 type ProviderType string
@@ -138,6 +141,15 @@ func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
 		UserDN:                 s.UserDN,
 		ExtraRefreshAttributes: maps.Clone(s.ExtraRefreshAttributes), // shallow copy works because all keys and values are strings
 	}
+}
+
+type GitHubSessionData struct {
+	// TODO: flesh this out
+}
+
+func (s *GitHubSessionData) Clone() *GitHubSessionData {
+	dataCopy := *s // this shortcut works because all fields in this type are currently strings (no pointers)
+	return &dataCopy
 }
 
 // NewPinnipedSession returns a new empty session.

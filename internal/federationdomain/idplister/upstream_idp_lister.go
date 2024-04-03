@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package idplister
@@ -19,8 +19,13 @@ type UpstreamActiveDirectoryIdentityProviderLister interface {
 	GetActiveDirectoryIdentityProviders() []upstreamprovider.UpstreamLDAPIdentityProviderI
 }
 
+type UpstreamGitHubIdentityProviderLister interface {
+	GetGitHubIdentityProviders() []upstreamprovider.UpstreamGithubIdentityProviderI
+}
+
 type UpstreamIdentityProvidersLister interface {
 	UpstreamOIDCIdentityProvidersLister
 	UpstreamLDAPIdentityProvidersLister
 	UpstreamActiveDirectoryIdentityProviderLister
+	UpstreamGitHubIdentityProviderLister
 }

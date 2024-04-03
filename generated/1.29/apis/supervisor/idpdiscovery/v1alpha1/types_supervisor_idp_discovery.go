@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -16,6 +16,7 @@ const (
 	IDPTypeLDAP            IDPType = "ldap"
 	IDPTypeActiveDirectory IDPType = "activedirectory"
 
+	IDPTypeGitHub          IDPType = "github"
 	IDPFlowCLIPassword     IDPFlow = "cli_password"
 	IDPFlowBrowserAuthcode IDPFlow = "browser_authcode"
 )

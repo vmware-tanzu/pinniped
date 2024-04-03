@@ -11,6 +11,7 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedgithub"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/idtransform"
@@ -144,6 +145,7 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() [
 	cachedOIDCProviders := u.wrappedLister.GetOIDCIdentityProviders()
 	cachedLDAPProviders := u.wrappedLister.GetLDAPIdentityProviders()
 	cachedADProviders := u.wrappedLister.GetActiveDirectoryIdentityProviders()
+	cachedGitHubProviders := u.wrappedLister.GetGitHubIdentityProviders()
 	providers := []resolvedprovider.FederationDomainResolvedIdentityProvider{}
 	// Every configured identityProvider on the FederationDomain uses an objetRef to an underlying IDP CR that might
 	// be available as a provider in the wrapped cache. For each configured identityProvider/displayName...
@@ -181,6 +183,13 @@ func (u *FederationDomainIdentityProvidersListerFinder) GetIdentityProviders() [
 					Provider:            p,
 					SessionProviderType: psession.ProviderTypeActiveDirectory,
 					Transforms:          idp.Transforms,
+				})
+			}
+		}
+		for _, p := range cachedGitHubProviders {
+			if idp.UID == p.GetResourceUID() {
+				providers = append(providers, &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+					// TODO: fill this out.
 				})
 			}
 		}

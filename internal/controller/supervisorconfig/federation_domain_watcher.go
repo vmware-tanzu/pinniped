@@ -67,6 +67,7 @@ const (
 	kindLDAPIdentityProvider            = "LDAPIdentityProvider"
 	kindOIDCIdentityProvider            = "OIDCIdentityProvider"
 	kindActiveDirectoryIdentityProvider = "ActiveDirectoryIdentityProvider"
+	kindGitHubIdentityProvider          = "GitHubIdentityProvider"
 
 	celTransformerMaxExpressionRuntime = 5 * time.Second
 )
@@ -88,9 +89,9 @@ type federationDomainWatcherController struct {
 	oidcIdentityProviderInformer            idpinformers.OIDCIdentityProviderInformer
 	ldapIdentityProviderInformer            idpinformers.LDAPIdentityProviderInformer
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer
-
-	celTransformer *celtransformer.CELTransformer
-	allowedKinds   sets.Set[string]
+	githubIdentityProviderInformer          idpinformers.GitHubIdentityProviderInformer
+	celTransformer                          *celtransformer.CELTransformer
+	allowedKinds                            sets.Set[string]
 }
 
 // NewFederationDomainWatcherController creates a controllerlib.Controller that watches
@@ -104,9 +105,10 @@ func NewFederationDomainWatcherController(
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer,
+	githubProviderInformer idpinformers.GitHubIdentityProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
-	allowedKinds := sets.New(kindActiveDirectoryIdentityProvider, kindLDAPIdentityProvider, kindOIDCIdentityProvider)
+	allowedKinds := sets.New(kindActiveDirectoryIdentityProvider, kindLDAPIdentityProvider, kindOIDCIdentityProvider, kindGitHubIdentityProvider)
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: controllerName,
@@ -119,6 +121,7 @@ func NewFederationDomainWatcherController(
 				oidcIdentityProviderInformer:            oidcIdentityProviderInformer,
 				ldapIdentityProviderInformer:            ldapIdentityProviderInformer,
 				activeDirectoryIdentityProviderInformer: activeDirectoryIdentityProviderInformer,
+				githubIdentityProviderInformer:          githubProviderInformer,
 				allowedKinds:                            allowedKinds,
 			},
 		},
@@ -143,6 +146,13 @@ func NewFederationDomainWatcherController(
 		),
 		withInformer(
 			activeDirectoryIdentityProviderInformer,
+			// Since this controller only cares about IDP metadata names and UIDs (immutable fields),
+			// we only need to trigger Sync on creates and deletes.
+			pinnipedcontroller.MatchAnythingIgnoringUpdatesFilter(pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			githubProviderInformer,
 			// Since this controller only cares about IDP metadata names and UIDs (immutable fields),
 			// we only need to trigger Sync on creates and deletes.
 			pinnipedcontroller.MatchAnythingIgnoringUpdatesFilter(pinnipedcontroller.SingletonQueue()),
@@ -264,9 +274,12 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 	if err != nil {
 		return nil, nil, err
 	}
-
+	githubIdentityProviders, err := c.githubIdentityProviderInformer.Lister().List(labels.Everything())
+	if err != nil {
+		return nil, nil, err
+	}
 	// Check if that there is exactly one IDP defined in the Supervisor namespace of any IDP CRD type.
-	idpCRsCount := len(oidcIdentityProviders) + len(ldapIdentityProviders) + len(activeDirectoryIdentityProviders)
+	idpCRsCount := len(oidcIdentityProviders) + len(ldapIdentityProviders) + len(activeDirectoryIdentityProviders) + len(githubIdentityProviders)
 
 	switch {
 	case idpCRsCount == 1:
@@ -286,6 +299,10 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 			defaultFederationDomainIdentityProvider.DisplayName = activeDirectoryIdentityProviders[0].Name
 			defaultFederationDomainIdentityProvider.UID = activeDirectoryIdentityProviders[0].UID
 			foundIDPName = activeDirectoryIdentityProviders[0].Name
+		case len(githubIdentityProviders) == 1:
+			defaultFederationDomainIdentityProvider.DisplayName = githubIdentityProviders[0].Name
+			defaultFederationDomainIdentityProvider.UID = githubIdentityProviders[0].UID
+			foundIDPName = githubIdentityProviders[0].Name
 		}
 		// Backwards compatibility mode always uses an empty identity transformation pipeline since no
 		// transformations are defined on the FederationDomain.
@@ -446,6 +463,8 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 		foundIDP, err = c.activeDirectoryIdentityProviderInformer.Lister().ActiveDirectoryIdentityProviders(namespace).Get(objectRef.Name)
 	case kindOIDCIdentityProvider:
 		foundIDP, err = c.oidcIdentityProviderInformer.Lister().OIDCIdentityProviders(namespace).Get(objectRef.Name)
+	case kindGitHubIdentityProvider:
+		foundIDP, err = c.githubIdentityProviderInformer.Lister().GitHubIdentityProviders(namespace).Get(objectRef.Name)
 	default:
 		// This shouldn't happen because this helper function is not called when the kind is invalid.
 		return "", false, fmt.Errorf("unexpected kind: %s", objectRef.Kind)

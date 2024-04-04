@@ -29,6 +29,10 @@ replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttpt
 // This is an indirect dep which has CVE-2024-24786, so replace it with a fixed version
 replace google.golang.org/protobuf => google.golang.org/protobuf v1.33.0
 
+// https://github.com/coreos/go-oidc/releases/tag/v3.10.0 starts to use https://github.com/go-jose/go-jose/releases/tag/v4.0.0.
+// Unfortunately this has breaking changes.
+replace github.com/coreos/go-oidc/v3 => github.com/coreos/go-oidc/v3 v3.9.0
+
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20240328024531-fe04f09ede24
@@ -106,7 +110,6 @@ require (
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
-	github.com/go-jose/go-jose/v4 v4.0.1 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect

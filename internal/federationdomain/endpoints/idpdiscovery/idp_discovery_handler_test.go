@@ -39,6 +39,7 @@ func TestIDPDiscovery(t *testing.T) {
 				"pinniped_identity_providers": [
 					{"name": "a-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "a-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
+					{"name": "g-some-github-idp", "type": "github",        "flows": ["browser_authcode"]},
 					{"name": "x-some-ldap-idp", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
 					{"name": "x-some-oidc-idp", "type": "oidc",            "flows": ["browser_authcode"]},
 					{"name": "y-some-ad-idp",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
@@ -49,6 +50,7 @@ func TestIDPDiscovery(t *testing.T) {
 			}`),
 			wantSecondResponseBodyJSON: here.Doc(`{
 				"pinniped_identity_providers": [
+					{"name": "g-some-github-idp",     "type": "github",          "flows": ["browser_authcode"]},
 					{"name": "some-other-ad-idp-1",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
 					{"name": "some-other-ad-idp-2",   "type": "activedirectory", "flows": ["cli_password", "browser_authcode"]},
 					{"name": "some-other-ldap-idp-1", "type": "ldap",            "flows": ["cli_password", "browser_authcode"]},
@@ -77,6 +79,7 @@ func TestIDPDiscovery(t *testing.T) {
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("a-some-oidc-idp").Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ldap-idp").Build()).
 				WithLDAP(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("x-some-ldap-idp").Build()).
+				WithGitHub(oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().WithName("g-some-github-idp").Build()).
 				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("z-some-ad-idp").Build()).
 				WithActiveDirectory(oidctestutil.NewTestUpstreamLDAPIdentityProviderBuilder().WithName("y-some-ad-idp").Build()).
 				BuildFederationDomainIdentityProvidersListerFinder()

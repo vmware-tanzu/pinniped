@@ -39,7 +39,7 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) IDPCount() int {
 
 func (t *TestFederationDomainIdentityProvidersListerFinder) GetIdentityProviders() []resolvedprovider.FederationDomainResolvedIdentityProvider {
 	fdIDPs := make([]resolvedprovider.FederationDomainResolvedIdentityProvider,
-		len(t.upstreamOIDCIdentityProviders)+len(t.upstreamLDAPIdentityProviders)+len(t.upstreamActiveDirectoryIdentityProviders))
+		len(t.upstreamOIDCIdentityProviders)+len(t.upstreamLDAPIdentityProviders)+len(t.upstreamActiveDirectoryIdentityProviders)+len(t.upstreamGitHubIdentityProviders))
 	i := 0
 	for _, testIDP := range t.upstreamOIDCIdentityProviders {
 		fdIDP := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{

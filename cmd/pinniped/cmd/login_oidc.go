@@ -304,7 +304,8 @@ func flowOptions(
 	}
 
 	switch requestedIDPType {
-	case idpdiscoveryv1alpha1.IDPTypeOIDC:
+	// TODO(BEN): previously i had put a panic("GitHub NOPE") here.  Now its time to work out the details of doing an actual GitHub Login....
+	case idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeGitHub:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword:
 			return useCLIFlow, nil
@@ -328,9 +329,6 @@ func flowOptions(
 				flowSource, requestedIDPType, requestedFlow,
 				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
 		}
-	// TODO: implement this
-	case idpdiscoveryv1alpha1.IDPTypeGitHub:
-		panic("GitHub has not been implemented yet.")
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
 		return nil, fmt.Errorf(
@@ -340,6 +338,7 @@ func flowOptions(
 				idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
 				idpdiscoveryv1alpha1.IDPTypeLDAP.String(),
 				idpdiscoveryv1alpha1.IDPTypeActiveDirectory.String(),
+				idpdiscoveryv1alpha1.IDPTypeGitHub.String(),
 			}, ", "),
 		)
 	}

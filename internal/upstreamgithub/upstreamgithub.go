@@ -96,7 +96,7 @@ func (p *Provider) GetHttpClient() *http.Client {
 
 // AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(
-	ctx context.Context, //nolint:all
+	ctx context.Context,       //nolint:all
 	username, password string, //nolint:all
 ) (*authenticators.Response, bool, error) {
 	// TODO: implement this, currently just placeholder to satisfy UserAuthenticator interface above

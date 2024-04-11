@@ -5,6 +5,7 @@ package resolvedgithub
 
 import (
 	"context"
+	"fmt"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
@@ -44,8 +45,13 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) GetIDPDiscoveryType() v
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) GetIDPDiscoveryFlows() []v1alpha1.IDPFlow {
-	// TODO: implement
-	return []v1alpha1.IDPFlow{}
+	// TODO: review and see if this is actually true to follow the OIDC model
+	flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
+	// TODO: coming as a later feature?  The UpstreamGithubIdentityProviderI does not currently impl this func
+	// if p.Provider.AllowsPasswordGrant() {
+	// 	flows = append(flows, v1alpha1.IDPFlowCLIPassword)
+	// }
+	return flows
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) GetTransforms() *idtransform.TransformationPipeline {
@@ -68,6 +74,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedire
 	downstreamIssuerURL string, //nolint:all
 ) (string, error) {
 	// TODO: implement
+	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamAuthorizeRedirectURL() called with state: %#v, downstreamIssuerURL %s", state, downstreamIssuerURL)
 	return "", nil
 }
 
@@ -77,6 +84,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
 	submittedPassword string, //nolint:all
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
+	fmt.Printf("GithubResolvedIdentityProvider ~ Login() called with submittedUserName %s, submittedPassword %s", submittedUsername, submittedPassword)
 	return nil, nil, nil
 }
 
@@ -88,6 +96,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 	redirectURI string, //nolint:all
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
+	fmt.Printf("GithubResolvedIdentityProvider ~ LoginFromCallback() called wtih authCode: %s, pkce: %#v, nonce: %#v, redirectURI: %s", authCode, pkce, nonce, redirectURI)
 	return nil, nil, nil
 }
 
@@ -96,5 +105,6 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
 	identity *resolvedprovider.Identity, //nolint:all
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	// TODO: implement
+	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamRefresh() called with identity %#v", identity)
 	return nil, nil
 }

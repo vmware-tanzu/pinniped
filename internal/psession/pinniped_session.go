@@ -146,7 +146,6 @@ func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
 
 // TODO: flesh this out, GitHub will need additional data.
 type GitHubSessionData struct {
-	// TODO: flesh this out.
 }
 
 func (s *GitHubSessionData) Clone() *GitHubSessionData {

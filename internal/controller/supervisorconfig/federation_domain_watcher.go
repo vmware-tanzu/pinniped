@@ -90,8 +90,9 @@ type federationDomainWatcherController struct {
 	ldapIdentityProviderInformer            idpinformers.LDAPIdentityProviderInformer
 	activeDirectoryIdentityProviderInformer idpinformers.ActiveDirectoryIdentityProviderInformer
 	githubIdentityProviderInformer          idpinformers.GitHubIdentityProviderInformer
-	celTransformer                          *celtransformer.CELTransformer
-	allowedKinds                            sets.Set[string]
+
+	celTransformer *celtransformer.CELTransformer
+	allowedKinds   sets.Set[string]
 }
 
 // NewFederationDomainWatcherController creates a controllerlib.Controller that watches

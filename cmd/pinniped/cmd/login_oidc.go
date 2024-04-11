@@ -304,7 +304,7 @@ func flowOptions(
 	}
 
 	switch requestedIDPType {
-	// TODO(BEN): previously i had put a panic("GitHub NOPE") here.  Now its time to work out the details of doing an actual GitHub Login....
+	// TODO: Decide if we can bundle GitHub here long term or if it needs its own case
 	case idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeGitHub:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword:

@@ -94,6 +94,13 @@ if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_u
   exit 1
 fi
 
+if [[ "$use_github_upstream" == "yes" ]]; then
+  if [[ "${PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID:-}" == "" || "${PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET:-}" == "" ]]; then
+    echo "Error: Please set environment vars PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID and PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET when using --github flag"
+    exit 1
+  fi
+fi
+
 # Read the env vars output by hack/prepare-for-integration-tests.sh
 source /tmp/integration-test-env
 

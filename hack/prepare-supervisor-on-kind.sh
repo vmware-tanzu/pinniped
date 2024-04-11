@@ -323,8 +323,8 @@ type: "secrets.pinniped.dev/github-client"
 metadata:
   name: my-github-provider-client-secret
 stringData:
-  clientID: REDACTED
-  clientSecret: REDACTED
+  clientID: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID"
+  clientSecret: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET"
 EOF
 fi
 
@@ -589,12 +589,6 @@ fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "    AD Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
   echo "    AD Password: $PINNIPED_TEST_AD_USER_PASSWORD"
-  echo
-fi
-
-if [[ "$use_github_upstream" == "yes" ]]; then
-  echo "    GitHub Username: your github username"
-  echo "    GitHub Password: your github password"
   echo
 fi
 

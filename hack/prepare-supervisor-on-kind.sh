@@ -303,8 +303,7 @@ EOF
 fi
 
 if [[ "$use_github_upstream" == "yes" ]]; then
-  # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.
-  # TODO: claims ought be configured
+  # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.  
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: GitHubIdentityProvider
@@ -318,8 +317,7 @@ spec:
       policy: AllGitHubUsers
 EOF
 
-  # Make a Secret for the above GitHubIdentityProvider to describe the GitHub client configured.
-  # TODO: make clientID and clientSecret configurable, create & store values in our secret manager
+  # Make a Secret for the above GitHubIdentityProvider to describe the GitHub client configured.  
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: v1
 kind: Secret
@@ -331,7 +329,6 @@ stringData:
   clientSecret: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET"
 EOF
 fi
-
 
 # Create a CA and TLS serving certificates for the Supervisor's FederationDomain.
 if [[ ! -f "$root_ca_crt_path" ]]; then
@@ -468,8 +465,6 @@ if [[ "$use_github_upstream" == "yes" ]]; then
         name: my-github-provider
 EOF
 fi
-
-
 
 # Apply the FederationDomain from the file created above.
 kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f "$fd_file"

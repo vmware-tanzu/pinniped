@@ -42,7 +42,7 @@ source hack/lib/helpers.sh
 use_oidc_upstream=no
 use_ldap_upstream=no
 use_ad_upstream=no
-use_github_upstream=no # TODO: there are two kinds of github apps, we may have to support args for this?
+use_github_upstream=no
 use_flow=""
 while (("$#")); do
   case "$1" in
@@ -311,9 +311,6 @@ kind: GitHubIdentityProvider
 metadata:
   name: my-github-provider
 spec:
-  claims:
-    username: id
-    groups: slug
   client:
     secretName: my-github-provider-client-secret
   allowAuthentication:

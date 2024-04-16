@@ -68,6 +68,7 @@ import (
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/secret"
@@ -325,12 +326,15 @@ func prepareControllers(
 			singletonWorker).
 		WithController(
 			githubupstreamwatcher.New(
+				podInfo.Namespace,
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
 				plog.New(),
 				controllerlib.WithInformer,
+				clock.RealClock{},
+				phttp.Default,
 			),
 			singletonWorker).
 		WithController(

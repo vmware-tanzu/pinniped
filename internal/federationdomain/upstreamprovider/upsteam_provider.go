@@ -5,11 +5,13 @@ package upstreamprovider
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -128,4 +130,40 @@ type UpstreamLDAPIdentityProviderI interface {
 
 type UpstreamGithubIdentityProviderI interface {
 	UpstreamIdentityProviderI
+
+	// GetHost returns the hostname of the GitHub server. This is either "github.com" or a GitHub Enterprise Server.
+	GetHost() string
+
+	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
+	GetClientID() string
+
+	// GetUsernameAttribute returns the attribute from the GitHub API user response to use for the downstream username.
+	// See https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user.
+	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
+	GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute
+
+	// GetGroupNameAttribute returns the attribute from the GitHub API team response to use for the downstream group names.
+	// See https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user.
+	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
+	GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute
+
+	// GetAllowedOrganizations returns a list of organizations configured to allow authentication. A user must have membership
+	// in at least one of these organizations to log in. Note that the user can specify a policy (returned by GetOrganizationLoginPolicy)
+	// to disregard organization membership for purposes of authentication.
+	//
+	// If this list is specified, only teams from the listed organizations should be represented as groups for the downstream token.
+	GetAllowedOrganizations() []string
+
+	// GetOrganizationLoginPolicy must be "OnlyUsersFromAllowedOrganizations" if GetAllowedOrganizations has values.
+	// Otherwise, it must be "AllGitHubUsers", which means disregard the result of GetAllowedOrganizations.
+	GetOrganizationLoginPolicy() v1alpha1.GitHubAllowedAuthOrganizationsPolicy
+
+	// GetAuthorizationURL returns the authorization URL for the configured GitHub. This will look like:
+	// https://<spec.githubAPI.host>/login/oauth/authorize
+	// It will not include any query parameters or fragment. Any subdomains or port will come from <spec.githubAPI.host>.
+	// It will never include a username or password in the authority section.
+	GetAuthorizationURL() string
+
+	// GetHttpClient returns a http client configured with the provided CA bundle and a timeout.
+	GetHttpClient() *http.Client
 }

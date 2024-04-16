@@ -17,7 +17,7 @@ import (
 type HostPort struct {
 	// Host is the validated host part of the input, which may be a hostname or IP.
 	//
-	// This string can be be used as an x509 certificate SAN.
+	// This string can be used as a x509 certificate SAN.
 	Host string
 
 	// Port is the validated port number, which may be defaulted.

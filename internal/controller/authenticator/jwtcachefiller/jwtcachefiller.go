@@ -240,7 +240,7 @@ func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncac
 }
 
 func (c *jwtCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	rootCAs, _, err := pinnipedauthenticator.CABundle(tlsSpec)
+	rootCAs, _, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
 		conditions = append(conditions, &metav1.Condition{
@@ -594,7 +594,7 @@ func (c *jwtCacheFillerController) updateStatus(
 		})
 	}
 
-	_ = conditionsutil.MergeConfigConditions(
+	_ = conditionsutil.MergeConditions(
 		conditions,
 		original.Generation,
 		&updated.Status.Conditions,

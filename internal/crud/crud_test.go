@@ -1235,7 +1235,6 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				// TODO: Note that this test will pass with just about any value for lifetime
 				rv1, err := storage.Create(ctx, signature, data, nil, nil, 0) // 0 == infinity
 				require.Empty(t, rv1)                                         // fake client does not set this
 				require.NoError(t, err)

@@ -200,7 +200,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 	labelsToAdd[SecretLabelKey] = s.resource // make it easier to find this stuff via kubectl
 
 	var annotations map[string]string
-	if lifetime > 0 && s.clock != nil {
+	if lifetime > 0 {
 		annotations = map[string]string{
 			SecretLifetimeAnnotationKey: s.clock().Add(lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
 		}

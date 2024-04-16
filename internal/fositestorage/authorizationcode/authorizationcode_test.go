@@ -35,6 +35,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
@@ -45,6 +46,7 @@ const namespace = "test-ns"
 var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
 var lifetime = time.Minute * 10
 var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+var lifetimeFunc = func(requester fosite.Requester) time.Duration { return lifetime }
 
 func TestAuthorizationCodeStorage(t *testing.T) {
 	secretsGVR := schema.GroupVersionResource{
@@ -66,7 +68,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":0},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -86,19 +88,26 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":0},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
 		}),
 	}
 
-	ctx, client, _, storage := makeTestSubject()
+	storageLifetimeFuncCallCount := 0
+	var storageLifetimeFuncCallRequesterArg fosite.Requester
+	ctx, client, _, storage := makeTestSubject(func(requester fosite.Requester) time.Duration {
+		storageLifetimeFuncCallCount++
+		storageLifetimeFuncCallRequesterArg = requester
+		return lifetime
+	})
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
 		Client: &clientregistry.Client{
+			IDTokenLifetimeConfiguration: 42 * time.Second,
 			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
 				DefaultClient: &fosite.DefaultClient{
 					ID:            "pinny",
@@ -127,6 +136,8 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
 	require.NoError(t, err)
+	require.Equal(t, 1, storageLifetimeFuncCallCount)
+	require.Equal(t, request, storageLifetimeFuncCallRequesterArg)
 
 	newRequest, err := storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
 	require.NoError(t, err)
@@ -143,10 +154,13 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	invalidatedRequest, err := storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
 	require.EqualError(t, err, "authorization code session for fancy-signature has already been used: Authorization code has ben invalidated")
 	require.Equal(t, "abcd-1", invalidatedRequest.GetID())
+
+	// Check that there were no more calls to the lifetime func since the original create.
+	require.Equal(t, 1, storageLifetimeFuncCallCount)
 }
 
 func TestGetNotFound(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	_, notFoundErr := storage.GetAuthorizeCodeSession(ctx, "non-existent-signature", nil)
 	require.EqualError(t, notFoundErr, "not_found")
@@ -154,7 +168,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestInvalidateWhenNotFound(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	notFoundErr := storage.InvalidateAuthorizeCodeSession(ctx, "non-existent-signature")
 	require.EqualError(t, notFoundErr, "not_found")
@@ -162,7 +176,7 @@ func TestInvalidateWhenNotFound(t *testing.T) {
 }
 
 func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
-	ctx, client, _, storage := makeTestSubject()
+	ctx, client, _, storage := makeTestSubject(lifetimeFunc)
 
 	client.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewConflict(schema.GroupResource{
@@ -183,7 +197,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 }
 
 func TestWrongVersion(t *testing.T) {
-	ctx, _, secrets, storage := makeTestSubject()
+	ctx, _, secrets, storage := makeTestSubject(lifetimeFunc)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -208,7 +222,7 @@ func TestWrongVersion(t *testing.T) {
 }
 
 func TestNilSessionRequest(t *testing.T) {
-	ctx, _, secrets, storage := makeTestSubject()
+	ctx, _, secrets, storage := makeTestSubject(lifetimeFunc)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -233,14 +247,14 @@ func TestNilSessionRequest(t *testing.T) {
 }
 
 func TestCreateWithNilRequester(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", nil)
 	require.EqualError(t, err, "requester must be of type fosite.Request")
 }
 
 func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	request := &fosite.Request{
 		Session: nil,
@@ -257,10 +271,13 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
-func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
+func makeTestSubject(lifetimeFunc timeouts.StorageLifetime) (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
-	return context.Background(), client, secrets, New(secrets, clocktesting.NewFakeClock(fakeNow).Now, func(requester fosite.Requester) time.Duration { return lifetime })
+	return context.Background(),
+		client,
+		secrets,
+		New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetimeFunc)
 }
 
 // TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession asserts that we can correctly round trip our authorize code session.

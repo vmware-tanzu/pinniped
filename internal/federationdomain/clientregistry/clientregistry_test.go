@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
@@ -180,7 +181,7 @@ func TestClientManager(t *testing.T) {
 			},
 		},
 		{
-			name: "find a valid dynamic client",
+			name: "find a valid dynamic client without an ID token lifetime configuration",
 			oidcClients: []*configv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -188,6 +189,7 @@ func TestClientManager(t *testing.T) {
 						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
+						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: nil},
 					},
 				},
 				{
@@ -203,24 +205,49 @@ func TestClientManager(t *testing.T) {
 				require.IsType(t, &Client{}, got)
 				c := got.(*Client)
 
-				require.Equal(t, testName, c.GetID())
-				require.Nil(t, c.GetHashedSecret())
-				require.Len(t, c.GetRotatedHashes(), 2)
-				require.Equal(t, testutil.HashedPassword1AtSupervisorMinCost, string(c.GetRotatedHashes()[0]))
-				require.Equal(t, testutil.HashedPassword2AtSupervisorMinCost, string(c.GetRotatedHashes()[1]))
-				require.Equal(t, []string{"http://localhost:80", "https://foobar.com/callback"}, c.GetRedirectURIs())
-				require.Equal(t, fosite.Arguments{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"}, c.GetGrantTypes())
-				require.Equal(t, fosite.Arguments{"code"}, c.GetResponseTypes())
-				require.Equal(t, fosite.Arguments{"openid", "offline_access", "pinniped:request-audience", "username", "groups"}, c.GetScopes())
-				require.False(t, c.IsPublic())
-				require.Nil(t, c.GetAudience())
-				require.Nil(t, c.GetRequestURIs())
-				require.Nil(t, c.GetJSONWebKeys())
-				require.Equal(t, "", c.GetJSONWebKeysURI())
-				require.Equal(t, "", c.GetRequestObjectSigningAlgorithm())
-				require.Equal(t, "client_secret_basic", c.GetTokenEndpointAuthMethod())
-				require.Equal(t, "RS256", c.GetTokenEndpointAuthSigningAlgorithm())
-				require.Equal(t, []fosite.ResponseModeType{"", "query"}, c.GetResponseModes())
+				requireDynamicOIDCClient(t, c,
+					testName,
+					[]string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost},
+					fosite.Arguments{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					fosite.Arguments{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+					[]string{"http://localhost:80", "https://foobar.com/callback"},
+					0*time.Second,
+				)
+			},
+		},
+		{
+			name: "find a valid dynamic client with an ID token lifetime configuration",
+			oidcClients: []*configv1alpha1.OIDCClient{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+					Spec: configv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
+						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
+						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:8080"},
+						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: ptr.To[int32]((4242))},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-client", Generation: 1234, UID: testUID},
+				},
+			},
+			secrets: []*corev1.Secret{
+				testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword2AtSupervisorMinCost, testutil.HashedPassword1AtSupervisorMinCost}),
+			},
+			run: func(t *testing.T, subject *ClientManager) {
+				got, err := subject.GetClient(ctx, testName)
+				require.NoError(t, err)
+				require.IsType(t, &Client{}, got)
+				c := got.(*Client)
+
+				requireDynamicOIDCClient(t, c,
+					testName,
+					[]string{testutil.HashedPassword2AtSupervisorMinCost, testutil.HashedPassword1AtSupervisorMinCost},
+					fosite.Arguments{"authorization_code", "refresh_token"},
+					fosite.Arguments{"openid", "offline_access", "username", "groups"},
+					[]string{"http://localhost:8080"},
+					4242*time.Second,
+				)
 			},
 		},
 	}
@@ -279,6 +306,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 	require.Equal(t, "none", c.GetTokenEndpointAuthMethod())
 	require.Equal(t, "RS256", c.GetTokenEndpointAuthSigningAlgorithm())
 	require.Equal(t, []fosite.ResponseModeType{"", "query", "form_post"}, c.GetResponseModes())
+	require.Equal(t, 0*time.Second, c.IDTokenLifetimeConfiguration)
 
 	marshaled, err := json.Marshal(c)
 	require.NoError(t, err)
@@ -315,4 +343,40 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 		  "token_endpoint_auth_signing_alg": "RS256",
           "IDTokenLifetimeConfiguration": 0
 		}`, string(marshaled))
+}
+
+func requireDynamicOIDCClient(
+	t *testing.T,
+	c *Client,
+	wantClientID string,
+	wantHashes []string,
+	wantGrantTypes fosite.Arguments,
+	wantScopes fosite.Arguments,
+	wantRedirectURIs []string,
+	wantIDTokenLifetimeConfiguration time.Duration,
+) {
+	require.Equal(t, wantClientID, c.GetID())
+
+	require.Len(t, c.GetRotatedHashes(), len(wantHashes))
+	for i := range wantHashes {
+		require.Equal(t, wantHashes[i], string(c.GetRotatedHashes()[i]))
+	}
+
+	require.Equal(t, wantRedirectURIs, c.GetRedirectURIs())
+	require.Equal(t, wantGrantTypes, c.GetGrantTypes())
+	require.Equal(t, wantScopes, c.GetScopes())
+	require.Equal(t, wantIDTokenLifetimeConfiguration, c.IDTokenLifetimeConfiguration)
+
+	// The following are always the same for all OIDCClients.
+	require.Nil(t, c.GetHashedSecret())
+	require.Equal(t, fosite.Arguments{"code"}, c.GetResponseTypes())
+	require.False(t, c.IsPublic())
+	require.Nil(t, c.GetAudience())
+	require.Nil(t, c.GetRequestURIs())
+	require.Nil(t, c.GetJSONWebKeys())
+	require.Equal(t, "", c.GetJSONWebKeysURI())
+	require.Equal(t, "", c.GetRequestObjectSigningAlgorithm())
+	require.Equal(t, "client_secret_basic", c.GetTokenEndpointAuthMethod())
+	require.Equal(t, "RS256", c.GetTokenEndpointAuthSigningAlgorithm())
+	require.Equal(t, []fosite.ResponseModeType{"", "query"}, c.GetResponseModes())
 }

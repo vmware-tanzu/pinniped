@@ -27,12 +27,17 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-const namespace = "test-ns"
+const (
+	namespace       = "test-ns"
+	expectedVersion = "7" // update this when you update the storage version in the production code
+)
 
-var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
-var lifetime = time.Minute * 10
-var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
-var lifetimeFunc = func(requester fosite.Requester) time.Duration { return lifetime }
+var (
+	fakeNow                     = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	lifetime                    = time.Minute * 10
+	fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+	lifetimeFunc                = func(requester fosite.Requester) time.Duration { return lifetime }
+)
 
 func TestOpenIdConnectStorage(t *testing.T) {
 	secretsGVR := schema.GroupVersionResource{
@@ -54,7 +59,7 @@ func TestOpenIdConnectStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/oidc",
@@ -151,7 +156,7 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetOpenIDConnectSession(ctx, "fancy-code.fancy-signature", nil)
 
-	require.EqualError(t, err, "oidc request data has wrong version: oidc session for fancy-signature has version not-the-right-version instead of 6")
+	require.EqualError(t, err, "oidc request data has wrong version: oidc session for fancy-signature has version not-the-right-version instead of "+expectedVersion)
 }
 
 func TestNilSessionRequest(t *testing.T) {
@@ -166,7 +171,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"6"}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"` + expectedVersion + `"}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/oidc",

@@ -35,7 +35,8 @@ const (
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
-	authorizeCodeStorageVersion = "6"
+	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
+	authorizeCodeStorageVersion = "7"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -393,5 +394,5 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
 		]
 	},
-	"version": "6"
+	"version": "7"
 }`

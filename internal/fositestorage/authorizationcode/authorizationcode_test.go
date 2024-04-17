@@ -41,12 +41,17 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-const namespace = "test-ns"
+const (
+	namespace       = "test-ns"
+	expectedVersion = "7" // update this when you update the storage version in the production code
+)
 
-var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
-var lifetime = time.Minute * 10
-var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
-var lifetimeFunc = func(requester fosite.Requester) time.Duration { return lifetime }
+var (
+	fakeNow                     = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	lifetime                    = time.Minute * 10
+	fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+	lifetimeFunc                = func(requester fosite.Requester) time.Duration { return lifetime }
+)
 
 func TestAuthorizationCodeStorage(t *testing.T) {
 	secretsGVR := schema.GroupVersionResource{
@@ -68,7 +73,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -88,7 +93,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -218,7 +223,7 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
 
-	require.EqualError(t, err, "authorization request data has wrong version: authorization code session for fancy-signature has version not-the-right-version instead of 6")
+	require.EqualError(t, err, "authorization request data has wrong version: authorization code session for fancy-signature has version not-the-right-version instead of "+expectedVersion)
 }
 
 func TestNilSessionRequest(t *testing.T) {
@@ -233,7 +238,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value", "version":"6", "active": true}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value", "version":"` + expectedVersion + `", "active": true}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/authcode",
@@ -403,7 +408,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 
 	// set these to match CreateAuthorizeCodeSession so that .JSONEq works
 	validSession.Active = true
-	validSession.Version = "6" // update this when you update the storage version in the production code
+	validSession.Version = expectedVersion
 
 	validSessionJSONBytes, err := json.MarshalIndent(validSession, "", "\t")
 	require.NoError(t, err)
@@ -414,9 +419,15 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 
 	t.Log("actual value from fuzzing", authorizeCodeSessionJSONFromFuzzing) // can be useful when updating expected value
 
-	// while the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
-	// if it adds a new field that can be fuzzed, this check will fail
-	// thus if AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field)
+	// While the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
+	// if it adds a new field that can be fuzzed, this check will fail.
+	// Thus, when AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field).
+	// Whenever this changes, consider increasing the session storage versions. Consider what would happen if an old
+	// version of a session Secret is read by new code after a Pinniped upgrade? For example, would there be new unset
+	// fields in the deserialized session data structs? If so, you probably want to increase the storage versions to
+	// cause those old session Secrets to be discarded upon read after an upgrade.
+	// Note that when you change the storage version, you will also need to change it in the JSON content of the
+	// expected value for this assertion.
 	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing, "actual:\n%s", authorizeCodeSessionJSONFromFuzzing)
 }
 
@@ -438,13 +449,13 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"id_token_claims":{"jti": "xyz"},"headers":{"extra":{"myheader": "foo"}},"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"id_token_claims":{"jti": "xyz"},"headers":{"extra":{"myheader": "foo"}},"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/authcode",
 			},
 			wantSession: &Session{
-				Version: "6",
+				Version: expectedVersion,
 				Active:  true,
 				Request: &fosite.Request{
 					ID:     "abcd-1",
@@ -482,7 +493,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/not-authcode",
@@ -505,7 +516,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/authcode",
 			},
-			wantErr: "authorization request data has wrong version: authorization code session has version wrong-version-here instead of 6",
+			wantErr: "authorization request data has wrong version: authorization code session has version wrong-version-here instead of " + expectedVersion,
 		},
 		{
 			name: "missing request",
@@ -518,7 +529,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/authcode",

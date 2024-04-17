@@ -34,7 +34,8 @@ const (
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
-	refreshTokenStorageVersion = "6"
+	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
+	refreshTokenStorageVersion = "7"
 )
 
 type RevocationStorage interface {

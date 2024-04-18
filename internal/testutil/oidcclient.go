@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -50,6 +50,7 @@ func newOIDCClient(
 	redirectURI string,
 	allowedGrantTypes []configv1alpha1.GrantType,
 	allowedScopes []configv1alpha1.Scope,
+	tokenLifetimesIDTokenSeconds *int32,
 ) *configv1alpha1.OIDCClient {
 	return &configv1alpha1.OIDCClient{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: clientID, Generation: 1, UID: types.UID(clientUID)},
@@ -57,6 +58,7 @@ func newOIDCClient(
 			AllowedGrantTypes:   allowedGrantTypes,
 			AllowedScopes:       allowedScopes,
 			AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(redirectURI)},
+			TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: tokenLifetimesIDTokenSeconds},
 		},
 	}
 }
@@ -73,6 +75,7 @@ func FullyCapableOIDCClientAndStorageSecret(
 	clientID string,
 	clientUID string,
 	redirectURI string,
+	tokenLifetimesIDTokenSeconds *int32,
 	hashes []string,
 	validateFunc OIDCClientValidatorFunc,
 ) (*configv1alpha1.OIDCClient, *corev1.Secret) {
@@ -82,7 +85,7 @@ func FullyCapableOIDCClientAndStorageSecret(
 		"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token",
 	}
 
-	return OIDCClientAndStorageSecret(t, namespace, clientID, clientUID, allGrantTypes, allScopes, redirectURI, hashes, validateFunc)
+	return OIDCClientAndStorageSecret(t, namespace, clientID, clientUID, allGrantTypes, allScopes, redirectURI, tokenLifetimesIDTokenSeconds, hashes, validateFunc)
 }
 
 // OIDCClientAndStorageSecret returns an OIDC client which is allowed to use the specified grant types and scopes,
@@ -96,10 +99,11 @@ func OIDCClientAndStorageSecret(
 	allowedGrantTypes []configv1alpha1.GrantType,
 	allowedScopes []configv1alpha1.Scope,
 	redirectURI string,
+	tokenLifetimesIDTokenSeconds *int32,
 	hashes []string,
 	validateFunc OIDCClientValidatorFunc,
 ) (*configv1alpha1.OIDCClient, *corev1.Secret) {
-	oidcClient := newOIDCClient(namespace, clientID, clientUID, redirectURI, allowedGrantTypes, allowedScopes)
+	oidcClient := newOIDCClient(namespace, clientID, clientUID, redirectURI, allowedGrantTypes, allowedScopes, tokenLifetimesIDTokenSeconds)
 	secret := OIDCClientSecretStorageSecretForUID(t, namespace, clientUID, hashes)
 
 	// If a test made an invalid OIDCClient then inform the author of the test, so they can fix the test case.

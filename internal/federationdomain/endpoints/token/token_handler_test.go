@@ -38,6 +38,7 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -291,6 +292,14 @@ type tokenEndpointResponseExpectedValues struct {
 	wantCustomSessionDataStored       *psession.CustomSessionData
 	wantWarnings                      []RecordedWarning
 	wantAdditionalClaims              map[string]interface{}
+	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
+	// When zero, will assume that the test wants the default value for ID token lifetime.
+	wantIDTokenLifetimeSeconds int
+}
+
+func withWantCustomIDTokenLifetime(wantIDTokenLifetimeSeconds int, w tokenEndpointResponseExpectedValues) tokenEndpointResponseExpectedValues {
+	w.wantIDTokenLifetimeSeconds = wantIDTokenLifetimeSeconds
+	return w
 }
 
 type authcodeExchangeInputs struct {
@@ -308,11 +317,28 @@ func addFullyCapableDynamicClientAndSecretToKubeResources(t *testing.T, supervis
 		dynamicClientID,
 		dynamicClientUID,
 		goodRedirectURI,
+		nil, // no custom ID token lifetime
 		[]string{testutil.HashedPassword1AtGoMinCost, testutil.HashedPassword2AtGoMinCost},
 		oidcclientvalidator.Validate,
 	)
 	require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 	require.NoError(t, kubeClient.Tracker().Add(secret))
+}
+
+func addFullyCapableDynamicClientWithCustomIDTokenLifetimeAndSecretToKubeResources(idTokenLifetime int32) func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+	return func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace",
+			dynamicClientID,
+			dynamicClientUID,
+			goodRedirectURI,
+			ptr.To(idTokenLifetime), // with custom ID token lifetime
+			[]string{testutil.HashedPassword1AtGoMinCost, testutil.HashedPassword2AtGoMinCost},
+			oidcclientvalidator.Validate,
+		)
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
+	}
 }
 
 func modifyAuthcodeTokenRequestWithDynamicClientAuth(r *http.Request, authCode string) {
@@ -400,6 +426,27 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+				},
+			},
+		},
+		{
+			name:          "request is valid and tokens are issued for dynamic client which has a custom ID token lifetime",
+			kubeResources: addFullyCapableDynamicClientWithCustomIDTokenLifetimeAndSecretToKubeResources(4242),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid pinniped:request-audience username groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                 http.StatusOK,
+					wantClientID:               dynamicClientID,
+					wantSuccessBodyFields:      []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:        []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantGrantedScopes:          []string{"openid", "pinniped:request-audience", "username", "groups"},
+					wantUsername:               goodUsername,
+					wantGroups:                 goodGroups,
+					wantIDTokenLifetimeSeconds: 4242,
 				},
 			},
 		},
@@ -972,14 +1019,16 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		wantGroups:            goodGroups,
 	}
 
-	successfulAuthCodeExchangeUsingDynamicClient := tokenEndpointResponseExpectedValues{
-		wantStatus:            http.StatusOK,
-		wantClientID:          dynamicClientID,
-		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-		wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "username", "groups"},
-		wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
-		wantUsername:          goodUsername,
-		wantGroups:            goodGroups,
+	successfulAuthCodeExchangeUsingDynamicClient := func() tokenEndpointResponseExpectedValues {
+		return tokenEndpointResponseExpectedValues{
+			wantStatus:            http.StatusOK,
+			wantClientID:          dynamicClientID,
+			wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+			wantRequestedScopes:   []string{"openid", "pinniped:request-audience", "username", "groups"},
+			wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
+			wantUsername:          goodUsername,
+			wantGroups:            goodGroups,
+		}
 	}
 
 	doValidAuthCodeExchange := authcodeExchangeInputs{
@@ -989,13 +1038,15 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		want: successfulAuthCodeExchange,
 	}
 
-	doValidAuthCodeExchangeUsingDynamicClient := authcodeExchangeInputs{
-		modifyAuthRequest: func(authRequest *http.Request) {
-			addDynamicClientIDToFormPostBody(authRequest)
-			authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
-		},
-		modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
-		want:               successfulAuthCodeExchangeUsingDynamicClient,
+	doValidAuthCodeExchangeUsingDynamicClient := func() authcodeExchangeInputs {
+		return authcodeExchangeInputs{
+			modifyAuthRequest: func(authRequest *http.Request) {
+				addDynamicClientIDToFormPostBody(authRequest)
+				authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
+			},
+			modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+			want:               successfulAuthCodeExchangeUsingDynamicClient(),
+		}
 	}
 
 	tests := []struct {
@@ -1081,7 +1132,27 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		{
 			name:             "happy path with dynamic client",
 			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
-			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient(),
+			modifyRequestParams: func(t *testing.T, params url.Values) {
+				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
+			},
+			modifyRequestHeaders: func(r *http.Request) {
+				r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1)
+			},
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
+		},
+		{
+			name:          "happy path with dynamic client which has a custom ID token lifetime configuration (which does not apply to ID tokens from token exchanges)",
+			kubeResources: addFullyCapableDynamicClientWithCustomIDTokenLifetimeAndSecretToKubeResources(4242),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest:  doValidAuthCodeExchangeUsingDynamicClient().modifyAuthRequest,
+				modifyTokenRequest: doValidAuthCodeExchangeUsingDynamicClient().modifyTokenRequest,
+				want: withWantCustomIDTokenLifetime(
+					4242, // want custom lifetime for authcode exchange (but not for token exchange)
+					doValidAuthCodeExchangeUsingDynamicClient().want,
+				),
+			},
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
 			},
@@ -1403,7 +1474,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		{
 			name:             "dynamic client uses wrong client secret",
 			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
-			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient(),
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("client_id") // client auth for dynamic clients must be in basic auth header
 			},
@@ -1418,7 +1489,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		{
 			name:             "dynamic client uses wrong auth method (must use basic auth)",
 			kubeResources:    addFullyCapableDynamicClientAndSecretToKubeResources,
-			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient,
+			authcodeExchange: doValidAuthCodeExchangeUsingDynamicClient(),
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				// Dynamic clients do not support this method of auth.
 				params.Set("client_id", dynamicClientID)
@@ -1604,6 +1675,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			// at and expires at dates which are newer than the old tokens.
 			time.Sleep(1 * time.Second)
 
+			// Perform the token exchange.
 			approxRequestTime := time.Now()
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
@@ -1699,12 +1771,21 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			// Also assert which are the different from the original downstream ID token.
 			requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, tokenClaims) // JWT ID
 			requireClaimsAreNotEqual(t, "aud", claimsOfFirstIDToken, tokenClaims) // audience
-			requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, tokenClaims) // expires at
-			require.Greater(t, tokenClaims["exp"], claimsOfFirstIDToken["exp"])
 			requireClaimsAreNotEqual(t, "iat", claimsOfFirstIDToken, tokenClaims) // issued at
 			require.Greater(t, tokenClaims["iat"], claimsOfFirstIDToken["iat"])
+			requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, tokenClaims) // expires at
+			if test.authcodeExchange.want.wantIDTokenLifetimeSeconds == 0 {
+				// If the ID token lifetime of the original ID token was not customized by configuration,
+				// then both the original and new ID tokens should have default 2-minute lifetimes, with the
+				// clock starting for each at token issuing time. Therefore, the new one should expire
+				// after the original one (i.e. a moving 2-minute window).
+				require.Greater(t, tokenClaims["exp"], claimsOfFirstIDToken["exp"])
+			}
 
 			// Assert that the timestamps in the token are approximately as expected.
+			// When dynamic clients are configured to have a custom ID token lifetime, that does not apply to
+			// token exchanges. Therefore, we can always assert that the lifetime of the new ID token is always
+			// the default lifetime.
 			expiresAtAsFloat, ok := tokenClaims["exp"].(float64)
 			require.True(t, ok, "expected exp claim to be a float64")
 			expiresAt := time.Unix(int64(expiresAtAsFloat), 0)
@@ -1713,6 +1794,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.True(t, ok, "expected iat claim to be a float64")
 			issuedAt := time.Unix(int64(issuedAtAsFloat), 0)
 			testutil.RequireTimeInDelta(t, approxRequestTime.UTC(), issuedAt, timeComparisonFudge)
+			// The difference between iat (issued at) and exp (expires at) claims should be exactly the lifetime seconds.
+			require.Equal(t, int64(idTokenExpirationSeconds), int64(expiresAtAsFloat)-int64(issuedAtAsFloat),
+				"ID token lifetime was not the expected value")
 
 			// Assert that nothing in storage has been modified.
 			newSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})
@@ -2278,6 +2362,42 @@ func TestRefreshGrant(t *testing.T) {
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 				)),
+			},
+		},
+		{
+			name: "happy path refresh grant with openid scope granted (id token returned) using dynamic client which has custom ID token lifetime configured",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
+				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
+						Claims: map[string]interface{}{
+							"sub": goodUpstreamSubject,
+						},
+					},
+				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
+			kubeResources: addFullyCapableDynamicClientWithCustomIDTokenLifetimeAndSecretToKubeResources(4242),
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access username groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want: withWantCustomIDTokenLifetime(4242,
+					withWantDynamicClientID(
+						happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamOIDCRefreshTokenCustomSessionData()),
+					),
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: modifyRefreshTokenRequestWithDynamicClientAuth,
+				want: withWantCustomIDTokenLifetime(4242,
+					withWantDynamicClientID(
+						happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+							upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+							refreshedUpstreamTokensWithIDAndRefreshTokens(),
+						),
+					),
+				),
 			},
 		},
 		{
@@ -4581,22 +4701,25 @@ func exchangeAuthcodeForTokens(
 		kubeResources(t, supervisorClient, kubeClient)
 	}
 
-	var oauthHelper fosite.OAuth2Provider
+	// Use the same timeouts configuration as the production code will use.
+	timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
+
 	// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
-	oauthStore = storage.NewKubeStorage(secrets, oidcClientsClient, oidc.DefaultOIDCTimeoutsConfiguration(), bcrypt.MinCost)
+	oauthStore = storage.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
 
 	if test.makeJwksSigningKeyAndProvider == nil {
 		test.makeJwksSigningKeyAndProvider = generateJWTSigningKeyAndJWKSProvider
 	}
 
+	var oauthHelper fosite.OAuth2Provider
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
 	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
 
 	subject = NewHandler(
 		idps,
 		oauthHelper,
-		func(accessRequest fosite.AccessRequester) (bool, time.Duration) { return false, 0 },
-		func(accessRequest fosite.AccessRequester) (bool, time.Duration) { return false, 0 },
+		timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
+		timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
 	)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
@@ -4674,7 +4797,7 @@ func requireTokenEndpointBehavior(
 			expectedNumberOfRefreshTokenSessionsStored = 1
 		}
 		if wantIDToken {
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, parsedResponseBody["access_token"].(string), requestTime)
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, test.wantIDTokenLifetimeSeconds, parsedResponseBody["access_token"].(string), requestTime)
 		}
 		if wantRefreshToken {
 			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
@@ -5198,6 +5321,7 @@ func requireValidIDToken(
 	wantUsernameInIDToken string,
 	wantGroupsInIDToken []string,
 	wantAdditionalClaims map[string]interface{},
+	wantIDTokenLifetimeSeconds int,
 	actualAccessToken string,
 	requestTime time.Time,
 ) {
@@ -5266,11 +5390,19 @@ func requireValidIDToken(
 		require.Empty(t, claims.Nonce)
 	}
 
+	if wantIDTokenLifetimeSeconds == 0 {
+		// When not specified, assert that the ID token has the default lifetime for an ID token.
+		wantIDTokenLifetimeSeconds = idTokenExpirationSeconds
+	}
+
+	// The difference between iat (issued at) and exp (expires at) claims should be exactly the lifetime seconds.
+	require.Equal(t, int64(wantIDTokenLifetimeSeconds), claims.ExpiresAt-claims.IssuedAt, "ID token lifetime was not the expected value")
+
 	expiresAt := time.Unix(claims.ExpiresAt, 0)
 	issuedAt := time.Unix(claims.IssuedAt, 0)
 	requestedAt := time.Unix(claims.RequestedAt, 0)
 	authTime := time.Unix(claims.AuthTime, 0)
-	testutil.RequireTimeInDelta(t, requestTime.UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudge)
+	testutil.RequireTimeInDelta(t, requestTime.UTC().Add(time.Duration(wantIDTokenLifetimeSeconds)*time.Second), expiresAt, timeComparisonFudge)
 	testutil.RequireTimeInDelta(t, requestTime.UTC(), issuedAt, timeComparisonFudge)
 	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudge)
 	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudge)

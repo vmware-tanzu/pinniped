@@ -282,7 +282,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// for the original ID token and the refreshed ID token.
 		wantDownstreamIDTokenAdditionalClaims map[string]interface{}
 		// The expected ID token lifetime, as calculated by token claim 'exp' subtracting token claim 'iat'.
-		// ID tokens issued through a token refresh should have the configured lifetime (or default if not configured).
+		// ID tokens issued through authcode exchange or token refresh should have the configured lifetime (or default if not configured).
 		// ID tokens issued through a token exchange should have the default lifetime.
 		wantDownstreamIDTokenLifetime *time.Duration
 
@@ -1427,6 +1427,32 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
 					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
 					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, configv1alpha1.OIDCClientPhaseReady)
+			},
+			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
+		},
+		{
+			name:      "oidc upstream with downstream dynamic client happy path, requesting all scopes, with a custom ID token lifetime configuration",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				spec := basicOIDCIdentityProviderSpec()
+				spec.Claims = idpv1alpha1.OIDCClaims{
+					Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+					Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+				}
+				spec.AuthorizationConfig = idpv1alpha1.OIDCAuthorizationConfig{
+					AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
+			},
+			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
+				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 					TokenLifetimes: configv1alpha1.OIDCClientTokenLifetimes{
 						IDTokenSeconds: ptr.To[int32](1234),
 					},
@@ -2534,7 +2560,7 @@ func testSupervisorLogin(
 	// Authcodes should start with the custom prefix "pin_ac_" to make them identifiable as authcodes when seen by a user out of context.
 	require.True(t, strings.HasPrefix(authcode, "pin_ac_"), "token %q did not have expected prefix 'pin_ac_'", authcode)
 
-	// Call the token endpoint to get tokens.
+	// Call the token endpoint for the first time to get an initial set of tokens.
 	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	if wantAuthcodeExchangeError != "" {
 		require.EqualError(t, err, wantAuthcodeExchangeError)
@@ -2555,13 +2581,14 @@ func testSupervisorLogin(
 	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
 		expectedIDTokenClaims = append(expectedIDTokenClaims, "additionalClaims")
 	}
-	defaultIDTokenLifetime := oidc.DefaultOIDCTimeoutsConfiguration().IDTokenLifespan
+
+	defaultIDTokenLifetime := 2 * time.Minute
 	if wantDownstreamIDTokenLifetime == nil {
+		// When not specified by the test, assume that it wants to assert the default lifetime.
 		wantDownstreamIDTokenLifetime = ptr.To(defaultIDTokenLifetime)
 	}
 
-	initialIDTokenClaims := verifyTokenResponse(
-		t,
+	initialIDTokenClaims := verifyTokenResponse(t,
 		tokenResponse,
 		discovery,
 		downstreamOAuth2Config,
@@ -2574,12 +2601,11 @@ func testSupervisorLogin(
 		*wantDownstreamIDTokenLifetime,
 	)
 
-	// token exchange on the original token
+	// Perform token exchange on the original token by calling the token endpoint again.
 	if requestTokenExchangeAud == "" {
 		requestTokenExchangeAud = "some-cluster-123" // use a default test value
 	}
-	doTokenExchange(
-		t,
+	doTokenExchange(t,
 		requestTokenExchangeAud,
 		&downstreamOAuth2Config,
 		tokenResponse,
@@ -2613,13 +2639,15 @@ func testSupervisorLogin(
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
 		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
 	}
-	// Use the refresh token to get new tokens
+
+	// Use the refresh token to get new tokens by calling the token endpoint again.
 	refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
 	refreshedTokenResponse, err := refreshSource.Token()
 	require.NoError(t, err)
 
 	// When refreshing, do not expect a "nonce" claim.
 	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "azp", "at_hash"}
+
 	if slices.Contains(wantDownstreamScopes, "username") {
 		// If the test wants the username scope to have been granted, then also expect the claim in the refreshed ID token.
 		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "username")
@@ -2631,8 +2659,8 @@ func testSupervisorLogin(
 	if len(wantDownstreamIDTokenAdditionalClaims) > 0 {
 		expectRefreshedIDTokenClaims = append(expectRefreshedIDTokenClaims, "additionalClaims")
 	}
-	refreshedIDTokenClaims := verifyTokenResponse(
-		t,
+
+	refreshedIDTokenClaims := verifyTokenResponse(t,
 		refreshedTokenResponse,
 		discovery,
 		downstreamOAuth2Config,
@@ -2649,7 +2677,7 @@ func testSupervisorLogin(
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
 	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
 
-	// token exchange on the refreshed token
+	// Perform token exchange on the refreshed token by calling the token endpoint again.
 	doTokenExchange(
 		t,
 		requestTokenExchangeAud,
@@ -2662,7 +2690,7 @@ func testSupervisorLogin(
 		defaultIDTokenLifetime,
 	)
 
-	// Now that we have successfully performed a refresh, let's test what happens when an
+	// Now that we have successfully performed a refresh once, let's test what happens when an
 	// upstream refresh fails during the next downstream refresh.
 	if breakRefreshSessionData != nil {
 		latestRefreshToken := refreshedTokenResponse.RefreshToken
@@ -2766,14 +2794,8 @@ func verifyTokenResponse(
 	// Check the token lifetime by calculating the delta between "exp" and "iat"
 	iat := getFloat64Claim(t, idTokenClaims, "iat")
 	exp := getFloat64Claim(t, idTokenClaims, "exp")
-	require.InDeltaf(
-		t,
-		wantDownstreamIDTokenLifetime.Seconds(),
-		exp-iat,
-		10.0,
-		"actual token lifetime (%f) must be within 10 seconds of expectation (%f)",
-		exp-iat,
-		wantDownstreamIDTokenLifetime.Seconds(),
+	require.InDelta(t, wantDownstreamIDTokenLifetime.Seconds(), exp-iat, 1.0,
+		"actual token lifetime must be within 1 second of expectation",
 	)
 
 	// Some light verification of the other tokens that were returned.
@@ -3153,14 +3175,8 @@ func doTokenExchange(
 	// Check the token lifetime by calculating the delta between "exp" and "iat"
 	iat := getFloat64Claim(t, claims, "iat")
 	exp := getFloat64Claim(t, claims, "exp")
-	require.InDeltaf(
-		t,
-		wantIDTokenLifetime.Seconds(),
-		exp-iat,
-		10.0,
-		"actual token lifetime (%f) must be within 10 seconds of expectation (%f)",
-		exp-iat,
-		wantIDTokenLifetime.Seconds(),
+	require.InDelta(t, wantIDTokenLifetime.Seconds(), exp-iat, 1.0,
+		"actual token lifetime must be within 1 second of expectation",
 	)
 
 	// The original client ID should be preserved in the azp claim, therefore preserving this information

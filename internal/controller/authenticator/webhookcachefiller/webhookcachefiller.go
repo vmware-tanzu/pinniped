@@ -10,7 +10,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/url"
-	"os"
+	"time"
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -19,10 +19,8 @@ import (
 	errorsutil "k8s.io/apimachinery/pkg/util/errors"
 	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	webhookutil "k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
@@ -36,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -49,9 +48,7 @@ const (
 	reasonSuccess                    = "Success"
 	reasonNotReady                   = "NotReady"
 	reasonUnableToValidate           = "UnableToValidate"
-	reasonUnableToCreateTempFile     = "UnableToCreateTempFile"
-	reasonUnableToMarshallKubeconfig = "UnableToMarshallKubeconfig"
-	reasonUnableToLoadKubeconfig     = "UnableToLoadKubeconfig"
+	reasonUnableToCreateClient       = "UnableToCreateClient"
 	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
 	reasonInvalidTLSConfiguration    = "InvalidTLSConfiguration"
 	reasonInvalidEndpointURL         = "InvalidEndpointURL"
@@ -95,7 +92,7 @@ type webhookCacheFillerController struct {
 	client        conciergeclientset.Interface
 	clock         clock.Clock
 	log           plog.Logger
-	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error)
+	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error) // for mocking, use tls.Dial in prod
 }
 
 // Sync implements controllerlib.Syncer.
@@ -106,25 +103,25 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 	if err != nil {
+		// no unit test for this failure
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
 	conditions := make([]*metav1.Condition, 0)
-	specCopy := obj.Spec.DeepCopy()
 	var errs []error
 
-	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(specCopy.TLS, conditions)
-	endpointHostPort, conditions, endpointOk := c.validateEndpoint(specCopy.Endpoint, conditions)
+	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	endpointHostPort, conditions, endpointOk := c.validateEndpoint(obj.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 	conditions, tlsNegotiateErr := c.validateConnection(certPool, endpointHostPort, conditions, okSoFar)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
 	webhookAuthenticator, conditions, err := newWebhookAuthenticator(
-		specCopy.Endpoint,
+		// Note that we use the whole URL when constructing the webhook client,
+		// not just the host and port that ew validated above. We need the path, etc.
+		obj.Spec.Endpoint,
 		pemBytes,
-		os.CreateTemp,
-		clientcmd.WriteToFile,
 		conditions,
 		okSoFar,
 	)
@@ -153,10 +150,8 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
 func newWebhookAuthenticator(
-	endpoint string,
+	endpointURL string,
 	pemBytes []byte,
-	tempfileFunc func(string, string) (*os.File, error),
-	marshalFunc func(clientcmdapi.Config, string) error,
 	conditions []*metav1.Condition,
 	prereqOk bool,
 ) (*webhook.WebhookTokenAuthenticator, []*metav1.Condition, error) {
@@ -168,39 +163,6 @@ func newWebhookAuthenticator(
 			Message: msgUnableToValidate,
 		})
 		return nil, conditions, nil
-	}
-	temp, err := tempfileFunc("", "pinniped-webhook-kubeconfig-*")
-	if err != nil {
-		errText := "unable to create temporary file"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeAuthenticatorValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonUnableToCreateTempFile,
-			Message: msg,
-		})
-		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
-	}
-	defer func() { _ = os.Remove(temp.Name()) }()
-
-	cluster := &clientcmdapi.Cluster{Server: endpoint}
-	cluster.CertificateAuthorityData = pemBytes
-
-	kubeconfig := clientcmdapi.NewConfig()
-	kubeconfig.Clusters["anonymous-cluster"] = cluster
-	kubeconfig.Contexts["anonymous"] = &clientcmdapi.Context{Cluster: "anonymous-cluster"}
-	kubeconfig.CurrentContext = "anonymous"
-
-	if err := marshalFunc(*kubeconfig, temp.Name()); err != nil {
-		errText := "unable to marshal kubeconfig"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeAuthenticatorValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonUnableToMarshallKubeconfig,
-			Message: msg,
-		})
-		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
 	// We use v1beta1 instead of v1 since v1beta1 is more prevalent in our desired
@@ -216,40 +178,30 @@ func newWebhookAuthenticator(
 	// custom proxy stuff used by the API server.
 	var customDial k8snetutil.DialFunc
 
-	// TODO refactor this code to directly construct the rest.Config
-	//  ideally we would keep rest config generation contained to the kubeclient package
-	//  but this will require some form of a new WithTLSConfigFunc kubeclient.Option
-	//  ex:
-	//  _, caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
-	//  ...
-	//  restConfig := &rest.Config{
-	//    Host:            spec.Endpoint,
-	//    TLSClientConfig: rest.TLSClientConfig{CAData: caBundle},
-	//    // copied from k8s.io/apiserver/pkg/util/webhook
-	//    Timeout: 30 * time.Second,
-	//    QPS:     -1,
-	//  }
-	//  client, err := kubeclient.New(kubeclient.WithConfig(restConfig), kubeclient.WithTLSConfigFunc(ptls.Default))
-	//  ...
-	//  then use client.JSONConfig as clientConfig
-	clientConfig, err := webhookutil.LoadKubeconfig(temp.Name(), customDial)
+	restConfig := &rest.Config{
+		Host:            endpointURL,
+		TLSClientConfig: rest.TLSClientConfig{CAData: pemBytes},
+
+		// The remainder of these settings are copied from webhookutil.LoadKubeconfig in k8s.io/apiserver/pkg/util/webhook.
+		Dial:    customDial,
+		Timeout: 30 * time.Second,
+		QPS:     -1,
+	}
+
+	client, err := kubeclient.New(kubeclient.WithConfig(restConfig), kubeclient.WithTLSConfigFunc(ptls.Default))
 	if err != nil {
-		// no unit test for this failure.
-		errText := "unable to load kubeconfig"
+		errText := "unable to create client for this webhook"
 		msg := fmt.Sprintf("%s: %s", errText, err.Error())
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAuthenticatorValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonUnableToLoadKubeconfig,
+			Reason:  reasonUnableToCreateClient,
 			Message: msg,
 		})
 		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
-	// this uses a http client that does not honor our TLS config
-	// TODO: fix when we pick up https://github.com/kubernetes/kubernetes/pull/106155
-	//   NOTE: looks like the above was merged on Mar 18, 2022
-	webhookA, err := webhook.New(clientConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
+	webhookAuthenticator, err := webhook.New(client.JSONConfig, version, implicitAuds, *webhook.DefaultRetryBackoff())
 	if err != nil {
 		// no unit test for this failure.
 		errText := "unable to instantiate webhook"
@@ -262,6 +214,7 @@ func newWebhookAuthenticator(
 		})
 		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
+
 	msg := "authenticator initialized"
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeAuthenticatorValid,
@@ -269,7 +222,8 @@ func newWebhookAuthenticator(
 		Reason:  reasonSuccess,
 		Message: msg,
 	})
-	return webhookA, conditions, nil
+
+	return webhookAuthenticator, conditions, nil
 }
 
 func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPool, endpointHostPort *endpointaddr.HostPort, conditions []*metav1.Condition, prereqOk bool) ([]*metav1.Condition, error) {
@@ -300,6 +254,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	// this error should never be significant
 	err = conn.Close()
 	if err != nil {
+		// no unit test for this failure
 		c.log.Error("error closing dialer", err)
 	}
 
@@ -307,7 +262,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 		Type:    typeWebhookConnectionValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
-		Message: "tls verified",
+		Message: "successfully dialed webhook server",
 	})
 	return conditions, nil
 }
@@ -378,7 +333,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		Type:    typeEndpointURLValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  reasonSuccess,
-		Message: "endpoint is a valid URL",
+		Message: "spec.endpoint is a valid URL",
 	})
 	return &endpointHostPort, conditions, true
 }

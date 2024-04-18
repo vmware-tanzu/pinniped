@@ -16,19 +16,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	coretesting "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -91,56 +89,33 @@ func TestController(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	hostAsLocalhostMux := http.NewServeMux()
 	hostAsLocalhostWebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		hostAsLocalhostMux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*hostAsLocalhostServingCert,
-		}
-		thisServer.TLS = thisTLSConfig
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*hostAsLocalhostServingCert}
 	})
 
-	hostAs127001Mux := http.NewServeMux()
 	hostAs127001WebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		hostAs127001Mux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*hostAs127001ServingCert,
-		}
-		thisServer.TLS = thisTLSConfig
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*hostAs127001ServingCert}
 	})
 
-	localWithExampleDotComMux := http.NewServeMux()
 	hostLocalWithExampleDotComCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		localWithExampleDotComMux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*localButExampleDotComServerCert,
-		}
-		thisServer.TLS = thisTLSConfig
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*localButExampleDotComServerCert}
 	})
 
-	goodMux := http.NewServeMux()
-	hostGoodDefaultServingCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		goodMux.ServeHTTP(w, r)
-	}), tlsserver.RecordTLSHello)
-	goodMux.Handle("/some/webhook", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := fmt.Fprintf(w, `{"something": "%s"}`, "something-for-response")
-		require.NoError(t, err)
-	}))
-	goodMux.Handle("/nothing/here", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle("/nothing/here", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// note that we are only dialing, so we shouldn't actually get here
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, "404 nothing here")
+		_, _ = fmt.Fprint(w, "404 nothing here")
 	}))
+	hostGoodDefaultServingCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	}), nil)
 
 	goodWebhookDefaultServingCertEndpoint := hostGoodDefaultServingCertServer.URL
 	goodWebhookDefaultServingCertEndpointBut404 := goodWebhookDefaultServingCertEndpoint + "/nothing/here"
@@ -270,7 +245,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "tls verified",
+			Message:            "successfully dialed webhook server",
 		}
 	}
 	unknownWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -321,7 +296,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "endpoint is a valid URL",
+			Message:            "spec.endpoint is a valid URL",
 		}
 	}
 	sadEndpointURLValid := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -390,7 +365,7 @@ func TestController(t *testing.T) {
 		wantCacheEntries int
 	}{
 		{
-			name:    "404: WebhookAuthenticator not found will abort sync loop, no status conditions",
+			name:    "Sync: WebhookAuthenticator not found will abort sync loop, no status conditions",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []map[string]any{
 				{
@@ -859,14 +834,14 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: auth1alpha1.WebhookAuthenticatorSpec{
-						Endpoint: fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()),
+						Endpoint: fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
 						TLS: &auth1alpha1.TLSSpec{
 							// CA Bundle for validating the server's certs
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(caForLocalhostAsHostname.Bundle()),
 						},
 					},
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
-						Conditions: allHappyConditionsSuccess(fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()), frozenMetav1Now, 0),
+						Conditions: allHappyConditionsSuccess(fmt.Sprintf("https://localhost:%s", localhostURL.Port()), frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
 				},
@@ -877,7 +852,7 @@ func TestController(t *testing.T) {
 					"timestamp": "2099-08-08T13:57:36.123456Z",
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
-					"endpoint":  fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()),
+					"endpoint":  fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
 					"webhook": map[string]interface{}{
 						"name": "test-name",
 					},
@@ -1379,35 +1354,53 @@ func TestController(t *testing.T) {
 }
 
 func TestNewWebhookAuthenticator(t *testing.T) {
-	goodEndpoint := "https://example.com"
+	server := tlsserver.TLSTestServer(t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Webhook clients should always use ptls.Default when making requests to the webhook. Assert that here.
+			tlsserver.AssertTLS(t, r, ptls.Default)
 
-	testServerCABundle, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Contains(t, string(body), "test-token")
-		_, err = w.Write([]byte(`{}`))
-		require.NoError(t, err)
-	})
+			// Loosely assert on the request body.
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			require.Contains(t, string(body), "test-token")
+
+			// Write a realistic looking fake response for a successfully authenticated user, so we can tell that
+			// this endpoint was actually called by the test below where it asserts on the fake user and group names.
+			w.Header().Add("Content-Type", "application/json")
+			responseBody := authenticationv1beta1.TokenReview{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "TokenReview",
+					APIVersion: authenticationv1beta1.SchemeGroupVersion.String(),
+				},
+				Status: authenticationv1beta1.TokenReviewStatus{
+					Authenticated: true,
+					User: authenticationv1beta1.UserInfo{
+						Username: "fake-username-from-server",
+						Groups:   []string{"fake-group-from-server-1", "fake-group-from-server-2"},
+					},
+				},
+			}
+			err = json.NewEncoder(w).Encode(responseBody)
+			require.NoError(t, err)
+		}),
+		tlsserver.RecordTLSHello,
+	)
 
 	tests := []struct {
-		name                            string
-		endpoint                        string
-		pemBytes                        []byte
-		tempFileFunc                    func(dir string, pattern string) (*os.File, error)
-		marshallFunc                    func(config clientcmdapi.Config, filename string) error
-		prereqOk                        bool
-		wantConditions                  []*metav1.Condition
-		wantWebhook                     bool
-		wantErr                         string
-		testCreatedWebhookWithFakeToken bool
+		name                                          string
+		endpoint                                      string
+		pemBytes                                      []byte
+		prereqOk                                      bool
+		wantConditions                                []*metav1.Condition
+		wantWebhook                                   bool
+		wantErr                                       string
+		userCreatedWebhookClientToCallWebhookEndpoint bool
 	}{
 		{
-			name:         "prerequisites not ready, cannot create webhook authenticator",
-			endpoint:     "",
-			pemBytes:     []byte("irrelevant pem bytes"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			wantErr:      "",
+			name:     "prerequisites not ready, cannot create webhook authenticator",
+			endpoint: "",
+			pemBytes: []byte("irrelevant pem bytes"),
+			wantErr:  "",
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "Unknown",
@@ -1416,58 +1409,22 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			}},
 			prereqOk: false,
 		}, {
-			name:     "temp file failure, cannot create webhook authenticator",
-			endpoint: "",
-			pemBytes: []byte("irrelevant pem bytes"),
-			tempFileFunc: func(_ string, _ string) (*os.File, error) {
-				return nil, fmt.Errorf("some temp file error")
-			},
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
-			wantConditions: []*metav1.Condition{{
-				Type:    "AuthenticatorValid",
-				Status:  "False",
-				Reason:  "UnableToCreateTempFile",
-				Message: "unable to create temporary file: some temp file error",
-			}},
-			wantErr: "unable to create temporary file: some temp file error",
-		}, {
-			name:         "marshal failure, cannot create webhook authenticator",
-			endpoint:     "",
-			pemBytes:     []byte("irrelevant pem bytes"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: func(_ clientcmdapi.Config, _ string) error {
-				return fmt.Errorf("some marshal error")
-			},
+			name:     "invalid pem data, unable to parse bytes as PEM block",
+			endpoint: "https://does-not-matter-will-not-be-used",
+			pemBytes: []byte("invalid-bas64"),
 			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
-				Reason:  "UnableToMarshallKubeconfig",
-				Message: "unable to marshal kubeconfig: some marshal error",
+				Reason:  "UnableToCreateClient",
+				Message: "unable to create client for this webhook: could not create secure client config: unable to load root certificates: unable to parse bytes as PEM block",
 			}},
-			wantErr: "unable to marshal kubeconfig: some marshal error",
+			wantErr: "unable to create client for this webhook: could not create secure client config: unable to load root certificates: unable to parse bytes as PEM block",
 		}, {
-			name:         "invalid pem data, unable to parse bytes as PEM block",
-			endpoint:     goodEndpoint,
-			pemBytes:     []byte("invalid-bas64"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
-			wantConditions: []*metav1.Condition{{
-				Type:    "AuthenticatorValid",
-				Status:  "False",
-				Reason:  "UnableToInstantiateWebhook",
-				Message: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
-			}},
-			wantErr: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
-		}, {
-			name:         "valid config with no TLS spec, webhook authenticator created",
-			endpoint:     goodEndpoint,
-			pemBytes:     nil,
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
+			name:     "valid config with no PEM bytes, webhook authenticator created",
+			endpoint: "https://does-not-matter-will-not-be-used",
+			pemBytes: nil,
+			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "True",
@@ -1476,19 +1433,18 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			}},
 			wantWebhook: true,
 		}, {
-			name:         "success, webhook authenticator created",
-			endpoint:     testServerURL,
-			pemBytes:     []byte(testServerCABundle),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
+			name:     "valid config, webhook authenticator created, and test calling webhook server",
+			endpoint: server.URL,
+			pemBytes: tlsserver.TLSTestServerCA(server),
+			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "True",
 				Reason:  "Success",
 				Message: "authenticator initialized",
 			}},
-			testCreatedWebhookWithFakeToken: true,
+			wantWebhook: true,
+			userCreatedWebhookClientToCallWebhookEndpoint: true,
 		},
 	}
 
@@ -1497,12 +1453,14 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var conditions []*metav1.Condition
-			webhook, conditions, err := newWebhookAuthenticator(tt.endpoint, tt.pemBytes, tt.tempFileFunc, tt.marshallFunc, conditions, tt.prereqOk)
+			webhook, conditions, err := newWebhookAuthenticator(tt.endpoint, tt.pemBytes, conditions, tt.prereqOk)
 
 			require.Equal(t, tt.wantConditions, conditions)
 
 			if tt.wantWebhook {
 				require.NotNil(t, webhook)
+			} else {
+				require.Nil(t, webhook)
 			}
 
 			if tt.wantErr != "" {
@@ -1511,11 +1469,12 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if tt.testCreatedWebhookWithFakeToken {
+			if tt.userCreatedWebhookClientToCallWebhookEndpoint {
 				authResp, isAuthenticated, err := webhook.AuthenticateToken(context.Background(), "test-token")
 				require.NoError(t, err)
-				require.Nil(t, authResp)
-				require.False(t, isAuthenticated)
+				require.True(t, isAuthenticated)
+				require.Equal(t, "fake-username-from-server", authResp.User.GetName())
+				require.Equal(t, []string{"fake-group-from-server-1", "fake-group-from-server-2"}, authResp.User.GetGroups())
 			}
 		})
 	}

@@ -34,6 +34,7 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/plog"
 )
@@ -282,11 +283,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 		return conditions, nil
 	}
 
-	conn, err := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		// If certPool is nil then RootCAs will be set to nil and TLS will use the host's root CA set automatically.
-		RootCAs: certPool,
-	})
+	conn, err := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), ptls.Default(certPool))
 
 	if err != nil {
 		errText := "cannot dial server"

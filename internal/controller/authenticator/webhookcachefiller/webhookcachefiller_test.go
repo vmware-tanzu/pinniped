@@ -897,10 +897,12 @@ func TestController(t *testing.T) {
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
 				assert.Equal(t, "[0:0:0:0:0:0:0:1]:4242", addr)
+				defaultTLSConfig := ptls.Default(nil)
 				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
+				assert.Equal(t, defaultTLSConfig.MinVersion, config.MinVersion)
+				assert.Equal(t, defaultTLSConfig.CipherSuites, config.CipherSuites)
+				assert.Equal(t, defaultTLSConfig.NextProtos, config.NextProtos)
+				return nil, errors.New("IPv6 fake dial error")
 			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -930,7 +932,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]:4242/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 fake dial error"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -945,7 +947,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 fake dial error`),
 			wantCacheEntries: 0,
 		},
 		{
@@ -954,10 +956,12 @@ func TestController(t *testing.T) {
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
 				assert.Equal(t, "[0:0:0:0:0:0:0:1]:443", addr, "should add default port when port not provided")
+				defaultTLSConfig := ptls.Default(nil)
 				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
+				assert.Equal(t, defaultTLSConfig.MinVersion, config.MinVersion)
+				assert.Equal(t, defaultTLSConfig.CipherSuites, config.CipherSuites)
+				assert.Equal(t, defaultTLSConfig.NextProtos, config.NextProtos)
+				return nil, errors.New("IPv6 fake dial error")
 			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -987,7 +991,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 fake dial error"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1002,7 +1006,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 fake dial error`),
 			wantCacheEntries: 0,
 		},
 		{
@@ -1094,10 +1098,12 @@ func TestController(t *testing.T) {
 			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
 				assert.Equal(t, "tcp", network)
 				assert.Equal(t, "[0:0:0:0:0:0:0:1]:443", addr)
+				defaultTLSConfig := ptls.Default(nil)
 				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
+				assert.Equal(t, defaultTLSConfig.MinVersion, config.MinVersion)
+				assert.Equal(t, defaultTLSConfig.CipherSuites, config.CipherSuites)
+				assert.Equal(t, defaultTLSConfig.NextProtos, config.NextProtos)
+				return nil, errors.New("IPv6 fake dial error")
 			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
@@ -1127,7 +1133,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://0:0:0:0:0:0:0:1/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 fake dial error"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1142,7 +1148,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 fake dial error`),
 			wantCacheEntries: 0,
 		},
 		{

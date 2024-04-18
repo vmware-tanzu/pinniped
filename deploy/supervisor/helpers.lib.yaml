@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -53,7 +53,12 @@ _: #@ template.replace(data.values.custom_labels)
 #@       "apiService": defaultResourceNameWithSuffix("api"),
 #@     },
 #@     "labels": labels(),
-#@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests
+#@     "insecureAcceptExternalUnencryptedHttpRequests": data.values.deprecated_insecure_accept_external_unencrypted_http_requests,
+#@     "tls": {
+#@       "1.2": {
+#@         "allowedCiphers": data.values["allowed_ciphers_for_tls_onedottwo"]
+#@       }
+#@     }
 #@   }
 #@   if data.values.log_level or data.values.deprecated_log_format:
 #@     config["log"] = {}

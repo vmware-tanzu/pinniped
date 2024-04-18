@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -20,6 +20,18 @@ type Config struct {
 	Endpoints               *Endpoints         `json:"endpoints"`
 	AllowExternalHTTP       stringOrBoolAsBool `json:"insecureAcceptExternalUnencryptedHttpRequests"`
 	AggregatedAPIServerPort *int64             `json:"aggregatedAPIServerPort"`
+	TLS                     TLSSpec            `json:"tls"`
+}
+
+type TLSSpec struct {
+	OneDotTwo TLSProtocolSpec `json:"1.2"`
+}
+
+type TLSProtocolSpec struct {
+	// AllowedCiphers will permit Pinniped to use only the listed ciphers.
+	// This affects Pinniped both when it acts as a client and as a server.
+	// If empty, Pinniped will use a built-in list of ciphers.
+	AllowedCiphers []string `json:"allowedCiphers"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.

@@ -53,7 +53,7 @@ func TestMerge(t *testing.T) {
 		{
 			name:          "default without NextProtos",
 			tlsConfigFunc: Default,
-			tlsConfig: &tls.Config{ //nolint:gosec // not concerned with TLS MinVersion here
+			tlsConfig: &tls.Config{
 				ServerName: "something-to-check-passthrough",
 			},
 			want: &tls.Config{

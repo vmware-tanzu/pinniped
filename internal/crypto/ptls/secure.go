@@ -21,6 +21,7 @@ const secureServingOptionsMinTLSVersion = "VersionTLS13"
 // by tls.Config.
 const SecureTLSConfigMinTLSVersion = tls.VersionTLS13
 
+// Secure returns a tls.Config that requires TLS1.3+ and does not permit configurable ciphers.
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// as of 2021-10-19, Mozilla Guideline v5.6, Go 1.17.2, modern configuration, supports:
 	// - Firefox 63

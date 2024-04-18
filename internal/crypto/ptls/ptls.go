@@ -19,8 +19,6 @@ import (
 	"k8s.io/client-go/transport"
 )
 
-// TODO decide if we need to expose the three TLS levels (secure, default, default-ldap) as config.
-
 // defaultServingOptionsMinTLSVersion is the minimum tls version in the format
 // expected by SecureServingOptions.MinTLSVersion from
 // k8s.io/apiserver/pkg/server/options.

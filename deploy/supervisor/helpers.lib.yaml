@@ -53,6 +53,11 @@ _: #@ template.replace(data.values.custom_labels)
 #@       "apiService": defaultResourceNameWithSuffix("api"),
 #@     },
 #@     "labels": labels(),
+#@     "tls": {
+#@       "1.2": {
+#@         "allowedCiphers": data.values["allowed_ciphers_for_tls_onedottwo"]
+#@       }
+#@     }
 #@   }
 #@   if data.values.log_level:
 #@     config["log"] = {}

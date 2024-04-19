@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,9 +32,8 @@ const (
 	helloKey
 )
 
-// TLSTestIPv6Server returns a TLS-required server that listens at an IPv6 loopback
-// TODO: Rename since the package name already includes TLS.
-func TLSTestIPv6Server(t *testing.T, handler http.Handler, f func(*httptest.Server)) *httptest.Server {
+// TestServerIPv6 returns a TLS-required server that listens at an IPv6 loopback.
+func TestServerIPv6(t *testing.T, handler http.Handler, f func(*httptest.Server)) (*httptest.Server, []byte) {
 	t.Helper()
 
 	listener, err := net.Listen("tcp6", "[::1]:0")
@@ -46,16 +47,15 @@ func TLSTestIPv6Server(t *testing.T, handler http.Handler, f func(*httptest.Serv
 	return testServer(t, server, f)
 }
 
-// TLSTestServer returns a TLS-required server that listens at an IPv4 loopback.
-// TODO: Rename since the package name already includes TLS.
-func TLSTestServer(t *testing.T, handler http.Handler, f func(*httptest.Server)) *httptest.Server {
+// TestServerIPv4 returns a TLS-required server that listens at an IPv4 loopback.
+func TestServerIPv4(t *testing.T, handler http.Handler, f func(*httptest.Server)) (*httptest.Server, []byte) {
 	t.Helper()
 
 	server := httptest.NewUnstartedServer(handler)
 	return testServer(t, server, f)
 }
 
-func testServer(t *testing.T, server *httptest.Server, f func(*httptest.Server)) *httptest.Server {
+func testServer(t *testing.T, server *httptest.Server, f func(*httptest.Server)) (*httptest.Server, []byte) {
 	t.Helper()
 
 	server.TLS = ptls.Default(nil) // mimic API server config
@@ -64,14 +64,43 @@ func testServer(t *testing.T, server *httptest.Server, f func(*httptest.Server))
 	}
 	server.StartTLS()
 	t.Cleanup(server.Close)
-	return server
-}
-
-func TLSTestServerCA(server *httptest.Server) []byte {
-	return pem.EncodeToMemory(&pem.Block{
+	return server, pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: server.Certificate().Raw,
 	})
+}
+
+func TLSTestServerWithCert(t *testing.T, handler http.HandlerFunc, certificate *tls.Certificate) (url string) {
+	t.Helper()
+
+	c := ptls.Default(nil) // mimic API server config
+	c.Certificates = []tls.Certificate{*certificate}
+
+	server := http.Server{
+		TLSConfig:         c,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	serverShutdownChan := make(chan error)
+	go func() {
+		// Empty certFile and keyFile will use certs from Server.TLSConfig.
+		serverShutdownChan <- server.ServeTLS(l, "", "")
+	}()
+
+	t.Cleanup(func() {
+		_ = server.Close()
+		serveErr := <-serverShutdownChan
+		if !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Log("Got an unexpected error while starting the fake http server!")
+			require.NoError(t, serveErr)
+		}
+	})
+
+	return l.Addr().String()
 }
 
 func RecordTLSHello(server *httptest.Server) {

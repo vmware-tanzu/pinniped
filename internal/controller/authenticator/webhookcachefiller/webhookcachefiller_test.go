@@ -88,25 +88,25 @@ func TestController(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	hostAsLocalhostWebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostAsLocalhostWebhookServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*hostAsLocalhostServingCert}
 	})
 
-	hostAs127001WebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostAs127001WebhookServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*hostAs127001ServingCert}
 	})
 
-	hostLocalWithExampleDotComCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostLocalWithExampleDotComCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*localButExampleDotComServerCert}
 	})
 
-	hostLocalIPv6Server := tlsserver.TLSTestIPv6Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), tlsserver.RecordTLSHello)
+	hostLocalIPv6Server, ipv6CA := tlsserver.TestServerIPv6(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), tlsserver.RecordTLSHello)
 
 	mux := http.NewServeMux()
 	mux.Handle("/nothing/here", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +114,7 @@ func TestController(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = fmt.Fprint(w, "404 nothing here")
 	}))
-	hostGoodDefaultServingCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostGoodDefaultServingCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	}), nil)
 
@@ -533,7 +533,7 @@ func TestController(t *testing.T) {
 						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
 						ipv6.Endpoint = hostLocalIPv6Server.URL
 						ipv6.TLS = ptr.To(auth1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(tlsserver.TLSTestServerCA(hostLocalIPv6Server)),
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
 						})
 						return *ipv6
 					}(),
@@ -560,7 +560,7 @@ func TestController(t *testing.T) {
 						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
 						ipv6.Endpoint = hostLocalIPv6Server.URL
 						ipv6.TLS = ptr.To(auth1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(tlsserver.TLSTestServerCA(hostLocalIPv6Server)),
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
 						})
 						return *ipv6
 					}(),
@@ -1365,7 +1365,7 @@ func TestController(t *testing.T) {
 }
 
 func TestNewWebhookAuthenticator(t *testing.T) {
-	server := tlsserver.TLSTestServer(t,
+	server, serverCA := tlsserver.TestServerIPv4(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Webhook clients should always use ptls.Default when making requests to the webhook. Assert that here.
 			tlsserver.AssertTLS(t, r, ptls.Default)
@@ -1446,7 +1446,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		}, {
 			name:     "valid config, webhook authenticator created, and test calling webhook server",
 			endpoint: server.URL,
-			pemBytes: tlsserver.TLSTestServerCA(server),
+			pemBytes: serverCA,
 			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",

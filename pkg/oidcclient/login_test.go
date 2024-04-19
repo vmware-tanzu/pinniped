@@ -66,10 +66,9 @@ func (m *mockSessionCache) PutToken(key SessionCacheKey, token *oidctypes.Token)
 	m.sawPutTokens = append(m.sawPutTokens, token)
 }
 
-func newClientForServer(server *httptest.Server) *http.Client {
+func buildHTTPClientForPEM(pemData []byte) *http.Client {
 	pool := x509.NewCertPool()
-	caPEMData := tlsserver.TLSTestServerCA(server)
-	pool.AppendCertsFromPEM(caPEMData)
+	pool.AppendCertsFromPEM(pemData)
 	return phttp.Default(pool)
 }
 
@@ -91,13 +90,13 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 	}
 
 	// Start a test server that returns 500 errors.
-	errorServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	errorServer, errorServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "some discovery error", http.StatusInternalServerError)
 	}), nil)
 
 	// Start a test server that returns discovery data with a broken response_modes_supported value.
 	brokenResponseModeMux := http.NewServeMux()
-	brokenResponseModeServer := tlsserver.TLSTestServer(t, brokenResponseModeMux, nil)
+	brokenResponseModeServer, brokenResponseModeServerCA := tlsserver.TestServerIPv4(t, brokenResponseModeMux, nil)
 	brokenResponseModeMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -116,7 +115,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 	// Start a test server that returns discovery data with a broken token URL.
 	brokenTokenURLMux := http.NewServeMux()
-	brokenTokenURLServer := tlsserver.TLSTestServer(t, brokenTokenURLMux, nil)
+	brokenTokenURLServer, brokenTokenURLServerCA := tlsserver.TestServerIPv4(t, brokenTokenURLMux, nil)
 	brokenTokenURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -135,7 +134,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 	// Start a test server that returns discovery data with an insecure token URL.
 	insecureTokenURLMux := http.NewServeMux()
-	insecureTokenURLServer := tlsserver.TLSTestServer(t, insecureTokenURLMux, nil)
+	insecureTokenURLServer, insecureTokenURLServerCA := tlsserver.TestServerIPv4(t, insecureTokenURLMux, nil)
 	insecureTokenURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -154,7 +153,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 	// Start a test server that returns discovery data with a broken authorize URL.
 	brokenAuthURLMux := http.NewServeMux()
-	brokenAuthURLServer := tlsserver.TLSTestServer(t, brokenAuthURLMux, nil)
+	brokenAuthURLServer, brokenAuthURLServerCA := tlsserver.TestServerIPv4(t, brokenAuthURLMux, nil)
 	brokenAuthURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -173,7 +172,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 	// Start a test server that returns discovery data with an insecure authorize URL.
 	insecureAuthURLMux := http.NewServeMux()
-	insecureAuthURLServer := tlsserver.TLSTestServer(t, insecureAuthURLMux, nil)
+	insecureAuthURLServer, insecureAuthURLServerCA := tlsserver.TestServerIPv4(t, insecureAuthURLMux, nil)
 	insecureAuthURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
@@ -298,13 +297,13 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 	// Start a test server that returns a real discovery document and answers refresh requests.
 	providerMux := http.NewServeMux()
-	successServer := tlsserver.TLSTestServer(t, providerMux, nil)
+	successServer, successServerCA := tlsserver.TestServerIPv4(t, providerMux, nil)
 	providerMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(successServer, nil))
 	providerMux.HandleFunc("/token", tokenHandler)
 
 	// Start a test server that returns a real discovery document and answers refresh requests, _and_ supports form_mode=post.
 	formPostProviderMux := http.NewServeMux()
-	formPostSuccessServer := tlsserver.TLSTestServer(t, formPostProviderMux, nil)
+	formPostSuccessServer, formPostSuccessServerCA := tlsserver.TestServerIPv4(t, formPostProviderMux, nil)
 	formPostProviderMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(formPostSuccessServer, []string{"query", "form_post"}))
 	formPostProviderMux.HandleFunc("/token", tokenHandler)
 
@@ -339,7 +338,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 		require.NoError(t, WithSessionCache(cache)(h))
 		require.NoError(t, WithCLISendingCredentials()(h))
 		require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
-		require.NoError(t, WithClient(newClientForServer(successServer))(h))
+		require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 		require.NoError(t, WithClient(&http.Client{
 			Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
@@ -436,7 +435,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(errorServerCA))(h))
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
 							Token:  "test-id-token",
@@ -485,7 +484,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "discovery failure due to 500 error",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(errorServerCA))(h))
 					return nil
 				}
 			},
@@ -497,7 +496,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "discovery failure due to invalid response_modes_supported",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(brokenResponseModeServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(brokenResponseModeServerCA))(h))
 					return nil
 				}
 			},
@@ -511,7 +510,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
@@ -562,7 +561,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
@@ -605,7 +604,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			clientID: "not-the-test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
@@ -638,7 +637,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "issuer has invalid token URL",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(brokenTokenURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(brokenTokenURLServerCA))(h))
 					return nil
 				}
 			},
@@ -650,7 +649,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "issuer has insecure token URL",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(insecureTokenURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(insecureTokenURLServerCA))(h))
 					return nil
 				}
 			},
@@ -662,7 +661,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "issuer has invalid authorize URL",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(brokenAuthURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(brokenAuthURLServerCA))(h))
 					return nil
 				}
 			},
@@ -674,7 +673,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "issuer has insecure authorize URL",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(insecureAuthURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(insecureAuthURLServerCA))(h))
 					return nil
 				}
 			},
@@ -686,7 +685,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			name: "listen failure and non-tty stdin",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					h.listen = func(net string, addr string) (net.Listener, error) {
 						assert.Equal(t, "tcp", net)
 						assert.Equal(t, "localhost:0", addr)
@@ -711,7 +710,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(formPostSuccessServerCA))(h))
 					require.NoError(t, WithSkipListen()(h))
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
@@ -750,7 +749,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					require.NoError(t, WithClient(newClientForServer(formPostSuccessServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(formPostSuccessServerCA))(h))
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
@@ -790,7 +789,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
 
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 					ctx, cancel := context.WithCancel(h.ctx)
 					h.ctx = ctx
@@ -824,7 +823,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					h.openURL = func(_ string) error {
 						go func() {
 							h.callbacks <- callbackResult{err: fmt.Errorf("some callback error")}
@@ -873,7 +872,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -947,7 +946,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -1013,7 +1012,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -1091,7 +1090,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -1182,7 +1181,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 
-					client := newClientForServer(formPostSuccessServer)
+					client := buildHTTPClientForPEM(formPostSuccessServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -1258,7 +1257,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "oidc")(h))
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
@@ -1349,7 +1348,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
@@ -1567,7 +1566,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
@@ -1671,7 +1670,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
@@ -1778,7 +1777,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
 					})
 
-					client := newClientForServer(successServer)
+					client := buildHTTPClientForPEM(successServerCA)
 					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
@@ -1842,7 +1841,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(errorServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(errorServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("cluster-1234")(h))
 					return nil
@@ -1871,7 +1870,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(insecureTokenURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(insecureTokenURLServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("cluster-1234")(h))
 					return nil
@@ -1900,7 +1899,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(brokenTokenURLServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(brokenTokenURLServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("cluster-1234")(h))
 					return nil
@@ -1929,7 +1928,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-http-response")(h))
 					return nil
@@ -1958,7 +1957,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-http-400")(h))
 					return nil
@@ -1987,7 +1986,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-content-type")(h))
 					return nil
@@ -2016,7 +2015,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-wrong-content-type")(h))
 					return nil
@@ -2045,7 +2044,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-json")(h))
 					return nil
@@ -2074,7 +2073,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-tokentype")(h))
 					return nil
@@ -2103,7 +2102,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-issuedtokentype")(h))
 					return nil
@@ -2132,7 +2131,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-jwt")(h))
 					return nil
@@ -2161,7 +2160,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience")(h))
 
@@ -2204,7 +2203,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("request-this-test-audience")(h))
 
@@ -2256,7 +2255,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 							Claims: map[string]interface{}{"aud": "test-custom-request-audience"},
 						}, cache.sawPutTokens[0].IDToken)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-custom-request-audience")(h))
 
@@ -2318,7 +2317,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						}}, cache.sawGetKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("request-this-test-audience")(h))
 
@@ -2343,7 +2342,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					require.NoError(t, WithClient(newClientForServer(successServer))(h))
+					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
 						IDToken: &oidctypes.IDToken{

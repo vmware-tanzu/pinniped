@@ -76,7 +76,7 @@ func TestController(t *testing.T) {
 	distributedGroups := []string{"some-distributed-group-1", "some-distributed-group-2"}
 
 	goodMux := http.NewServeMux()
-	goodOIDCIssuerServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	goodOIDCIssuerServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		goodMux.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
@@ -174,7 +174,7 @@ func TestController(t *testing.T) {
 	}))
 
 	badMuxInvalidJWKSURI := http.NewServeMux()
-	badOIDCIssuerServerInvalidJWKSURI := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	badOIDCIssuerServerInvalidJWKSURI, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		badMuxInvalidJWKSURI.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
@@ -185,7 +185,7 @@ func TestController(t *testing.T) {
 	}))
 
 	badMuxInvalidJWKSURIScheme := http.NewServeMux()
-	badOIDCIssuerServerInvalidJWKSURIScheme := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	badOIDCIssuerServerInvalidJWKSURIScheme, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		badMuxInvalidJWKSURIScheme.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
@@ -196,7 +196,7 @@ func TestController(t *testing.T) {
 	}))
 
 	jwksFetchShouldFailMux := http.NewServeMux()
-	jwksFetchShouldFailServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwksFetchShouldFailServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		jwksFetchShouldFailMux.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)

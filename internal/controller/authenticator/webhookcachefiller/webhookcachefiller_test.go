@@ -92,18 +92,21 @@ func TestController(t *testing.T) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*hostAsLocalhostServingCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
 	hostAs127001WebhookServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*hostAs127001ServingCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
 	hostLocalWithExampleDotComCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// only expecting dials, which will not get into handler func
 	}), func(s *httptest.Server) {
 		s.TLS.Certificates = []tls.Certificate{*localButExampleDotComServerCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
 	hostLocalIPv6Server, ipv6CA := tlsserver.TestServerIPv6(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), tlsserver.RecordTLSHello)
@@ -116,7 +119,9 @@ func TestController(t *testing.T) {
 	}))
 	hostGoodDefaultServingCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
-	}), nil)
+	}), func(s *httptest.Server) {
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
+	})
 
 	goodWebhookDefaultServingCertEndpoint := hostGoodDefaultServingCertServer.URL
 	goodWebhookDefaultServingCertEndpointBut404 := goodWebhookDefaultServingCertEndpoint + "/nothing/here"
@@ -1398,14 +1403,14 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	)
 
 	tests := []struct {
-		name                                          string
-		endpoint                                      string
-		pemBytes                                      []byte
-		prereqOk                                      bool
-		wantConditions                                []*metav1.Condition
-		wantWebhook                                   bool
-		wantErr                                       string
-		userCreatedWebhookClientToCallWebhookEndpoint bool
+		name           string
+		endpoint       string
+		pemBytes       []byte
+		prereqOk       bool
+		wantConditions []*metav1.Condition
+		wantErr        string
+		wantWebhook    bool // When true, we want a webhook client to have been successfully created.
+		callWebhook    bool // When true, really call the webhook endpoint using the created webhook client.
 	}{
 		{
 			name:     "prerequisites not ready, cannot create webhook authenticator",
@@ -1455,7 +1460,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				Message: "authenticator initialized",
 			}},
 			wantWebhook: true,
-			userCreatedWebhookClientToCallWebhookEndpoint: true,
+			callWebhook: true,
 		},
 	}
 
@@ -1480,7 +1485,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if tt.userCreatedWebhookClientToCallWebhookEndpoint {
+			if tt.callWebhook {
 				authResp, isAuthenticated, err := webhook.AuthenticateToken(context.Background(), "test-token")
 				require.NoError(t, err)
 				require.True(t, isAuthenticated)

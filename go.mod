@@ -1,8 +1,8 @@
 module go.pinniped.dev
 
-go 1.21.3
+go 1.22.0
 
-toolchain go1.22.0
+toolchain go1.22.2
 
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
@@ -35,7 +35,7 @@ replace github.com/coreos/go-oidc/v3 => github.com/coreos/go-oidc/v3 v3.9.0
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240328024531-fe04f09ede24
+	github.com/chromedp/cdproto v0.0.0-20240421230201-ab917191657d
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/coreos/go-semver v0.3.1
@@ -43,7 +43,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-jose/go-jose/v3 v3.0.3
-	github.com/go-ldap/ldap/v3 v3.4.7
+	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/go-logr/logr v1.4.1
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.3.0
@@ -72,15 +72,15 @@ require (
 	golang.org/x/sync v0.7.0
 	golang.org/x/term v0.19.0
 	golang.org/x/text v0.14.0
-	k8s.io/api v0.29.3
-	k8s.io/apiextensions-apiserver v0.29.3
-	k8s.io/apimachinery v0.29.3
-	k8s.io/apiserver v0.29.3
-	k8s.io/client-go v0.29.3
-	k8s.io/component-base v0.29.3
+	k8s.io/api v0.30.0
+	k8s.io/apiextensions-apiserver v0.30.0
+	k8s.io/apimachinery v0.30.0
+	k8s.io/apiserver v0.30.0
+	k8s.io/client-go v0.30.0
+	k8s.io/component-base v0.30.0
 	k8s.io/gengo v0.0.0-20240404160639-a0386bf69313
 	k8s.io/klog/v2 v2.120.1
-	k8s.io/kube-aggregator v0.29.3
+	k8s.io/kube-aggregator v0.30.0
 	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 	sigs.k8s.io/yaml v1.4.0
@@ -200,8 +200,8 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.29.3 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
+	k8s.io/kms v0.30.0 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )

@@ -23,14 +23,13 @@ import (
 func TestFIPSCipherSuites_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
-	Server, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server, ca := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// use the default fips config which contains a hard coded list of cipher suites
 		// that should be equal to the default list of fips cipher suites.
 		// assert that the client hello response has the same tls config as this test server.
 		tlsserver.AssertTLS(t, r, ptls.Default)
 	}), tlsserver.RecordTLSHello)
 
-	ca := tlsserver.TestServerIPv4CA(server)
 	pool, err := cert.NewPoolFromBytes(ca)
 	require.NoError(t, err)
 	// create a tls config that does not explicitly set cipher suites,

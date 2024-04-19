@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package conciergeclient
@@ -20,7 +20,7 @@ import (
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 func TestNew(t *testing.T) {
@@ -163,12 +163,12 @@ func TestExchangeToken(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns only 500 errors.
-		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("some server error"))
-		})
+		}), nil)
 
-		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("jwt", "test-authenticator"))
+		client, err := New(WithEndpoint(server.URL), WithCABundle(string(serverCA)), WithAuthenticator("jwt", "test-authenticator"))
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")
@@ -180,15 +180,15 @@ func TestExchangeToken(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns success but with an error message
 		errorMessage := "some login failure"
-		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
 				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
 				Status:   loginv1alpha1.TokenCredentialRequestStatus{Message: &errorMessage},
 			})
-		})
+		}), nil)
 
-		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("jwt", "test-authenticator"))
+		client, err := New(WithEndpoint(server.URL), WithCABundle(string(serverCA)), WithAuthenticator("jwt", "test-authenticator"))
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")
@@ -199,14 +199,14 @@ func TestExchangeToken(t *testing.T) {
 	t.Run("login failure unknown error", func(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns without any error message but also without valid credentials
-		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
 				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
 			})
-		})
+		}), nil)
 
-		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("jwt", "test-authenticator"))
+		client, err := New(WithEndpoint(server.URL), WithCABundle(string(serverCA)), WithAuthenticator("jwt", "test-authenticator"))
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")
@@ -219,7 +219,7 @@ func TestExchangeToken(t *testing.T) {
 		expires := metav1.NewTime(time.Now().Truncate(time.Second))
 
 		// Start a test server that returns successfully and asserts various properties of the request.
-		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
 			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
@@ -257,9 +257,9 @@ func TestExchangeToken(t *testing.T) {
 					},
 				},
 			})
-		})
+		}), nil)
 
-		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
+		client, err := New(WithEndpoint(server.URL), WithCABundle(string(serverCA)), WithAuthenticator("webhook", "test-webhook"))
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")

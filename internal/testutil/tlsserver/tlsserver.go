@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,26 +32,80 @@ const (
 	helloKey
 )
 
-func TLSTestServer(t *testing.T, handler http.Handler, f func(*httptest.Server)) *httptest.Server {
+// TestServerIPv6 returns a TLS-required server that listens at an IPv6 loopback.
+func TestServerIPv6(t *testing.T, handler http.Handler, f func(*httptest.Server)) (*httptest.Server, []byte) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	require.NoError(t, err, "TLSTestIPv6Server: failed to listen on a port")
+
+	server := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: handler}, //nolint:gosec //ReadHeaderTimeout is not needed for a localhost listener
+	}
+
+	return testServer(t, server, f)
+}
+
+// TestServerIPv4 returns a TLS-required server that listens at an IPv4 loopback.
+func TestServerIPv4(t *testing.T, handler http.Handler, f func(*httptest.Server)) (*httptest.Server, []byte) {
 	t.Helper()
 
 	server := httptest.NewUnstartedServer(handler)
+	return testServer(t, server, f)
+}
+
+func testServer(t *testing.T, server *httptest.Server, f func(*httptest.Server)) (*httptest.Server, []byte) {
+	t.Helper()
+
 	server.TLS = ptls.Default(nil) // mimic API server config
 	if f != nil {
 		f(server)
 	}
 	server.StartTLS()
 	t.Cleanup(server.Close)
-	return server
-}
-
-func TLSTestServerCA(server *httptest.Server) []byte {
-	return pem.EncodeToMemory(&pem.Block{
+	return server, pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: server.Certificate().Raw,
 	})
 }
 
+func TLSTestServerWithCert(t *testing.T, handler http.HandlerFunc, certificate *tls.Certificate) (url string) {
+	t.Helper()
+
+	c := ptls.Default(nil) // mimic API server config
+	c.Certificates = []tls.Certificate{*certificate}
+
+	server := http.Server{
+		TLSConfig:         c,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	serverShutdownChan := make(chan error)
+	go func() {
+		// Empty certFile and keyFile will use certs from Server.TLSConfig.
+		serverShutdownChan <- server.ServeTLS(l, "", "")
+	}()
+
+	t.Cleanup(func() {
+		_ = server.Close()
+		serveErr := <-serverShutdownChan
+		if !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Log("Got an unexpected error while starting the fake http server!")
+			require.NoError(t, serveErr)
+		}
+	})
+
+	return l.Addr().String()
+}
+
+// RecordTLSHello configures the server to record client TLS negotiation info onto each incoming request,
+// so that the details of the client's TLS settings can be asserted upon during request handling
+// using AssertTLS.
 func RecordTLSHello(server *httptest.Server) {
 	server.Config.ConnContext = func(ctx context.Context, _ net.Conn) context.Context {
 		return context.WithValue(ctx, mapKey, &sync.Map{})
@@ -67,6 +123,29 @@ func RecordTLSHello(server *httptest.Server) {
 	}
 }
 
+// AssertEveryTLSHello can be used to make assertions about the client's TLS configuration
+// when a test expects the server to be dialed by the client, but does not expect that http
+// requests will be performed (and thus assertions cannot be made during request handling).
+// For example, a test could use this when the production code is only going to perform a
+// tls.Dial to test the connection to the server, without making any actual requests.
+func AssertEveryTLSHello(t *testing.T, server *httptest.Server, clientTLSConfigFunc ptls.ConfigFunc) {
+	server.TLS.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+		t.Helper()
+
+		// We don't know yet at this point if the request will be an upgrade request, so as a shortcut,
+		// we won't assert on that. When that a concern, use AssertTLS in the request handler instead.
+		assertionsPassed := assertTLSOnHello(t, info, false, clientTLSConfigFunc)
+
+		if !assertionsPassed {
+			t.Errorf("insecure client TLS hello detected during TLS negotiation")
+		}
+
+		return nil, nil
+	}
+}
+
+// AssertTLS makes assertions on a particular incoming http request, assuming that the server
+// was configured using RecordTLSHello.
 func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFunc) {
 	t.Helper()
 
@@ -78,6 +157,16 @@ func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFun
 
 	actualClientHello, ok := h.(*tls.ClientHelloInfo)
 	require.True(t, ok)
+
+	assertionsPassed := assertTLSOnHello(t, actualClientHello, httpstream.IsUpgradeRequest(r), clientTLSConfigFunc)
+
+	if !assertionsPassed {
+		t.Errorf("insecure TLS detected for %q %q %q upgrade=%v", r.Proto, r.Method, r.URL.String(), httpstream.IsUpgradeRequest(r))
+	}
+}
+
+func assertTLSOnHello(t *testing.T, actualClientHello *tls.ClientHelloInfo, isUpgradeRequest bool, clientTLSConfigFunc ptls.ConfigFunc) bool {
+	t.Helper()
 
 	clientTLSConfig := clientTLSConfigFunc(nil)
 
@@ -102,7 +191,7 @@ func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFun
 	}
 
 	wantClientProtos := clientTLSConfig.NextProtos
-	if httpstream.IsUpgradeRequest(r) {
+	if isUpgradeRequest {
 		wantClientProtos = clientTLSConfig.NextProtos[1:]
 	}
 
@@ -111,10 +200,7 @@ func AssertTLS(t *testing.T, r *http.Request, clientTLSConfigFunc ptls.ConfigFun
 	ok2 := assert.Equal(t, cipherSuiteIDsToStrings(wantClientSupportedCiphers), cipherSuiteIDsToStrings(actualClientHello.CipherSuites))
 	ok3 := assert.Equal(t, wantClientProtos, actualClientHello.SupportedProtos)
 
-	if all := ok1 && ok2 && ok3; !all {
-		t.Errorf("insecure TLS detected for %q %q %q upgrade=%v wantClientSupportedVersions=%v wantClientSupportedCiphers=%v wantClientProtos=%v",
-			r.Proto, r.Method, r.URL.String(), httpstream.IsUpgradeRequest(r), ok1, ok2, ok3)
-	}
+	return ok1 && ok2 && ok3
 }
 
 // appendIfNotAlreadyIncluded only adds the newItems to the list if they are not already included

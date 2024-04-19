@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/ptr"
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -27,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
 func TestGetKubeconfig(t *testing.T) {
@@ -3198,7 +3200,7 @@ func TestGetKubeconfig(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var issuerEndpointPtr *string
-			issuerCABundle, issuerEndpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			testServer, testServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
 				switch r.URL.Path {
 				case "/.well-known/openid-configuration":
@@ -3226,8 +3228,8 @@ func TestGetKubeconfig(t *testing.T) {
 				default:
 					t.Fatalf("tried to call issuer at a path that wasn't one of the expected discovery endpoints.")
 				}
-			})
-			issuerEndpointPtr = &issuerEndpoint
+			}), nil)
+			issuerEndpointPtr = ptr.To(testServer.URL)
 
 			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			cmd := kubeconfigCommand(kubeconfigDeps{
@@ -3248,7 +3250,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					fake := fakeconciergeclientset.NewSimpleClientset()
 					if tt.conciergeObjects != nil {
-						fake = fakeconciergeclientset.NewSimpleClientset(tt.conciergeObjects(issuerCABundle, issuerEndpoint)...)
+						fake = fakeconciergeclientset.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
 					}
 					if len(tt.conciergeReactions) > 0 {
 						fake.ReactionChain = append(tt.conciergeReactions, fake.ReactionChain...)
@@ -3263,7 +3265,7 @@ func TestGetKubeconfig(t *testing.T) {
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 
-			cmd.SetArgs(tt.args(issuerCABundle, issuerEndpoint))
+			cmd.SetArgs(tt.args(string(testServerCA), testServer.URL))
 
 			err := cmd.Execute()
 			if tt.wantError {
@@ -3274,19 +3276,19 @@ func TestGetKubeconfig(t *testing.T) {
 
 			var expectedLogs []string
 			if tt.wantLogs != nil {
-				expectedLogs = tt.wantLogs(issuerCABundle, issuerEndpoint)
+				expectedLogs = tt.wantLogs(string(testServerCA), testServer.URL)
 			}
 			testLog.Expect(expectedLogs)
 
 			expectedStdout := ""
 			if tt.wantStdout != nil {
-				expectedStdout = tt.wantStdout(issuerCABundle, issuerEndpoint)
+				expectedStdout = tt.wantStdout(string(testServerCA), testServer.URL)
 			}
 			require.Equal(t, expectedStdout, stdout.String(), "unexpected stdout")
 
 			actualStderr := stderr.String()
 			if tt.wantStderr != nil {
-				testutil.RequireErrorString(t, actualStderr, tt.wantStderr(issuerCABundle, issuerEndpoint))
+				testutil.RequireErrorString(t, actualStderr, tt.wantStderr(string(testServerCA), testServer.URL))
 			} else {
 				require.Empty(t, actualStderr, "unexpected stderr")
 			}

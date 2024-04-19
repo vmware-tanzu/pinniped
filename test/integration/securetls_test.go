@@ -23,7 +23,7 @@ import (
 func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
-	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// pinniped CLI uses ptls.Secure when talking to KAS
 		// in FIPS mode the distinction doesn't matter much because
 		// each of the configs is a wrapper for the same base FIPS config
@@ -33,15 +33,13 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 			`"status":{"credential":{"token":"some-fancy-token"}}}`)
 	}), tlsserver.RecordTLSHello)
 
-	ca := tlsserver.TLSTestServerCA(server)
-
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
 	stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, "login", "static",
 		"--token", "does-not-matter",
 		"--concierge-authenticator-type", "webhook",
 		"--concierge-authenticator-name", "does-not-matter",
-		"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(ca),
+		"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(serverCA),
 		"--concierge-endpoint", server.URL,
 		"--enable-concierge",
 		"--credential-cache", "",
@@ -57,7 +55,7 @@ func TestSecureTLSPinnipedCLIToKAS_Parallel(t *testing.T) {
 func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 	_ = testlib.IntegrationEnv(t)
 
-	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// pinniped CLI uses ptls.Default when talking to supervisor
 		// in FIPS mode the distinction doesn't matter much because
 		// each of the configs is a wrapper for the same base FIPS config
@@ -66,12 +64,10 @@ func TestSecureTLSPinnipedCLIToSupervisor_Parallel(t *testing.T) {
 		fmt.Fprint(w, `{"issuer":"https://not-a-good-issuer"}`)
 	}), tlsserver.RecordTLSHello)
 
-	ca := tlsserver.TLSTestServerCA(server)
-
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
 	stdout, stderr := runPinnipedCLI(&fakeT{T: t}, nil, pinnipedExe, "login", "oidc",
-		"--ca-bundle-data", base64.StdEncoding.EncodeToString(ca),
+		"--ca-bundle-data", base64.StdEncoding.EncodeToString(serverCA),
 		"--issuer", server.URL,
 		"--credential-cache", "",
 		"--upstream-identity-provider-flow", "cli_password",

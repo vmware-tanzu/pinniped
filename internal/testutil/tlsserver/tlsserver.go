@@ -30,10 +30,34 @@ const (
 	helloKey
 )
 
+// TLSTestIPv6Server returns a TLS-required server that listens at an IPv6 loopback
+// TODO: Rename since the package name already includes TLS.
+func TLSTestIPv6Server(t *testing.T, handler http.Handler, f func(*httptest.Server)) *httptest.Server {
+	t.Helper()
+
+	listener, err := net.Listen("tcp6", "[::1]:0")
+	require.NoError(t, err, "TLSTestIPv6Server: failed to listen on a port")
+
+	server := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: handler}, //nolint:gosec //ReadHeaderTimeout is not needed for a localhost listener
+	}
+
+	return testServer(t, server, f)
+}
+
+// TLSTestServer returns a TLS-required server that listens at an IPv4 loopback.
+// TODO: Rename since the package name already includes TLS.
 func TLSTestServer(t *testing.T, handler http.Handler, f func(*httptest.Server)) *httptest.Server {
 	t.Helper()
 
 	server := httptest.NewUnstartedServer(handler)
+	return testServer(t, server, f)
+}
+
+func testServer(t *testing.T, server *httptest.Server, f func(*httptest.Server)) *httptest.Server {
+	t.Helper()
+
 	server.TLS = ptls.Default(nil) // mimic API server config
 	if f != nil {
 		f(server)

@@ -64,18 +64,16 @@ func New(
 	webhooks authinformers.WebhookAuthenticatorInformer,
 	clock clock.Clock,
 	log plog.Logger,
-	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error),
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: controllerName,
 			Syncer: &webhookCacheFillerController{
-				cache:         cache,
-				client:        client,
-				webhooks:      webhooks,
-				clock:         clock,
-				log:           log.WithName(controllerName),
-				tlsDialerFunc: tlsDialerFunc,
+				cache:    cache,
+				client:   client,
+				webhooks: webhooks,
+				clock:    clock,
+				log:      log.WithName(controllerName),
 			},
 		},
 		controllerlib.WithInformer(
@@ -87,12 +85,11 @@ func New(
 }
 
 type webhookCacheFillerController struct {
-	cache         *authncache.Cache
-	webhooks      authinformers.WebhookAuthenticatorInformer
-	client        conciergeclientset.Interface
-	clock         clock.Clock
-	log           plog.Logger
-	tlsDialerFunc func(network string, addr string, config *tls.Config) (*tls.Conn, error) // for mocking, use tls.Dial in prod
+	cache    *authncache.Cache
+	webhooks authinformers.WebhookAuthenticatorInformer
+	client   conciergeclientset.Interface
+	clock    clock.Clock
+	log      plog.Logger
 }
 
 // Sync implements controllerlib.Syncer.
@@ -237,7 +234,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 		return conditions, nil
 	}
 
-	conn, err := c.tlsDialerFunc("tcp", endpointHostPort.Endpoint(), ptls.Default(certPool))
+	conn, err := tls.Dial("tcp", endpointHostPort.Endpoint(), ptls.Default(certPool))
 
 	if err != nil {
 		errText := "cannot dial server"

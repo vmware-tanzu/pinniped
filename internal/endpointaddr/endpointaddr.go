@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 type HostPort struct {
@@ -41,7 +42,7 @@ func (h *HostPort) Endpoint() string {
 // - "[<IPv6>]:<port>"   (IPv6 address with port, brackets are required)
 //
 // If the input does not specify a port number, then defaultPort will be used.
-func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
+func Parse(endpoint string, defaultPort uint16, paths ...string) (HostPort, error) {
 	// Try parsing it both with and without an implicit port 443 at the end.
 	host, port, err := net.SplitHostPort(endpoint)
 
@@ -61,9 +62,13 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 		return HostPort{}, fmt.Errorf("invalid port %q", port)
 	}
 
+	if len(paths) < 1 {
+		paths = []string{"UNKNOWN_PATH"}
+	}
+
 	// Check if the host part is a IPv4 or IPv6 address or a valid hostname according to RFC 1123.
 	switch {
-	case len(validation.IsValidIP(host)) == 0:
+	case len(validation.IsValidIP(field.NewPath(paths[0], paths[1:]...), host)) == 0:
 	case len(validation.IsDNS1123Subdomain(host)) == 0:
 	default:
 		return HostPort{}, fmt.Errorf("host %q is not a valid hostname or IP address", host)

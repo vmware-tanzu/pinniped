@@ -326,7 +326,7 @@ func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Con
 	}
 
 	conn := ldap.NewConn(c, true)
-	conn.Start() //nolint:staticcheck // will need a different approach soon
+	conn.Start()
 	return conn, nil
 }
 
@@ -348,7 +348,7 @@ func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort)
 	}
 
 	conn := ldap.NewConn(c, false)
-	conn.Start() //nolint:staticcheck // will need a different approach soon
+	conn.Start()
 	err = conn.StartTLS(tlsConfig)
 	if err != nil {
 		return nil, err

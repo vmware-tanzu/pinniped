@@ -17,6 +17,7 @@ func TestParse(t *testing.T) {
 		name           string
 		input          string
 		defaultPort    uint16
+		paths          []string
 		expectErr      string
 		expect         HostPort
 		expectEndpoint string
@@ -41,6 +42,13 @@ func TestParse(t *testing.T) {
 			defaultPort:    443,
 			expect:         HostPort{Host: "127.0.0.1", Port: 8443},
 			expectEndpoint: "127.0.0.1:8443",
+		},
+		{
+			name:        "invalid IPv4",
+			input:       "1.1.1.",
+			defaultPort: 443,
+			paths:       []string{"does", "not", "matter", "because", "this", "error", "is", "ignored"},
+			expectErr:   `host "1.1.1." is not a valid hostname or IP address`,
 		},
 		{
 			name:           "IPv4 as IPv6 in brackets with port",
@@ -170,7 +178,7 @@ func TestParse(t *testing.T) {
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.input, tt.defaultPort)
+			got, err := Parse(tt.input, tt.defaultPort, tt.paths...)
 			if tt.expectErr == "" {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect, got)

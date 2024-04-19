@@ -199,7 +199,7 @@ func dialTLS(t *testing.T, env *TestEnv) *ldap.Conn {
 	c, err := dialer.DialContext(context.Background(), "tcp", env.SupervisorUpstreamActiveDirectory.Host)
 	require.NoError(t, err)
 	conn := ldap.NewConn(c, true)
-	conn.Start() //nolint:staticcheck // will need a different approach soon
+	conn.Start()
 	return conn
 }
 

@@ -8,16 +8,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
+	controllerAuthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
@@ -109,8 +109,8 @@ func TestController(t *testing.T) {
 			initialCache: func(t *testing.T, cache *authncache.Cache) {
 				cache.Store(testWebhookKey1, nil)
 				cache.Store(testWebhookKey2, nil)
-				cache.Store(testJWTAuthenticatorKey1, newClosableCacheValue(t, 0))
-				cache.Store(testJWTAuthenticatorKey2, newClosableCacheValue(t, 1))
+				cache.Store(testJWTAuthenticatorKey1, newClosableCacheValue(t, false))
+				cache.Store(testJWTAuthenticatorKey2, newClosableCacheValue(t, true))
 				cache.Store(testKeyUnknownType, nil)
 			},
 			objects: []runtime.Object{
@@ -174,10 +174,28 @@ func TestController(t *testing.T) {
 	}
 }
 
-func newClosableCacheValue(t *testing.T, wantCloses int) authncache.Value {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	tac := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
-	tac.EXPECT().Close().Times(wantCloses)
-	return tac
+type mockValue struct {
+	wasClosed bool
+}
+
+func (m *mockValue) Close() {
+	m.wasClosed = true
+}
+
+func (m *mockValue) AuthenticateToken(_ context.Context, _ string) (*authenticator.Response, bool, error) {
+	panic("implement me")
+}
+
+var _ authncache.Value = (*mockValue)(nil)
+var _ controllerAuthenticator.Closer = (*mockValue)(nil)
+
+func newClosableCacheValue(t *testing.T, wantClose bool) authncache.Value {
+	t.Helper()
+	mock := &mockValue{}
+
+	t.Cleanup(func() {
+		require.Equal(t, wantClose, mock.wasClosed)
+	})
+
+	return mock
 }

@@ -1,4 +1,4 @@
-#! Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -131,7 +131,7 @@ rules:
     resources: [ apiservices ]
     verbs: [ get, list, patch, update, watch ]
   - apiGroups: [ admissionregistration.k8s.io ]
-    resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations ]
+    resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations, validatingadmissionpolicybindings ]
     verbs: [ get, list, watch ]
   - apiGroups: [ flowcontrol.apiserver.k8s.io ]
     resources: [ flowschemas, prioritylevelconfigurations ]

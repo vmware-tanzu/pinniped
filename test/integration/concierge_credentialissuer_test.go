@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -90,7 +90,8 @@ func TestCredentialIssuer(t *testing.T) {
 		} else {
 			require.Equal(t, configv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, configv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
-			require.Contains(t, actualStatusStrategy.Message, "could not find a healthy kube-controller-manager pod (0 candidates)")
+			require.Contains(t, actualStatusStrategy.Message, "could not find a healthy kube-controller-manager pod (0 candidates): "+
+				"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)")
 			require.Nil(t, actualStatusKubeConfigInfo)
 		}
 	})

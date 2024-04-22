@@ -1,9 +1,12 @@
 # This file lists the versions of Kubernetes to use for codegen.
 # They must be listed newest to oldest.
-1.29.2
-1.28.7
-1.27.11
-1.26.14
+# New releases are listed at https://kubernetes.io/releases/.
+# Older releases are listed at https://kubernetes.io/releases/patch-releases/.
+1.30.0
+1.29.4
+1.28.9
+1.27.13
+1.26.15
 1.25.16
 1.24.17
 1.23.17

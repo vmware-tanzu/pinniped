@@ -70,8 +70,8 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) ApplyIDPSpecificSession
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedirectURL(
-	state *resolvedprovider.UpstreamAuthorizeRequestState, //nolint:all
-	downstreamIssuerURL string, //nolint:all
+	state *resolvedprovider.UpstreamAuthorizeRequestState,
+	downstreamIssuerURL string,
 ) (string, error) {
 	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamAuthorizeRedirectURL() called with state: %#v, downstreamIssuerURL %s", state, downstreamIssuerURL)
@@ -80,8 +80,8 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedire
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
 	ctx context.Context, //nolint:all
-	submittedUsername string, //nolint:all
-	submittedPassword string, //nolint:all
+	submittedUsername string,
+	submittedPassword string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ Login() called with submittedUserName %s, submittedPassword %s", submittedUsername, submittedPassword)
@@ -90,19 +90,19 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 	ctx context.Context, //nolint:all
-	authCode string, //nolint:all
-	pkce pkce.Code, //nolint:all
-	nonce nonce.Nonce, //nolint:all
-	redirectURI string, //nolint:all
+	authCode string,
+	pkce pkce.Code,
+	nonce nonce.Nonce,
+	redirectURI string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	// TODO: implement
-	fmt.Printf("GithubResolvedIdentityProvider ~ LoginFromCallback() called wtih authCode: %s, pkce: %#v, nonce: %#v, redirectURI: %s", authCode, pkce, nonce, redirectURI)
+	fmt.Printf("GithubResolvedIdentityProvider ~ LoginFromCallback() called with authCode: %s, pkce: %#v, nonce: %#v, redirectURI: %s", authCode, pkce, nonce, redirectURI)
 	return nil, nil, nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
 	ctx context.Context, //nolint:all
-	identity *resolvedprovider.Identity, //nolint:all
+	identity *resolvedprovider.Identity,
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
 	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamRefresh() called with identity %#v", identity)

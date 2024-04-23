@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamgithub"
 )
@@ -68,7 +69,6 @@ type gitHubWatcherController struct {
 	client                         supervisorclientset.Interface
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer
 	secretInformer                 corev1informers.SecretInformer
-	httpClientBuilder              func(rootCAs *x509.CertPool) *http.Client
 	clock                          clock.Clock
 }
 
@@ -82,7 +82,6 @@ func New(
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
-	httpClientBuilder func(rootCAs *x509.CertPool) *http.Client,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
 		namespace:                      namespace,
@@ -91,7 +90,6 @@ func New(
 		log:                            log.WithName(controllerName),
 		gitHubIdentityProviderInformer: gitHubIdentityProviderInformer,
 		secretInformer:                 secretInformer,
-		httpClientBuilder:              httpClientBuilder,
 		clock:                          clock,
 	}
 
@@ -390,7 +388,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", hostPort.Endpoint()),
-	}, fmt.Sprintf("https://%s", hostPort.Endpoint()), c.httpClientBuilder(certPool), conn.Close()
+	}, fmt.Sprintf("https://%s", hostPort.Endpoint()), phttp.Default(certPool), conn.Close()
 }
 
 // buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.

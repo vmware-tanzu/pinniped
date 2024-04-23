@@ -692,7 +692,7 @@ func TestImpersonator(t *testing.T) {
 			// will proxy incoming calls to this fake server.
 			testKubeAPIServerWasCalled := false
 			var testKubeAPIServerSawHeaders http.Header
-			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testKubeAPIServer, testKubeAPIServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				tlsConfigFunc := func(rootCAs *x509.CertPool) *tls.Config {
 					// Requests to get configmaps, flowcontrol requests, and healthz requests
 					// are not done by our http round trippers that specify only one protocol
@@ -815,7 +815,7 @@ func TestImpersonator(t *testing.T) {
 			// Create the client config that the impersonation server should use to talk to the Kube API server.
 			testKubeAPIServerKubeconfig := rest.Config{
 				Host:            testKubeAPIServer.URL,
-				TLSClientConfig: rest.TLSClientConfig{CAData: tlsserver.TLSTestServerCA(testKubeAPIServer)},
+				TLSClientConfig: rest.TLSClientConfig{CAData: testKubeAPIServerCA},
 			}
 
 			// Punch out just enough stuff to make New actually run without error.
@@ -1806,7 +1806,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 
 			testKubeAPIServerWasCalled := false
 			testKubeAPIServerSawHeaders := http.Header{}
-			testKubeAPIServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			testKubeAPIServer, testKubeAPIServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				tlsConfigFunc := func(rootCAs *x509.CertPool) *tls.Config {
 					// Requests to get configmaps, flowcontrol requests, and healthz requests
 					// are not done by our http round trippers that specify only one protocol
@@ -1842,7 +1842,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			testKubeAPIServerKubeconfig := rest.Config{
 				Host:            testKubeAPIServer.URL,
 				BearerToken:     "some-service-account-token",
-				TLSClientConfig: rest.TLSClientConfig{CAData: tlsserver.TLSTestServerCA(testKubeAPIServer)},
+				TLSClientConfig: rest.TLSClientConfig{CAData: testKubeAPIServerCA},
 			}
 			if tt.restConfig == nil {
 				tt.restConfig = &testKubeAPIServerKubeconfig

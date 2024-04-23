@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -957,7 +957,7 @@ func TestUnwrap(t *testing.T) {
 
 		regularClient := makeClient(t, restConfig, func(_ *rest.Config) {})
 
-		testUnwrap(t, regularClient, serverSubjects)
+		testUnwrap(t, regularClient, serverSubjects, ptls.Secure)
 	})
 
 	t.Run("exec client", func(t *testing.T) {
@@ -972,7 +972,7 @@ func TestUnwrap(t *testing.T) {
 			}
 		})
 
-		testUnwrap(t, execClient, serverSubjects)
+		testUnwrap(t, execClient, serverSubjects, ptls.Secure)
 	})
 
 	t.Run("oidc client", func(t *testing.T) {
@@ -988,90 +988,149 @@ func TestUnwrap(t *testing.T) {
 			}
 		})
 
-		testUnwrap(t, oidcClient, serverSubjects)
+		testUnwrap(t, oidcClient, serverSubjects, ptls.Secure)
+	})
+
+	t.Run("regular client with ptls.Default", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		regularClient := makeClient(t, restConfig, func(_ *rest.Config) {}, WithTLSConfigFunc(ptls.Default))
+
+		testUnwrap(t, regularClient, serverSubjects, ptls.Default)
+	})
+
+	t.Run("exec client with ptls.Default", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		execClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.ExecProvider = &clientcmdapi.ExecConfig{
+				Command:         "echo",
+				Args:            []string{"pandas are awesome"},
+				APIVersion:      clientauthenticationv1.SchemeGroupVersion.String(),
+				InteractiveMode: clientcmdapi.NeverExecInteractiveMode,
+			}
+		}, WithTLSConfigFunc(ptls.Default))
+
+		testUnwrap(t, execClient, serverSubjects, ptls.Default)
+	})
+
+	t.Run("oidc client with ptls.Default", func(t *testing.T) {
+		t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
+
+		oidcClient := makeClient(t, restConfig, func(config *rest.Config) {
+			config.AuthProvider = &clientcmdapi.AuthProviderConfig{
+				Name: "oidc",
+				Config: map[string]string{
+					"idp-issuer-url": "https://pandas.local",
+					"client-id":      "walrus",
+				},
+			}
+		}, WithTLSConfigFunc(ptls.Default))
+
+		testUnwrap(t, oidcClient, serverSubjects, ptls.Default)
 	})
 }
 
-func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
+func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte, tlsConfigFuncForExpectedValues ptls.ConfigFunc) {
 	tests := []struct {
-		name string
-		rt   http.RoundTripper
+		name           string
+		rt             http.RoundTripper
+		wantConfigFunc ptls.ConfigFunc
 	}{
 		{
-			name: "core v1",
-			rt:   extractTransport(client.Kubernetes.CoreV1()),
+			name:           "core v1",
+			rt:             extractTransport(client.Kubernetes.CoreV1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "coordination v1",
-			rt:   extractTransport(client.Kubernetes.CoordinationV1()),
+			name:           "coordination v1",
+			rt:             extractTransport(client.Kubernetes.CoordinationV1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "api registration v1",
-			rt:   extractTransport(client.Aggregation.ApiregistrationV1()),
+			name:           "api registration v1",
+			rt:             extractTransport(client.Aggregation.ApiregistrationV1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "concierge login",
-			rt:   extractTransport(client.PinnipedConcierge.LoginV1alpha1()),
+			name:           "concierge login",
+			rt:             extractTransport(client.PinnipedConcierge.LoginV1alpha1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "concierge config",
-			rt:   extractTransport(client.PinnipedConcierge.ConfigV1alpha1()),
+			name:           "concierge config",
+			rt:             extractTransport(client.PinnipedConcierge.ConfigV1alpha1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "supervisor idp",
-			rt:   extractTransport(client.PinnipedSupervisor.IDPV1alpha1()),
+			name:           "supervisor idp",
+			rt:             extractTransport(client.PinnipedSupervisor.IDPV1alpha1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "supervisor config",
-			rt:   extractTransport(client.PinnipedSupervisor.ConfigV1alpha1()),
+			name:           "supervisor config",
+			rt:             extractTransport(client.PinnipedSupervisor.ConfigV1alpha1()),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "json config",
-			rt:   configToTransport(t, client.JSONConfig),
+			name:           "json config",
+			rt:             configToTransport(t, client.JSONConfig),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "proto config",
-			rt:   configToTransport(t, client.ProtoConfig),
+			name:           "proto config",
+			rt:             configToTransport(t, client.ProtoConfig),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "anonymous json config",
-			rt:   configToTransport(t, SecureAnonymousClientConfig(client.JSONConfig)),
+			name:           "anonymous json config",
+			rt:             configToTransport(t, SecureAnonymousClientConfig(client.JSONConfig)),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous proto config",
-			rt:   configToTransport(t, SecureAnonymousClientConfig(client.ProtoConfig)),
+			name:           "anonymous proto config",
+			rt:             configToTransport(t, SecureAnonymousClientConfig(client.ProtoConfig)),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "json config - no cache",
-			rt:   configToTransport(t, bustTLSCache(client.JSONConfig)),
+			name:           "json config - no cache",
+			rt:             configToTransport(t, bustTLSCache(client.JSONConfig)),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "proto config - no cache",
-			rt:   configToTransport(t, bustTLSCache(client.ProtoConfig)),
+			name:           "proto config - no cache",
+			rt:             configToTransport(t, bustTLSCache(client.ProtoConfig)),
+			wantConfigFunc: tlsConfigFuncForExpectedValues,
 		},
 		{
-			name: "anonymous json config - no cache, inner bust",
-			rt:   configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig))),
+			name:           "anonymous json config - no cache, inner bust",
+			rt:             configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous proto config - no cache, inner bust",
-			rt:   configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig))),
+			name:           "anonymous proto config - no cache, inner bust",
+			rt:             configToTransport(t, SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous json config - no cache, double bust",
-			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig)))),
+			name:           "anonymous json config - no cache, double bust",
+			rt:             configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.JSONConfig)))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous proto config - no cache, double bust",
-			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig)))),
+			name:           "anonymous proto config - no cache, double bust",
+			rt:             configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(bustTLSCache(client.ProtoConfig)))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous json config - no cache, outer bust",
-			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.JSONConfig))),
+			name:           "anonymous json config - no cache, outer bust",
+			rt:             configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.JSONConfig))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 		{
-			name: "anonymous proto config - no cache, outer bust",
-			rt:   configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.ProtoConfig))),
+			name:           "anonymous proto config - no cache, outer bust",
+			rt:             configToTransport(t, bustTLSCache(SecureAnonymousClientConfig(client.ProtoConfig))),
+			wantConfigFunc: ptls.Secure, // SecureAnonymousClientConfig is always ptls.Secure
 		},
 	}
 	for _, tt := range tests {
@@ -1083,11 +1142,11 @@ func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte) {
 			require.NoError(t, err)
 			require.NotNil(t, tlsConfig)
 
-			secureTLSConfig := ptls.Secure(nil)
+			ptlsConfig := tt.wantConfigFunc(nil)
 
-			require.Equal(t, secureTLSConfig.MinVersion, tlsConfig.MinVersion)
-			require.Equal(t, secureTLSConfig.CipherSuites, tlsConfig.CipherSuites)
-			require.Equal(t, secureTLSConfig.NextProtos, tlsConfig.NextProtos)
+			require.Equal(t, ptlsConfig.MinVersion, tlsConfig.MinVersion)
+			require.Equal(t, ptlsConfig.CipherSuites, tlsConfig.CipherSuites)
+			require.Equal(t, ptlsConfig.NextProtos, tlsConfig.NextProtos)
 
 			// x509.CertPool has some embedded functions that make it hard to compare so just look at the subjects
 			//nolint:staticcheck // since we're not using .Subjects() to access the system pool
@@ -1120,14 +1179,14 @@ func bustTLSCache(config *rest.Config) *rest.Config {
 	return c
 }
 
-func makeClient(t *testing.T, restConfig *rest.Config, f func(*rest.Config)) *Client {
+func makeClient(t *testing.T, restConfig *rest.Config, f func(*rest.Config), opts ...Option) *Client {
 	t.Helper()
 
 	restConfig = rest.CopyConfig(restConfig)
 
 	f(restConfig)
 
-	client, err := New(WithConfig(restConfig))
+	client, err := New(append([]Option{WithConfig(restConfig)}, opts...)...)
 	require.NoError(t, err)
 
 	return client

@@ -270,13 +270,15 @@ func TestAgentController(t *testing.T) {
 				},
 			},
 			wantDistinctErrors: []string{
-				"could not find a healthy kube-controller-manager pod (0 candidates)",
+				"could not find a healthy kube-controller-manager pod (0 candidates): " +
+					"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)",
 			},
 			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
-				Message:        "could not find a healthy kube-controller-manager pod (0 candidates)",
+				Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status: configv1alpha1.ErrorStrategyStatus,
+				Reason: configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message: "could not find a healthy kube-controller-manager pod (0 candidates): " +
+					"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
 		},

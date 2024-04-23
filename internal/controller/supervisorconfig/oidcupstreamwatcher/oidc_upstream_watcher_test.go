@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcupstreamwatcher
@@ -35,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/testutil/tlsassertions"
+	"go.pinniped.dev/internal/testutil/tlsserver"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
 
@@ -113,7 +114,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	earlier := metav1.NewTime(now.Add(-1 * time.Hour).UTC())
 
 	// Start another test server that answers discovery successfully.
-	testIssuerCA, testIssuerURL := newTestIssuer(t)
+	testIssuerURL, testIssuerCA := newTestIssuer(t)
 	testIssuerCABase64 := base64.StdEncoding.EncodeToString([]byte(testIssuerCA))
 	testIssuerAuthorizeURL, err := url.Parse("https://example.com/authorize")
 	require.NoError(t, err)
@@ -1529,7 +1530,7 @@ func normalizeOIDCUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav
 
 func newTestIssuer(t *testing.T) (string, string) {
 	mux := http.NewServeMux()
-	caBundlePEM, testURL := testutil.TLSTestServer(t, mux.ServeHTTP)
+	server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(mux.ServeHTTP), nil)
 
 	type providerJSON struct {
 		Issuer        string `json:"issuer"`
@@ -1543,7 +1544,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL,
+			Issuer:        server.URL,
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "https://example.com/revoke",
 			TokenURL:      "https://example.com/token",
@@ -1554,7 +1555,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/valid-without-revocation/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/valid-without-revocation",
+			Issuer:        server.URL + "/valid-without-revocation",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "", // none
 			TokenURL:      "https://example.com/token",
@@ -1565,7 +1566,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/invalid/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:   testURL + "/invalid",
+			Issuer:   server.URL + "/invalid",
 			AuthURL:  "%",
 			TokenURL: "https://example.com/token",
 		})
@@ -1575,7 +1576,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/invalid-revocation-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/invalid-revocation-url",
+			Issuer:        server.URL + "/invalid-revocation-url",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "%",
 			TokenURL:      "https://example.com/token",
@@ -1586,7 +1587,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/insecure/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:   testURL + "/insecure",
+			Issuer:   server.URL + "/insecure",
 			AuthURL:  "http://example.com/authorize",
 			TokenURL: "https://example.com/token",
 		})
@@ -1596,7 +1597,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/insecure-revocation-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/insecure-revocation-url",
+			Issuer:        server.URL + "/insecure-revocation-url",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "http://example.com/revoke",
 			TokenURL:      "https://example.com/token",
@@ -1607,7 +1608,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/insecure-token-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/insecure-token-url",
+			Issuer:        server.URL + "/insecure-token-url",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "https://example.com/revoke",
 			TokenURL:      "http://example.com/token",
@@ -1619,7 +1620,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/missing-token-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/missing-token-url",
+			Issuer:        server.URL + "/missing-token-url",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "https://example.com/revoke",
 		})
@@ -1629,7 +1630,7 @@ func newTestIssuer(t *testing.T) (string, string) {
 	mux.HandleFunc("/missing-auth-url/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/missing-auth-url",
+			Issuer:        server.URL + "/missing-auth-url",
 			RevocationURL: "https://example.com/revoke",
 			TokenURL:      "https://example.com/token",
 		})
@@ -1638,13 +1639,13 @@ func newTestIssuer(t *testing.T) (string, string) {
 	// handle the four issuer with trailing slash configs
 
 	// valid case in= out=
-	// handled above at the root of testURL
+	// handled above at the root of server.URL
 
 	// valid case in=/ out=/
 	mux.HandleFunc("/ends-with-slash/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:        testURL + "/ends-with-slash/",
+			Issuer:        server.URL + "/ends-with-slash/",
 			AuthURL:       "https://example.com/authorize",
 			RevocationURL: "https://example.com/revoke",
 			TokenURL:      "https://example.com/token",
@@ -1657,5 +1658,5 @@ func newTestIssuer(t *testing.T) (string, string) {
 	// invalid case in=/ out=
 	// can be tested using root endpoint
 
-	return caBundlePEM, testURL
+	return server.URL, string(serverCA)
 }

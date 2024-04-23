@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -19,7 +19,7 @@ import (
 
 func TestSecureTLS(t *testing.T) {
 	var sawRequest bool
-	server := tlsserver.TLSTestServer(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+	server, serverCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Secure)
 		sawRequest = true
 	}), tlsserver.RecordTLSHello)
@@ -27,7 +27,7 @@ func TestSecureTLS(t *testing.T) {
 	config := &rest.Config{
 		Host: server.URL,
 		TLSClientConfig: rest.TLSClientConfig{
-			CAData: tlsserver.TLSTestServerCA(server),
+			CAData: serverCA,
 		},
 	}
 

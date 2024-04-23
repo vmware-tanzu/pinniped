@@ -276,7 +276,7 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 			Type:    "EndpointURLValid",
 			Status:  "True",
 			Reason:  "Success",
-			Message: "endpoint is a valid URL",
+			Message: "spec.endpoint is a valid URL",
 		},
 		{
 			Type:    "Ready",
@@ -294,7 +294,7 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 			Type:    "WebhookConnectionValid",
 			Status:  "True",
 			Reason:  "Success",
-			Message: "tls verified",
+			Message: "successfully dialed webhook server",
 		},
 	}
 }

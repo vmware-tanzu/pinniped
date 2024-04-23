@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -6,12 +6,15 @@ package kubeclient
 import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
+
+	"go.pinniped.dev/internal/crypto/ptls"
 )
 
 type Option func(*clientConfig)
 
 type clientConfig struct {
 	config           *restclient.Config
+	tlsConfigFunc    ptls.ConfigFunc
 	middlewares      []Middleware
 	transportWrapper transport.WrapperFunc
 }
@@ -19,6 +22,15 @@ type clientConfig struct {
 func WithConfig(config *restclient.Config) Option {
 	return func(c *clientConfig) {
 		c.config = config
+	}
+}
+
+// WithTLSConfigFunc will cause the client to use the provided configuration from the ptls package when the
+// client makes requests. For example, pass ptls.Default or ptls.Secure as the argument. When this Option
+// is not used, the client will default to using ptls.Secure.
+func WithTLSConfigFunc(tlsConfigFunc ptls.ConfigFunc) Option {
+	return func(c *clientConfig) {
+		c.tlsConfigFunc = tlsConfigFunc
 	}
 }
 

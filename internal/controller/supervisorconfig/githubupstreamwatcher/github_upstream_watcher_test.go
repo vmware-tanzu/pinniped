@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -62,15 +61,15 @@ var (
 func TestController(t *testing.T) {
 	require.Equal(t, 5, countExpectedConditions)
 
-	goodServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	goodServer, goodServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}), tlsserver.RecordTLSHello)
 	goodServerDomain, _ := strings.CutPrefix(goodServer.URL, "https://")
-	goodServerCAB64 := base64.StdEncoding.EncodeToString(tlsserver.TLSTestServerCA(goodServer))
+	goodServerCAB64 := base64.StdEncoding.EncodeToString(goodServerCA)
 
-	goodServerIPv6 := tlsserver.TLSTestIPv6Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	goodServerIPv6, goodServerIPv6CA := tlsserver.TestServerIPv6(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}), tlsserver.RecordTLSHello)
 	goodServerIPv6Domain, _ := strings.CutPrefix(goodServerIPv6.URL, "https://")
-	goodServerIPv6CAB64 := base64.StdEncoding.EncodeToString(tlsserver.TLSTestServerCA(goodServerIPv6))
+	goodServerIPv6CAB64 := base64.StdEncoding.EncodeToString(goodServerIPv6CA)
 
 	caForUnknownServer, err := certauthority.New("Some Unknown CA", time.Hour)
 	require.NoError(t, err)
@@ -366,7 +365,7 @@ func TestController(t *testing.T) {
 					AllowedOrganizations:    []string{"organization1", "org2"},
 					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
 					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              buildPretendHttpClient(t, goodServer),
+					HttpClient:              buildPretendHttpClient(t, goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -413,7 +412,7 @@ func TestController(t *testing.T) {
 					},
 					OrganizationLoginPolicy: "AllGitHubUsers",
 					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", goodServerDomain),
-					HttpClient:              buildPretendHttpClient(t, goodServer),
+					HttpClient:              buildPretendHttpClient(t, goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -467,7 +466,7 @@ func TestController(t *testing.T) {
 					},
 					OrganizationLoginPolicy: "AllGitHubUsers",
 					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", goodServerIPv6Domain),
-					HttpClient:              buildPretendHttpClient(t, goodServer),
+					HttpClient:              buildPretendHttpClient(t, goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -547,7 +546,7 @@ func TestController(t *testing.T) {
 					AllowedOrganizations:    []string{"organization1", "org2"},
 					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
 					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              buildPretendHttpClient(t, goodServer),
+					HttpClient:              buildPretendHttpClient(t, goodServerCA),
 				},
 				{
 					Name:               "other-idp-name",
@@ -562,7 +561,7 @@ func TestController(t *testing.T) {
 					AllowedOrganizations:    []string{"organization1", "org2"},
 					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
 					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              buildPretendHttpClient(t, goodServer),
+					HttpClient:              buildPretendHttpClient(t, goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -1707,10 +1706,10 @@ func TestController(t *testing.T) {
 func TestController_WithExistingConditions(t *testing.T) {
 	require.Equal(t, 5, countExpectedConditions)
 
-	goodServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	goodServer, goodServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	}), tlsserver.RecordTLSHello)
 	goodServerDomain, _ := strings.CutPrefix(goodServer.URL, "https://")
-	goodServerCAB64 := base64.StdEncoding.EncodeToString(tlsserver.TLSTestServerCA(goodServer))
+	goodServerCAB64 := base64.StdEncoding.EncodeToString(goodServerCA)
 
 	oneHourAgo := metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
 	namespace := "existing-conditions-namespace"
@@ -1878,9 +1877,9 @@ func TestController_WithExistingConditions(t *testing.T) {
 	}
 }
 
-func buildPretendHttpClient(t *testing.T, server *httptest.Server) *http.Client {
+func buildPretendHttpClient(t *testing.T, ca []byte) *http.Client {
 	t.Helper()
-	rootCAs, err := cert.NewPoolFromBytes(tlsserver.TLSTestServerCA(server))
+	rootCAs, err := cert.NewPoolFromBytes(ca)
 	require.NoError(t, err)
 	return buildHttpClient(rootCAs)
 }

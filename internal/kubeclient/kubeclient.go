@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -36,7 +36,9 @@ type Client struct {
 }
 
 func New(opts ...Option) (*Client, error) {
-	c := &clientConfig{}
+	c := &clientConfig{
+		tlsConfigFunc: ptls.Secure, // Set a default value. Can be overridden by an Option.
+	}
 
 	for _, opt := range opts {
 		opt(c)
@@ -51,16 +53,16 @@ func New(opts ...Option) (*Client, error) {
 		WithConfig(inClusterConfig)(c) // make sure all writes to clientConfig flow through one code path
 	}
 
-	secureKubeConfig, err := createSecureKubeConfig(c.config)
+	ptlsKubeConfig, err := createPTLSKubeConfig(c.config, c.tlsConfigFunc)
 	if err != nil {
 		return nil, fmt.Errorf("could not create secure client config: %w", err)
 	}
 
 	// explicitly use json when talking to CRD APIs
-	jsonKubeConfig := createJSONKubeConfig(secureKubeConfig)
+	jsonKubeConfig := createJSONKubeConfig(ptlsKubeConfig)
 
 	// explicitly use protobuf when talking to built-in kube APIs
-	protoKubeConfig := createProtoKubeConfig(secureKubeConfig)
+	protoKubeConfig := createProtoKubeConfig(ptlsKubeConfig)
 
 	// Connect to the core Kubernetes API.
 	k8sClient, err := kubernetes.NewForConfig(configWithWrapper(protoKubeConfig, kubescheme.Scheme, kubescheme.Codecs, c.middlewares, c.transportWrapper))
@@ -120,25 +122,25 @@ func createProtoKubeConfig(kubeConfig *restclient.Config) *restclient.Config {
 	return protoKubeConfig
 }
 
-// createSecureKubeConfig returns a copy of the input config with the WrapTransport
+// createPTLSKubeConfig returns a copy of the input config with the WrapTransport
 // enhanced to use the secure TLS configuration of the ptls / phttp packages.
-func createSecureKubeConfig(kubeConfig *restclient.Config) (*restclient.Config, error) {
-	secureKubeConfig := restclient.CopyConfig(kubeConfig)
+func createPTLSKubeConfig(kubeConfig *restclient.Config, tlsConfigFunc ptls.ConfigFunc) (*restclient.Config, error) {
+	ptlsKubeConfig := restclient.CopyConfig(kubeConfig)
 
 	// by setting proxy to always be non-nil, we bust the client-go global TLS config cache.
 	// this is required to make our wrapper function work without data races.  the unit tests
 	// associated with this code run in parallel to assert that we are not using the cache.
 	// see k8s.io/client-go/transport.tlsConfigKey
-	if secureKubeConfig.Proxy == nil {
-		secureKubeConfig.Proxy = net.NewProxierWithNoProxyCIDR(http.ProxyFromEnvironment)
+	if ptlsKubeConfig.Proxy == nil {
+		ptlsKubeConfig.Proxy = net.NewProxierWithNoProxyCIDR(http.ProxyFromEnvironment)
 	}
 
 	// make sure restclient.TLSConfigFor always returns a non-nil TLS config
-	if len(secureKubeConfig.NextProtos) == 0 {
-		secureKubeConfig.NextProtos = ptls.Secure(nil).NextProtos
+	if len(ptlsKubeConfig.NextProtos) == 0 {
+		ptlsKubeConfig.NextProtos = tlsConfigFunc(nil).NextProtos
 	}
 
-	tlsConfigTest, err := restclient.TLSConfigFor(secureKubeConfig)
+	tlsConfigTest, err := restclient.TLSConfigFor(ptlsKubeConfig)
 	if err != nil {
 		return nil, err // should never happen because our input config should always be valid
 	}
@@ -146,10 +148,10 @@ func createSecureKubeConfig(kubeConfig *restclient.Config) (*restclient.Config, 
 		return nil, fmt.Errorf("unexpected empty TLS config") // should never happen because we set NextProtos above
 	}
 
-	secureKubeConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+	ptlsKubeConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 		defer func() {
-			if err := AssertSecureTransport(rt); err != nil {
-				panic(err) // not sure what the point of this function would be if it failed to make the config secure
+			if err := assertTransport(rt, tlsConfigFunc); err != nil {
+				panic(err) // not sure what the point of this function would be if it failed to make the config use the ptls settings
 			}
 		}()
 
@@ -167,23 +169,23 @@ func createSecureKubeConfig(kubeConfig *restclient.Config) (*restclient.Config, 
 		}
 
 		// mutate the TLS config into our desired state before it is used
-		ptls.Merge(ptls.Secure, tlsConfig)
+		ptls.Merge(tlsConfigFunc, tlsConfig)
 
 		return rt // return the input transport since we mutated it in-place
 	})
 
-	if err := AssertSecureConfig(secureKubeConfig); err != nil {
+	if err := assertConfig(ptlsKubeConfig, tlsConfigFunc); err != nil {
 		return nil, err // not sure what the point of this function would be if it failed to make the config secure
 	}
 
-	return secureKubeConfig, nil
+	return ptlsKubeConfig, nil
 }
 
 // SecureAnonymousClientConfig has the same properties as restclient.AnonymousClientConfig
 // while still enforcing the secure TLS configuration of the ptls / phttp packages.
 func SecureAnonymousClientConfig(kubeConfig *restclient.Config) *restclient.Config {
 	kubeConfig = restclient.AnonymousClientConfig(kubeConfig)
-	secureKubeConfig, err := createSecureKubeConfig(kubeConfig)
+	secureKubeConfig, err := createPTLSKubeConfig(kubeConfig, ptls.Secure)
 	if err != nil {
 		panic(err) // should never happen as this would only fail on invalid CA data, which would never work anyway
 	}
@@ -194,22 +196,30 @@ func SecureAnonymousClientConfig(kubeConfig *restclient.Config) *restclient.Conf
 }
 
 func AssertSecureConfig(kubeConfig *restclient.Config) error {
+	return assertConfig(kubeConfig, ptls.Secure)
+}
+
+func assertConfig(kubeConfig *restclient.Config, tlsConfigFunc ptls.ConfigFunc) error {
 	rt, err := restclient.TransportFor(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to build transport: %w", err)
 	}
 
-	return AssertSecureTransport(rt)
+	return assertTransport(rt, tlsConfigFunc)
 }
 
 func AssertSecureTransport(rt http.RoundTripper) error {
+	return assertTransport(rt, ptls.Secure)
+}
+
+func assertTransport(rt http.RoundTripper, tlsConfigFunc ptls.ConfigFunc) error {
 	tlsConfig, err := net.TLSClientConfig(rt)
 	if err != nil {
 		return fmt.Errorf("failed to get TLS config: %w", err)
 	}
 
 	tlsConfigCopy := tlsConfig.Clone()
-	ptls.Merge(ptls.Secure, tlsConfigCopy) // only mutate the copy
+	ptls.Merge(tlsConfigFunc, tlsConfigCopy) // only mutate the copy
 
 	//nolint:gosec // the empty TLS config here is not used
 	if diff := cmp.Diff(tlsConfigCopy, tlsConfig,

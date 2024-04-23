@@ -6,7 +6,6 @@
 package controllermanager
 
 import (
-	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -241,7 +240,6 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				clock.RealClock{},
 				plog.New(),
-				tls.Dial,
 			),
 			singletonWorker,
 		).

@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package kubecertagent provides controllers that ensure a pod (the kube-cert-agent), is
@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -278,7 +279,13 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	// If there are no healthy controller manager pods, we alert the user that we can't find the keypair via
 	// the CredentialIssuer.
 	if newestControllerManager == nil {
-		err := fmt.Errorf("could not find a healthy kube-controller-manager pod (%s)", pluralize(controllerManagerPods))
+		msg := fmt.Sprintf("could not find a healthy kube-controller-manager pod (%s)", pluralize(controllerManagerPods))
+		if len(controllerManagerPods) == 0 {
+			err = fmt.Errorf("%s: note that this error is the expected behavior for some cluster types, "+
+				"including most cloud provider clusters (e.g. GKE, AKS, EKS)", msg)
+		} else {
+			err = errors.New(msg)
+		}
 		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 

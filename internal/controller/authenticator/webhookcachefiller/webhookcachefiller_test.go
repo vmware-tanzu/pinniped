@@ -16,20 +16,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	coretesting "k8s.io/client-go/testing"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clocktesting "k8s.io/utils/clock/testing"
+	"k8s.io/utils/ptr"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
@@ -91,56 +88,40 @@ func TestController(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	hostAsLocalhostMux := http.NewServeMux()
-	hostAsLocalhostWebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		hostAsLocalhostMux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*hostAsLocalhostServingCert,
-		}
-		thisServer.TLS = thisTLSConfig
+	hostAsLocalhostWebhookServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*hostAsLocalhostServingCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
-	hostAs127001Mux := http.NewServeMux()
-	hostAs127001WebhookServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		hostAs127001Mux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*hostAs127001ServingCert,
-		}
-		thisServer.TLS = thisTLSConfig
+	hostAs127001WebhookServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*hostAs127001ServingCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
-	localWithExampleDotComMux := http.NewServeMux()
-	hostLocalWithExampleDotComCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		localWithExampleDotComMux.ServeHTTP(w, r)
-	}), func(thisServer *httptest.Server) {
-		thisTLSConfig := ptls.Default(nil)
-		thisTLSConfig.Certificates = []tls.Certificate{
-			*localButExampleDotComServerCert,
-		}
-		thisServer.TLS = thisTLSConfig
+	hostLocalWithExampleDotComCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// only expecting dials, which will not get into handler func
+	}), func(s *httptest.Server) {
+		s.TLS.Certificates = []tls.Certificate{*localButExampleDotComServerCert}
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
 
-	goodMux := http.NewServeMux()
-	hostGoodDefaultServingCertServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tlsserver.AssertTLS(t, r, ptls.Default)
-		goodMux.ServeHTTP(w, r)
-	}), tlsserver.RecordTLSHello)
-	goodMux.Handle("/some/webhook", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, err := fmt.Fprintf(w, `{"something": "%s"}`, "something-for-response")
-		require.NoError(t, err)
-	}))
-	goodMux.Handle("/nothing/here", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostLocalIPv6Server, ipv6CA := tlsserver.TestServerIPv6(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), tlsserver.RecordTLSHello)
+
+	mux := http.NewServeMux()
+	mux.Handle("/nothing/here", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// note that we are only dialing, so we shouldn't actually get here
 		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, "404 nothing here")
+		_, _ = fmt.Fprint(w, "404 nothing here")
 	}))
+	hostGoodDefaultServingCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	}), func(s *httptest.Server) {
+		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
+	})
 
 	goodWebhookDefaultServingCertEndpoint := hostGoodDefaultServingCertServer.URL
 	goodWebhookDefaultServingCertEndpointBut404 := goodWebhookDefaultServingCertEndpoint + "/nothing/here"
@@ -270,7 +251,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "tls verified",
+			Message:            "successfully dialed webhook server",
 		}
 	}
 	unknownWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -321,7 +302,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "endpoint is a valid URL",
+			Message:            "spec.endpoint is a valid URL",
 		}
 	}
 	sadEndpointURLValid := func(issuer string, time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -383,14 +364,13 @@ func TestController(t *testing.T) {
 		webhooks []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
 		configClient     func(*pinnipedfake.Clientset)
-		tlsDialerFunc    func(network string, addr string, config *tls.Config) (*tls.Conn, error)
 		wantSyncLoopErr  testutil.RequireErrorStringFunc
 		wantLogs         []map[string]any
 		wantActions      func() []coretesting.Action
 		wantCacheEntries int
 	}{
 		{
-			name:    "404: WebhookAuthenticator not found will abort sync loop, no status conditions",
+			name:    "Sync: WebhookAuthenticator not found will abort sync loop, no status conditions",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []map[string]any{
 				{
@@ -534,6 +514,63 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantCacheEntries: 1,
+		},
+		{
+			name:    "Sync: valid WebhookAuthenticator with IPV6 and CA: will complete sync loop successfully with success conditions and ready phase",
+			syncKey: controllerlib.Key{Name: "test-name"},
+			webhooks: []runtime.Object{
+				&auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: func() auth1alpha1.WebhookAuthenticatorSpec {
+						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
+						ipv6.Endpoint = hostLocalIPv6Server.URL
+						ipv6.TLS = ptr.To(auth1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
+						})
+						return *ipv6
+					}(),
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "webhookcachefiller-controller",
+					"message":   "added new webhook authenticator",
+					"endpoint":  hostLocalIPv6Server.URL,
+					"webhook": map[string]interface{}{
+						"name": "test-name",
+					},
+				},
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &auth1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: func() auth1alpha1.WebhookAuthenticatorSpec {
+						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
+						ipv6.Endpoint = hostLocalIPv6Server.URL
+						ipv6.TLS = ptr.To(auth1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
+						})
+						return *ipv6
+					}(),
+					Status: auth1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(hostLocalIPv6Server.URL, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
 				})
@@ -716,9 +753,6 @@ func TestController(t *testing.T) {
 		{
 			name:    "validateEndpoint: should error if endpoint cannot be parsed",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
-				return nil, errors.New("IPv6 test fake error")
-			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -859,14 +893,14 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: auth1alpha1.WebhookAuthenticatorSpec{
-						Endpoint: fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()),
+						Endpoint: fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
 						TLS: &auth1alpha1.TLSSpec{
 							// CA Bundle for validating the server's certs
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(caForLocalhostAsHostname.Bundle()),
 						},
 					},
 					Status: auth1alpha1.WebhookAuthenticatorStatus{
-						Conditions: allHappyConditionsSuccess(fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()), frozenMetav1Now, 0),
+						Conditions: allHappyConditionsSuccess(fmt.Sprintf("https://localhost:%s", localhostURL.Port()), frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
 				},
@@ -877,7 +911,7 @@ func TestController(t *testing.T) {
 					"timestamp": "2099-08-08T13:57:36.123456Z",
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
-					"endpoint":  fmt.Sprintf("%s:%s", "https://localhost", localhostURL.Port()),
+					"endpoint":  fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
 					"webhook": map[string]interface{}{
 						"name": "test-name",
 					},
@@ -894,14 +928,6 @@ func TestController(t *testing.T) {
 		{
 			name:    "validateConnection: IPv6 address with port: should call dialer func with correct arguments",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
-				assert.Equal(t, "tcp", network)
-				assert.Equal(t, "[0:0:0:0:0:0:0:1]:4242", addr)
-				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
-			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -930,7 +956,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]:4242/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: dial tcp [::1]:4242: connect: connection refused"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -945,20 +971,12 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:4242: connect: connection refused`),
 			wantCacheEntries: 0,
 		},
 		{
 			name:    "validateConnection: IPv6 address without port: should call dialer func with correct arguments",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
-				assert.Equal(t, "tcp", network)
-				assert.Equal(t, "[0:0:0:0:0:0:0:1]:443", addr, "should add default port when port not provided")
-				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
-			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -987,7 +1005,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://[0:0:0:0:0:0:0:1]/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: dial tcp [::1]:443: connect: connection refused"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1002,7 +1020,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:443: connect: connection refused`),
 			wantCacheEntries: 0,
 		},
 		{
@@ -1091,14 +1109,6 @@ func TestController(t *testing.T) {
 		{
 			name:    "validateConnection: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			tlsDialerFunc: func(network string, addr string, config *tls.Config) (*tls.Conn, error) {
-				assert.Equal(t, "tcp", network)
-				assert.Equal(t, "[0:0:0:0:0:0:0:1]:443", addr)
-				assert.True(t, caForLocalhostAs127001.Pool().Equal(config.RootCAs))
-				assert.Equal(t, uint16(tls.VersionTLS12), config.MinVersion)
-
-				return nil, errors.New("IPv6 test fake error to skip real dial in prod code, this is actually success")
-			},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1127,7 +1137,7 @@ func TestController(t *testing.T) {
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess("https://0:0:0:0:0:0:0:1/some/fake/path", frozenMetav1Now, 0),
 							[]metav1.Condition{
-								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success"),
+								sadWebhookConnectionValidWithMessage(frozenMetav1Now, 0, "cannot dial server: dial tcp [::1]:443: connect: connection refused"),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
 							},
@@ -1142,7 +1152,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: IPv6 test fake error to skip real dial in prod code, this is actually success`),
+			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:443: connect: connection refused`),
 			wantCacheEntries: 0,
 		},
 		{
@@ -1310,16 +1320,12 @@ func TestController(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			if tt.tlsDialerFunc == nil {
-				tt.tlsDialerFunc = tls.Dial
-			}
 			controller := New(
 				cache,
 				pinnipedAPIClient,
 				informers.Authentication().V1alpha1().WebhookAuthenticators(),
 				frozenClock,
-				logger,
-				tt.tlsDialerFunc)
+				logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -1356,52 +1362,61 @@ func TestController(t *testing.T) {
 				}
 			}
 
-			if tt.wantActions != nil {
-				if !assert.ElementsMatch(t, tt.wantActions(), pinnipedAPIClient.Actions()) {
-					// cmp.Diff is superior to require.ElementsMatch in terms of readability here.
-					// require.ElementsMatch will handle pointers better than require.Equal, but
-					// the timestamps are still incredibly verbose.
-					require.Fail(t, cmp.Diff(tt.wantActions(), pinnipedAPIClient.Actions()), "actions should be exactly the expected number of actions and also contain the correct resources")
-				}
-			} else {
-				require.Fail(t, "wantActions is required for test "+tt.name)
-			}
-
+			require.NotEmpty(t, tt.wantActions, "wantActions is required for test %s", tt.name)
+			require.Equal(t, tt.wantActions(), pinnipedAPIClient.Actions())
 			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))
 		})
 	}
 }
 
 func TestNewWebhookAuthenticator(t *testing.T) {
-	goodEndpoint := "https://example.com"
+	server, serverCA := tlsserver.TestServerIPv4(t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Webhook clients should always use ptls.Default when making requests to the webhook. Assert that here.
+			tlsserver.AssertTLS(t, r, ptls.Default)
 
-	testServerCABundle, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Contains(t, string(body), "test-token")
-		_, err = w.Write([]byte(`{}`))
-		require.NoError(t, err)
-	})
+			// Loosely assert on the request body.
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			require.Contains(t, string(body), "test-token")
+
+			// Write a realistic looking fake response for a successfully authenticated user, so we can tell that
+			// this endpoint was actually called by the test below where it asserts on the fake user and group names.
+			w.Header().Add("Content-Type", "application/json")
+			responseBody := authenticationv1beta1.TokenReview{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "TokenReview",
+					APIVersion: authenticationv1beta1.SchemeGroupVersion.String(),
+				},
+				Status: authenticationv1beta1.TokenReviewStatus{
+					Authenticated: true,
+					User: authenticationv1beta1.UserInfo{
+						Username: "fake-username-from-server",
+						Groups:   []string{"fake-group-from-server-1", "fake-group-from-server-2"},
+					},
+				},
+			}
+			err = json.NewEncoder(w).Encode(responseBody)
+			require.NoError(t, err)
+		}),
+		tlsserver.RecordTLSHello,
+	)
 
 	tests := []struct {
-		name                            string
-		endpoint                        string
-		pemBytes                        []byte
-		tempFileFunc                    func(dir string, pattern string) (*os.File, error)
-		marshallFunc                    func(config clientcmdapi.Config, filename string) error
-		prereqOk                        bool
-		wantConditions                  []*metav1.Condition
-		wantWebhook                     bool
-		wantErr                         string
-		testCreatedWebhookWithFakeToken bool
+		name           string
+		endpoint       string
+		pemBytes       []byte
+		prereqOk       bool
+		wantConditions []*metav1.Condition
+		wantErr        string
+		wantWebhook    bool // When true, we want a webhook client to have been successfully created.
+		callWebhook    bool // When true, really call the webhook endpoint using the created webhook client.
 	}{
 		{
-			name:         "prerequisites not ready, cannot create webhook authenticator",
-			endpoint:     "",
-			pemBytes:     []byte("irrelevant pem bytes"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			wantErr:      "",
+			name:     "prerequisites not ready, cannot create webhook authenticator",
+			endpoint: "",
+			pemBytes: []byte("irrelevant pem bytes"),
+			wantErr:  "",
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "Unknown",
@@ -1410,58 +1425,22 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			}},
 			prereqOk: false,
 		}, {
-			name:     "temp file failure, cannot create webhook authenticator",
-			endpoint: "",
-			pemBytes: []byte("irrelevant pem bytes"),
-			tempFileFunc: func(_ string, _ string) (*os.File, error) {
-				return nil, fmt.Errorf("some temp file error")
-			},
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
-			wantConditions: []*metav1.Condition{{
-				Type:    "AuthenticatorValid",
-				Status:  "False",
-				Reason:  "UnableToCreateTempFile",
-				Message: "unable to create temporary file: some temp file error",
-			}},
-			wantErr: "unable to create temporary file: some temp file error",
-		}, {
-			name:         "marshal failure, cannot create webhook authenticator",
-			endpoint:     "",
-			pemBytes:     []byte("irrelevant pem bytes"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: func(_ clientcmdapi.Config, _ string) error {
-				return fmt.Errorf("some marshal error")
-			},
+			name:     "invalid pem data, unable to parse bytes as PEM block",
+			endpoint: "https://does-not-matter-will-not-be-used",
+			pemBytes: []byte("invalid-bas64"),
 			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "False",
-				Reason:  "UnableToMarshallKubeconfig",
-				Message: "unable to marshal kubeconfig: some marshal error",
+				Reason:  "UnableToCreateClient",
+				Message: "unable to create client for this webhook: could not create secure client config: unable to load root certificates: unable to parse bytes as PEM block",
 			}},
-			wantErr: "unable to marshal kubeconfig: some marshal error",
+			wantErr: "unable to create client for this webhook: could not create secure client config: unable to load root certificates: unable to parse bytes as PEM block",
 		}, {
-			name:         "invalid pem data, unable to parse bytes as PEM block",
-			endpoint:     goodEndpoint,
-			pemBytes:     []byte("invalid-bas64"),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
-			wantConditions: []*metav1.Condition{{
-				Type:    "AuthenticatorValid",
-				Status:  "False",
-				Reason:  "UnableToInstantiateWebhook",
-				Message: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
-			}},
-			wantErr: "unable to instantiate webhook: unable to load root certificates: unable to parse bytes as PEM block",
-		}, {
-			name:         "valid config with no TLS spec, webhook authenticator created",
-			endpoint:     goodEndpoint,
-			pemBytes:     nil,
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
+			name:     "valid config with no PEM bytes, webhook authenticator created",
+			endpoint: "https://does-not-matter-will-not-be-used",
+			pemBytes: nil,
+			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "True",
@@ -1470,19 +1449,18 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			}},
 			wantWebhook: true,
 		}, {
-			name:         "success, webhook authenticator created",
-			endpoint:     testServerURL,
-			pemBytes:     []byte(testServerCABundle),
-			tempFileFunc: os.CreateTemp,
-			marshallFunc: clientcmd.WriteToFile,
-			prereqOk:     true,
+			name:     "valid config, webhook authenticator created, and test calling webhook server",
+			endpoint: server.URL,
+			pemBytes: serverCA,
+			prereqOk: true,
 			wantConditions: []*metav1.Condition{{
 				Type:    "AuthenticatorValid",
 				Status:  "True",
 				Reason:  "Success",
 				Message: "authenticator initialized",
 			}},
-			testCreatedWebhookWithFakeToken: true,
+			wantWebhook: true,
+			callWebhook: true,
 		},
 	}
 
@@ -1491,12 +1469,14 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var conditions []*metav1.Condition
-			webhook, conditions, err := newWebhookAuthenticator(tt.endpoint, tt.pemBytes, tt.tempFileFunc, tt.marshallFunc, conditions, tt.prereqOk)
+			webhook, conditions, err := newWebhookAuthenticator(tt.endpoint, tt.pemBytes, conditions, tt.prereqOk)
 
 			require.Equal(t, tt.wantConditions, conditions)
 
 			if tt.wantWebhook {
 				require.NotNil(t, webhook)
+			} else {
+				require.Nil(t, webhook)
 			}
 
 			if tt.wantErr != "" {
@@ -1505,11 +1485,12 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if tt.testCreatedWebhookWithFakeToken {
+			if tt.callWebhook {
 				authResp, isAuthenticated, err := webhook.AuthenticateToken(context.Background(), "test-token")
 				require.NoError(t, err)
-				require.Nil(t, authResp)
-				require.False(t, isAuthenticated)
+				require.True(t, isAuthenticated)
+				require.Equal(t, "fake-username-from-server", authResp.User.GetName())
+				require.Equal(t, []string{"fake-group-from-server-1", "fake-group-from-server-2"}, authResp.User.GetGroups())
 			}
 		})
 	}

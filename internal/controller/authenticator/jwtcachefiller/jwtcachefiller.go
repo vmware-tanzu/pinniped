@@ -66,7 +66,6 @@ const (
 	reasonInvalidTLSConfiguration                   = "InvalidTLSConfiguration"
 	reasonInvalidDiscoveryProbe                     = "InvalidDiscoveryProbe"
 	reasonInvalidAuthenticator                      = "InvalidAuthenticator"
-	reasonInvalidTokenSigningFailure                = "InvalidTokenSigningFailure"
 	reasonInvalidCouldNotFetchJWKS                  = "InvalidCouldNotFetchJWKS"
 
 	msgUnableToValidate = "unable to validate; see other conditions for details"

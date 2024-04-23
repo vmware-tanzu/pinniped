@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 /*
@@ -58,7 +58,7 @@ func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server,
 		resources = make(map[string]runtime.Object)
 	}
 
-	server := tlsserver.TLSTestServer(t, httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+	server, serverCA := tlsserver.TestServerIPv4(t, httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		tlsserver.AssertTLS(t, r, ptls.Secure)
 
 		obj, err := decodeObj(r)
@@ -84,7 +84,7 @@ func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server,
 	restConfig := &restclient.Config{
 		Host: server.URL,
 		TLSClientConfig: restclient.TLSClientConfig{
-			CAData: tlsserver.TLSTestServerCA(server),
+			CAData: serverCA,
 		},
 	}
 	return server, restConfig

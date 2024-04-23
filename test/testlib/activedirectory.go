@@ -1,4 +1,4 @@
-// Copyright 2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package testlib
 
@@ -199,7 +199,7 @@ func dialTLS(t *testing.T, env *TestEnv) *ldap.Conn {
 	c, err := dialer.DialContext(context.Background(), "tcp", env.SupervisorUpstreamActiveDirectory.Host)
 	require.NoError(t, err)
 	conn := ldap.NewConn(c, true)
-	conn.Start()
+	conn.Start() //nolint:staticcheck // will need a different approach soon
 	return conn
 }
 

@@ -2363,7 +2363,7 @@ func TestGetURL(t *testing.T) {
 
 // Testing of host parsing, TLS negotiation, and CA bundle, etc. for the production code's dialer.
 func TestRealTLSDialing(t *testing.T) {
-	testServer := tlsserver.TLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+	testServer, testServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
 		func(server *httptest.Server) {
 			tlsserver.RecordTLSHello(server)
 			recordFunc := server.TLS.GetConfigForClient
@@ -2378,14 +2378,13 @@ func TestRealTLSDialing(t *testing.T) {
 	parsedURL, err := url.Parse(testServer.URL)
 	require.NoError(t, err)
 	testServerHostAndPort := parsedURL.Host
-	testServerCABundle := tlsserver.TLSTestServerCA(testServer)
 
 	caForTestServerWithBadCertName, err := certauthority.New("Test CA", time.Hour)
 	require.NoError(t, err)
 	wrongIP := net.ParseIP("10.2.3.4")
 	cert, err := caForTestServerWithBadCertName.IssueServerCert([]string{"wrong-dns-name"}, []net.IP{wrongIP}, time.Hour)
 	require.NoError(t, err)
-	testServerWithBadCertNameAddr := testutil.TLSTestServerWithCert(t, func(w http.ResponseWriter, r *http.Request) {}, cert)
+	testServerWithBadCertNameAddr := tlsserver.TLSTestServerWithCert(t, func(w http.ResponseWriter, r *http.Request) {}, cert)
 
 	unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -2406,7 +2405,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "happy path",
 			host:      testServerHostAndPort,
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: TLS,
 			context:   context.Background(),
 		},
@@ -2437,7 +2436,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "invalid host with TLS",
 			host:      "this:is:not:a:valid:hostname",
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: TLS,
 			context:   context.Background(),
 			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`),
@@ -2445,7 +2444,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "invalid host with StartTLS",
 			host:      "this:is:not:a:valid:hostname",
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: StartTLS,
 			context:   context.Background(),
 			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`),
@@ -2462,7 +2461,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name: "cannot connect to host",
 			// This is assuming that this port was not reclaimed by another app since the test setup ran. Seems safe enough.
 			host:      recentlyClaimedHostAndPort,
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: TLS,
 			context:   context.Background(),
 			wantError: testutil.WantSprintfErrorString(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
@@ -2470,7 +2469,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "pays attention to the passed context",
 			host:      testServerHostAndPort,
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: TLS,
 			context:   alreadyCancelledContext,
 			wantError: testutil.WantSprintfErrorString(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
@@ -2478,7 +2477,7 @@ func TestRealTLSDialing(t *testing.T) {
 		{
 			name:      "unsupported connection protocol",
 			host:      testServerHostAndPort,
-			caBundle:  testServerCABundle,
+			caBundle:  testServerCA,
 			connProto: "bad usage of this type",
 			context:   alreadyCancelledContext,
 			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": did not specify valid ConnectionProtocol`),

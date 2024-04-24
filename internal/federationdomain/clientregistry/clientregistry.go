@@ -35,6 +35,10 @@ type Client struct {
 	IDTokenLifetimeConfiguration time.Duration
 }
 
+func (c *Client) GetIDTokenLifetimeConfiguration() time.Duration {
+	return c.IDTokenLifetimeConfiguration
+}
+
 // Client implements the base, OIDC, and response_mode client interfaces of Fosite.
 var (
 	_ fosite.Client              = (*Client)(nil)
@@ -181,7 +185,7 @@ func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSec
 	var idTokenLifetime time.Duration
 	if idTokenLifetimeOverrideInSeconds != nil {
 		// It should be safe to cast this int32 to time.Duration, because time.Duration is an int64.
-		idTokenLifetime = time.Duration(*(oidcClient.Spec.TokenLifetimes.IDTokenSeconds)) * time.Second
+		idTokenLifetime = time.Duration(*(idTokenLifetimeOverrideInSeconds)) * time.Second
 	}
 
 	return &Client{

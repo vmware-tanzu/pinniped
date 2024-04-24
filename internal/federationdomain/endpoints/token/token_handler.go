@@ -95,13 +95,13 @@ func NewHandler(
 }
 
 func maybeOverrideDefaultAccessTokenLifetime(overrideAccessTokenLifespan timeouts.OverrideLifespan, accessRequest fosite.AccessRequester) {
-	if doOverride, newLifespan := overrideAccessTokenLifespan(accessRequest); doOverride {
+	if newLifespan, doOverride := overrideAccessTokenLifespan(accessRequest); doOverride {
 		accessRequest.GetSession().SetExpiresAt(fosite.AccessToken, time.Now().UTC().Add(newLifespan).Round(time.Second))
 	}
 }
 
 func maybeOverrideDefaultIDTokenLifetime(baseCtx context.Context, overrideIDTokenLifespan timeouts.OverrideLifespan, accessRequest fosite.AccessRequester) context.Context {
-	if doOverride, newLifespan := overrideIDTokenLifespan(accessRequest); doOverride {
+	if newLifespan, doOverride := overrideIDTokenLifespan(accessRequest); doOverride {
 		return idtokenlifespan.OverrideIDTokenLifespanInContext(baseCtx, newLifespan)
 	}
 	return baseCtx

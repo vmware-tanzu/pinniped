@@ -38,7 +38,7 @@ func TestOverrideDefaultAccessTokenLifespan(t *testing.T) {
 	c := DefaultOIDCTimeoutsConfiguration()
 
 	// We are not yet overriding access token lifetimes.
-	doOverride, newLifespan := c.OverrideDefaultAccessTokenLifespan(nil)
+	newLifespan, doOverride := c.OverrideDefaultAccessTokenLifespan(nil)
 	require.Equal(t, false, doOverride)
 	require.Equal(t, time.Duration(0), newLifespan)
 }
@@ -109,7 +109,7 @@ func TestOverrideIDTokenLifespan(t *testing.T) {
 
 			c := DefaultOIDCTimeoutsConfiguration()
 
-			doOverride, newLifespan := c.OverrideDefaultIDTokenLifespan(tt.accessRequest)
+			newLifespan, doOverride := c.OverrideDefaultIDTokenLifespan(tt.accessRequest)
 			require.Equal(t, tt.wantOverride, doOverride)
 			require.Equal(t, tt.wantLifespan, newLifespan)
 		})

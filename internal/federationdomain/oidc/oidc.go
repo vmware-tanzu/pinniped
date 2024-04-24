@@ -173,31 +173,31 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 		AuthorizeCodeLifespan: authorizationCodeLifespan,
 
 		AccessTokenLifespan: accessTokenLifespan,
-		OverrideDefaultAccessTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+		OverrideDefaultAccessTokenLifespan: func(accessRequest fosite.AccessRequester) (time.Duration, bool) {
 			// Not currently overriding the defaults.
-			return false, 0
+			return 0, false
 		},
 
 		IDTokenLifespan: idTokenLifespan,
-		OverrideDefaultIDTokenLifespan: func(accessRequest fosite.AccessRequester) (bool, time.Duration) {
+		OverrideDefaultIDTokenLifespan: func(accessRequest fosite.AccessRequester) (time.Duration, bool) {
 			client := accessRequest.GetClient()
 			// Don't allow OIDCClients to override the default lifetime for ID tokens returned
 			// by RFC8693 token exchange. This is not user configurable for now.
-			if !accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange) {
+			if !accessRequest.GetGrantTypes().Has(oidcapi.GrantTypeTokenExchange) {
 				if castClient, ok := client.(*clientregistry.Client); !ok {
 					// All clients returned by our client registry implement clientregistry.Client,
 					// so this should be a safe cast in practice.
 					plog.Error("could not check if client overrides token lifetimes",
 						errors.New("could not cast client to *clientregistry.Client"),
 						"clientID", client.GetID(), "clientType", reflect.TypeOf(client))
-				} else if castClient.IDTokenLifetimeConfiguration > 0 {
+				} else if castClient.GetIDTokenLifetimeConfiguration() > 0 {
 					// An OIDCClient resource has provided an override, so use it.
 					// Note that the pinniped-cli client never overrides this value.
-					return true, castClient.IDTokenLifetimeConfiguration
+					return castClient.GetIDTokenLifetimeConfiguration(), true
 				}
 			}
 			// Otherwise, do not override the defaults.
-			return false, 0
+			return 0, false
 		},
 
 		RefreshTokenLifespan: refreshTokenLifespan,

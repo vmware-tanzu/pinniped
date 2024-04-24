@@ -224,7 +224,7 @@ func TestClientManager(t *testing.T) {
 						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
 						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
 						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:8080"},
-						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: ptr.To[int32]((4242))},
+						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: ptr.To[int32](4242)},
 					},
 				},
 				{
@@ -306,7 +306,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 	require.Equal(t, "none", c.GetTokenEndpointAuthMethod())
 	require.Equal(t, "RS256", c.GetTokenEndpointAuthSigningAlgorithm())
 	require.Equal(t, []fosite.ResponseModeType{"", "query", "form_post"}, c.GetResponseModes())
-	require.Equal(t, 0*time.Second, c.IDTokenLifetimeConfiguration)
+	require.Equal(t, 0*time.Second, c.GetIDTokenLifetimeConfiguration())
 
 	marshaled, err := json.Marshal(c)
 	require.NoError(t, err)
@@ -341,7 +341,7 @@ func requireEqualsPinnipedCLI(t *testing.T, c *Client) {
 		  "request_uris": null,
 		  "request_object_signing_alg": "",
 		  "token_endpoint_auth_signing_alg": "RS256",
-          "IDTokenLifetimeConfiguration": 0
+		  "IDTokenLifetimeConfiguration": 0
 		}`, string(marshaled))
 }
 
@@ -365,7 +365,7 @@ func requireDynamicOIDCClient(
 	require.Equal(t, wantRedirectURIs, c.GetRedirectURIs())
 	require.Equal(t, wantGrantTypes, c.GetGrantTypes())
 	require.Equal(t, wantScopes, c.GetScopes())
-	require.Equal(t, wantIDTokenLifetimeConfiguration, c.IDTokenLifetimeConfiguration)
+	require.Equal(t, wantIDTokenLifetimeConfiguration, c.GetIDTokenLifetimeConfiguration())
 
 	// The following are always the same for all OIDCClients.
 	require.Nil(t, c.GetHashedSecret())

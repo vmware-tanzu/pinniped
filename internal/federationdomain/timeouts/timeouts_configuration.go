@@ -14,7 +14,7 @@ type StorageLifetime func(requester fosite.Requester) time.Duration
 
 // OverrideLifespan is a function that, given a request, can suggest to override the default lifespan
 // by returning true along with a new lifespan. When false is returned, the returned duration should be ignored.
-type OverrideLifespan func(accessRequest fosite.AccessRequester) (bool, time.Duration)
+type OverrideLifespan func(accessRequest fosite.AccessRequester) (time.Duration, bool)
 
 type Configuration struct {
 	// The length of time that our state param that we encrypt and pass to the upstream OIDC IDP should be considered

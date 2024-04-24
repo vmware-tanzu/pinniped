@@ -30,7 +30,34 @@ func TestMergeIDPConditions(t *testing.T) {
 		wantConditions     []metav1.Condition
 	}{
 		{
-			name: "True -> False returns true",
+			name: "Adding a new condition with status=True returns false",
+			newConditions: []*metav1.Condition{
+				{
+					Type:    "NewType",
+					Status:  metav1.ConditionTrue,
+					Reason:  "new reason",
+					Message: "new message",
+				},
+			},
+			observedGeneration: int64(999),
+			conditionsToUpdate: &[]metav1.Condition{},
+			wantLogSnippets: []string{
+				`"message":"updated condition","type":"NewType","status":"True"`,
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               "NewType",
+					Status:             metav1.ConditionTrue,
+					ObservedGeneration: int64(999),
+					LastTransitionTime: testTime,
+					Reason:             "new reason",
+					Message:            "new message",
+				},
+			},
+			wantResult: false,
+		},
+		{
+			name: "Updating a condition status from False to True returns true",
 			newConditions: []*metav1.Condition{
 				{
 					Type:    "UnchangedType",
@@ -144,7 +171,13 @@ func TestMergeIDPConditions(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			result := MergeConditions(tt.newConditions, tt.observedGeneration, tt.conditionsToUpdate, logger, testTime)
+			result := MergeConditions(
+				tt.newConditions,
+				tt.observedGeneration,
+				tt.conditionsToUpdate,
+				logger,
+				testTime,
+			)
 
 			logString := log.String()
 			require.Equal(t, len(tt.wantLogSnippets), strings.Count(logString, "\n"))

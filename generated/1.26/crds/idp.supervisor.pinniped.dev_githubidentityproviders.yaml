@@ -114,6 +114,7 @@ spec:
                 - organizations
                 type: object
               claims:
+                default: {}
                 description: Claims allows customization of the username and groups
                   claims.
                 properties:

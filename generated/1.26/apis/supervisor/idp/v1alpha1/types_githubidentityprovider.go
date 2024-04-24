@@ -211,7 +211,7 @@ type GitHubIdentityProviderSpec struct {
 
 	// Claims allows customization of the username and groups claims.
 	//
-	// +optional
+	// +kubebuilder:default={}
 	Claims GitHubClaims `json:"claims,omitempty"`
 
 	// AllowAuthentication allows customization of who can authenticate using this IDP and how.

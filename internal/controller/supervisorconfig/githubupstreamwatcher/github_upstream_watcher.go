@@ -48,6 +48,8 @@ const (
 	gitHubClientSecretType               corev1.SecretType = "secrets.pinniped.dev/github-client"
 	clientIDDataKey, clientSecretDataKey string            = "clientID", "clientSecret"
 
+	countExpectedConditions = 6
+
 	HostValid                string = "HostValid"
 	TLSConfigurationValid    string = "TLSConfigurationValid"
 	OrganizationsPolicyValid string = "OrganizationsPolicyValid"
@@ -55,6 +57,7 @@ const (
 	// have been obtained. The controller has no way to verify whether they are valid.
 	ClientCredentialsObtained string = "ClientCredentialsObtained" //nolint:gosec // this is not a credential
 	GitHubConnectionValid     string = "GitHubConnectionValid"
+	ClaimsValid               string = "ClaimsValid"
 )
 
 // UpstreamGitHubIdentityProviderICache is a thread safe cache that holds a list of validated upstream GitHub IDP configurations.
@@ -250,10 +253,8 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	// Should there be some sort of catch-all condition to capture this?
 	// This does not actually prevent a GitHub IDP from being added to the cache.
 	// CRD defaulting and validation should eliminate the possibility of an error here.
-	groupNameAttribute, usernameAttribute, userAndGroupErr := validateUserAndGroupAttributes(upstream)
-	if userAndGroupErr != nil {
-		applicationErrors = append(applicationErrors, userAndGroupErr)
-	}
+	userAndGroupCondition, groupNameAttribute, usernameAttribute := validateUserAndGroupAttributes(upstream)
+	conditions = append(conditions, userAndGroupCondition)
 
 	organizationPolicyCondition, policy := validateOrganizationsPolicy(&upstream.Spec.AllowAuthentication.Organizations)
 	conditions = append(conditions, organizationPolicyCondition)
@@ -277,12 +278,12 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	// The critical pattern to maintain is that every run of the sync loop will populate the exact number of the exact
 	// same set of conditions.  Conditions depending on other conditions should get Status: metav1.ConditionUnknown, or
 	// Status: metav1.ConditionFalse, never be omitted.
-	if len(conditions) != 5 { // untested since all code paths result in 5 conditions
-		applicationErrors = append(applicationErrors, fmt.Errorf("expected %d conditions but found %d conditions", 5, len(conditions)))
+	if len(conditions) != countExpectedConditions { // untested since all code paths return the same number of conditions
+		applicationErrors = append(applicationErrors, fmt.Errorf("expected %d conditions but found %d conditions", countExpectedConditions, len(conditions)))
 		return nil, k8sutilerrors.NewAggregate(applicationErrors)
 	}
 	hadErrorCondition, updateStatusErr := c.updateStatus(ctx.Context, upstream, conditions)
-	if updateStatusErr != nil { // untested
+	if updateStatusErr != nil {
 		applicationErrors = append(applicationErrors, updateStatusErr)
 	}
 	// Any error condition means we will not add the IDP to the cache, so just return nil here
@@ -406,15 +407,28 @@ func buildDialErrorMessage(tlsDialErr error) string {
 	return reason
 }
 
-func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (v1alpha1.GitHubGroupNameAttribute, v1alpha1.GitHubUsernameAttribute, error) {
-	var groupNameAttribute v1alpha1.GitHubGroupNameAttribute
-	var usernameAttribute v1alpha1.GitHubUsernameAttribute
+func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (*metav1.Condition, v1alpha1.GitHubGroupNameAttribute, v1alpha1.GitHubUsernameAttribute) {
+	buildInvalidCondition := func(message string) *metav1.Condition {
+		return &metav1.Condition{
+			Type:    ClaimsValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  "Invalid",
+			Message: message,
+		}
+	}
 
-	if upstream.Spec.Claims.Groups == nil || upstream.Spec.Claims.Username == nil {
-		return "", "", fmt.Errorf("spec.claims.groups and spec.claims.username are required")
+	var usernameAttribute v1alpha1.GitHubUsernameAttribute
+	if upstream.Spec.Claims.Username == nil {
+		return buildInvalidCondition("spec.claims.username is required"), "", ""
+	} else {
+		usernameAttribute = *upstream.Spec.Claims.Username
+	}
+
+	var groupNameAttribute v1alpha1.GitHubGroupNameAttribute
+	if upstream.Spec.Claims.Groups == nil {
+		return buildInvalidCondition("spec.claims.groups is required"), "", ""
 	} else {
 		groupNameAttribute = *upstream.Spec.Claims.Groups
-		usernameAttribute = *upstream.Spec.Claims.Username
 	}
 
 	switch usernameAttribute {
@@ -423,7 +437,7 @@ func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (
 	case v1alpha1.GitHubUsernameID:
 	default:
 		// Should not happen due to CRD enum validation
-		return "", "", fmt.Errorf("invalid spec.claims.username (%q)", usernameAttribute)
+		return buildInvalidCondition(fmt.Sprintf("spec.claims.username (%q) is not valid", usernameAttribute)), "", ""
 	}
 
 	switch groupNameAttribute {
@@ -431,10 +445,15 @@ func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (
 	case v1alpha1.GitHubUseTeamSlugForGroupName:
 	default:
 		// Should not happen due to CRD enum validation
-		return "", "", fmt.Errorf("invalid spec.claims.groups (%q)", groupNameAttribute)
+		return buildInvalidCondition(fmt.Sprintf("spec.claims.groups (%q) is not valid", groupNameAttribute)), "", ""
 	}
 
-	return groupNameAttribute, usernameAttribute, nil
+	return &metav1.Condition{
+		Type:    ClaimsValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  upstreamwatchers.ReasonSuccess,
+		Message: "spec.claims are valid",
+	}, groupNameAttribute, usernameAttribute
 }
 
 func (c *gitHubWatcherController) updateStatus(
@@ -457,7 +476,7 @@ func (c *gitHubWatcherController) updateStatus(
 		updated.Status.Phase = v1alpha1.GitHubPhaseError
 	}
 
-	if equality.Semantic.DeepEqual(upstream, updated) { // untested
+	if equality.Semantic.DeepEqual(upstream, updated) {
 		return hadErrorCondition, nil
 	}
 

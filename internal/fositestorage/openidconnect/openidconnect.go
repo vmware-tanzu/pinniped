@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package openidconnect
@@ -17,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/fositestorage"
 	"go.pinniped.dev/internal/psession"
 )
@@ -34,13 +35,15 @@ const (
 	// Version 4 is when fosite added json tags to their openid.DefaultSession struct.
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
-	oidcStorageVersion = "6"
+	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
+	oidcStorageVersion = "7"
 )
 
 var _ openid.OpenIDConnectRequestStorage = &openIDConnectRequestStorage{}
 
 type openIDConnectRequestStorage struct {
-	storage crud.Storage
+	storage  crud.Storage
+	lifetime timeouts.StorageLifetime
 }
 
 type session struct {
@@ -48,8 +51,8 @@ type session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) openid.OpenIDConnectRequestStorage {
-	return &openIDConnectRequestStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime timeouts.StorageLifetime) openid.OpenIDConnectRequestStorage {
+	return &openIDConnectRequestStorage{storage: crud.New(TypeLabelValue, secrets, clock), lifetime: sessionStorageLifetime}
 }
 
 func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) error {
@@ -63,7 +66,13 @@ func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Con
 		return err
 	}
 
-	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: oidcStorageVersion}, nil, nil)
+	_, err = a.storage.Create(ctx,
+		signature,
+		&session{Request: request, Version: oidcStorageVersion},
+		nil,
+		nil,
+		a.lifetime(requester),
+	)
 	return err
 }
 

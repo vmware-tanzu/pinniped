@@ -613,7 +613,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
-			"some-namespace", dynamicClientID, dynamicClientUID, downstreamRedirectURI,
+			"some-namespace", dynamicClientID, dynamicClientUID, downstreamRedirectURI, nil,
 			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 		require.NoError(t, kubeClient.Tracker().Add(secret))

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package refreshtoken
@@ -23,20 +23,28 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
+	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 )
 
-const namespace = "test-ns"
+const (
+	namespace       = "test-ns"
+	expectedVersion = "7" // update this when you update the storage version in the production code
+)
 
-var secretsGVR = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "secrets",
-}
-var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
-var lifetime = time.Minute * 10
-var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+var (
+	fakeNow                     = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	lifetime                    = time.Minute * 10
+	fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+	lifetimeFunc                = func(requester fosite.Requester) time.Duration { return lifetime }
+
+	secretsGVR = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "secrets",
+	}
+)
 
 func TestRefreshTokenStorage(t *testing.T) {
 	wantActions := []coretesting.Action{
@@ -53,7 +61,7 @@ func TestRefreshTokenStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":42000000000},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -62,12 +70,19 @@ func TestRefreshTokenStorage(t *testing.T) {
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-refresh-token-pwu5zs7lekbhnln2w4"),
 	}
 
-	ctx, client, _, storage := makeTestSubject()
+	storageLifetimeFuncCallCount := 0
+	var storageLifetimeFuncCallRequesterArg fosite.Requester
+	ctx, client, _, storage := makeTestSubject(func(requester fosite.Requester) time.Duration {
+		storageLifetimeFuncCallCount++
+		storageLifetimeFuncCallRequesterArg = requester
+		return lifetime
+	})
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
 		Client: &clientregistry.Client{
+			IDTokenLifetimeConfiguration: 42 * time.Second,
 			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
 				DefaultClient: &fosite.DefaultClient{
 					ID:            "pinny",
@@ -96,6 +111,8 @@ func TestRefreshTokenStorage(t *testing.T) {
 	}
 	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", request)
 	require.NoError(t, err)
+	require.Equal(t, 1, storageLifetimeFuncCallCount)
+	require.Equal(t, request, storageLifetimeFuncCallRequesterArg)
 
 	newRequest, err := storage.GetRefreshTokenSession(ctx, "fancy-signature", nil)
 	require.NoError(t, err)
@@ -106,6 +123,9 @@ func TestRefreshTokenStorage(t *testing.T) {
 
 	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
 	require.Equal(t, wantActions, client.Actions())
+
+	// Check that there were no more calls to the lifetime func since the original create.
+	require.Equal(t, 1, storageLifetimeFuncCallCount)
 }
 
 func TestRefreshTokenStorageRevocation(t *testing.T) {
@@ -123,7 +143,7 @@ func TestRefreshTokenStorageRevocation(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":0},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -134,7 +154,7 @@ func TestRefreshTokenStorageRevocation(t *testing.T) {
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-refresh-token-pwu5zs7lekbhnln2w4"),
 	}
 
-	ctx, client, _, storage := makeTestSubject()
+	ctx, client, _, storage := makeTestSubject(lifetimeFunc)
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
@@ -178,7 +198,7 @@ func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"6"}`),
+				"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":"","IDTokenLifetimeConfiguration":0},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"fosite":{"id_token_claims":null,"headers":null,"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","warnings":null,"oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token","upstreamAccessToken":"","upstreamSubject":"some-subject","upstreamIssuer":"some-issuer"}}},"requestedAudience":null,"grantedAudience":null},"version":"` + expectedVersion + `"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/refresh-token",
@@ -189,7 +209,7 @@ func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-refresh-token-pwu5zs7lekbhnln2w4"),
 	}
 
-	ctx, client, _, storage := makeTestSubject()
+	ctx, client, _, storage := makeTestSubject(lifetimeFunc)
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
@@ -220,7 +240,7 @@ func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	_, notFoundErr := storage.GetRefreshTokenSession(ctx, "non-existent-signature", nil)
 	require.EqualError(t, notFoundErr, "not_found")
@@ -228,7 +248,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestWrongVersion(t *testing.T) {
-	ctx, _, secrets, storage := makeTestSubject()
+	ctx, _, secrets, storage := makeTestSubject(lifetimeFunc)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -252,11 +272,11 @@ func TestWrongVersion(t *testing.T) {
 
 	_, err = storage.GetRefreshTokenSession(ctx, "fancy-signature", nil)
 
-	require.EqualError(t, err, "refresh token request data has wrong version: refresh token session for fancy-signature has version not-the-right-version instead of 6")
+	require.EqualError(t, err, "refresh token request data has wrong version: refresh token session for fancy-signature has version not-the-right-version instead of "+expectedVersion)
 }
 
 func TestNilSessionRequest(t *testing.T) {
-	ctx, _, secrets, storage := makeTestSubject()
+	ctx, _, secrets, storage := makeTestSubject(lifetimeFunc)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -270,7 +290,7 @@ func TestNilSessionRequest(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"6"}`),
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value","version":"` + expectedVersion + `"}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/refresh-token",
@@ -284,14 +304,14 @@ func TestNilSessionRequest(t *testing.T) {
 }
 
 func TestCreateWithNilRequester(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", nil)
 	require.EqualError(t, err, "requester must be of type fosite.Request")
 }
 
 func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
-	ctx, _, _, storage := makeTestSubject()
+	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
 	request := &fosite.Request{
 		Session: nil,
@@ -309,7 +329,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 }
 
 func TestCreateWithoutRequesterID(t *testing.T) {
-	ctx, client, _, storage := makeTestSubject()
+	ctx, client, _, storage := makeTestSubject(lifetimeFunc)
 
 	request := &fosite.Request{
 		ID:      "", // empty ID
@@ -330,10 +350,13 @@ func TestCreateWithoutRequesterID(t *testing.T) {
 	require.Equal(t, request.ID, actualSecret.Labels["storage.pinniped.dev/request-id"])
 }
 
-func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, RevocationStorage) {
+func makeTestSubject(lifetimeFunc timeouts.StorageLifetime) (context.Context, *fake.Clientset, corev1client.SecretInterface, RevocationStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
-	return context.Background(), client, secrets, New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetime)
+	return context.Background(),
+		client,
+		secrets,
+		New(secrets, clocktesting.NewFakeClock(fakeNow).Now, lifetimeFunc)
 }
 
 func TestReadFromSecret(t *testing.T) {
@@ -354,13 +377,13 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"id_token_claims":{"jti": "xyz"},"headers":{"extra":{"myheader": "foo"}},"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","session":{"fosite":{"id_token_claims":{"jti": "xyz"},"headers":{"extra":{"myheader": "foo"}},"expires_at":null,"username":"snorlax","subject":"panda"},"custom":{"username":"fake-username","upstreamUsername":"fake-upstream-username","upstreamGroups":["fake-upstream-group1","fake-upstream-group2"],"providerUID":"fake-provider-uid","providerName":"fake-provider-name","providerType":"fake-provider-type","oidc":{"upstreamRefreshToken":"fake-upstream-refresh-token"}}}},"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/refresh-token",
 			},
 			wantSession: &Session{
-				Version: "6",
+				Version: expectedVersion,
 				Request: &fosite.Request{
 					ID:     "abcd-1",
 					Client: &clientregistry.Client{},
@@ -397,7 +420,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1"},"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/not-refresh-token",
@@ -420,7 +443,7 @@ func TestReadFromSecret(t *testing.T) {
 				},
 				Type: "storage.pinniped.dev/refresh-token",
 			},
-			wantErr: "refresh token request data has wrong version: refresh token session has version wrong-version-here instead of 6",
+			wantErr: "refresh token request data has wrong version: refresh token session has version wrong-version-here instead of " + expectedVersion,
 		},
 		{
 			name: "missing request",
@@ -433,7 +456,7 @@ func TestReadFromSecret(t *testing.T) {
 					},
 				},
 				Data: map[string][]byte{
-					"pinniped-storage-data":    []byte(`{"version":"6","active": true}`),
+					"pinniped-storage-data":    []byte(`{"version":"` + expectedVersion + `","active": true}`),
 					"pinniped-storage-version": []byte("1"),
 				},
 				Type: "storage.pinniped.dev/refresh-token",

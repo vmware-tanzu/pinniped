@@ -171,7 +171,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
-			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI,
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, nil,
 			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 		require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -815,7 +815,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
 					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
 					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
-					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
 			},
@@ -858,7 +858,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
 					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
-					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
 			},
@@ -1094,7 +1094,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
 					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
 					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
-					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
 			},
@@ -1123,7 +1123,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
 					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
 					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
-					downstreamRedirectURI, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
 			},

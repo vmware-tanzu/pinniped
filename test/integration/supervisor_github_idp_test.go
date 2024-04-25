@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 
 	"go.pinniped.dev/test/testlib"
@@ -254,6 +257,76 @@ func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 	}
 }
 
+func TestGitHubIDPSetsDefaultsWithKubectl_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+
+	adminClient := testlib.NewKubernetesClientset(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	namespaceClient := adminClient.CoreV1().Namespaces()
+
+	ns, err := namespaceClient.Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: generateNamePrefix,
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		require.NoError(t, namespaceClient.Delete(ctx, ns.Name, metav1.DeleteOptions{}))
+	})
+	t.Logf("Created namespace %s", ns.Name)
+
+	idpName := generateNamePrefix + testlib.RandHex(t, 16)
+
+	githubIDPYaml := []byte(here.Doc(fmt.Sprintf(`
+	---
+	apiVersion: idp.supervisor.%s/v1alpha1
+	kind: GitHubIdentityProvider
+	metadata:
+	  name: %s
+	  namespace: %s
+	spec:
+	  allowAuthentication:
+	    organizations:
+	      policy: AllGitHubUsers
+	  client:
+	    secretName: any-secret-name`, env.APIGroupSuffix, idpName, ns.Name)))
+
+	githubIDPYamlFilepath := filepath.Join(t.TempDir(), "github-idp.yaml")
+
+	require.NoError(t, os.WriteFile(githubIDPYamlFilepath, githubIDPYaml, 0600))
+
+	stdOut, stdErr := runTestKubectlCommand(t, "create", "-f", githubIDPYamlFilepath)
+
+	require.Equal(t, fmt.Sprintf("githubidentityprovider.idp.supervisor.%s/%s created\n", env.APIGroupSuffix, idpName), stdOut)
+	require.Empty(t, stdErr)
+
+	gitHubIDPClient := testlib.NewSupervisorClientset(t).IDPV1alpha1().GitHubIdentityProviders(ns.Name)
+
+	idp, err := gitHubIDPClient.Get(ctx, idpName, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Equal(t, idpv1alpha1.GitHubIdentityProviderSpec{
+		GitHubAPI: idpv1alpha1.GitHubAPIConfig{
+			Host: ptr.To("github.com"),
+		},
+		Claims: idpv1alpha1.GitHubClaims{
+			Username: ptr.To(idpv1alpha1.GitHubUsernameLoginAndID),
+			Groups:   ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
+		},
+		AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+			Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+				Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			},
+		},
+		Client: idpv1alpha1.GitHubClientSpec{
+			SecretName: "any-secret-name",
+		},
+	}, idp.Spec)
+}
+
 func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 	// These operations must be performed in the Supervisor's namespace so that the controller can find GitHubIdentityProvider
 	supervisorNamespace := testlib.IntegrationEnv(t).SupervisorNamespace
@@ -304,6 +377,12 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 			},
 			wantPhase: idpv1alpha1.GitHubPhaseReady,
 			wantConditions: []*metav1.Condition{
+				{
+					Type:    "ClaimsValid",
+					Status:  metav1.ConditionTrue,
+					Reason:  "Success",
+					Message: "spec.claims are valid",
+				},
 				{
 					Type:    "ClientCredentialsObtained",
 					Status:  metav1.ConditionTrue,
@@ -365,6 +444,12 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 			},
 			wantPhase: idpv1alpha1.GitHubPhaseError,
 			wantConditions: []*metav1.Condition{
+				{
+					Type:    "ClaimsValid",
+					Status:  metav1.ConditionTrue,
+					Reason:  "Success",
+					Message: "spec.claims are valid",
+				},
 				{
 					Type:   "ClientCredentialsObtained",
 					Status: metav1.ConditionFalse,
@@ -566,6 +651,12 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 	testlib.WaitForGitHubIDPPhase(ctx, t, gitHubIDPClient, created.Name, idpv1alpha1.GitHubPhaseError)
 
 	testlib.WaitForGitHubIdentityProviderStatusConditions(ctx, t, gitHubIDPClient, created.Name, []*metav1.Condition{
+		{
+			Type:    "ClaimsValid",
+			Status:  metav1.ConditionTrue,
+			Reason:  "Success",
+			Message: "spec.claims are valid",
+		},
 		{
 			Type:   "ClientCredentialsObtained",
 			Status: metav1.ConditionFalse,

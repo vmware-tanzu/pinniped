@@ -76,9 +76,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) CloneIDPSpecificSessionDa
 			return nil
 		}
 		return session.ActiveDirectory.Clone()
-	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
-		fallthrough
-	case psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
+	case psession.ProviderTypeOIDC, psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
 		fallthrough
 	default:
 		return nil
@@ -153,9 +151,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) Login(
 			UserDN:                 authenticateResponse.DN,
 			ExtraRefreshAttributes: authenticateResponse.ExtraRefreshAttributes,
 		}
-	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
-		fallthrough
-	case psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
+	case psession.ProviderTypeOIDC, psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
 		fallthrough
 	default:
 		return nil, nil, ErrUnexpectedUpstreamLDAPError.WithWrap(fmt.Errorf("unexpected provider type %q", p.GetSessionProviderType()))
@@ -209,9 +205,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
 		}
 		dn = sessionData.UserDN
 		additionalAttributes = sessionData.ExtraRefreshAttributes
-	case psession.ProviderTypeOIDC: // this is just here to avoid a lint error about not handling all cases
-		fallthrough
-	case psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
+	case psession.ProviderTypeOIDC, psession.ProviderTypeGitHub: // this is just here to avoid a lint error about not handling all cases
 		fallthrough
 	default:
 		// This shouldn't really happen.

@@ -5,6 +5,7 @@ package resolvedgithub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
@@ -45,13 +46,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) GetIDPDiscoveryType() v
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) GetIDPDiscoveryFlows() []v1alpha1.IDPFlow {
-	// TODO: review and see if this is actually true to follow the OIDC model
-	flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
-	// TODO: coming as a later feature?  The UpstreamGithubIdentityProviderI does not currently impl this func
-	// if p.Provider.AllowsPasswordGrant() {
-	// 	flows = append(flows, v1alpha1.IDPFlowCLIPassword)
-	// }
-	return flows
+	return []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) GetTransforms() *idtransform.TransformationPipeline {
@@ -73,38 +68,34 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedire
 	state *resolvedprovider.UpstreamAuthorizeRequestState,
 	downstreamIssuerURL string,
 ) (string, error) {
-	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamAuthorizeRedirectURL() called with state: %#v, downstreamIssuerURL %s", state, downstreamIssuerURL)
-	return "", nil
+	return "", errors.New("function UpstreamAuthorizeRedirectURL not yet implemented for GitHub IDP")
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
-	ctx context.Context, //nolint:all
+	_ context.Context,
 	submittedUsername string,
 	submittedPassword string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
-	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ Login() called with submittedUserName %s, submittedPassword %s", submittedUsername, submittedPassword)
-	return nil, nil, nil
+	return nil, nil, errors.New("function Login not yet implemented for GitHub IDP")
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
-	ctx context.Context, //nolint:all
+	_ context.Context,
 	authCode string,
 	pkce pkce.Code,
 	nonce nonce.Nonce,
 	redirectURI string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
-	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ LoginFromCallback() called with authCode: %s, pkce: %#v, nonce: %#v, redirectURI: %s", authCode, pkce, nonce, redirectURI)
-	return nil, nil, nil
+	return nil, nil, errors.New("function LoginFromCallback not yet implemented for GitHub IDP")
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
-	ctx context.Context, //nolint:all
+	_ context.Context,
 	identity *resolvedprovider.Identity,
 ) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
-	// TODO: implement
 	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamRefresh() called with identity %#v", identity)
-	return nil, nil
+	return nil, errors.New("function UpstreamRefresh not yet implemented for GitHub IDP")
 }

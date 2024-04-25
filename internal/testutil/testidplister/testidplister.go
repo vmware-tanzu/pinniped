@@ -243,8 +243,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPasswordCredentialsGra
 			actualArgs = upstreamOIDC.PasswordCredentialsGrantAndValidateTokensArgs(0)
 		}
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
-
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to PasswordCredentialsGrantAndValidateTokens() by all OIDC upstreams",
 	)
@@ -260,7 +258,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPasswordCredentialsG
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.PasswordCredentialsGrantAndValidateTokensCallCount()
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to PasswordCredentialsGrantAndValidateTokens()",
 	)
@@ -283,7 +280,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndVal
 			actualArgs = upstreamOIDC.ExchangeAuthcodeAndValidateTokensArgs(0)
 		}
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to ExchangeAuthcodeAndValidateTokens() by all OIDC upstreams",
 	)
@@ -299,7 +295,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndV
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
+
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to ExchangeAuthcodeAndValidateTokens()",
 	)
@@ -384,7 +380,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(
 			actualArgs = upstreamOIDC.ValidateTokenAndMergeWithUserInfoArgs(0)
 		}
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to ValidateTokenAndMergeWithUserInfo() by all OIDC upstreams",
 	)
@@ -400,7 +395,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToValidateToken(t *tes
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ValidateTokenAndMergeWithUserInfoCallCount()
 	}
-	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to ValidateTokenAndMergeWithUserInfo()",
 	)
@@ -423,7 +417,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToRevokeToken(
 			actualArgs = upstreamOIDC.RevokeTokenArgs(0)
 		}
 	}
-	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
 		"should have been exactly one call to RevokeToken() by all OIDC upstreams",
 	)
@@ -439,7 +432,6 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToRevokeToken(t *testi
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.RevokeTokenCallCount()
 	}
-	// TODO: probably add GitHub loop once we flesh out structs
 	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
 		"expected exactly zero calls to RevokeToken()",
 	)

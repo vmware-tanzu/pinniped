@@ -190,7 +190,6 @@ func (e *errSerializationFailureWithCause) Error() string {
 	return fmt.Sprintf("%s: %s", fosite.ErrSerializationFailure, e.cause)
 }
 
-// TODO: need to revisit this, there is a unit test now failing.
 // ExpectedAuthorizeCodeSessionJSONFromFuzzing is used for round tripping tests.
 // It is exported to allow integration tests to use it.
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{

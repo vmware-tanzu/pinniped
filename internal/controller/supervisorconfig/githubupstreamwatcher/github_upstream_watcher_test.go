@@ -371,8 +371,7 @@ func TestController(t *testing.T) {
 		wantErr                 string
 		wantLogs                []string
 		wantResultingCache      []*upstreamgithub.ProviderConfig
-		// wantResultingCache      []*oidctestutil.TestUpstreamGitHubIdentityProvider
-		wantResultingUpstreams []v1alpha1.GitHubIdentityProvider
+		wantResultingUpstreams  []v1alpha1.GitHubIdentityProvider
 	}{
 		{
 			name: "no GitHubIdentityProviders",
@@ -1763,7 +1762,6 @@ func TestController(t *testing.T) {
 				var actualIDP *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
 					if possibleIDP.GetName() == tt.wantResultingCache[i].Name {
-						// For this check, we know that the actual IDPs are going to have type upstreamgithub.ProviderConfig
 						var ok bool
 						actualIDP, ok = possibleIDP.(*upstreamgithub.Provider)
 						require.True(t, ok)

@@ -304,8 +304,7 @@ func flowOptions(
 	}
 
 	switch requestedIDPType {
-	// TODO: Decide if we can bundle GitHub here long term or if it needs its own case
-	case idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeGitHub:
+	case idpdiscoveryv1alpha1.IDPTypeOIDC:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword:
 			return useCLIFlow, nil

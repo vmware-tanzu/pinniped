@@ -5,15 +5,12 @@
 package upstreamgithub
 
 import (
-	"context"
 	"net/http"
 
 	"golang.org/x/oauth2"
-
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 )
 
@@ -36,7 +33,6 @@ type Provider struct {
 }
 
 var _ upstreamprovider.UpstreamGithubIdentityProviderI = &Provider{}
-var _ authenticators.UserAuthenticator = &Provider{}
 
 // New creates a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
@@ -92,13 +88,4 @@ func (p *Provider) GetAuthorizationURL() string {
 
 func (p *Provider) GetHttpClient() *http.Client {
 	return p.c.HttpClient
-}
-
-// AuthenticateUser authenticates an end user and returns their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
-func (p *Provider) AuthenticateUser(
-	ctx context.Context,       //nolint:all
-	username, password string, //nolint:all
-) (*authenticators.Response, bool, error) {
-	// TODO: implement this, currently just placeholder to satisfy UserAuthenticator interface above
-	return nil, false, nil
 }

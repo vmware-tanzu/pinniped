@@ -105,7 +105,6 @@ func NewTestUpstreamGitHubIdentityProviderBuilder() *TestUpstreamGitHubIdentityP
 	return &TestUpstreamGitHubIdentityProviderBuilder{}
 }
 
-// TODO: flesh this out.
 type TestUpstreamGitHubIdentityProvider struct {
 	Name                           string
 	ClientID                       string

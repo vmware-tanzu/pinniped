@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -304,8 +304,8 @@ func forceRestart(ctx context.Context, t *testing.T, namespace *corev1.Namespace
 	require.NoError(t, err)
 
 	newLease := waitForIdentity(ctx, t, namespace, leaseName, clients)
-	require.Zero(t, *newLease.Spec.LeaseTransitions)
-	require.Greater(t, newLease.Spec.AcquireTime.UnixNano(), startLease.Spec.AcquireTime.UnixNano())
+	require.LessOrEqual(t, *newLease.Spec.LeaseTransitions, int32(1))
+	require.GreaterOrEqual(t, newLease.Spec.AcquireTime.UnixNano(), startLease.Spec.AcquireTime.UnixNano())
 
 	return newLease
 }

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -24,7 +24,7 @@ func TestFromPath(t *testing.T) {
 		wantError  string
 	}{
 		{
-			name: "Happy",
+			name: "Happy (with new log field)",
 			yaml: here.Doc(`
 				---
 				apiGroupSuffix: some.suffix.com
@@ -37,58 +37,6 @@ func TestFromPath(t *testing.T) {
 				  https:
 				    network: unix
 				    address: :1234
-				  http:
-				    network: tcp
-					address: 127.0.0.1:1234
-				insecureAcceptExternalUnencryptedHttpRequests: false
-				logLevel: trace
-				aggregatedAPIServerPort: 12345
-			`),
-			wantConfig: &Config{
-				APIGroupSuffix: ptr.To("some.suffix.com"),
-				Labels: map[string]string{
-					"myLabelKey1": "myLabelValue1",
-					"myLabelKey2": "myLabelValue2",
-				},
-				NamesConfig: NamesConfigSpec{
-					DefaultTLSCertificateSecret: "my-secret-name",
-				},
-				Endpoints: &Endpoints{
-					HTTPS: &Endpoint{
-						Network: "unix",
-						Address: ":1234",
-					},
-					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: "127.0.0.1:1234",
-					},
-				},
-				AllowExternalHTTP: false,
-				LogLevel:          func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelTrace),
-				Log: plog.LogSpec{
-					Level: plog.LevelTrace,
-				},
-				AggregatedAPIServerPort: ptr.To[int64](12345),
-			},
-		},
-		{
-			name: "Happy with new log field",
-			yaml: here.Doc(`
-				---
-				apiGroupSuffix: some.suffix.com
-				labels:
-				  myLabelKey1: myLabelValue1
-				  myLabelKey2: myLabelValue2
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: unix
-				    address: :1234
-				  http:
-				    network: tcp
-				    address: 127.0.0.1:1234
-				insecureAcceptExternalUnencryptedHttpRequests: false
 				log:
 				  level: info
 				  format: text
@@ -108,68 +56,12 @@ func TestFromPath(t *testing.T) {
 						Network: "unix",
 						Address: ":1234",
 					},
-					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: "127.0.0.1:1234",
-					},
 				},
-				AllowExternalHTTP: false,
 				Log: plog.LogSpec{
 					Level:  plog.LevelInfo,
 					Format: plog.FormatText,
 				},
 				AggregatedAPIServerPort: ptr.To[int64](12345),
-			},
-		},
-		{
-			name: "Happy with old and new log field",
-			yaml: here.Doc(`
-				---
-				apiGroupSuffix: some.suffix.com
-				labels:
-				  myLabelKey1: myLabelValue1
-				  myLabelKey2: myLabelValue2
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: unix
-				    address: :1234
-				  http:
-				    network: tcp
-				    address: 127.0.0.1:1234
-				insecureAcceptExternalUnencryptedHttpRequests: false
-				logLevel: trace
-				log:
-				  level: info
-				  format: text
-			`),
-			wantConfig: &Config{
-				APIGroupSuffix: ptr.To("some.suffix.com"),
-				Labels: map[string]string{
-					"myLabelKey1": "myLabelValue1",
-					"myLabelKey2": "myLabelValue2",
-				},
-				NamesConfig: NamesConfigSpec{
-					DefaultTLSCertificateSecret: "my-secret-name",
-				},
-				Endpoints: &Endpoints{
-					HTTPS: &Endpoint{
-						Network: "unix",
-						Address: ":1234",
-					},
-					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: "127.0.0.1:1234",
-					},
-				},
-				AllowExternalHTTP: false,
-				LogLevel:          func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelTrace),
-				Log: plog.LogSpec{
-					Level:  plog.LevelTrace,
-					Format: plog.FormatText,
-				},
-				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
 		{
@@ -202,11 +94,7 @@ func TestFromPath(t *testing.T) {
 						Network: "tcp",
 						Address: ":8443",
 					},
-					HTTP: &Endpoint{
-						Network: "disabled",
-					},
 				},
-				AllowExternalHTTP:       false,
 				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
 		},
@@ -219,10 +107,8 @@ func TestFromPath(t *testing.T) {
 				endpoints:
 				  https:
 				    network: disabled
-				  http:
-				    network: disabled
 			`),
-			wantError: "validate endpoints: all endpoints are disabled",
+			wantError: "validate https endpoint: must not be disabled",
 		},
 		{
 			name: "invalid https endpoint",
@@ -239,141 +125,6 @@ func TestFromPath(t *testing.T) {
 			wantError: `validate https endpoint: unknown network "foo"`,
 		},
 		{
-			name: "invalid http endpoint",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: disabled
-				  http:
-				    network: bar
-			`),
-			wantError: `validate http endpoint: unknown network "bar"`,
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests missing",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: disabled
-				  http:
-				    network: tcp
-					address: :8080
-			`),
-			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to boolean false",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: disabled
-				  http:
-				    network: tcp
-					address: :8080
-				insecureAcceptExternalUnencryptedHttpRequests: false
-			`),
-			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to unsupported value",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				insecureAcceptExternalUnencryptedHttpRequests: "garbage" # this will be treated as the default, which is false
-			`),
-			wantError: `decode yaml: error unmarshaling JSON: while decoding JSON: invalid value for boolean`,
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to string false",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  https:
-				    network: disabled
-				  http:
-				    network: tcp
-					address: :8080
-				insecureAcceptExternalUnencryptedHttpRequests: "false"
-			`),
-			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to boolean true",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  http:
-				    network: tcp
-					address: :1234
-				insecureAcceptExternalUnencryptedHttpRequests: true
-			`),
-			wantConfig: &Config{
-				APIGroupSuffix: ptr.To("pinniped.dev"),
-				Labels:         map[string]string{},
-				NamesConfig: NamesConfigSpec{
-					DefaultTLSCertificateSecret: "my-secret-name",
-				},
-				Endpoints: &Endpoints{
-					HTTPS: &Endpoint{
-						Network: "tcp",
-						Address: ":8443",
-					},
-					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: ":1234",
-					},
-				},
-				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: ptr.To[int64](10250),
-			},
-		},
-		{
-			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests set to string true",
-			yaml: here.Doc(`
-				---
-				names:
-				  defaultTLSCertificateSecret: my-secret-name
-				endpoints:
-				  http:
-				    network: tcp
-					address: :1234
-				insecureAcceptExternalUnencryptedHttpRequests: "true"
-			`),
-			wantConfig: &Config{
-				APIGroupSuffix: ptr.To("pinniped.dev"),
-				Labels:         map[string]string{},
-				NamesConfig: NamesConfigSpec{
-					DefaultTLSCertificateSecret: "my-secret-name",
-				},
-				Endpoints: &Endpoints{
-					HTTPS: &Endpoint{
-						Network: "tcp",
-						Address: ":8443",
-					},
-					HTTP: &Endpoint{
-						Network: "tcp",
-						Address: ":1234",
-					},
-				},
-				AllowExternalHTTP:       true,
-				AggregatedAPIServerPort: ptr.To[int64](10250),
-			},
-		},
-		{
 			name: "endpoint disabled with non-empty address",
 			yaml: here.Doc(`
 				---
@@ -384,7 +135,7 @@ func TestFromPath(t *testing.T) {
 				    network: disabled
 				    address: wee
 			`),
-			wantError: `validate https endpoint: address set to "wee" when disabled, should be empty`,
+			wantError: `validate https endpoint: must not be disabled`,
 		},
 		{
 			name: "endpoint tcp with empty address",
@@ -393,10 +144,10 @@ func TestFromPath(t *testing.T) {
 				names:
 				  defaultTLSCertificateSecret: my-secret-name
 				endpoints:
-				  http:
+				  https:
 				    network: tcp
 			`),
-			wantError: `validate http endpoint: address must be set with "tcp" network`,
+			wantError: `validate https endpoint: address must be set with "tcp" network`,
 		},
 		{
 			name: "endpoint unix with empty address",

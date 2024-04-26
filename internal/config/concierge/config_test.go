@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -57,7 +57,8 @@ func TestFromPath(t *testing.T) {
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
-				logLevel: debug
+				log:
+				  level: debug
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -94,7 +95,6 @@ func TestFromPath(t *testing.T) {
 					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
-				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
 				Log: plog.LogSpec{
 					Level: plog.LevelDebug,
 				},
@@ -215,7 +215,6 @@ func TestFromPath(t *testing.T) {
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
-				logLevel: debug
 				log:
 				  level: all
 				  format: json
@@ -255,9 +254,8 @@ func TestFromPath(t *testing.T) {
 					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
-				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
 				Log: plog.LogSpec{
-					Level:  plog.LevelDebug,
+					Level:  plog.LevelAll,
 					Format: plog.FormatJSON,
 				},
 			},

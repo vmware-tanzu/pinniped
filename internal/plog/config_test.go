@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -166,7 +166,7 @@ testing.tRunner
 	// check for the deprecation warning
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config.go:96] "setting log.format to 'text' is deprecated - this option will be removed in a future release" warning=true`,
+	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config.go:89] "setting log.format to 'text' is deprecated - this option will be removed in a future release" warning=true`,
 		pid), scanner.Text())
 
 	Debug("what is happening", "does klog", "work?")

@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -48,13 +48,6 @@ var _ json.Unmarshaler = func() *LogFormat {
 type LogSpec struct {
 	Level  LogLevel  `json:"level,omitempty"`
 	Format LogFormat `json:"format,omitempty"`
-}
-
-func MaybeSetDeprecatedLogLevel(level *LogLevel, log *LogSpec) {
-	if level != nil {
-		Warning("logLevel is deprecated, set log.level instead")
-		log.Level = *level
-	}
 }
 
 func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) error {

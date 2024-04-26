@@ -77,3 +77,11 @@ func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 func secureServing(opts *options.SecureServingOptionsWithLoopback) {
 	defaultServing(opts)
 }
+
+// SetAllowedCiphersForTLSOneDotTwo does not allow users to specify allowedCipherNames in FIPS mode
+func SetAllowedCiphersForTLSOneDotTwo(allowedCipherNames []string) error {
+	if len(allowedCipherNames) > 0 {
+		return fmt.Errorf("FIPS mode does not accept allowedCipherNames")
+	}
+	return nil
+}

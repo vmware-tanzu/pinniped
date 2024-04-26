@@ -14,11 +14,13 @@ import (
 	"sync/atomic"
 )
 
+//nolint:gochecknoglobals // These need to be global because they are set when reading config
 var (
 	// allowedCiphersForTLSOneDotTwo will only contain ciphers that meet the following criteria:
 	// 1. They are secure
 	// 2. They are returned by tls.CipherSuites
 	// 3. They are within list cipherSuiteIDsForDefault or additionalCipherSuiteIDsForDefaultLDAP
+	// This is atomic so that it can not be set and read at the same time.
 	allowedCiphersForTLSOneDotTwo atomic.Value
 	cipherSuiteIDsForDefault      = []uint16{
 		// the order does not matter in go 1.17+ https://go.dev/blog/tls-cipher-suites
@@ -40,8 +42,8 @@ var (
 		// The Kubernetes API server must use approved cipher suites.
 		// https://stigviewer.com/stig/kubernetes/2021-06-17/finding/V-242418
 
-		// these are all AEADs with ECDHE, some use ChaCha20Poly1305 while others use AES-GCM
-		// this provides forward secrecy, confidentiality and authenticity of data
+		// These are all AEADs with ECDHE, some use ChaCha20Poly1305 while others use AES-GCM,
+		// which provides forward secrecy, confidentiality and authenticity of data.
 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -121,9 +123,10 @@ func validateAllowedCiphers(allowedCipherNames []string) ([]*tls.CipherSuite, er
 		return nil, nil
 	}
 
-	var configuredCipherNames []string
-	for _, cipher := range cipherSuitesForDefaultLDAP() {
-		configuredCipherNames = append(configuredCipherNames, cipher.Name)
+	configuredCiphers := cipherSuitesForDefaultLDAP()
+	configuredCipherNames := make([]string, len(configuredCiphers))
+	for i, cipher := range configuredCiphers {
+		configuredCipherNames[i] = cipher.Name
 	}
 
 	// Allow some loosening of the names for legacy reasons.
@@ -223,19 +226,19 @@ func buildCipherSuites(
 	return allowedCipherSuiteIDs
 }
 
-// Default or Secure should be the only way to create a tls.Config within any component of Pinniped
+// Default or Secure should be the only way to create a tls.Config within any component of Pinniped.
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	return buildTLSConfig(rootCAs, cipherSuitesForDefault(), getAllowedCiphersForTLSOneDotTwo())
 }
 
-// DefaultLDAP or Secure should be the only ways to create a tls.Config for LDAP within any component of Pinniped
+// DefaultLDAP or Secure should be the only ways to create a tls.Config for LDAP within any component of Pinniped.
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	return buildTLSConfig(rootCAs, cipherSuitesForDefaultLDAP(), getAllowedCiphersForTLSOneDotTwo())
 }
 
 func getAllowedCiphersForTLSOneDotTwo() []*tls.CipherSuite {
 	temp, ok := (allowedCiphersForTLSOneDotTwo.Load()).([]*tls.CipherSuite)
-	if ok { // untested
+	if ok { // untested within unit tests
 		return temp
 	}
 	return nil

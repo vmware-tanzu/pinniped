@@ -94,7 +94,7 @@ func TestBuildTLSConfig(t *testing.T) {
 			wantConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 				CipherSuites: []uint16{
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, //nolint:gosec // this is a test
 					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				},
 				NextProtos: []string{"h2", "http/1.1"},
@@ -116,7 +116,7 @@ func TestBuildTLSConfig(t *testing.T) {
 					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, //nolint:gosec // this is a test
 				},
 				NextProtos: []string{"h2", "http/1.1"},
 			},
@@ -177,7 +177,7 @@ func TestDefaultLDAP(t *testing.T) {
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, //nolint:gosec // this is a test
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
@@ -273,7 +273,6 @@ func TestValidateAllowedCiphers(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestCipherSuitesForDefault(t *testing.T) {

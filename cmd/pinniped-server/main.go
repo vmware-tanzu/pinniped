@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main is the combined entrypoint for all Pinniped server components.
@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	concierge "go.pinniped.dev/internal/concierge/server"
-	// this side effect import ensures that we use fipsonly crypto in fips_strict mode.
+	// this side effect import ensures that we use FIPS-only crypto in boringcrypto mode.
 	_ "go.pinniped.dev/internal/crypto/ptls"
 	lua "go.pinniped.dev/internal/localuserauthenticator"
 	"go.pinniped.dev/internal/plog"

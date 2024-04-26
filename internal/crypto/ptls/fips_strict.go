@@ -2,21 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The configurations here override the usual configs when Pinniped is built in fips-only mode.
-//go:build fips_strict
+//go:build boringcrypto
 
 package ptls
 
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"k8s.io/apiserver/pkg/server/options"
 
-	// Cause fipsonly tls mode with this side effect import.
-	_ "go.pinniped.dev/internal/crypto/fips"
+	// Cause FIPS-only tls mode with this side effect import.
+	_ "go.pinniped.dev/internal/crypto/fipsonly"
 	"go.pinniped.dev/internal/plog"
 )
 

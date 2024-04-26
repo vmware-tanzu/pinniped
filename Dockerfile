@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BUILD_IMAGE=golang:1.22.2@sha256:450e3822c7a135e1463cd83e51c8e2eb03b86a02113c89424e6f0f8344bb4168
@@ -28,7 +28,8 @@ RUN \
   --mount=target=. \
   --mount=type=cache,target=/cache/gocache \
   --mount=type=cache,target=/cache/gomodcache \
-  export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH && \
+  export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache && \
+  export CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH && \
   go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
   go build -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \

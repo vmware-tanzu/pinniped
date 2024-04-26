@@ -1,9 +1,9 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build fips_strict
+//go:build boringcrypto
 
-package fips
+package fipsonly
 
 import (
 	"C"                     // explicitly import cgo so that runtime/cgo gets linked into the kube-cert-agent

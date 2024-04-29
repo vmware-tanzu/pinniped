@@ -54,24 +54,15 @@ ingress and TLS configuration. In that case, please refer to the documentation f
 
 ## Exposing the Supervisor app's endpoints outside the cluster
 
-The Supervisor app's endpoints should be exposed as HTTPS endpoints with proper TLS certificates signed by a
+The Supervisor app's endpoints must be exposed as HTTPS endpoints with proper TLS certificates signed by a
 certificate authority (CA) which is trusted by your end user's web browsers.
 
-It is recommended that the traffic to these endpoints should be encrypted via TLS all the way into the
+Furthermore, all traffic to Supervisor endpoints must be encrypted via TLS all the way into the
 Supervisor pods, even when crossing boundaries that are entirely inside the Kubernetes cluster.
 The credentials and tokens that are handled by these endpoints are too sensitive to transmit without encryption.
 
-In previous versions of the Supervisor app, there were both HTTP and HTTPS ports available for use by default.
-These ports each host all the Supervisor's endpoints. Unfortunately, this has caused some confusion in the community
-and some blog posts have been written which demonstrate using the HTTP port in such a way that a portion of the traffic's
-path is unencrypted. Newer versions of the Supervisor disable the HTTP port by default to make it more clear that
-the Supervisor app is not intended to receive non-TLS HTTP traffic from outside the Pod. Furthermore, in these newer versions,
-when the HTTP listener is configured to be enabled it may only listen on loopback interfaces for traffic from within its own pod.
-To aid in transition for impacted users, the old behavior of allowing the HTTP listener to receive traffic from
-outside the pod may be re-enabled using the
-`deprecated_insecure_accept_external_unencrypted_http_requests` value in
-[values.yaml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml),
-until that setting is removed in a future release.
+Previous versions of the Supervisor app supported both HTTP and HTTPS ports. Starting with Pinniped v0.30.0,
+HTTP ports are no longer allowed.
 
 Because there are many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
 Some common approaches are:

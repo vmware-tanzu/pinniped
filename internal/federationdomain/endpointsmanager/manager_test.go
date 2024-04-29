@@ -118,8 +118,18 @@ func TestManager(t *testing.T) {
 			r.Equal(http.StatusOK, recorder.Code, "unexpected response:", recorder)
 			responseBody, err := io.ReadAll(recorder.Body)
 			r.NoError(err)
-			r.Equal(
-				fmt.Sprintf(`{"pinniped_identity_providers":[%s]}`+"\n", strings.Join(expectedIDPJSONList, ",")),
+
+			expectedResponse := here.Docf(`{
+				"pinniped_identity_providers": [%s],
+				"pinniped_supported_identity_provider_types": [
+					{"type":"activedirectory"},
+					{"type":"ldap"},
+					{"type":"oidc"}
+				]
+}`, strings.Join(expectedIDPJSONList, ","))
+
+			r.JSONEq(
+				expectedResponse,
 				string(responseBody),
 			)
 		}

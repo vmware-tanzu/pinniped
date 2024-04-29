@@ -37,15 +37,23 @@ func NewHandler(upstreamIDPs federationdomainproviders.FederationDomainIdentityP
 }
 
 func responseAsJSON(upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersListerI) ([]byte, error) {
-	r := v1alpha1.IDPDiscoveryResponse{PinnipedIDPs: []v1alpha1.PinnipedIDP{}}
+	r := v1alpha1.IDPDiscoveryResponse{
+		PinnipedSupportedIDPTypes: []v1alpha1.PinnipedSupportedIDPType{
+			{Type: v1alpha1.IDPTypeActiveDirectory},
+			{Type: v1alpha1.IDPTypeLDAP},
+			{Type: v1alpha1.IDPTypeOIDC},
+		},
+	}
 
+	upstreams := upstreamIDPs.GetIdentityProviders()
+	r.PinnipedIDPs = make([]v1alpha1.PinnipedIDP, len(upstreams))
 	// The cache of IDPs could change at any time, so always recalculate the list.
-	for _, federationDomainIdentityProvider := range upstreamIDPs.GetIdentityProviders() {
-		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
+	for i, federationDomainIdentityProvider := range upstreams {
+		r.PinnipedIDPs[i] = v1alpha1.PinnipedIDP{
 			Name:  federationDomainIdentityProvider.GetDisplayName(),
 			Type:  federationDomainIdentityProvider.GetIDPDiscoveryType(),
 			Flows: federationDomainIdentityProvider.GetIDPDiscoveryFlows(),
-		})
+		}
 	}
 
 	// Nobody like an API that changes the results unnecessarily. :)

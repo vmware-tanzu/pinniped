@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -93,7 +94,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// Test that there is no default discovery endpoint available when there are no FederationDomains.
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
-			// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
+			// Define several unique issuer URLs. Always use https in the issuer URL even when we are accessing the http port.
 			issuer1 := fmt.Sprintf("https://%s/nested/issuer1", addr)
 			issuer2 := fmt.Sprintf("https://%s/nested/issuer2", addr)
 			issuer3 := fmt.Sprintf("https://%s/issuer3", addr)
@@ -102,7 +103,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
 			badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
 
-			// When FederationDomain are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
+			// When FederationDomains are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
 			config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
 			config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
@@ -119,7 +120,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
 			require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
-			// Editing a provider to change the issuer name updates the endpoints that are being served.
+			// Editing a FederationDomain to change the issuer URL updates the endpoints that are being served.
 			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
 			jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
@@ -130,31 +131,37 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
 
-			// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+			// When the same issuer URL is added to two FederationDomains, both FederationDomains are marked as duplicates, and neither is serving.
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuer6}, v1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
-			// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+			// If we delete the first duplicate FederationDomain, the second duplicate FederationDomain starts serving.
 			requireDelete(t, client, ns, config6Duplicate1.Name)
 			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
 			requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
-			// When we finally delete all issuers, the endpoint should be down.
+			// When we finally delete all FederationDomains, the discovery endpoints should be down.
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
-			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer URL.
 			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
 			config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
 
-			// When we create a provider with an invalid issuer, the status is set to invalid.
+			// When we create a FederationDomain with an invalid issuer url, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: badIssuer}, v1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, badConfig.Name, v1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerURLValid"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+
+			issuer8 := fmt.Sprintf("https://%s/issuer8multipleIDP", addr)
+			config8 := requireIDPsListedByIDPDiscoveryEndpoint(t, env, ctx, kubeClient, ns, scheme, addr, caBundle, issuer8)
+
+			// requireJWKSEndpointIsWorking() will give us a bit of an idea what to do...
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config8, client, ns, scheme, addr, caBundle, issuer8)
 		})
 	}
 }
@@ -494,6 +501,7 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	return newFederationDomain, jwksResult
 }
 
+// TODO: consider renaming this since it does not actually check all discovery endpoints (example: idp discovery is not tested).
 func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
 	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	jwksResult := requireJWKSEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
@@ -737,4 +745,96 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 	}
 
 	return c
+}
+
+func requireIDPsListedByIDPDiscoveryEndpoint(
+	t *testing.T,
+	env *testlib.TestEnv,
+	ctx context.Context,
+	kubeClient kubernetes.Interface,
+	ns, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) *v1alpha1.FederationDomain {
+	// github
+	gitHubIDPSecretName := "github-idp-secret" //nolint:gosec // this is not a credential
+	_, err := kubeClient.CoreV1().Secrets(ns).Create(ctx, &corev1.Secret{
+		Type:     "secrets.pinniped.dev/github-client",
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gitHubIDPSecretName,
+			Namespace: ns,
+		},
+		StringData: map[string]string{
+			"clientID":     "foo",
+			"clientSecret": "bar",
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = kubeClient.CoreV1().Secrets(ns).Delete(ctx, gitHubIDPSecretName, metav1.DeleteOptions{})
+	})
+
+	ghIDP := testlib.CreateGitHubIdentityProvider(t, idpv1alpha1.GitHubIdentityProviderSpec{
+		Client: idpv1alpha1.GitHubClientSpec{
+			SecretName: gitHubIDPSecretName,
+		},
+		AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+			Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+				Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			},
+		},
+	}, idpv1alpha1.GitHubPhaseReady)
+
+	// TODO: add ldap to prove it shows up in the IDP discovery API
+	// TODO: add oidc to prove it shows up in the IDP discovery API
+	// TODO: add ad to prove it shows up in the IDP discovery API
+
+	federationDomainConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
+		Issuer: issuerName,
+		IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{{
+			DisplayName: ghIDP.Name,
+			ObjectRef: corev1.TypedLocalObjectReference{
+				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+				Kind:     "GitHubIdentityProvider",
+				Name:     ghIDP.Name,
+			},
+		}},
+	}, v1alpha1.FederationDomainPhaseReady)
+
+	requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
+	issuer8URL, err := url.Parse(issuerName)
+	require.NoError(t, err)
+	wellKnownURL := wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuer8URL.Path)
+	_, wellKnownResponseBody := requireSuccessEndpointResponse(t, wellKnownURL, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+
+	type WellKnownResponse struct {
+		Issuer                string `json:"issuer"`
+		AuthorizationEndpoint string `json:"authorization_endpoint"`
+		TokenEndpoint         string `json:"token_endpoint"`
+		JWKSUri               string `json:"jwks_uri"`
+		DiscoverySupervisor   struct {
+			IdentityProvidersEndpoint string `json:"pinniped_identity_providers_endpoint"`
+		} `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+	}
+	var wellKnownResponse WellKnownResponse
+	err = json.Unmarshal([]byte(wellKnownResponseBody), &wellKnownResponse)
+	require.NoError(t, err)
+	discoveryIDPEndpoint := wellKnownResponse.DiscoverySupervisor.IdentityProvidersEndpoint
+	_, discoveryIDPResponseBody := requireSuccessEndpointResponse(t, discoveryIDPEndpoint, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+	type IdentityProviderListResponse struct {
+		IdentityProviders []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"pinniped_identity_providers"`
+	}
+	var identityProviderListResponse IdentityProviderListResponse
+	err = json.Unmarshal([]byte(discoveryIDPResponseBody), &identityProviderListResponse)
+	require.NoError(t, err)
+
+	allIDPs := []string{ghIDP.Name}
+	require.Equal(t, len(identityProviderListResponse.IdentityProviders), 1, "all IDPs should be listed by idp discovery endpoint")
+	for _, provider := range identityProviderListResponse.IdentityProviders {
+		require.True(t, slices.Contains(allIDPs, provider.Name))
+		require.Contains(t, allIDPs, provider.Name, fmt.Sprintf("provider name should be listed in IDP discovery: %s", provider.Name))
+	}
+
+	return federationDomainConfig
 }

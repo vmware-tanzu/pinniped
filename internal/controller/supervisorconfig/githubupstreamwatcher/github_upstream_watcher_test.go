@@ -1787,7 +1787,6 @@ func TestController(t *testing.T) {
 
 				compareTLSClientConfigWithinHttpClients(t, phttp.Default(certPool), actualIDP.GetHttpClient())
 				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualIDP.GetOAuth2Config())
-
 			}
 
 			// Verify the status conditions as reported in Kubernetes

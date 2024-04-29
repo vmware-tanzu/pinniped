@@ -238,7 +238,7 @@ func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizations
 }
 
 func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx controllerlib.Context, upstream *v1alpha1.GitHubIdentityProvider) (
-	*upstreamgithub.ProviderConfig, // If validated, returns the config
+	*upstreamgithub.Provider, // If validated, returns the config
 	error, // This error will only refer to programmatic errors such as inability to perform a Dial or dereference a pointer, not configuration errors
 ) {
 	conditions := make([]*metav1.Condition, 0)
@@ -291,22 +291,24 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		return nil, k8sutilerrors.NewAggregate(applicationErrors)
 	}
 
-	providerConfig := &upstreamgithub.ProviderConfig{
-		Name:               upstream.Name,
-		ResourceUID:        upstream.UID,
-		Host:               hostURL,
-		GroupNameAttribute: groupNameAttribute,
-		UsernameAttribute:  usernameAttribute,
-		OAuth2Config: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
+	provider := upstreamgithub.New(
+		upstreamgithub.ProviderConfig{
+			Name:               upstream.Name,
+			ResourceUID:        upstream.UID,
+			Host:               hostURL,
+			GroupNameAttribute: groupNameAttribute,
+			UsernameAttribute:  usernameAttribute,
+			OAuth2Config: &oauth2.Config{
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+			},
+			AllowedOrganizations:    upstream.Spec.AllowAuthentication.Organizations.Allowed,
+			OrganizationLoginPolicy: policy,
+			AuthorizationURL:        fmt.Sprintf("%s/login/oauth/authorize", hostURL),
+			HttpClient:              httpClient,
 		},
-		AllowedOrganizations:    upstream.Spec.AllowAuthentication.Organizations.Allowed,
-		OrganizationLoginPolicy: policy,
-		AuthorizationURL:        fmt.Sprintf("%s/login/oauth/authorize", hostURL),
-		HttpClient:              httpClient,
-	}
-	return providerConfig, k8sutilerrors.NewAggregate(applicationErrors)
+	)
+	return provider, k8sutilerrors.NewAggregate(applicationErrors)
 }
 
 func validateHost(gitHubAPIConfig v1alpha1.GitHubAPIConfig) (*metav1.Condition, *endpointaddr.HostPort) {

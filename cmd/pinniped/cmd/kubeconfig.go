@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -143,7 +143,18 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.oidc.upstreamIDPName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	f.StringVar(&flags.oidc.upstreamIDPType, "upstream-identity-provider-type", "", fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory))
+	f.StringVar(
+		&flags.oidc.upstreamIDPType,
+		"upstream-identity-provider-type",
+		"",
+		fmt.Sprintf(
+			"The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s', '%s')",
+			idpdiscoveryv1alpha1.IDPTypeOIDC,
+			idpdiscoveryv1alpha1.IDPTypeLDAP,
+			idpdiscoveryv1alpha1.IDPTypeActiveDirectory,
+			idpdiscoveryv1alpha1.IDPTypeGitHub,
+		),
+	)
 	f.StringVar(&flags.oidc.upstreamIDPFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowCLIPassword, idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode))
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")

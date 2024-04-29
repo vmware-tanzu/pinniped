@@ -10,6 +10,7 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedgithub"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -52,6 +53,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		WithName("my-ad-idp2").
 		WithResourceUID("my-ad-uid-idp2").
 		Build()
+	myDefaultGitHubIDP := oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+		WithName("my-default-github-idp").
+		WithResourceUID("my-default-github-uid-idp").
+		Build()
+	myGitHubIDP1 := oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+		WithName("my-github-idp1").
+		WithResourceUID("my-github-uid-idp1").
+		Build()
 
 	// FederationDomainIssuers
 	fakeIssuerURL := "https://www.fakeissuerurl.com"
@@ -77,13 +86,20 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	fdIssuerWithOIDCAndLDAPAndADIDPs, err := NewFederationDomainIssuer(fakeIssuerURL, []*FederationDomainIdentityProvider{
+	fdIssuerWithDefaultGitHubIDP, err := NewFederationDomainIssuerWithDefaultIDP(fakeIssuerURL, &FederationDomainIdentityProvider{
+		DisplayName: "my-default-github-idp",
+		UID:         "my-default-github-uid-idp",
+	})
+	require.NoError(t, err)
+
+	fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs, err := NewFederationDomainIssuer(fakeIssuerURL, []*FederationDomainIdentityProvider{
 		{DisplayName: "my-oidc-idp1", UID: "my-oidc-uid-idp1"},
 		{DisplayName: "my-oidc-idp2", UID: "my-oidc-uid-idp2"},
 		{DisplayName: "my-ldap-idp1", UID: "my-ldap-uid-idp1"},
 		{DisplayName: "my-ldap-idp2", UID: "my-ldap-uid-idp2"},
 		{DisplayName: "my-ad-idp1", UID: "my-ad-uid-idp1"},
 		{DisplayName: "my-ad-idp2", UID: "my-ad-uid-idp2"},
+		{DisplayName: "my-github-idp1", UID: "my-github-uid-idp1"},
 	})
 	require.NoError(t, err)
 
@@ -99,6 +115,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		{DisplayName: "my-ldap-idp4", UID: "my-ldap-uid-idp4"},
 		{DisplayName: "my-ad-idp2", UID: "my-ad-uid-idp2"},
 		{DisplayName: "my-ad-idp3", UID: "my-ad-uid-idp3"},
+		{DisplayName: "my-github-idp1", UID: "my-github-uid-idp1"},
 	})
 	require.NoError(t, err)
 
@@ -133,6 +150,11 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		Provider:            myADIDP1,
 		SessionProviderType: "activedirectory",
 	}
+	myGitHub1Resolved := &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+		DisplayName:         "my-github-idp1",
+		Provider:            myGitHubIDP1,
+		SessionProviderType: "github",
+	}
 
 	myDefaultOIDCIDPResolved := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
 		DisplayName:         "my-default-oidc-idp",
@@ -144,15 +166,21 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		Provider:            myDefaultLDAPIDP,
 		SessionProviderType: "ldap",
 	}
+	myDefaultGitHubIDPResolved := &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+		DisplayName:         "my-default-github-idp",
+		Provider:            myDefaultGitHubIDP,
+		SessionProviderType: "github",
+	}
 
 	testFindUpstreamIDPByDisplayName := []struct {
-		name                     string
-		wrappedLister            idplister.UpstreamIdentityProvidersLister
-		federationDomainIssuer   *FederationDomainIssuer
-		findIDPByDisplayName     string
-		wantOIDCIDPByDisplayName *resolvedoidc.FederationDomainResolvedOIDCIdentityProvider
-		wantLDAPIDPByDisplayName *resolvedldap.FederationDomainResolvedLDAPIdentityProvider
-		wantError                string
+		name                       string
+		wrappedLister              idplister.UpstreamIdentityProvidersLister
+		federationDomainIssuer     *FederationDomainIssuer
+		findIDPByDisplayName       string
+		wantOIDCIDPByDisplayName   *resolvedoidc.FederationDomainResolvedOIDCIdentityProvider
+		wantLDAPIDPByDisplayName   *resolvedldap.FederationDomainResolvedLDAPIdentityProvider
+		wantGitHubIDPByDisplayName *resolvedgithub.FederationDomainResolvedGitHubIdentityProvider
+		wantError                  string
 	}{
 		{
 			name:                 "FindUpstreamIDPByDisplayName will find an upstream IdP by display name with one IDP configured",
@@ -182,8 +210,9 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithOIDC(myOIDCIDP2).
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer:   fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer:   fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantOIDCIDPByDisplayName: myOIDCIDP1Resolved,
 		},
 		{
@@ -195,6 +224,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer:   fdIssuerWithOIDCIDP1,
 			wantOIDCIDPByDisplayName: myOIDCIDP1Resolved,
@@ -208,11 +238,13 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer:   fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
+			wantLDAPIDPByDisplayName: myLDAPIDP1Resolved,
 		},
 		{
-			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type AD (LDAP)  by display name",
+			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type AD (LDAP) by display name",
 			findIDPByDisplayName: "my-ad-idp1",
 			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(myOIDCIDP1).
@@ -220,9 +252,24 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer:   fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer:   fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantLDAPIDPByDisplayName: myADIDP1Resolved,
+		},
+		{
+			name:                 "FindUpstreamIDPByDisplayName will find an upstream IDP of type GitHub by display name",
+			findIDPByDisplayName: "my-github-idp1",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
+				WithOIDC(myOIDCIDP1).
+				WithOIDC(myOIDCIDP2).
+				WithLDAP(myLDAPIDP1).
+				WithLDAP(myLDAPIDP2).
+				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer:     fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
+			wantGitHubIDPByDisplayName: myGitHub1Resolved,
 		},
 		{
 			name:                 "FindUpstreamIDPByDisplayName will error if IDP by display name is not found - no such display name",
@@ -233,8 +280,9 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantError:              `identity provider not found: "i-cant-find-my-idp"`,
 		},
 		{
@@ -266,6 +314,9 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			if tt.wantLDAPIDPByDisplayName != nil {
 				require.Equal(t, tt.wantLDAPIDPByDisplayName, foundIDP)
 			}
+			if tt.wantGitHubIDPByDisplayName != nil {
+				require.Equal(t, tt.wantGitHubIDPByDisplayName, foundIDP)
+			}
 		})
 	}
 
@@ -275,6 +326,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 		federationDomainIssuer *FederationDomainIssuer
 		wantDefaultOIDCIDP     *resolvedoidc.FederationDomainResolvedOIDCIdentityProvider
 		wantDefaultLDAPIDP     *resolvedldap.FederationDomainResolvedLDAPIdentityProvider
+		wantDefaultGitHubIDP   *resolvedgithub.FederationDomainResolvedGitHubIdentityProvider
 		wantError              string
 	}{
 		{
@@ -292,6 +344,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithDefaultLDAPIDP,
 			wantDefaultLDAPIDP:     myDefaultLDAPIDPResolved,
+		},
+		{
+			name: "FindDefaultIDP resturns a GitHubIdentityProvider if there is a GitHubIdentityProvider defined as the default IDP",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
+				WithGitHub(myDefaultGitHubIDP).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithDefaultGitHubIDP,
+			wantDefaultGitHubIDP:   myDefaultGitHubIDPResolved,
 		},
 		{
 			name: "FindDefaultIDP returns an error if there is no default IDP to return",
@@ -342,6 +402,9 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			if tt.wantDefaultLDAPIDP != nil {
 				require.Equal(t, tt.wantDefaultLDAPIDP, foundIDP)
 			}
+			if tt.wantDefaultGitHubIDP != nil {
+				require.Equal(t, tt.wantDefaultGitHubIDP, foundIDP)
+			}
 		})
 	}
 
@@ -359,14 +422,16 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				WithLDAP(myLDAPIDP1).
 				WithLDAP(myLDAPIDP2).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantIDPs: []resolvedprovider.FederationDomainResolvedIdentityProvider{
 				myOIDCIDP1Resolved,
 				myOIDCIDP2Resolved,
 				myLDAPIDP1Resolved,
 				myLDAPIDP2Resolved,
 				myADIDP1Resolved,
+				myGitHub1Resolved,
 			},
 		},
 		{
@@ -380,6 +445,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 					Build()).
 				WithLDAP(myLDAPIDP1).
 				WithActiveDirectory(myADIDP1).
+				WithGitHub(myGitHubIDP1).
 				BuildDynamicUpstreamIDPProvider(),
 			federationDomainIssuer: fdIssuerWithLotsOfIDPs,
 			wantIDPs: []resolvedprovider.FederationDomainResolvedIdentityProvider{
@@ -387,13 +453,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 				myOIDCIDP2Resolved,
 				myLDAPIDP1Resolved,
 				myADIDP1Resolved,
+				myGitHub1Resolved,
 			},
 		},
 		{
 			name: "GetIdentityProviders will return empty list if no IDPs are found",
 			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantIDPs:               []resolvedprovider.FederationDomainResolvedIdentityProvider{},
 		},
 	}
@@ -420,7 +487,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			name: "IDPCount when there are none to be found",
 			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantCount:              0,
 		},
 		{
@@ -443,9 +510,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 					WithName("my-ad-idp-that-isnt-in-fd-issuer").
 					WithResourceUID("my-ad-idp-that-isnt-in-fd-issuer").
 					Build()).
+				WithGitHub(myGitHubIDP1).
+				WithGitHub(oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+					WithName("my-github-idp-that-isnt-in-fd-issuer").
+					WithResourceUID("my-github-idp-that-isnt-in-fd-issuer").
+					Build()).
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
-			wantCount:              5,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
+			wantCount:              6,
 		},
 	}
 
@@ -483,6 +555,14 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			wantHasDefaultIDP:      true,
 		},
 		{
+			name: "HasDefaultIDP when there is a GitHub provider set as default",
+			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
+				WithGitHub(myDefaultGitHubIDP).
+				BuildDynamicUpstreamIDPProvider(),
+			federationDomainIssuer: fdIssuerWithDefaultGitHubIDP,
+			wantHasDefaultIDP:      true,
+		},
+		{
 			name: "HasDefaultIDP when there is one set even if it cannot be found",
 			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
@@ -497,7 +577,7 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 			name: "HasDefaultIDP when there is none set",
 			wrappedLister: testidplister.NewUpstreamIDPListerBuilder().
 				BuildDynamicUpstreamIDPProvider(),
-			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADIDPs,
+			federationDomainIssuer: fdIssuerWithOIDCAndLDAPAndADAndGitHubIDPs,
 			wantHasDefaultIDP:      false,
 		},
 	}

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -370,15 +370,18 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"ĩŦʀ宍D挟": "q萮左/篣AÚƄŕ~čfVLPC諡}",
 						"姧骦:駝重EȫʆɵʮGɃ": "囤1+,Ȳ齠@ɍB鳛Nč乿ƔǴę鏶"
 					}
+				},
+				"github": {
 				}
 			}
 		},
 		"requestedAudience": [
-			"ň"
+			"ȝâ融貵捠ŉ0"
 		],
 		"grantedAudience": [
-			"â融貵捠ŉ",
-			"d鞕ȸ腿tʏƲ%}ſ¯Ɣ 籌Tǘ乚Ȥ2"
+			"ȸ腿tʏƲ%",
+			"泡hUɨĪű鹠NƤ鷒絓",
+			"ěå=瑅ƍ逤ŔfȀ箬+橇肅aā鲴"
 		]
 	},
 	"version": "6"

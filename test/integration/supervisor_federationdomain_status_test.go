@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -362,7 +362,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						{
 							Type: "IdentityProvidersObjectRefKindValid", Status: "False", Reason: "KindUnrecognized",
 							Message: `some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized ` +
-								`(should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
+								`(should be one of "ActiveDirectoryIdentityProvider", "GitHubIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
 						},
 						{
 							Type: "Ready", Status: "False", Reason: "NotReady",
@@ -493,7 +493,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						{
 							Type: "IdentityProvidersObjectRefKindValid", Status: "False", Reason: "KindUnrecognized",
 							Message: `some kinds specified by .spec.identityProviders[].objectRef.kind are not recognized ` +
-								`(should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
+								`(should be one of "ActiveDirectoryIdentityProvider", "GitHubIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): "this is the wrong kind"`,
 						},
 						{
 							Type: "Ready", Status: "False", Reason: "NotReady",

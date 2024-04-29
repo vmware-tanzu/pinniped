@@ -177,6 +177,7 @@ func prepareControllers(
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
+				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

@@ -304,7 +304,7 @@ func flowOptions(
 	}
 
 	switch requestedIDPType {
-	case idpdiscoveryv1alpha1.IDPTypeOIDC:
+	case idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeGitHub:
 		switch requestedFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword:
 			return useCLIFlow, nil
@@ -337,6 +337,7 @@ func flowOptions(
 				idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
 				idpdiscoveryv1alpha1.IDPTypeLDAP.String(),
 				idpdiscoveryv1alpha1.IDPTypeActiveDirectory.String(),
+				idpdiscoveryv1alpha1.IDPTypeGitHub.String(),
 			}, ", "),
 		)
 	}

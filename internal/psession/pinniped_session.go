@@ -74,6 +74,9 @@ type CustomSessionData struct {
 
 	// Only used when ProviderType == "activedirectory".
 	ActiveDirectory *ActiveDirectorySessionData `json:"activedirectory,omitempty"`
+
+	// Only used when ProviderType == "github".
+	GitHub *GitHubSessionData `json:"github,omitempty"`
 }
 
 type ProviderType string
@@ -82,6 +85,7 @@ const (
 	ProviderTypeOIDC            ProviderType = "oidc"
 	ProviderTypeLDAP            ProviderType = "ldap"
 	ProviderTypeActiveDirectory ProviderType = "activedirectory"
+	ProviderTypeGitHub          ProviderType = "github"
 )
 
 // OIDCSessionData is the additional data needed by Pinniped when the upstream IDP is an OIDC provider.
@@ -138,6 +142,14 @@ func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
 		UserDN:                 s.UserDN,
 		ExtraRefreshAttributes: maps.Clone(s.ExtraRefreshAttributes), // shallow copy works because all keys and values are strings
 	}
+}
+
+type GitHubSessionData struct {
+}
+
+func (s *GitHubSessionData) Clone() *GitHubSessionData {
+	dataCopy := *s // this shortcut works because all fields in this type are currently strings (no pointers)
+	return &dataCopy
 }
 
 // NewPinnipedSession returns a new empty session.

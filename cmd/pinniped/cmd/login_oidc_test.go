@@ -161,7 +161,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory)
+				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory, github)
 			`),
 		},
 		{
@@ -173,7 +173,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			env:       map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "browser_authcode"},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory)
+				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory, github)
 			`),
 		},
 		{

@@ -186,7 +186,7 @@ func CreateTestWebhookAuthenticator(
 	defer cancel()
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
-		ObjectMeta: testObjectMeta(t, "webhook"),
+		ObjectMeta: TestObjectMeta(t, "webhook"),
 		Spec:       *webhookSpec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
@@ -295,7 +295,7 @@ func CreateTestJWTAuthenticator(
 	defer cancel()
 
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
-		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
+		ObjectMeta: TestObjectMeta(t, "jwt-authenticator"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")
@@ -369,7 +369,7 @@ func CreateTestFederationDomain(
 
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
 	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
-		ObjectMeta: testObjectMeta(t, "oidc-provider"),
+		ObjectMeta: TestObjectMeta(t, "oidc-provider"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test FederationDomain")
@@ -460,7 +460,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	defer cancel()
 
 	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
-		ObjectMeta: testObjectMeta(t, baseName),
+		ObjectMeta: TestObjectMeta(t, baseName),
 		Type:       secretType,
 		StringData: stringData,
 	}, metav1.CreateOptions{})
@@ -482,7 +482,7 @@ func CreateTestSecretBytes(t *testing.T, namespace string, baseName string, secr
 	defer cancel()
 
 	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
-		ObjectMeta: testObjectMeta(t, baseName),
+		ObjectMeta: TestObjectMeta(t, baseName),
 		Type:       secretType,
 		Data:       data,
 	}, metav1.CreateOptions{})
@@ -587,7 +587,7 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
-	return CreateTestOIDCIdentityProviderWithObjectMeta(t, spec, testObjectMeta(t, "upstream-oidc-idp"), expectedPhase)
+	return CreateTestOIDCIdentityProviderWithObjectMeta(t, spec, TestObjectMeta(t, "upstream-oidc-idp"), expectedPhase)
 }
 
 func CreateTestOIDCIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, objectMeta metav1.ObjectMeta, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
@@ -640,7 +640,7 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 
 	// Create the LDAPIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.LDAPIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream-ldap-idp"),
+		ObjectMeta: TestObjectMeta(t, "upstream-ldap-idp"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -681,7 +681,7 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 
 	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	created, err := upstreams.Create(ctx, &idpv1alpha1.ActiveDirectoryIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream-ad-idp"),
+		ObjectMeta: TestObjectMeta(t, "upstream-ad-idp"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -711,6 +711,41 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 	return result
 }
 
+func CreateGitHubIdentityProvider(t *testing.T, spec idpv1alpha1.GitHubIdentityProviderSpec, expectedPhase idpv1alpha1.GitHubIdentityProviderPhase) *idpv1alpha1.GitHubIdentityProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	upstreams := client.IDPV1alpha1().GitHubIdentityProviders(env.SupervisorNamespace)
+
+	// Create the GitHubIdentityProvider using GenerateName to get a random name.
+	created, err := upstreams.Create(ctx, &idpv1alpha1.GitHubIdentityProvider{
+		ObjectMeta: TestObjectMeta(t, "upstream-github-idp"),
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test GitHubIdentityProvider %s", created.Name)
+
+	// Wait for the GitHubIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.GitHubIdentityProvider
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		var err error
+		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+		requireEventually.NoErrorf(err, "error while getting GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
+		requireEventually.Equal(expectedPhase, result.Status.Phase)
+	}, 60*time.Second, 1*time.Second, "expected the GitHubIdentityProvider to go into phase %s, GitHubIdentityProvider was: %s", expectedPhase, Sdump(result))
+	return result
+}
+
 func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
 	t.Helper()
 	client := NewKubernetesClientset(t)
@@ -721,7 +756,7 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 
 	// Create the ClusterRoleBinding using GenerateName to get a random name.
 	created, err := clusterRoles.Create(ctx, &rbacv1.ClusterRoleBinding{
-		ObjectMeta: testObjectMeta(t, "cluster-role"),
+		ObjectMeta: TestObjectMeta(t, "cluster-role"),
 		Subjects:   []rbacv1.Subject{subject},
 		RoleRef:    roleRef,
 	}, metav1.CreateOptions{})
@@ -772,7 +807,7 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 	ctx, cancel := context.WithTimeout(ctx, podCreateTimeout+time.Minute)
 	defer cancel()
 
-	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: testObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})
+	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: TestObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})
 	require.NoError(t, err)
 	t.Logf("created test Pod %s", created.Name)
 
@@ -890,7 +925,7 @@ func WaitForGitHubIdentityProviderStatusConditions(
 	}, 60*time.Second, 1*time.Second, "wanted conditions for GitHubIdentityProvider %q", gitHubIDPName)
 }
 
-func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {
+func TestObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
 		GenerateName: fmt.Sprintf("test-%s-", baseName),
 		Labels:       map[string]string{"pinniped.dev/test": ""},

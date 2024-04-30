@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/upstreamgithub"
@@ -31,6 +33,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		Provider: upstreamgithub.New(upstreamgithub.ProviderConfig{
 			Name:        "fake-provider-config",
 			ResourceUID: "fake-resource-uid",
+			OAuth2Config: &oauth2.Config{
+				ClientID:     "clientID12345",
+				ClientSecret: "clientSecret6789",
+				RedirectURL:  "some/redirect/url",
+			},
 		}),
 		SessionProviderType: psession.ProviderTypeGitHub,
 		Transforms:          transforms,
@@ -40,6 +47,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 	require.Equal(t, upstreamgithub.New(upstreamgithub.ProviderConfig{
 		Name:        "fake-provider-config",
 		ResourceUID: "fake-resource-uid",
+		OAuth2Config: &oauth2.Config{
+			ClientID:     "clientID12345",
+			ClientSecret: "clientSecret6789",
+			RedirectURL:  "some/redirect/url",
+		},
 	}), subject.GetProvider())
 	require.Equal(t, psession.ProviderTypeGitHub, subject.GetSessionProviderType())
 	require.Equal(t, v1alpha1.IDPTypeGitHub, subject.GetIDPDiscoveryType())
@@ -50,4 +62,17 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		UpstreamUsername: "fake-upstream-username",
 		GitHub:           &psession.GitHubSessionData{},
 	}))
+	redirectURL, err := subject.UpstreamAuthorizeRedirectURL(
+		&resolvedprovider.UpstreamAuthorizeRequestState{
+			EncodedStateParam: "encodedStateParam12345",
+			PKCE:              "pkce6789",
+			Nonce:             "nonce1289",
+		},
+		"https://localhost/fake/path",
+	)
+	require.NoError(t, err)
+	require.Equal(t,
+		"?client_id=clientID12345&redirect_uri=https%3A%2F%2Flocalhost%2Ffake%2Fpath%2Fcallback&response_type=code&state=encodedStateParam12345",
+		redirectURL,
+	)
 }

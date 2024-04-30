@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/oauth2"
+
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -68,8 +70,17 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedire
 	state *resolvedprovider.UpstreamAuthorizeRequestState,
 	downstreamIssuerURL string,
 ) (string, error) {
-	fmt.Printf("GithubResolvedIdentityProvider ~ UpstreamAuthorizeRedirectURL() called with state: %#v, downstreamIssuerURL %s", state, downstreamIssuerURL)
-	return "", errors.New("function UpstreamAuthorizeRedirectURL not yet implemented for GitHub IDP")
+	upstreamOAuthConfig := oauth2.Config{
+		ClientID: p.Provider.GetClientID(),
+		Endpoint: oauth2.Endpoint{
+			AuthURL: p.Provider.GetAuthorizationURL(),
+		},
+		RedirectURL: fmt.Sprintf("%s/callback", downstreamIssuerURL),
+	}
+	redirectURL := upstreamOAuthConfig.AuthCodeURL(
+		state.EncodedStateParam,
+	)
+	return redirectURL, nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) Login(

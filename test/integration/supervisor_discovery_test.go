@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -783,8 +784,54 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 		},
 	}, idpv1alpha1.GitHubPhaseReady)
 
-	// TODO: add ldap to prove it shows up in the IDP discovery API
-	// TODO: add oidc to prove it shows up in the IDP discovery API
+	ldapBindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+		map[string]string{
+			corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+			corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+		},
+	)
+	ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+		Host: env.SupervisorUpstreamLDAP.Host,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+		},
+		Bind: idpv1alpha1.LDAPIdentityProviderBind{
+			SecretName: ldapBindSecret.Name,
+		},
+		UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+			Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+			Filter: "",
+			Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+				Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+				UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+			},
+		},
+		GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+			Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+			Filter: "", // use the default value of "member={}"
+			Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+				GroupName: "", // use the default value of "dn"
+			},
+		},
+	}, idpv1alpha1.LDAPPhaseReady)
+
+	oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		Issuer: env.SupervisorUpstreamOIDC.Issuer,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+		},
+		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+			AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+		},
+		Claims: idpv1alpha1.OIDCClaims{
+			Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+			Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+		},
+		Client: idpv1alpha1.OIDCClient{
+			SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+		},
+	}, idpv1alpha1.PhaseReady)
+
 	// TODO: add ad to prove it shows up in the IDP discovery API
 
 	federationDomainConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
@@ -795,6 +842,20 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
 				Kind:     "GitHubIdentityProvider",
 				Name:     ghIDP.Name,
+			},
+		}, {
+			DisplayName: ldapIDP.Name,
+			ObjectRef: corev1.TypedLocalObjectReference{
+				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+				Kind:     "LDAPIdentityProvider",
+				Name:     ldapIDP.Name,
+			},
+		}, {
+			DisplayName: oidcIDP.Name,
+			ObjectRef: corev1.TypedLocalObjectReference{
+				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+				Kind:     "OIDCIdentityProvider",
+				Name:     oidcIDP.Name,
 			},
 		}},
 	}, v1alpha1.FederationDomainPhaseReady)
@@ -829,10 +890,9 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 	err = json.Unmarshal([]byte(discoveryIDPResponseBody), &identityProviderListResponse)
 	require.NoError(t, err)
 
-	allIDPs := []string{ghIDP.Name}
-	require.Equal(t, len(identityProviderListResponse.IdentityProviders), 1, "all IDPs should be listed by idp discovery endpoint")
+	allIDPs := []string{ghIDP.Name, ldapIDP.Name, oidcIDP.Name}
+	require.Equal(t, len(identityProviderListResponse.IdentityProviders), 3, "all IDPs should be listed by idp discovery endpoint")
 	for _, provider := range identityProviderListResponse.IdentityProviders {
-		require.True(t, slices.Contains(allIDPs, provider.Name))
 		require.Contains(t, allIDPs, provider.Name, fmt.Sprintf("provider name should be listed in IDP discovery: %s", provider.Name))
 	}
 

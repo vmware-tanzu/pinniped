@@ -832,32 +832,60 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 		},
 	}, idpv1alpha1.PhaseReady)
 
-	// TODO: add ad to prove it shows up in the IDP discovery API
+	var adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider
+	if activeDirectoryAvailable(t, env) {
+		activeDirectoryBindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+			map[string]string{
+				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+			},
+		)
+		adIDP = testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+			Host: env.SupervisorUpstreamActiveDirectory.Host,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+			},
+			Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+				SecretName: activeDirectoryBindSecret.Name,
+			},
+		}, idpv1alpha1.ActiveDirectoryPhaseReady)
+	}
 
+	idpsForFD := []v1alpha1.FederationDomainIdentityProvider{{
+		DisplayName: ghIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "GitHubIdentityProvider",
+			Name:     ghIDP.Name,
+		},
+	}, {
+		DisplayName: ldapIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "LDAPIdentityProvider",
+			Name:     ldapIDP.Name,
+		},
+	}, {
+		DisplayName: oidcIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "OIDCIdentityProvider",
+			Name:     oidcIDP.Name,
+		},
+	}}
+	if activeDirectoryAvailable(t, env) {
+		idpsForFD = append(idpsForFD, v1alpha1.FederationDomainIdentityProvider{
+			DisplayName: adIDP.Name,
+			ObjectRef: corev1.TypedLocalObjectReference{
+				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+				Kind:     "ActiveDirectoryIdentityProvider",
+				Name:     adIDP.Name,
+			},
+		})
+	}
 	federationDomainConfig := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
-		Issuer: issuerName,
-		IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{{
-			DisplayName: ghIDP.Name,
-			ObjectRef: corev1.TypedLocalObjectReference{
-				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
-				Kind:     "GitHubIdentityProvider",
-				Name:     ghIDP.Name,
-			},
-		}, {
-			DisplayName: ldapIDP.Name,
-			ObjectRef: corev1.TypedLocalObjectReference{
-				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
-				Kind:     "LDAPIdentityProvider",
-				Name:     ldapIDP.Name,
-			},
-		}, {
-			DisplayName: oidcIDP.Name,
-			ObjectRef: corev1.TypedLocalObjectReference{
-				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
-				Kind:     "OIDCIdentityProvider",
-				Name:     oidcIDP.Name,
-			},
-		}},
+		Issuer:            issuerName,
+		IdentityProviders: idpsForFD,
 	}, v1alpha1.FederationDomainPhaseReady)
 
 	requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
@@ -891,10 +919,20 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 	require.NoError(t, err)
 
 	allIDPs := []string{ghIDP.Name, ldapIDP.Name, oidcIDP.Name}
-	require.Equal(t, len(identityProviderListResponse.IdentityProviders), 3, "all IDPs should be listed by idp discovery endpoint")
+	if activeDirectoryAvailable(t, env) {
+		allIDPs = append(allIDPs, adIDP.Name)
+	}
+	require.Equal(t, len(identityProviderListResponse.IdentityProviders), len(allIDPs), "all IDPs should be listed by idp discovery endpoint")
 	for _, provider := range identityProviderListResponse.IdentityProviders {
 		require.Contains(t, allIDPs, provider.Name, fmt.Sprintf("provider name should be listed in IDP discovery: %s", provider.Name))
 	}
 
 	return federationDomainConfig
+}
+
+func activeDirectoryAvailable(t *testing.T, env *testlib.TestEnv) bool {
+	t.Helper()
+	hasLDAPPorts := env.HasCapability(testlib.CanReachInternetLDAPPorts)
+	hasADHost := testlib.IntegrationEnv(t).SupervisorUpstreamActiveDirectory.Host != ""
+	return hasLDAPPorts && hasADHost
 }

@@ -1,10 +1,16 @@
+#
 # This file lists the versions of Kubernetes to use for codegen.
 # They must be listed newest to oldest.
+#
 # New releases are listed at https://kubernetes.io/releases/.
 # Older releases are listed at https://kubernetes.io/releases/patch-releases/.
+#
 # Rule of thumb: Once a minor version has been out of support for a year
-# (see https://endoflife.date/kubernetes), then remove it from this file.
-# Whenever this file is updated, run ./hack/update.sh.
+# (see https://endoflife.date/kubernetes), then remove it from this file
+# and delete the generated/X.XX directory for that Kube version from git.
+#
+# Whenever a new version is added to this file, run hack/update.sh.
+#
 1.30.0
 1.29.4
 1.28.9

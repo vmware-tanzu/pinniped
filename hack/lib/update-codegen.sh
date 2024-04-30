@@ -65,6 +65,10 @@ KUBE_1_29_OR_NEWER="no"
 if [[ "$KUBE_MAJOR_NUMBER" -gt "1" || ( "$KUBE_MAJOR_NUMBER" == "1" && "$KUBE_MINOR_NUMBER" -ge "29" ) ]]; then
   KUBE_1_29_OR_NEWER="yes"
 fi
+KUBE_1_30_OR_NEWER="no"
+if [[ "$KUBE_MAJOR_NUMBER" -gt "1" || ( "$KUBE_MAJOR_NUMBER" == "1" && "$KUBE_MINOR_NUMBER" -ge "30" ) ]]; then
+  KUBE_1_30_OR_NEWER="yes"
+fi
 
 # KUBE_MODULE_VERSION is just version of client libraries (e.g., 'v0.28.9-rc-0').
 KUBE_MODULE_VERSION="v0.$(echo "${KUBE_VERSION}" | cut -d '.' -f 2-)"
@@ -185,70 +189,148 @@ fi
 # imports can be deleted by the usages of "go mod tidy" below.
 rm -f apis/placeholder.go client/tools.go
 
-# Generate API-related code for our public API groups
-echo "generating API-related code for our public API groups..."
 chmod -R +x "${GOPATH}/src/k8s.io/code-generator/"
-(cd apis &&
-    bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        "deepcopy" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/clientsecret:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-api > |"
-)
 
-# Generate API-related code for our internal API groups.
-# Note that OPENAPI_EXTRA_PACKAGES can be set to generate openapi docs for other k8s APIs that our types depend upon
-# aside from the default k8s packages that are already added automatically by the generate-internal-groups.sh script
-# (meta/v1, runtime, and version). E.g. TokenCredentialRequestSpec uses corev1.TypedLocalObjectReference, so we
-# add core/v1 when running codegen for the Concierge aggregated APIs here.
-echo "generating API-related code for our internal API groups..."
-(cd apis &&
-    OPENAPI_EXTRA_PACKAGES="k8s.io/api/core/v1" \
-    bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
-        "deepcopy,defaulter,conversion,openapi" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-concierge-int-api > |"
-)
-(cd apis &&
-    bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
-        "deepcopy,defaulter,conversion,openapi" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/clientsecret:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-supervisor-int-api > |"
-)
+if [[ "$KUBE_1_30_OR_NEWER" == "yes" ]]; then
+  # Use the new code generator scripts from Kubernetes.
+  # The old scripts were deprecated in 1.28 and removed in Kube 1.30.
+  # The new script is called kube_codegen.sh.
+  echo "Using new codegen tooling from kube_codegen.sh ..."
 
-# Tidy the apis module after codegen.
-echo "tidying ${OUTPUT_DIR}/apis/go.mod..."
-(cd apis && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+  # This is a dirty hack to avoid needing to rework much of this script.
+  # Without this, kube::codegen::gen_client will resolve our symlink to its true path and then cause an error.
+  # With this change, it will use whatever path we give it, so we can use our path which contains a symlink.
+  # Once we are not using the old Kube codegen scripts anymore, we should probably consider rewriting this
+  # whole script instead of using this dirty hack.
+  sed -i -E -e 's/--input-base.*/--input-base "${in_dir}" \\/g' "${GOPATH}/src/k8s.io/code-generator/kube_codegen.sh"
 
-# Generate client code for our public API groups
-echo "generating client code for our public API groups..."
-(cd client &&
-    bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        "client,lister,informer" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-concierge-client > |"
-)
-(cd client &&
-    bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
-        "client,lister,informer" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
-        "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/clientsecret:v1alpha1" \
-        --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-supervisor-client > |"
-)
+  source "${GOPATH}/src/k8s.io/code-generator/kube_codegen.sh"
 
-# Tidy the client module after codegen.
-echo "tidying ${OUTPUT_DIR}/client/go.mod..."
-(cd client && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+  # The functions from kube_codegen.sh pay attention to this env var.
+  export KUBE_VERBOSE="$debug_level"
+
+  echo "generating API helpers..."
+
+  # In the old codegen scripts, you would specify which generators you want to run as arguments.
+  # In this new codegen script, you instead specify the source code directory and it decides
+  # which generators to run for each package entirely by looking for "+k8s:*-gen" annotations
+  # in our source code.
+  pushd "${OUTPUT_DIR}/apis" > /dev/null
+  kube::codegen::gen_helpers . \
+    --boilerplate "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-helpers > |"
+  popd > /dev/null
+
+  # Tidy the apis module after codegen.
+  echo "tidying ${OUTPUT_DIR}/apis/go.mod..."
+  (cd apis && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+
+  echo "generating API clients and openapi..."
+
+  pushd "${OUTPUT_DIR}/apis/concierge" > /dev/null
+  kube::codegen::gen_client "${OUTPUT_DIR}/apis/concierge" \
+    --with-watch \
+    --output-dir "${OUTPUT_DIR}/client/concierge" \
+    --output-pkg "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
+    --boilerplate "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-client-concierge > |"
+  # Note that --extra-pkgs can be set to generate openapi docs for other k8s APIs that our types depend upon
+  # aside from the default k8s packages that are already added automatically by the kube::codegen::gen_openapi script
+  # (meta/v1, runtime, and version). E.g. TokenCredentialRequestSpec uses corev1.TypedLocalObjectReference, so we
+  # add core/v1 when running codegen for the Concierge aggregated APIs here.
+  kube::codegen::gen_openapi "${OUTPUT_DIR}/apis/concierge" \
+    --update-report \
+    --extra-pkgs "k8s.io/api/core/v1" \
+    --output-dir "${OUTPUT_DIR}/client/concierge/openapi" \
+    --output-pkg "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
+    --boilerplate "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-openapi-concierge > |"
+  popd > /dev/null
+
+  pushd "${OUTPUT_DIR}/apis/supervisor" > /dev/null
+  kube::codegen::gen_client "${OUTPUT_DIR}/apis/supervisor" \
+    --with-watch \
+    --output-dir "${OUTPUT_DIR}/client/supervisor" \
+    --output-pkg "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
+    --boilerplate "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-client-supervisor > |"
+  kube::codegen::gen_openapi "${OUTPUT_DIR}/apis/supervisor" \
+    --update-report \
+    --extra-pkgs "k8s.io/api/core/v1" \
+    --output-dir "${OUTPUT_DIR}/client/supervisor/openapi" \
+    --output-pkg "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
+    --boilerplate "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-openapi-supervisor > |"
+  popd > /dev/null
+
+  # Tidy the client module after codegen.
+  echo "tidying ${OUTPUT_DIR}/client/go.mod..."
+  (cd client && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+
+else
+  # For older Kube versions, use the old code generator scripts from Kubernetes: generate-groups.sh and generate-groups-internal.sh.
+  # The old scripts were deprecated in 1.28 and removed in Kube 1.30, but for older versions we can still use them.
+
+  # Generate API-related code for our public API groups
+  echo "generating API-related code for our public API groups..."
+
+  (cd apis &&
+      bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
+          "deepcopy" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/clientsecret:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
+          --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-api > |"
+  )
+
+  # Generate API-related code for our internal API groups.
+  # Note that OPENAPI_EXTRA_PACKAGES can be set to generate openapi docs for other k8s APIs that our types depend upon
+  # aside from the default k8s packages that are already added automatically by the generate-internal-groups.sh script
+  # (meta/v1, runtime, and version). E.g. TokenCredentialRequestSpec uses corev1.TypedLocalObjectReference, so we
+  # add core/v1 when running codegen for the Concierge aggregated APIs here.
+  echo "generating API-related code for our internal API groups..."
+  (cd apis &&
+      OPENAPI_EXTRA_PACKAGES="k8s.io/api/core/v1" \
+      bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
+          "deepcopy,defaulter,conversion,openapi" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "concierge/login:v1alpha1 concierge/identity:v1alpha1" \
+          --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-concierge-int-api > |"
+  )
+  (cd apis &&
+      bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
+          "deepcopy,defaulter,conversion,openapi" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "supervisor/clientsecret:v1alpha1" \
+          --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-supervisor-int-api > |"
+  )
+
+  # Tidy the apis module after codegen.
+  echo "tidying ${OUTPUT_DIR}/apis/go.mod..."
+  (cd apis && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+
+  # Generate client code for our public API groups
+  echo "generating client code for our public API groups..."
+  (cd client &&
+      bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
+          "client,lister,informer" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
+          --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-concierge-client > |"
+  )
+  (cd client &&
+      bash "${GOPATH}/src/k8s.io/code-generator/generate-groups.sh" \
+          "client,lister,informer" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/supervisor" \
+          "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
+          "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 supervisor/clientsecret:v1alpha1" \
+          --go-header-file "${ROOT}/hack/boilerplate.go.txt" -v "$debug_level" 2>&1 | sed "s|^|gen-supervisor-client > |"
+  )
+
+  # Tidy the client module after codegen.
+  echo "tidying ${OUTPUT_DIR}/client/go.mod..."
+  (cd client && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+fi
 
 # Generate API documentation
 sed "s|KUBE_MINOR_VERSION|${KUBE_MINOR_VERSION}|g" < "${ROOT}/hack/lib/docs/config.yaml" > /tmp/docs-config.yaml

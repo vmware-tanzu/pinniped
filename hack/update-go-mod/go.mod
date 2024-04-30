@@ -1,7 +1,7 @@
 module go.pinniped.dev/update-go-mod
 
-go 1.21.3
+go 1.22.0
 
-toolchain go1.22.0
+toolchain go1.22.2
 
 require golang.org/x/mod v0.17.0

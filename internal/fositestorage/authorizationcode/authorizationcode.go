@@ -265,7 +265,7 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			],
 			"request_object_signing_alg": "廜+v,淬Ʋ4Dʧ呩锏緍场脋",
 			"token_endpoint_auth_signing_alg": "ưƓǴ罷ǹ~]ea胠Ĺĩv絹b垇I",
-			"IDTokenLifetimeConfiguration":2.593156354696909e+18
+			"IDTokenLifetimeConfiguration": 2593156354696908951
 		},
 		"scopes": [
 			"ǀŻQ'k頂箨J-",
@@ -383,17 +383,15 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
 				},
-				"github": {
-				}
+				"github": {}
 			}
 		},
 		"requestedAudience": [
-			" 皦pSǬŝ社Vƅȭǝ*擦28ǅ",
-			"vư"
+			"皦pSǬŝ社Vƅȭǝ*",
+			"Ƽĝ\"zvưã置bņ抰蛖a³"
 		],
 		"grantedAudience": [
-			"置b",
-			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
+			"ʫ承dʬ)ġ,TÀqy_º"
 		]
 	},
 	"version": "7"

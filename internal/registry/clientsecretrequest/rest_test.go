@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clientsecretrequest
@@ -33,6 +33,7 @@ import (
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestNew(t *testing.T) {
@@ -1563,8 +1564,12 @@ func TestCreate(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestZapr(t, &log)
 			klog.SetLogger(logger)
+			originalKLogLevel := testutil.GetGlobalKlogLevel()
+			// trace.Log() utility will only log at level 2 or above, so set that for this test.
+			testutil.SetGlobalKlogLevel(t, 2) //nolint:staticcheck // old test of code using trace.Log()
 			t.Cleanup(func() {
 				klog.ClearLogger()
+				testutil.SetGlobalKlogLevel(t, originalKLogLevel) //nolint:staticcheck // old test of code using trace.Log()
 			})
 
 			kubeClient := kubefake.NewSimpleClientset()

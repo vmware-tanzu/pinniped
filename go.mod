@@ -4,12 +4,12 @@ go 1.22.0
 
 toolchain go1.22.2
 
-// This version taken from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L14 to avoid compile failures.
-replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod#L14 to avoid compile failures.
+replace github.com/google/cel-go => github.com/google/cel-go v0.17.8
 
 // ory/fosite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
 // Where they clash and cause "go mod tidy" to fail, use replace directives to make it work.
-// Copied from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L28-L33.
+// Copied from https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod#L29-L34.
 replace (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.42.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.44.0
@@ -19,15 +19,12 @@ replace (
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.19.0
 )
 
-// https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod does not include this one, but it is also needed
+// https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod does not include this one, but it is also needed
 // to resolve the clashes with ory/x, so use the same version that kubernetes/apiserver chooses for opentelemetry.
 replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
 
 // This is an indirect dep which has CVE-2023-45142, so replace it with the fixed version.
 replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
-
-// This is an indirect dep which has CVE-2024-24786, so replace it with a fixed version
-replace google.golang.org/protobuf => google.golang.org/protobuf v1.33.0
 
 // https://github.com/coreos/go-oidc/releases/tag/v3.10.0 starts to use https://github.com/go-jose/go-jose/releases/tag/v4.0.0.
 // Unfortunately this has breaking changes.

@@ -79,10 +79,23 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 		Network: NetworkTCP,
 		Address: ":8443",
 	})
+	maybeSetEndpointDefault(&config.Endpoints.HTTP, Endpoint{
+		Network: NetworkDisabled,
+	})
 
 	if err := validateEndpoint(*config.Endpoints.HTTPS); err != nil {
 		return nil, fmt.Errorf("validate https endpoint: %w", err)
 	}
+	if err := validateEndpoint(*config.Endpoints.HTTP); err != nil {
+		return nil, fmt.Errorf("validate http endpoint: %w", err)
+	}
+	if err := validateAdditionalHTTPEndpointRequirements(*config.Endpoints.HTTP); err != nil {
+		return nil, fmt.Errorf("validate http endpoint: %w", err)
+	}
+	if err := validateAtLeastOneEnabledEndpoint(*config.Endpoints.HTTPS, *config.Endpoints.HTTP); err != nil {
+		return nil, fmt.Errorf("validate endpoints: %w", err)
+	}
+
 	return &config, nil
 }
 
@@ -128,10 +141,32 @@ func validateEndpoint(endpoint Endpoint) error {
 		}
 		return nil
 	case NetworkDisabled:
-		return fmt.Errorf("must not be disabled")
+		if len(endpoint.Address) != 0 {
+			return fmt.Errorf("address set to %q when disabled, should be empty", endpoint.Address)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown network %q", n)
 	}
+}
+
+func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint) error {
+	if endpoint.Network == NetworkTCP && !addrIsOnlyOnLoopback(endpoint.Address) {
+		return fmt.Errorf(
+			"http listener address %q for %q network may only bind to loopback interfaces",
+			endpoint.Address,
+			endpoint.Network)
+	}
+	return nil
+}
+
+func validateAtLeastOneEnabledEndpoint(endpoints ...Endpoint) error {
+	for _, endpoint := range endpoints {
+		if endpoint.Network != NetworkDisabled {
+			return nil
+		}
+	}
+	return constable.Error("all endpoints are disabled")
 }
 
 // For tcp networks, the address can be in several formats: host:port, host:, and :port.

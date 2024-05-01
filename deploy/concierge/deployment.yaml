@@ -98,9 +98,7 @@ data:
       (@ end @)
     (@ if data.values.log_level: @)
     log:
-      (@ if data.values.log_level: @)
       level: (@= getAndValidateLogLevel() @)
-      (@ end @)
     (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":

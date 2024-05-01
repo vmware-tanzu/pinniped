@@ -54,15 +54,15 @@ ingress and TLS configuration. In that case, please refer to the documentation f
 
 ## Exposing the Supervisor app's endpoints outside the cluster
 
-The Supervisor app's endpoints must be exposed as HTTPS endpoints with proper TLS certificates signed by a
+The Supervisor app's endpoints should be exposed as HTTPS endpoints with proper TLS certificates signed by a
 certificate authority (CA) which is trusted by your end user's web browsers.
 
-Furthermore, all traffic to Supervisor endpoints must be encrypted via TLS all the way into the
+It is recommended that the traffic to these endpoints should be encrypted via TLS all the way into the
 Supervisor pods, even when crossing boundaries that are entirely inside the Kubernetes cluster.
 The credentials and tokens that are handled by these endpoints are too sensitive to transmit without encryption.
 
-Previous versions of the Supervisor app supported both HTTP and HTTPS ports. Starting with Pinniped v0.30.0,
-HTTP ports are no longer allowed.
+The Supervisor only listens on an HTTPS port by default. Incoming traffic must use TLS. The only exception is for
+an advanced configuration style using a service mesh to deliver traffic into the Supervisor (discussed below).
 
 Because there are many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
 Some common approaches are:

@@ -156,28 +156,39 @@ https_proxy: ""
 no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local"
 
 #@schema/title "Endpoints"
-#@ endpoints_desc = "Control the HTTPS listener of the Supervisor.  The current defaults are: \
-#@ {\"https\":{\"network\":\"tcp\",\"address\":\":8443\"}}. \
-#@ These defaults mean: Tor HTTPS listening, bind to all interfaces using TCP on port 8443. \
+#@ endpoints_desc = "Control the HTTP and HTTPS listeners of the Supervisor.  The current defaults are: \
+#@ {\"https\":{\"network\":\"tcp\",\"address\":\":8443\"},\"http\":\"disabled\"}. \
+#@ These defaults mean: 1.) for HTTPS listening, bind to all interfaces using TCP on port 8443 and \
+#@ 2.) disable HTTP listening by default. \
 #@ The schema of this config is as follows: \
-#@ {\"https\":{\"network\":\"tcp\",\"address\":\"{host}:{port}\"}} \
-#@ The HTTPS listener must be used to accept all traffic from outside the pod. \
-#@ Ingresses and load balancers that terminate TLS connections must re-encrypt the data and route traffic \
-#@ to the HTTPS listener, or provide TLS passthrough. \
+#@ {\"https\":{\"network\":\"tcp | unix | disabled\",\"address\":\"host:port when network=tcp or /pinniped_socket/socketfile.sock when network=unix\"},\"http\":{\"network\":\"tcp | unix | disabled\",\"address\":\"same as https, except that when network=tcp then the address is only allowed to bind to loopback interfaces\"}} \
+#@ The HTTP listener can only be bound to loopback interfaces. This allows the listener to accept \
+#@ traffic from within the pod, e.g. from a service mesh sidecar. The HTTP listener should not be \
+#@ used to accept traffic from outside the pod, since that would mean that the network traffic could be \
+#@ transmitted unencrypted. The HTTPS listener should be used instead to accept traffic from outside the pod. \
+#@ Ingresses and load balancers that terminate TLS connections should re-encrypt the data and route traffic \
+#@ to the HTTPS listener. Unix domain sockets may also be used for integrations with service meshes. \
 #@ Changing the HTTPS port number must be accompanied by matching changes to the service and deployment \
 #@ manifests. Changes to the HTTPS listener must be coordinated with the deployment health checks."
 #@schema/desc endpoints_desc
-#@schema/examples ("Example matching default settings", '{"https":{"network":"tcp","address":":8443"}}')
+#@schema/examples ("Example matching default settings", '{"https":{"network":"tcp","address":":8443"},"http":"disabled"}')
 #@schema/type any=True
 #@ def validate_endpoint(endpoint):
-#@   if (type(endpoint) != "yamlfragment"):
+#@   if(type(endpoint) not in ["yamlfragment", "string"]):
 #@     return False
 #@   end
-#@   if (endpoint["network"] != "tcp"):
-#@      return False
+#@   if(type(endpoint) in ["string"]):
+#@     if (endpoint != "disabled"):
+#@        return False
+#@     end
 #@   end
-#@   if (type(endpoint["address"]) != "string"):
-#@      return False
+#@   if(type(endpoint) in ["yamlfragment"]):
+#@     if (endpoint["network"] not in ["tcp", "unix", "disabled"]):
+#@        return False
+#@     end
+#@     if (type(endpoint["address"]) not in ["string"]):
+#@        return False
+#@     end
 #@   end
 #@   return True
 #@ end
@@ -185,11 +196,10 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@   """
 #@   Returns True if endpoints fulfill the expected structure
 #@   """
-#@   if (type(endpoints) != "yamlfragment"):
-#@     return False
-#@   end
-#@   return validate_endpoint(endpoints["https"])
+#@   http_val = endpoints["http"]
+#@   https_val = endpoints["https"]
+#@   return validate_endpoint(http_val) and validate_endpoint(https_val)
 #@ end
 #@schema/nullable
-#@schema/validation ("a map with key 'https', whose values are either the string 'disabled' or a map having keys 'network' and 'address', and the value of 'network' must be one of the allowed values", validate_endpoints)
+#@schema/validation ("a map with keys 'http' and 'https', whose values are either the string 'disabled' or a map having keys 'network' and 'address', and the value of 'network' must be one of the allowed values", validate_endpoints)
 endpoints: { }

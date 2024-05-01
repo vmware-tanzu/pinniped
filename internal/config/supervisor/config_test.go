@@ -24,7 +24,7 @@ func TestFromPath(t *testing.T) {
 		wantError  string
 	}{
 		{
-			name: "Happy (with new log field)",
+			name: "Happy",
 			yaml: here.Doc(`
 				---
 				apiGroupSuffix: some.suffix.com
@@ -37,9 +37,13 @@ func TestFromPath(t *testing.T) {
 				  https:
 				    network: unix
 				    address: :1234
+				  http:
+				    network: tcp
+				    address: 127.0.0.1:1234
+				insecureAcceptExternalUnencryptedHttpRequests: false
 				log:
 				  level: info
-				  format: text
+				  format: json
 				aggregatedAPIServerPort: 12345
 			`),
 			wantConfig: &Config{
@@ -56,16 +60,20 @@ func TestFromPath(t *testing.T) {
 						Network: "unix",
 						Address: ":1234",
 					},
+					HTTP: &Endpoint{
+						Network: "tcp",
+						Address: "127.0.0.1:1234",
+					},
 				},
 				Log: plog.LogSpec{
 					Level:  plog.LevelInfo,
-					Format: plog.FormatText,
+					Format: plog.FormatJSON,
 				},
 				AggregatedAPIServerPort: ptr.To[int64](12345),
 			},
 		},
 		{
-			name: "bad log format",
+			name: "cli is a bad log format when configured by the user",
 			yaml: here.Doc(`
 				---
 				names:
@@ -74,7 +82,7 @@ func TestFromPath(t *testing.T) {
 				  level: info
 				  format: cli
 			`),
-			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string, json and text",
+			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string or 'json'",
 		},
 		{
 			name: "When only the required fields are present, causes other fields to be defaulted",
@@ -94,6 +102,9 @@ func TestFromPath(t *testing.T) {
 						Network: "tcp",
 						Address: ":8443",
 					},
+					HTTP: &Endpoint{
+						Network: "disabled",
+					},
 				},
 				AggregatedAPIServerPort: ptr.To[int64](10250),
 			},
@@ -107,8 +118,10 @@ func TestFromPath(t *testing.T) {
 				endpoints:
 				  https:
 				    network: disabled
+				  http:
+				    network: disabled
 			`),
-			wantError: "validate https endpoint: must not be disabled",
+			wantError: "validate endpoints: all endpoints are disabled",
 		},
 		{
 			name: "invalid https endpoint",
@@ -125,6 +138,50 @@ func TestFromPath(t *testing.T) {
 			wantError: `validate https endpoint: unknown network "foo"`,
 		},
 		{
+			name: "invalid http endpoint",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: bar
+			`),
+			wantError: `validate http endpoint: unknown network "bar"`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces with insecureAcceptExternalUnencryptedHttpRequests missing",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: tcp
+					address: :8080
+			`),
+			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
+		},
+		{
+			name: "http endpoint uses tcp but binds to more than only loopback interfaces",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				endpoints:
+				  https:
+				    network: disabled
+				  http:
+				    network: tcp
+					address: :8080
+			`),
+			wantError: `validate http endpoint: http listener address ":8080" for "tcp" network may only bind to loopback interfaces`,
+		},
+		{
 			name: "endpoint disabled with non-empty address",
 			yaml: here.Doc(`
 				---
@@ -135,7 +192,7 @@ func TestFromPath(t *testing.T) {
 				    network: disabled
 				    address: wee
 			`),
-			wantError: `validate https endpoint: must not be disabled`,
+			wantError: `validate https endpoint: address set to "wee" when disabled, should be empty`,
 		},
 		{
 			name: "endpoint tcp with empty address",
@@ -144,10 +201,10 @@ func TestFromPath(t *testing.T) {
 				names:
 				  defaultTLSCertificateSecret: my-secret-name
 				endpoints:
-				  https:
+				  http:
 				    network: tcp
 			`),
-			wantError: `validate https endpoint: address must be set with "tcp" network`,
+			wantError: `validate http endpoint: address must be set with "tcp" network`,
 		},
 		{
 			name: "endpoint unix with empty address",

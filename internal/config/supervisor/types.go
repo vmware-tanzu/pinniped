@@ -25,6 +25,7 @@ type NamesConfigSpec struct {
 
 type Endpoints struct {
 	HTTPS *Endpoint `json:"https,omitempty"`
+	HTTP  *Endpoint `json:"http,omitempty"`
 }
 
 type Endpoint struct {

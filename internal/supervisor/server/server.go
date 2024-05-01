@@ -508,60 +508,79 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
 
-	finishSetupPerms := maybeSetupUnixPerms(cfg.Endpoints.HTTPS, supervisorPod)
+	if e := cfg.Endpoints.HTTP; e.Network != supervisor.NetworkDisabled {
+		finishSetupPerms := maybeSetupUnixPerms(e, supervisorPod)
 
-	bootstrapCert, err := getBootstrapCert() // generate this in-memory once per process startup
-	if err != nil {
-		return fmt.Errorf("https listener bootstrap error: %w", err)
-	}
-
-	c := ptls.Default(nil)
-	c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
-		foundServerNameCert := cert != nil
-
-		defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
-
-		if !foundServerNameCert {
-			cert = defaultCert
+		httpListener, err := net.Listen(e.Network, e.Address)
+		if err != nil {
+			return fmt.Errorf("cannot create http listener with network %q and address %q: %w", e.Network, e.Address, err)
 		}
 
-		// If we still don't have a cert for the request at this point, then using the bootstrapping cert,
-		// but in that case also set the request to fail unless it is a health check request.
-		usingBootstrapCert := false
-		if cert == nil {
-			usingBootstrapCert = true
-			setIsBootstrapConn(info.Context()) // make this connection only work for bootstrap requests
-			cert = bootstrapCert
+		if err := finishSetupPerms(); err != nil {
+			return fmt.Errorf("cannot setup http listener permissions for network %q and address %q: %w", e.Network, e.Address, err)
 		}
 
-		// Emit logs visible at a higher level of logging than the default. Using Info level so the user
-		// can safely configure a production Supervisor to show this message if they choose.
-		plog.Info("choosing TLS cert for incoming request",
-			"requestSNIServerName", info.ServerName,
-			"foundCertForSNIServerNameFromFederationDomain", foundServerNameCert,
-			"foundDefaultCertFromSecret", defaultCert != nil,
-			"defaultCertSecretName", cfg.NamesConfig.DefaultTLSCertificateSecret,
-			"servingBootstrapHealthzCert", usingBootstrapCert,
-			"requestLocalAddr", info.Conn.LocalAddr().String(),
-			"requestRemoteAddr", info.Conn.RemoteAddr().String(),
-		)
-
-		return cert, nil
+		defer func() { _ = httpListener.Close() }()
+		startServer(ctx, shutdown, httpListener, oidProvidersManager)
+		plog.Debug("supervisor http listener started", "address", httpListener.Addr().String())
 	}
 
-	httpsListener, err := tls.Listen(cfg.Endpoints.HTTPS.Network, cfg.Endpoints.HTTPS.Address, c)
-	if err != nil {
-		return fmt.Errorf("cannot create https listener with network %q and address %q: %w", cfg.Endpoints.HTTPS.Network, cfg.Endpoints.HTTPS.Address, err)
-	}
+	if e := cfg.Endpoints.HTTPS; e.Network != supervisor.NetworkDisabled { //nolint:nestif
+		finishSetupPerms := maybeSetupUnixPerms(e, supervisorPod)
 
-	if err := finishSetupPerms(); err != nil {
-		return fmt.Errorf("cannot setup https listener permissions for network %q and address %q: %w", cfg.Endpoints.HTTPS.Network, cfg.Endpoints.HTTPS.Address, err)
-	}
+		bootstrapCert, err := getBootstrapCert() // generate this in-memory once per process startup
+		if err != nil {
+			return fmt.Errorf("https listener bootstrap error: %w", err)
+		}
 
-	defer func() { _ = httpsListener.Close() }()
-	startServer(ctx, shutdown, httpsListener, oidProvidersManager)
-	plog.Debug("supervisor https listener started", "address", httpsListener.Addr().String())
+		c := ptls.Default(nil)
+		c.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+			foundServerNameCert := cert != nil
+
+			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
+
+			if !foundServerNameCert {
+				cert = defaultCert
+			}
+
+			// If we still don't have a cert for the request at this point, then using the bootstrapping cert,
+			// but in that case also set the request to fail unless it is a health check request.
+			usingBootstrapCert := false
+			if cert == nil {
+				usingBootstrapCert = true
+				setIsBootstrapConn(info.Context()) // make this connection only work for bootstrap requests
+				cert = bootstrapCert
+			}
+
+			// Emit logs visible at a higher level of logging than the default. Using Info level so the user
+			// can safely configure a production Supervisor to show this message if they choose.
+			plog.Info("choosing TLS cert for incoming request",
+				"requestSNIServerName", info.ServerName,
+				"foundCertForSNIServerNameFromFederationDomain", foundServerNameCert,
+				"foundDefaultCertFromSecret", defaultCert != nil,
+				"defaultCertSecretName", cfg.NamesConfig.DefaultTLSCertificateSecret,
+				"servingBootstrapHealthzCert", usingBootstrapCert,
+				"requestLocalAddr", info.Conn.LocalAddr().String(),
+				"requestRemoteAddr", info.Conn.RemoteAddr().String(),
+			)
+
+			return cert, nil
+		}
+
+		httpsListener, err := tls.Listen(e.Network, e.Address, c)
+		if err != nil {
+			return fmt.Errorf("cannot create https listener with network %q and address %q: %w", e.Network, e.Address, err)
+		}
+
+		if err := finishSetupPerms(); err != nil {
+			return fmt.Errorf("cannot setup https listener permissions for network %q and address %q: %w", e.Network, e.Address, err)
+		}
+
+		defer func() { _ = httpsListener.Close() }()
+		startServer(ctx, shutdown, httpsListener, oidProvidersManager)
+		plog.Debug("supervisor https listener started", "address", httpsListener.Addr().String())
+	}
 
 	plog.Debug("supervisor started")
 	defer plog.Debug("supervisor exiting")

@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
@@ -154,6 +155,54 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				},
 			},
 			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-hello" is invalid: spec.allowedRedirectURIs[1]: Invalid value: "oob": spec.allowedRedirectURIs[1] in body should match '^https://.+|^http://(127\.0\.0\.1|\[::1\])(:\d+)?/'`,
+		},
+		{
+			name: "ID token lifetime too small",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "client.oauth.pinniped.dev-hello",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{
+						"http://127.0.0.1/callback",
+					},
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{
+						"refresh_token",
+					},
+					AllowedScopes: []supervisorconfigv1alpha1.Scope{
+						"username",
+					},
+					TokenLifetimes: supervisorconfigv1alpha1.OIDCClientTokenLifetimes{
+						IDTokenSeconds: ptr.To[int32](119),
+					},
+				},
+			},
+			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-hello" is invalid: ` +
+				`spec.tokenLifetimes.idTokenSeconds: Invalid value: 119: spec.tokenLifetimes.idTokenSeconds in body should be greater than or equal to 120`,
+		},
+		{
+			name: "ID token lifetime too large",
+			client: &supervisorconfigv1alpha1.OIDCClient{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "client.oauth.pinniped.dev-hello",
+				},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{
+						"http://127.0.0.1/callback",
+					},
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{
+						"refresh_token",
+					},
+					AllowedScopes: []supervisorconfigv1alpha1.Scope{
+						"username",
+					},
+					TokenLifetimes: supervisorconfigv1alpha1.OIDCClientTokenLifetimes{
+						IDTokenSeconds: ptr.To[int32](1801),
+					},
+				},
+			},
+			wantErr: `OIDCClient.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-hello" is invalid: ` +
+				`spec.tokenLifetimes.idTokenSeconds: Invalid value: 1801: spec.tokenLifetimes.idTokenSeconds in body should be less than or equal to 1800`,
 		},
 		{
 			name: "bad grant type",

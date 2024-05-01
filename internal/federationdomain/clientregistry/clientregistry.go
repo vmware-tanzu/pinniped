@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package clientregistry defines Pinniped's OAuth2/OIDC clients.
@@ -27,6 +27,16 @@ import (
 // or a dynamic client defined by an OIDCClient CR.
 type Client struct {
 	fosite.DefaultOpenIDConnectClient
+
+	// Optionally provide a lifetime for ID tokens that result from authcode exchanges (initial logins)
+	// and refresh grants for this specific client. This will not impact the lifetime of ID tokens created
+	// via RFC8693 token exchange. When zero, the ID token lifetime will be determined by the defaults
+	// for the FederationDomain.
+	IDTokenLifetimeConfiguration time.Duration
+}
+
+func (c *Client) GetIDTokenLifetimeConfiguration() time.Duration {
+	return c.IDTokenLifetimeConfiguration
 }
 
 // Client implements the base, OIDC, and response_mode client interfaces of Fosite.
@@ -165,10 +175,19 @@ func PinnipedCLI() *Client {
 			TokenEndpointAuthSigningAlgorithm: coreosoidc.RS256,
 			TokenEndpointAuthMethod:           "none",
 		},
+		IDTokenLifetimeConfiguration: 0, // never override the default timeouts for this client
 	}
 }
 
 func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSecrets []string) *Client {
+	// Allow the user to optionally override the default timeouts for these clients.
+	idTokenLifetimeOverrideInSeconds := oidcClient.Spec.TokenLifetimes.IDTokenSeconds
+	var idTokenLifetime time.Duration
+	if idTokenLifetimeOverrideInSeconds != nil {
+		// It should be safe to cast this int32 to time.Duration, because time.Duration is an int64.
+		idTokenLifetime = time.Duration(*(idTokenLifetimeOverrideInSeconds)) * time.Second
+	}
+
 	return &Client{
 		DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
 			DefaultClient: &fosite.DefaultClient{
@@ -192,6 +211,7 @@ func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSec
 			TokenEndpointAuthSigningAlgorithm: coreosoidc.RS256,
 			TokenEndpointAuthMethod:           "client_secret_basic",
 		},
+		IDTokenLifetimeConfiguration: idTokenLifetime,
 	}
 }
 

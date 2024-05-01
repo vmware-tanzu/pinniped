@@ -43,6 +43,7 @@ import (
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
+	"go.pinniped.dev/internal/admissionpluginconfig"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/config/supervisor"
@@ -635,6 +636,11 @@ func getAggregatedAPIServerConfig(
 
 	// This port is configurable. It should be safe to cast because the config reader already validated it.
 	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
+
+	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure admission plugins on recommended options: %w", err)
+	}
 
 	// secure TLS for connections coming from and going to the Kube API server
 	// this is best effort because not all options provide the right hooks to override TLS config

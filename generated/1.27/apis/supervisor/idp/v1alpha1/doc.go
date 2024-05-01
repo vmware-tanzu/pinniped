@@ -1,9 +1,7 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +k8s:defaulter-gen=TypeMeta
 // +groupName=idp.supervisor.pinniped.dev
 // +groupGoName=IDP
 

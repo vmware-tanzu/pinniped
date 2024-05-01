@@ -24,7 +24,6 @@ import (
 	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -40,7 +39,6 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
-	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conciergetestutil"
@@ -1749,11 +1747,12 @@ func TestController(t *testing.T) {
 				Kind:     "JWTAuthenticator",
 				Name:     syncCtx.Key.Name,
 			}
-			cachedAuthenticator := cache.Get(expectedCacheKey)
+			cachedAuthenticator, ok := cache.Get(expectedCacheKey).(tokenAuthenticatorCloser)
+			require.True(t, ok)
 			require.NotNil(t, cachedAuthenticator)
 
 			// Schedule it to be closed at the end of the test.
-			t.Cleanup(cachedAuthenticator.(*cachedJWTAuthenticator).Close)
+			t.Cleanup(cachedAuthenticator.Close)
 
 			const (
 				goodSubject  = "some-subject"
@@ -2087,18 +2086,17 @@ func createJWT(
 }
 
 func newCacheValue(t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec, wantClose bool) authncache.Value {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	tokenAuthenticatorCloser := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
+	t.Helper()
+	wasClosed := false
 
-	wantCloses := 0
-	if wantClose {
-		wantCloses++
-	}
-	tokenAuthenticatorCloser.EXPECT().Close().Times(wantCloses)
+	t.Cleanup(func() {
+		require.Equal(t, wantClose, wasClosed)
+	})
 
 	return &cachedJWTAuthenticator{
-		tokenAuthenticatorCloser: tokenAuthenticatorCloser,
-		spec:                     &spec,
+		spec: &spec,
+		cancel: func() {
+			wasClosed = true
+		},
 	}
 }

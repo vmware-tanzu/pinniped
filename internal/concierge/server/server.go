@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	conciergeopenapi "go.pinniped.dev/generated/latest/client/concierge/openapi"
+	"go.pinniped.dev/internal/admissionpluginconfig"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/concierge/apiserver"
@@ -246,6 +247,11 @@ func getAggregatedAPIServerConfig(
 
 	// This port is configurable. It should be safe to cast because the config reader already validated it.
 	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
+
+	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure admission plugins on recommended options: %w", err)
+	}
 
 	// secure TLS for connections coming from and going to the Kube API server
 	// this is best effort because not all options provide the right hooks to override TLS config

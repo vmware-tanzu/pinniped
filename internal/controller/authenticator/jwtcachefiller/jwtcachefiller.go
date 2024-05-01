@@ -102,9 +102,16 @@ type tokenAuthenticatorCloser interface {
 }
 
 type cachedJWTAuthenticator struct {
-	tokenAuthenticatorCloser
-	spec *auth1alpha1.JWTAuthenticatorSpec
+	authenticator.Token
+	spec   *auth1alpha1.JWTAuthenticatorSpec
+	cancel context.CancelFunc
 }
+
+func (c *cachedJWTAuthenticator) Close() {
+	c.cancel()
+}
+
+var _ tokenAuthenticatorCloser = (*cachedJWTAuthenticator)(nil)
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
@@ -162,7 +169,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	// If this authenticator already exists, then only recreate it if is different from the desired
 	// authenticator. We don't want to be creating a new authenticator for every resync period.
 	//
-	// If we do need to recreate the authenticator, then make sure we close the old one to avoid
+	// If we do need to recreate the authenticator, then make sure cancel the old one to avoid
 	// goroutine leaks.
 	if value := c.cache.Get(cacheKey); value != nil {
 		jwtAuthenticator := c.extractValueAsJWTAuthenticator(value)
@@ -517,7 +524,8 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client
 		groupsClaim = defaultGroupsClaim
 	}
 
-	oidcAuthenticator, err := oidc.New(oidc.Options{
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	oidcAuthenticator, err := oidc.New(cancelCtx, oidc.Options{
 		JWTAuthenticator: apiserver.JWTAuthenticator{
 			Issuer: apiserver.Issuer{
 				URL:       spec.Issuer,
@@ -552,6 +560,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client
 			Reason:  reasonInvalidAuthenticator,
 			Message: msg,
 		})
+		cancel()
 		// resync err, lots of possible issues that may or may not be machine related
 		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
@@ -563,8 +572,9 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client
 		Message: msg,
 	})
 	return &cachedJWTAuthenticator{
-		tokenAuthenticatorCloser: oidcAuthenticator,
-		spec:                     spec,
+		Token:  oidcAuthenticator,
+		spec:   spec,
+		cancel: cancel,
 	}, conditions, nil
 }
 

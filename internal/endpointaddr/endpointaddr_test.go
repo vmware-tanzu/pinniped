@@ -43,6 +43,12 @@ func TestParse(t *testing.T) {
 			expectEndpoint: "127.0.0.1:8443",
 		},
 		{
+			name:        "invalid IPv4",
+			input:       "1.1.1.",
+			defaultPort: 443,
+			expectErr:   `host "1.1.1." is not a valid hostname or IP address`,
+		},
+		{
 			name:           "IPv4 as IPv6 in brackets with port",
 			input:          "[::127.0.0.1]:8443",
 			defaultPort:    443,

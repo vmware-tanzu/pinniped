@@ -139,7 +139,7 @@ rules:
     resources: [ apiservices ]
     verbs: [ get, list, patch, update, watch ]
   - apiGroups: [ admissionregistration.k8s.io ]
-    resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations ]
+    resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations, validatingadmissionpolicies, validatingadmissionpolicybindings ]
     verbs: [ get, list, watch ]
   - apiGroups: [ flowcontrol.apiserver.k8s.io ]
     resources: [ flowschemas, prioritylevelconfigurations ]

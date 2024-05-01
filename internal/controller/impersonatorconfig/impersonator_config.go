@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonatorconfig
@@ -27,6 +27,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -1205,7 +1206,7 @@ func validateCredentialIssuerSpec(spec *v1alpha1.ImpersonationProxySpec) error {
 	}
 
 	// If specified, validate that the LoadBalancerIP is a valid IPv4 or IPv6 address.
-	if ip := spec.Service.LoadBalancerIP; ip != "" && len(validation.IsValidIP(ip)) > 0 {
+	if ip := spec.Service.LoadBalancerIP; ip != "" && len(validation.IsValidIP(field.NewPath("spec", "service", "loadBalancerIP"), ip)) > 0 {
 		return fmt.Errorf("invalid LoadBalancerIP %q", spec.Service.LoadBalancerIP)
 	}
 

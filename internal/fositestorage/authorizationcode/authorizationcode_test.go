@@ -428,7 +428,13 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// cause those old session Secrets to be discarded upon read after an upgrade.
 	// Note that when you change the storage version, you will also need to change it in the JSON content of the
 	// expected value for this assertion.
-	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing, "actual:\n%s", authorizeCodeSessionJSONFromFuzzing)
+	require.JSONEq(t,
+		ExpectedAuthorizeCodeSessionJSONFromFuzzing,
+		authorizeCodeSessionJSONFromFuzzing,
+		"actual:\n%s\n\n(NOTICE: This test may fail when storage structure is updated. "+
+			"Be sure to update relevant version variables (authorizeCodeStorageVersion, oidcStorageVersion, pkceStorageVersion, "+
+			"refreshTokenStorageVersion, accessTokenStorageVersion) to a new value and leave a comment documenting the change. "+
+			"Updating the version ensures new secret generation, therefore smooth upgrades of Pinniped.)", authorizeCodeSessionJSONFromFuzzing)
 }
 
 func TestReadFromSecret(t *testing.T) {

@@ -701,27 +701,15 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
-		// Wait for the subprocess to print the username prompt, then type the user's username.
-		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
-		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Username + "\n")
-		require.NoError(t, err)
-
-		// Wait for the subprocess to print the password prompt, then type the user's password.
-		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
-		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Password + "\n")
-		require.NoError(t, err)
-
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		kubectlOutput := string(kubectlOutputBytes)
 
-		// The output should look like an authentication failure, because the OIDCIdentityProvider disallows password grants.
+		// The output should fail IDP discovery validation, because the OIDCIdentityProvider disallows password grants.
 		t.Log("kubectl command output (expecting a login failed error):\n", kubectlOutput)
 		require.Contains(t, kubectlOutput,
-			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
-				`The resource owner or authorization server denied the request. `+
-				`Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.`,
+			fmt.Sprintf(`could not complete Pinniped login: unable to find upstream identity provider with name "%[1]s" and type "oidc" and flow "cli_password". Found these providers: [{"name":"%[1]s","type":"oidc","flows":["browser_authcode"]}]`, oidcIdentityProvider.Name),
 		)
 	})
 

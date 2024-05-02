@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -57,7 +57,8 @@ func TestFromPath(t *testing.T) {
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
-				logLevel: debug
+				log:
+				  level: debug
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -94,14 +95,13 @@ func TestFromPath(t *testing.T) {
 					Image:            ptr.To("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
-				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
 				Log: plog.LogSpec{
 					Level: plog.LevelDebug,
 				},
 			},
 		},
 		{
-			name: "Fully filled out new log struct",
+			name: "fully filled out including log format",
 			yaml: here.Doc(`
 				---
 				discovery:
@@ -181,88 +181,6 @@ func TestFromPath(t *testing.T) {
 			},
 		},
 		{
-			name: "Fully filled out old log and new log struct",
-			yaml: here.Doc(`
-				---
-				discovery:
-				  url: https://some.discovery/url
-				api:
-				  servingCertificate:
-					durationSeconds: 3600
-					renewBeforeSeconds: 2400
-				apiGroupSuffix: some.suffix.com
-				aggregatedAPIServerPort: 12345
-				impersonationProxyServerPort: 4242
-				names:
-				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuer: pinniped-config
-				  apiService: pinniped-api
-				  kubeCertAgentPrefix: kube-cert-agent-prefix
-				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
-				  impersonationClusterIPService: impersonationClusterIPService-value
-				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
-				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
-				  impersonationSignerSecret: impersonationSignerSecret-value
-				  impersonationSignerSecret: impersonationSignerSecret-value
-				  agentServiceAccount: agentServiceAccount-value
-				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
-				  impersonationProxyLegacySecret: impersonationProxyLegacySecret-value
-				  extraName: extraName-value
-				labels:
-				  myLabelKey1: myLabelValue1
-				  myLabelKey2: myLabelValue2
-				kubeCertAgent:
-				  namePrefix: kube-cert-agent-name-prefix-
-				  image: kube-cert-agent-image
-				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
-				logLevel: debug
-				log:
-				  level: all
-				  format: json
-			`),
-			wantConfig: &Config{
-				DiscoveryInfo: DiscoveryInfoSpec{
-					URL: ptr.To("https://some.discovery/url"),
-				},
-				APIConfig: APIConfigSpec{
-					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    ptr.To[int64](3600),
-						RenewBeforeSeconds: ptr.To[int64](2400),
-					},
-				},
-				APIGroupSuffix:               ptr.To("some.suffix.com"),
-				AggregatedAPIServerPort:      ptr.To[int64](12345),
-				ImpersonationProxyServerPort: ptr.To[int64](4242),
-				NamesConfig: NamesConfigSpec{
-					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
-					CredentialIssuer:                  "pinniped-config",
-					APIService:                        "pinniped-api",
-					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
-					ImpersonationClusterIPService:     "impersonationClusterIPService-value",
-					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
-					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
-					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
-					AgentServiceAccount:               "agentServiceAccount-value",
-					ImpersonationProxyServiceAccount:  "impersonationProxyServiceAccount-value",
-					ImpersonationProxyLegacySecret:    "impersonationProxyLegacySecret-value",
-				},
-				Labels: map[string]string{
-					"myLabelKey1": "myLabelValue1",
-					"myLabelKey2": "myLabelValue2",
-				},
-				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
-					Image:            ptr.To("kube-cert-agent-image"),
-					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
-				},
-				LogLevel: func(level plog.LogLevel) *plog.LogLevel { return &level }(plog.LevelDebug),
-				Log: plog.LogSpec{
-					Level:  plog.LevelDebug,
-					Format: plog.FormatJSON,
-				},
-			},
-		},
-		{
 			name: "invalid log format",
 			yaml: here.Doc(`
 				---
@@ -281,7 +199,28 @@ func TestFromPath(t *testing.T) {
 				  level: all
 				  format: snorlax
 			`),
-			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string, json and text",
+			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string or 'json'",
+		},
+		{
+			name: "cli is a bad log format when configured by the user",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
+				log:
+				  level: all
+				  format: cli
+			`),
+			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: invalid log format, valid choices are the empty string or 'json'",
 		},
 		{
 			name: "When only the required fields are present, causes other fields to be defaulted",

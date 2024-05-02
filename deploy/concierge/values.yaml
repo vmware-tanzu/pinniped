@@ -124,17 +124,6 @@ api_serving_certificate_renew_before_seconds: 2160000
 #@schema/validation one_of=["info", "debug", "trace", "all"]
 log_level: ""
 
-#@schema/title "Log format"
-#@ deprecated_log_format_desc = "Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs). \
-#@ By default, when this value is left unset, logs are formatted in json. \
-#@ This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
-#@schema/desc deprecated_log_format_desc
-#@schema/examples ("Set logs to JSON format","json")
-#@schema/nullable
-#@schema/validation one_of=["json", "text"]
-#@schema/deprecated "This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
-deprecated_log_format: ""
-
 #@schema/title "Run as user"
 #@schema/desc "The user ID that will own the process."
 #! See the Dockerfile for the reasoning behind this default value.

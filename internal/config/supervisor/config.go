@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package supervisor contains functionality to load/store Config's from/to
@@ -66,7 +66,6 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
 
-	plog.MaybeSetDeprecatedLogLevel(config.LogLevel, &config.Log)
 	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, config.Log); err != nil {
 		return nil, fmt.Errorf("validate log level: %w", err)
 	}
@@ -90,7 +89,7 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 	if err := validateEndpoint(*config.Endpoints.HTTP); err != nil {
 		return nil, fmt.Errorf("validate http endpoint: %w", err)
 	}
-	if err := validateAdditionalHTTPEndpointRequirements(*config.Endpoints.HTTP, config.AllowExternalHTTP); err != nil {
+	if err := validateAdditionalHTTPEndpointRequirements(*config.Endpoints.HTTP); err != nil {
 		return nil, fmt.Errorf("validate http endpoint: %w", err)
 	}
 	if err := validateAtLeastOneEnabledEndpoint(*config.Endpoints.HTTPS, *config.Endpoints.HTTP); err != nil {
@@ -151,16 +150,8 @@ func validateEndpoint(endpoint Endpoint) error {
 	}
 }
 
-func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint, allowExternalHTTP stringOrBoolAsBool) error {
+func validateAdditionalHTTPEndpointRequirements(endpoint Endpoint) error {
 	if endpoint.Network == NetworkTCP && !addrIsOnlyOnLoopback(endpoint.Address) {
-		if allowExternalHTTP {
-			// Log that the validation should have been triggered.
-			plog.Warning("Listening on non-loopback interfaces for the HTTP port is deprecated and will be removed " +
-				"in a future release. Your current configuration would not be allowed in that future release. " +
-				"Please see comments in deploy/supervisor/values.yaml and review your settings.")
-			// Skip enforcement of the validation.
-			return nil
-		}
 		return fmt.Errorf(
 			"http listener address %q for %q network may only bind to loopback interfaces",
 			endpoint.Address,

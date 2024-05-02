@@ -79,34 +79,6 @@ image_tag: latest
 #@schema/validation min_len=1
 image_pull_dockerconfigjson: ""
 
-#@schema/title "Deprecated service HTTP nodeport port"
-#@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port",31234)
-#@schema/nullable
-#@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_nodeport_port: 0
-
-#@schema/title "Deprecated service http nodeport nodeport"
-#@schema/desc "The `nodePort` value of the NodePort Service, optional when `deprecated_service_http_nodeport_port` is specified"
-#@schema/examples ("Specify port",31234)
-#@schema/nullable
-#@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_nodeport_nodeport: 0
-
-#@schema/title "Deprecated service http loadbalancer port"
-#@schema/desc "When specified, creates a LoadBalancer Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port",8443)
-#@schema/nullable
-#@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_loadbalancer_port: 0
-
-#@schema/title "Deprecated service http clusterip port"
-#@schema/desc "Creates a ClusterIP Service with this `port` value, with port 8080 as its `targetPort`"
-#@schema/examples ("Specify port",8443)
-#@schema/nullable
-#@schema/deprecated "This data value will be removed in a future release"
-deprecated_service_http_clusterip_port: 0
-
 #@schema/title "Service https nodeport port"
 #@schema/desc "When specified, creates a NodePort Service with this `port` value, with port 8443 as its `targetPort`"
 #@schema/examples ("Specify port",31243)
@@ -146,17 +118,6 @@ service_loadbalancer_ip: ""
 #@schema/nullable
 #@schema/validation one_of=["info", "debug", "trace", "all"]
 log_level: ""
-
-#@schema/title "Log format"
-#@ deprecated_log_format_desc = "Specify the format of logging: json (for machine parsable logs) and text (for legacy klog formatted logs). \
-#@ By default, when this value is left unset, logs are formatted in json. \
-#@ This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
-#@schema/desc deprecated_log_format_desc
-#@schema/examples ("Set logs to JSON format","json")
-#@schema/nullable
-#@schema/validation one_of=["json", "text"]
-#@schema/deprecated "This configuration is deprecated and will be removed in a future release at which point logs will always be formatted as json."
-deprecated_log_format: ""
 
 #@schema/title "Run as user"
 #@schema/desc "The user ID that will own the process."
@@ -242,19 +203,3 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@schema/nullable
 #@schema/validation ("a map with keys 'http' and 'https', whose values are either the string 'disabled' or a map having keys 'network' and 'address', and the value of 'network' must be one of the allowed values", validate_endpoints)
 endpoints: { }
-
-#@ deprecated_insecure_accept_external_unencrypted_http_requests_desc = "Optionally override the validation on the endpoints.http \
-#@ value which checks that only loopback interfaces are used. \
-#@ When deprecated_insecure_accept_external_unencrypted_http_requests is true, the HTTP listener is allowed to bind to any \
-#@ interface, including interfaces that are listening for traffic from outside the pod. This value is being introduced \
-#@ to ease the transition to the new loopback interface validation for the HTTP port for any users who need more time \
-#@ to change their ingress strategy to avoid using plain HTTP into the Supervisor pods. \
-#@ This value is immediately deprecated upon its introduction. It will be removed in some future release, at which time \
-#@ traffic from outside the pod will need to be sent to the HTTPS listener instead, with no simple workaround available. \
-#@ Allowed values are true (boolean), 'true' (string), false (boolean), and 'false' (string). The default is false."
-#@schema/desc deprecated_insecure_accept_external_unencrypted_http_requests_desc
-#@schema/type any=True
-#@schema/validation ("a boolean or string version of boolean", lambda v: type(v) in ["string", "boolean"])
-#@schema/validation one_of=["true", "false", True, False]
-#@schema/deprecated "This data value will be removed in a future release"
-deprecated_insecure_accept_external_unencrypted_http_requests: false

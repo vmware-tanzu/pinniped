@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -15,9 +15,7 @@ type Config struct {
 	NamesConfig                  NamesConfigSpec   `json:"names"`
 	KubeCertAgentConfig          KubeCertAgentSpec `json:"kubeCertAgent"`
 	Labels                       map[string]string `json:"labels"`
-	// Deprecated: use log.level instead
-	LogLevel *plog.LogLevel `json:"logLevel"`
-	Log      plog.LogSpec   `json:"log"`
+	Log                          plog.LogSpec      `json:"log"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

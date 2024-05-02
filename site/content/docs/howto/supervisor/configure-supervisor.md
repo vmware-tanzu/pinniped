@@ -61,17 +61,8 @@ It is recommended that the traffic to these endpoints should be encrypted via TL
 Supervisor pods, even when crossing boundaries that are entirely inside the Kubernetes cluster.
 The credentials and tokens that are handled by these endpoints are too sensitive to transmit without encryption.
 
-In previous versions of the Supervisor app, there were both HTTP and HTTPS ports available for use by default.
-These ports each host all the Supervisor's endpoints. Unfortunately, this has caused some confusion in the community
-and some blog posts have been written which demonstrate using the HTTP port in such a way that a portion of the traffic's
-path is unencrypted. Newer versions of the Supervisor disable the HTTP port by default to make it more clear that
-the Supervisor app is not intended to receive non-TLS HTTP traffic from outside the Pod. Furthermore, in these newer versions,
-when the HTTP listener is configured to be enabled it may only listen on loopback interfaces for traffic from within its own pod.
-To aid in transition for impacted users, the old behavior of allowing the HTTP listener to receive traffic from
-outside the pod may be re-enabled using the
-`deprecated_insecure_accept_external_unencrypted_http_requests` value in
-[values.yaml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml),
-until that setting is removed in a future release.
+The Supervisor only listens on an HTTPS port by default. Incoming traffic must use TLS. The only exception is for
+an advanced configuration style using a service mesh to deliver traffic into the Supervisor (discussed below).
 
 Because there are many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
 Some common approaches are:

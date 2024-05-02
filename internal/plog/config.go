@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -22,8 +22,6 @@ func (l *LogFormat) UnmarshalJSON(b []byte) error {
 	switch string(b) {
 	case `""`, `"json"`:
 		*l = FormatJSON
-	case `"text"`:
-		*l = FormatText
 	// there is no "cli" case because it is not a supported option via our config
 	default:
 		return errInvalidLogFormat
@@ -33,11 +31,10 @@ func (l *LogFormat) UnmarshalJSON(b []byte) error {
 
 const (
 	FormatJSON LogFormat = "json"
-	FormatText LogFormat = "text"
 	FormatCLI  LogFormat = "cli" // only used by the pinniped CLI and not the server components
 
 	errInvalidLogLevel  = constable.Error("invalid log level, valid choices are the empty string, info, debug, trace and all")
-	errInvalidLogFormat = constable.Error("invalid log format, valid choices are the empty string, json and text")
+	errInvalidLogFormat = constable.Error("invalid log format, valid choices are the empty string or 'json'")
 )
 
 var _ json.Unmarshaler = func() *LogFormat {
@@ -48,13 +45,6 @@ var _ json.Unmarshaler = func() *LogFormat {
 type LogSpec struct {
 	Level  LogLevel  `json:"level,omitempty"`
 	Format LogFormat `json:"format,omitempty"`
-}
-
-func MaybeSetDeprecatedLogLevel(level *LogLevel, log *LogSpec) {
-	if level != nil {
-		Warning("logLevel is deprecated, set log.level instead")
-		log.Level = *level
-	}
 }
 
 func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) error {
@@ -75,8 +65,6 @@ func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) 
 		encoding = "json"
 	case FormatCLI:
 		encoding = "console"
-	case FormatText:
-		encoding = "text"
 	default:
 		return errInvalidLogFormat
 	}
@@ -88,12 +76,8 @@ func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) 
 
 	setGlobalLoggers(log, flush)
 
-	//nolint:exhaustive  // the switch above is exhaustive for format already
-	switch spec.Format {
-	case FormatCLI:
+	if spec.Format == FormatCLI {
 		return nil // do not spawn go routines on the CLI to allow the CLI to call this more than once
-	case FormatText:
-		Warning("setting log.format to 'text' is deprecated - this option will be removed in a future release")
 	}
 
 	// do spawn go routines on the server

@@ -57,6 +57,14 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 		},
 	}
 
+	newStyleAdmissionResourcesWithValidatingAdmissionPoliciesAtOlderAPIVersion := &metav1.APIResourceList{
+		GroupVersion: admissionregistrationv1.SchemeGroupVersion.Group + "/v1beta1",
+		APIResources: []metav1.APIResource{
+			{Name: "validatingwebhookconfigurations", Kind: "ValidatingWebhookConfiguration"},
+			{Name: "validatingadmissionpolicies", Kind: "ValidatingAdmissionPolicy"},
+		},
+	}
+
 	oldStyleAdmissionResourcesWithoutValidatingAdmissionPolicies := &metav1.APIResourceList{
 		GroupVersion: admissionregistrationv1.SchemeGroupVersion.String(),
 		APIResources: []metav1.APIResource{
@@ -87,6 +95,16 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 			availableAPIResources: []*metav1.APIResourceList{
 				coreResources,
 				oldStyleAdmissionResourcesWithoutValidatingAdmissionPolicies,
+				appsResources,
+			},
+			wantRegisteredPlugins:      customOldStylePluginsRegistered,
+			wantRecommendedPluginOrder: customOldStyleRecommendedPluginOrder,
+		},
+		{
+			name: "when there is only an older version of ValidatingAdmissionPolicy resource, as there would be in an old Kubernetes cluster with the feature flag enabled, then we change the plugin configuration to be more like it was for old versions of Kubernetes (because the admission code wants to watch v1)",
+			availableAPIResources: []*metav1.APIResourceList{
+				coreResources,
+				newStyleAdmissionResourcesWithValidatingAdmissionPoliciesAtOlderAPIVersion,
 				appsResources,
 			},
 			wantRegisteredPlugins:      customOldStylePluginsRegistered,

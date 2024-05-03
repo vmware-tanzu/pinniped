@@ -5,7 +5,6 @@ package admissionpluginconfig
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -82,17 +81,16 @@ func k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient discovery.
 		return false, fmt.Errorf("failed to perform k8s API discovery: %w", err)
 	}
 
-	// Now look at all discovered groups until we find admissionregistration.k8s.io.
-	wantedGroupWithSlash := fmt.Sprintf("%s/", admissionregistrationv1.GroupName)
+	// Now look at all discovered groups until we find version v1 of group admissionregistration.k8s.io.
 	for _, resourcesPerGV := range resources {
-		if strings.HasPrefix(resourcesPerGV.GroupVersion, wantedGroupWithSlash) {
+		if resourcesPerGV.GroupVersion == admissionregistrationv1.SchemeGroupVersion.String() {
 			// Found the group, so now look to see if it includes ValidatingAdmissionPolicy as a resource,
 			// which went GA in Kubernetes 1.30, and could be enabled by a feature flag in previous versions.
 			for _, resource := range resourcesPerGV.APIResources {
 				if resource.Kind == "ValidatingAdmissionPolicy" {
 					// Found it!
 					plog.Info("found ValidatingAdmissionPolicy resource on this Kubernetes cluster",
-						"group", resource.Group, "version", resource.Version, "kind", resource.Kind)
+						"groupVersion", resourcesPerGV.GroupVersion, "kind", resource.Kind)
 					return true, nil
 				}
 			}

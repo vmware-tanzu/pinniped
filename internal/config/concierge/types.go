@@ -16,6 +16,18 @@ type Config struct {
 	KubeCertAgentConfig          KubeCertAgentSpec `json:"kubeCertAgent"`
 	Labels                       map[string]string `json:"labels"`
 	Log                          plog.LogSpec      `json:"log"`
+	TLS                          TLSSpec           `json:"tls"`
+}
+
+type TLSSpec struct {
+	OneDotTwo TLSProtocolSpec `json:"1.2"`
+}
+
+type TLSProtocolSpec struct {
+	// AllowedCiphers will permit Pinniped to use only the listed ciphers.
+	// This affects Pinniped both when it acts as a client and as a server.
+	// If empty, Pinniped will use a built-in list of ciphers.
+	AllowedCiphers []string `json:"allowedCiphers"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

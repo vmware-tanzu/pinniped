@@ -21,6 +21,8 @@ import (
 //nolint:gochecknoglobals // This needs to be global because it will be set at application startup from configuration values
 var allowedCiphersForTLSOneDotTwo atomic.Value
 
+type SetAllowedCiphers func([]string) error
+
 // SetAllowedCiphersForTLSOneDotTwo allows configuration/setup components to constrain the allowed TLS ciphers for TLS1.2.
 // Not tested in unit tests for pollution reasons.
 func SetAllowedCiphersForTLSOneDotTwo(allowedCipherNames []string) error {

@@ -112,7 +112,7 @@ func (a *App) runServer(ctx context.Context) error {
 	featuregates.DisableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
 
 	// Read the server config file.
-	cfg, err := concierge.FromPath(ctx, a.configPath)
+	cfg, err := concierge.FromPath(ctx, a.configPath, ptls.SetAllowedCiphersForTLSOneDotTwo)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}

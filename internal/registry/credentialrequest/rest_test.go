@@ -68,16 +68,21 @@ func TestCreate(t *testing.T) {
 		var r *require.Assertions
 		var ctrl *gomock.Controller
 		var logger *testutil.TranscriptLogger
+		var originalKLogLevel klog.Level
 
 		it.Before(func() {
 			r = require.New(t)
 			ctrl = gomock.NewController(t)
 			logger = testutil.NewTranscriptLogger(t) //nolint:staticcheck  // old test with lots of log statements
 			klog.SetLogger(logr.New(logger))         // this is unfortunately a global logger, so can't run these tests in parallel :(
+			originalKLogLevel = testutil.GetGlobalKlogLevel()
+			// trace.Log() utility will only log at level 2 or above, so set that for this test.
+			testutil.SetGlobalKlogLevel(t, 2) //nolint:staticcheck // old test of code using trace.Log()
 		})
 
 		it.After(func() {
 			klog.ClearLogger()
+			testutil.SetGlobalKlogLevel(t, originalKLogLevel) //nolint:staticcheck // old test of code using trace.Log()
 			ctrl.Finish()
 		})
 

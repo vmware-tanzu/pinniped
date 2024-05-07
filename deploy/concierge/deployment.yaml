@@ -1,4 +1,4 @@
-#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -96,14 +96,9 @@ data:
       imagePullSecrets:
         - image-pull-secret
       (@ end @)
-    (@ if data.values.log_level or data.values.deprecated_log_format: @)
+    (@ if data.values.log_level: @)
     log:
-      (@ if data.values.log_level: @)
       level: (@= getAndValidateLogLevel() @)
-      (@ end @)
-      (@ if data.values.deprecated_log_format: @)
-      format: (@= data.values.deprecated_log_format @)
-      (@ end @)
     (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":

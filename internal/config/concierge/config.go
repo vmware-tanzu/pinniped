@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package concierge contains functionality to load/store Config's from/to
@@ -79,7 +79,6 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
 
-	plog.MaybeSetDeprecatedLogLevel(config.LogLevel, &config.Log)
 	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, config.Log); err != nil {
 		return nil, fmt.Errorf("validate log level: %w", err)
 	}

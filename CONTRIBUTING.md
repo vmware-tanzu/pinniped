@@ -152,6 +152,29 @@ go build -o pinniped ./cmd/pinniped
 
 To destroy the local Kubernetes cluster, run `./hack/kind-down.sh`.
 
+#### Using GoLand to Run an Integration Test
+
+It can sometimes be convenient to use GoLand to run an integration test. For example, this allows using the
+GoLand debugger to debug the test itself (not the server, since that it running in-cluster).
+
+Note that the output of `hack/prepare-for-integration-tests.sh` says:
+
+```bash
+# Using GoLand? Paste the result of this command into GoLand's run configuration "Environment".
+#    hack/integration-test-env-goland.sh | pbcopy
+```
+
+After using `hack/prepare-for-integration-tests.sh`, run `hack/integration-test-env-goland.sh | pbcopy` as instructed. Then:
+
+1. Select and run an integration test within GoLand. It will fail complaining about missing env vars.
+1. Pull down the menu that shows the name of the test which you just ran in the previous step, and choose "Edit Configurations...".
+1. In the "Environment" text box for the run configuration of the integration test that you just ran,
+   paste the results of `hack/integration-test-env-goland.sh | pbcopy`.
+1. Apply, and then run the integration test again. This time the test will use the environment variables provided.
+
+Note that if you run `hack/prepare-for-integration-tests.sh` again, then you may need to repeat these steps.
+Each run of `hack/prepare-for-integration-tests.sh` can result in different values for some of the env vars.
+
 ### Observing Tests on the Continuous Integration Environment
 
 [CI](https://ci.pinniped.dev/teams/main/pipelines/pull-requests)

@@ -4,12 +4,12 @@ go 1.22.0
 
 toolchain go1.22.2
 
-// This version taken from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L14 to avoid compile failures.
-replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
+// This version taken from https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod#L14 to avoid compile failures.
+replace github.com/google/cel-go => github.com/google/cel-go v0.17.8
 
 // ory/fosite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
 // Where they clash and cause "go mod tidy" to fail, use replace directives to make it work.
-// Copied from https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod#L28-L33.
+// Copied from https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod#L29-L34.
 replace (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.42.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.44.0
@@ -19,15 +19,12 @@ replace (
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.19.0
 )
 
-// https://github.com/kubernetes/apiserver/blob/v0.29.2/go.mod does not include this one, but it is also needed
+// https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod does not include this one, but it is also needed
 // to resolve the clashes with ory/x, so use the same version that kubernetes/apiserver chooses for opentelemetry.
 replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
 
 // This is an indirect dep which has CVE-2023-45142, so replace it with the fixed version.
 replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
-
-// This is an indirect dep which has CVE-2024-24786, so replace it with a fixed version
-replace google.golang.org/protobuf => google.golang.org/protobuf v1.33.0
 
 // https://github.com/coreos/go-oidc/releases/tag/v3.10.0 starts to use https://github.com/go-jose/go-jose/releases/tag/v4.0.0.
 // Unfortunately this has breaking changes.
@@ -35,7 +32,7 @@ replace github.com/coreos/go-oidc/v3 => github.com/coreos/go-oidc/v3 v3.9.0
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240421230201-ab917191657d
+	github.com/chromedp/cdproto v0.0.0-20240501202034-ef67d660e9fd
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/coreos/go-semver v0.3.1
@@ -63,15 +60,15 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
-	github.com/tdewolff/minify/v2 v2.20.19
+	github.com/tdewolff/minify/v2 v2.20.20
 	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.22.0
-	golang.org/x/net v0.24.0
-	golang.org/x/oauth2 v0.19.0
+	golang.org/x/crypto v0.23.0
+	golang.org/x/net v0.25.0
+	golang.org/x/oauth2 v0.20.0
 	golang.org/x/sync v0.7.0
-	golang.org/x/term v0.19.0
-	golang.org/x/text v0.14.0
+	golang.org/x/term v0.20.0
+	golang.org/x/text v0.15.0
 	k8s.io/api v0.30.0
 	k8s.io/apiextensions-apiserver v0.30.0
 	k8s.io/apimachinery v0.30.0
@@ -81,8 +78,8 @@ require (
 	k8s.io/gengo v0.0.0-20240404160639-a0386bf69313
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.30.0
-	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
-	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
+	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f
+	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -163,7 +160,7 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/tdewolff/parse/v2 v2.7.12 // indirect
+	github.com/tdewolff/parse/v2 v2.7.13 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
@@ -185,10 +182,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
-	golang.org/x/mod v0.15.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.18.0 // indirect
+	golang.org/x/tools v0.20.0 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect

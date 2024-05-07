@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -101,7 +101,7 @@ func TestFormat(t *testing.T) {
   "timestamp": "2022-11-21T23:37:26.953313Z",
   "caller": "%s/config_test.go:%d$plog.TestFormat.func1",
   "message": "something happened",
-  "error": "invalid log format, valid choices are the empty string, json and text",
+  "error": "invalid log format, valid choices are the empty string or 'json'",
   "an": "item"
 }`, wd, getLineNumberOfCaller()-11), scanner.Text())
 
@@ -148,7 +148,7 @@ testing.tRunner
 	DebugErr("something happened", errInvalidLogFormat, "an", "item")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(nowStr+`  plog/config_test.go:%d  something happened  {"error": "invalid log format, valid choices are the empty string, json and text", "an": "item"}`,
+	require.Equal(t, fmt.Sprintf(nowStr+`  plog/config_test.go:%d  something happened  {"error": "invalid log format, valid choices are the empty string or 'json'", "an": "item"}`,
 		getLineNumberOfCaller()-4), scanner.Text())
 
 	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b", "slightly less than a year", 363*24*time.Hour, "slightly more than 2 years", 2*367*24*time.Hour)
@@ -156,74 +156,6 @@ testing.tRunner
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  burrito  plog/config_test.go:%d  wee  {"a": "b", "slightly less than a year": "363d", "slightly more than 2 years": "2y4d", "error": "invalid log level, valid choices are the empty string, info, debug, trace and all"}`,
 		getLineNumberOfCaller()-4), scanner.Text())
-
-	old := New().WithName("created before mode change").WithValues("is", "old")
-
-	err = ValidateAndSetLogLevelAndFormatGlobally(ctx, LogSpec{Level: LevelDebug, Format: FormatText})
-	require.NoError(t, err)
-	pid := os.Getpid()
-
-	// check for the deprecation warning
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config.go:96] "setting log.format to 'text' is deprecated - this option will be removed in a future release" warning=true`,
-		pid), scanner.Text())
-
-	Debug("what is happening", "does klog", "work?")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what is happening" does klog="work?"`,
-		pid, getLineNumberOfCaller()-4), scanner.Text())
-
-	Logr().WithName("panda").V(KlogLevelDebug).Info("are the best", "yes?", "yes.")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "are the best" logger="panda" yes?="yes."`,
-		pid, getLineNumberOfCaller()-4), scanner.Text())
-
-	New().WithName("hi").WithName("there").WithValues("a", 1, "b", 2).Always("do it")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "do it" logger="hi.there" a=1 b=2`,
-		pid, getLineNumberOfCaller()-4), scanner.Text())
-
-	l := WithValues("x", 33, "z", 22)
-	l.Debug("what to do")
-	l.Debug("and why")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "what to do" x=33 z=22`,
-		pid, getLineNumberOfCaller()-5), scanner.Text())
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "and why" x=33 z=22`,
-		pid, getLineNumberOfCaller()-8), scanner.Text())
-
-	old.Always("should be klog text format", "for", "sure")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "should be klog text format" logger="created before mode change" is="old" for="sure"`,
-		pid, getLineNumberOfCaller()-4), scanner.Text())
-
-	// make sure child loggers do not share state
-	old1 := old.WithValues("i am", "old1")
-	old2 := old.WithName("old2")
-	old1.Warning("warn")
-	old2.Info("info")
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "warn" logger="created before mode change" is="old" i am="old1" warning=true`,
-		pid, getLineNumberOfCaller()-5), scanner.Text())
-	require.True(t, scanner.Scan())
-	require.NoError(t, scanner.Err())
-	require.Equal(t, fmt.Sprintf(`I1121 23:37:26.953313%8d config_test.go:%d] "info" logger="created before mode change.old2" is="old"`,
-		pid, getLineNumberOfCaller()-8), scanner.Text())
-
-	Trace("should not be logged", "for", "sure")
-	require.Empty(t, buf.String())
-
-	Logr().V(klogLevelAll).Info("also should not be logged", "open", "close")
-	require.Empty(t, buf.String())
 
 	require.False(t, scanner.Scan())
 	require.NoError(t, scanner.Err())

@@ -12,10 +12,6 @@ function tidy_cmd() {
   echo "go mod tidy -v -go=${version} -compat=${version}"
 }
 
-function lint_cmd() {
-  echo "golangci-lint run --modules-download-mode=readonly --timeout=30m"
-}
-
 function test_cmd() {
   echo "go test -count 1 -race ./..."
 }
@@ -61,8 +57,21 @@ function main() {
     ;;
   'lint' | 'linter' | 'linters')
     golangci-lint --version
-    echo
-    with_modules 'lint_cmd'
+    go version
+    golangci-lint run --modules-download-mode=readonly --timeout=30m
+    ;;
+  'lint_in_docker')
+    local lint_version
+    lint_version="${2:-latest}"
+    docker run --rm \
+      --volume "${ROOT/..}":/pinniped \
+      --volume "$(go env GOCACHE):/gocache" \
+      --volume "$(go env GOMODCACHE):/gomodcache" \
+      --env GOCACHE=/gocache \
+      --env GOMODCACHE=/gomodcache \
+      --workdir /pinniped \
+      golangci/golangci-lint:$lint_version \
+      ./hack/module.sh lint
     ;;
   'test' | 'tests')
     with_modules 'test_cmd'

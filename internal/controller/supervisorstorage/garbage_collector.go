@@ -79,7 +79,7 @@ func GarbageCollectorController(
 				UpdateFunc: func(oldObj, newObj metav1.Object) bool {
 					return isSecretWithGCAnnotation(oldObj) || isSecretWithGCAnnotation(newObj)
 				},
-				DeleteFunc: func(obj metav1.Object) bool { return false }, // ignore all deletes
+				DeleteFunc: func(_ metav1.Object) bool { return false }, // ignore all deletes
 				ParentFunc: pinnipedcontroller.SingletonQueue(),
 			},
 			controllerlib.InformerOption{},

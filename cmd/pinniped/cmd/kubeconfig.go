@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -163,7 +163,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+	cmd.RunE = func(cmd *cobra.Command, _args []string) error {
 		if flags.outputPath != "" {
 			out, err := os.Create(flags.outputPath)
 			if err != nil {

@@ -147,7 +147,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	mustMarkHidden(cmd, "skip-listen")
 	mustMarkHidden(cmd, "debug-session-cache")
 	mustMarkRequired(cmd, "issuer")
-	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runOIDCLogin(cmd, deps, flags) }
+	cmd.RunE = func(cmd *cobra.Command, _args []string) error { return runOIDCLogin(cmd, deps, flags) }
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 	mustMarkHidden(cmd, "concierge-namespace")

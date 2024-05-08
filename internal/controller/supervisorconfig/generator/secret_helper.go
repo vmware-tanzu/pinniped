@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package generator
@@ -60,7 +60,7 @@ const (
 	SecretUsageStateEncryptionKey
 )
 
-// New returns a SecretHelper that has been parameterized with common symmetric secret generation
+// NewSymmetricSecretHelper returns a SecretHelper that has been parameterized with common symmetric secret generation
 // knobs.
 func NewSymmetricSecretHelper(
 	namePrefix string,

@@ -53,6 +53,10 @@ issues:
       linters:
         - funlen
         - gochecknoglobals
+        - revive
+    - path: internal/testutil/
+      linters:
+      - revive
 
 linters-settings:
   funlen:

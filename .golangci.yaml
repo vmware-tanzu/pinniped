@@ -47,6 +47,8 @@ linters:
     - whitespace
     - copyloopvar
     - intrange
+    - fatcontext
+    # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
 
 issues:
   exclude-rules:

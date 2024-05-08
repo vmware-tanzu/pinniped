@@ -5,7 +5,6 @@ package upstreamprovider
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 
 	"golang.org/x/oauth2"
@@ -131,11 +130,11 @@ type UpstreamLDAPIdentityProviderI interface {
 type UpstreamGithubIdentityProviderI interface {
 	UpstreamIdentityProviderI
 
-	// GetHost returns the hostname of the GitHub server. This is either "github.com" or a GitHub Enterprise Server.
-	GetHost() string
-
 	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
 	GetClientID() string
+
+	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
+	GetScopes() []string
 
 	// GetUsernameAttribute returns the attribute from the GitHub API user response to use for the downstream username.
 	// See https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user.
@@ -147,16 +146,12 @@ type UpstreamGithubIdentityProviderI interface {
 	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
 	GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute
 
-	// GetAllowedOrganizations returns a list of organizations configured to allow authentication. A user must have membership
-	// in at least one of these organizations to log in. Note that the user can specify a policy (returned by GetOrganizationLoginPolicy)
-	// to disregard organization membership for purposes of authentication.
-	//
-	// If this list is specified, only teams from the listed organizations should be represented as groups for the downstream token.
+	// GetAllowedOrganizations returns a list of organizations configured to allow authentication.
+	// If this list has contents, a user must have membership in at least one of these organizations to log in,
+	// and only teams from the listed organizations should be represented as groups for the downstream token.
+	// If this list is empty, then any user can log in regardless of org membership, and any observable
+	// teams memberships should be represented as groups for the downstream token.
 	GetAllowedOrganizations() []string
-
-	// GetOrganizationLoginPolicy must be "OnlyUsersFromAllowedOrganizations" if GetAllowedOrganizations has values.
-	// Otherwise, it must be "AllGitHubUsers", which means disregard the result of GetAllowedOrganizations.
-	GetOrganizationLoginPolicy() v1alpha1.GitHubAllowedAuthOrganizationsPolicy
 
 	// GetAuthorizationURL returns the authorization URL for the configured GitHub. This will look like:
 	// https://<spec.githubAPI.host>/login/oauth/authorize
@@ -164,6 +159,13 @@ type UpstreamGithubIdentityProviderI interface {
 	// It will never include a username or password in the authority section.
 	GetAuthorizationURL() string
 
-	// GetHttpClient returns a http client configured with the provided CA bundle and a timeout.
-	GetHttpClient() *http.Client
+	// TODO: This interface should be easily mockable to avoid all interactions with the actual server.
+	//  What interactions with the server do we want to hide behind this interface? Something like this?
+	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
+	//    GetUser(ctx, accessToken) (User, error)
+	//    GetUserOrgs(ctx, accessToken) ([]Org, error)
+	//    GetUserTeams(ctx, accessToken) ([]Team, error)
+	//  Or maybe higher level interface like this?
+	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
+	//    GetUser(ctx, accessToken) (User, error) // in this case User would include team and org info
 }

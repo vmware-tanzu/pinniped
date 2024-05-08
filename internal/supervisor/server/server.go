@@ -335,6 +335,7 @@ func prepareControllers(
 				plog.New(),
 				controllerlib.WithInformer,
 				clock.RealClock{},
+				tls.Dial,
 			),
 			singletonWorker).
 		WithController(

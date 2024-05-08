@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -72,7 +72,6 @@ func TestRoundTrip(t *testing.T) {
 			wantError: "no impersonator service account token available",
 		},
 	} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			base := &fakeRoundTripper{
 				response: new(http.Response),

@@ -73,7 +73,6 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 		testlib.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
 	)
 	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
 		t.Run(
 			"access as group "+group+" with kubectl",
 			testlib.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
@@ -86,7 +85,6 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	// Validate that we can auth to the API via our user.
 	t.Run("access as user with client-go", testlib.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
 	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
 		t.Run("access as group "+group+" with client-go", testlib.AccessAsGroupTest(ctx, group, kubeClient))
 	}
 

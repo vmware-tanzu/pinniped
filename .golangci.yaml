@@ -45,6 +45,7 @@ linters:
     - sqlclosecheck
     - unconvert
     - whitespace
+    - copyloopvar
 
 issues:
   exclude-rules:

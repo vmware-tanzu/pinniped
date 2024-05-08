@@ -38,7 +38,6 @@ func Legacy(rootCAs *x509.CertPool) *tls.Config {
 func suitesToIDs(suites []*tls.CipherSuite) []uint16 {
 	out := make([]uint16, 0, len(suites))
 	for _, suite := range suites {
-		suite := suite
 		out = append(out, suite.ID)
 	}
 	return out

@@ -182,7 +182,6 @@ func leaderElectionClients(t *testing.T, namespace *corev1.Namespace, leaseName 
 
 func pickRandomLeaderElectionClient(clients map[string]*kubeclient.Client) *kubeclient.Client {
 	for _, client := range clients {
-		client := client
 		return client
 	}
 	panic("clients map was empty")
@@ -223,8 +222,6 @@ func runWriteRequests(ctx context.Context, clients map[string]*kubeclient.Client
 	out := make(map[string]error, len(clients))
 
 	for identity, client := range clients {
-		identity, client := identity, client
-
 		out[identity] = runWriteRequest(ctx, client)
 	}
 
@@ -246,8 +243,6 @@ func checkOnlyLeaderCanWrite(ctx context.Context, t *testing.T, namespace *corev
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		var leaders, nonLeaders int
 		for identity, err := range runWriteRequests(ctx, clients) {
-			identity, err := identity, err
-
 			if identity == *lease.Spec.HolderIdentity {
 				leaders++
 				requireEventually.NoError(err, "leader client %q should have no error", identity)

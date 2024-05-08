@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package groupsuffix
@@ -186,7 +186,6 @@ func Validate(apiGroupSuffix string) error {
 
 	errorStrings := validation.IsDNS1123Subdomain(apiGroupSuffix)
 	for _, errorString := range errorStrings {
-		errorString := errorString
 		errs = append(errs, constable.Error(errorString))
 	}
 

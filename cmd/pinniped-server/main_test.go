@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -38,7 +38,6 @@ func TestEntrypoint(t *testing.T) {
 			wantArgs: []string{"/path/to/valid-test-binary", "foo", "bar"},
 		},
 	} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var logBuf bytes.Buffer
 			testLog := log.New(&logBuf, "", 0)

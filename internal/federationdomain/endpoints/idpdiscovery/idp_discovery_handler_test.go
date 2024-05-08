@@ -68,7 +68,6 @@ func TestIDPDiscovery(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			idpLister := testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().WithName("z-some-oidc-idp").WithAllowPasswordGrant(true).Build()).

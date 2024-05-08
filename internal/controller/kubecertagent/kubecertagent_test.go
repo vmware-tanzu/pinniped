@@ -1018,7 +1018,6 @@ func TestAgentController(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1177,15 +1176,14 @@ func TestMergeLabelsAndAnnotations(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			existingCopy := tt.existing.DeepCopy()
 			desiredCopy := tt.desired.DeepCopy()
 			got := mergeLabelsAndAnnotations(tt.existing, tt.desired)
 			require.Equal(t, tt.expected, got)
-			require.Equal(t, existingCopy, &tt.existing, "input was modified!")
-			require.Equal(t, desiredCopy, &tt.desired, "input was modified!")
+			require.Equal(t, existingCopy, tt.existing.DeepCopy(), "input was modified!")
+			require.Equal(t, desiredCopy, tt.desired.DeepCopy(), "input was modified!")
 		})
 	}
 }

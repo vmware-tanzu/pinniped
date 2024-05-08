@@ -2391,7 +2391,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			testLogger := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
 			klog.SetLogger(testLogger.Logger)     // this is unfortunately a global logger, so can't run these tests in parallel :(
@@ -2603,7 +2602,6 @@ func TestHandlePasteCallback(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2914,7 +2912,6 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -1663,7 +1663,6 @@ func TestController(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1781,7 +1780,6 @@ func TestController(t *testing.T) {
 				tt.wantGroupsClaim,
 				goodIssuer,
 			) {
-				test := test
 				t.Run(test.name, func(t *testing.T) {
 					t.Parallel()
 

@@ -128,7 +128,6 @@ func TestSecureTLSSupervisor(t *testing.T) {
 	defaultECDSAOnly := ptls.Default(nil)
 	ciphers := make([]uint16, 0, len(defaultECDSAOnly.CipherSuites)/2)
 	for _, id := range defaultECDSAOnly.CipherSuites {
-		id := id
 		if !strings.Contains(tls.CipherSuiteName(id), "_ECDSA_") {
 			continue
 		}

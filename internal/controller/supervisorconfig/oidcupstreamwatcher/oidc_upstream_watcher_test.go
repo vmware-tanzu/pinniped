@@ -74,7 +74,6 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1409,7 +1408,6 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			fakePinnipedClient := pinnipedfake.NewSimpleClientset(tt.inputUpstreams...)

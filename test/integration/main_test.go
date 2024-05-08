@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -39,8 +39,6 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 	var serialTests, parallelTests, disruptiveTests, finalTests []testing.InternalTest
 
 	for _, test := range tests {
-		test := test
-
 		// top level integration tests the end with the string _Parallel
 		// are indicating that they are safe to run in parallel with
 		// other serial tests (which Go does not let you easily express).
@@ -69,7 +67,6 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 			t.Parallel()                     // outer test always runs in parallel for this bucket
 
 			for _, test := range serialTests {
-				test := test
 				t.Run(test.Name, func(t *testing.T) {
 					test.F(t) // inner serial tests do not run in parallel
 				})
@@ -84,7 +81,6 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 			t.Parallel()                     // outer test always runs in parallel for this bucket
 
 			for _, test := range parallelTests {
-				test := test
 				t.Run(test.Name, func(t *testing.T) {
 					t.Parallel() // inner parallel tests do run in parallel
 
@@ -101,7 +97,6 @@ func splitIntegrationTestsIntoBuckets(m *testing.M) {
 			// outer test never runs in parallel for this bucket
 
 			for _, test := range disruptiveTests {
-				test := test
 				t.Run(test.Name, func(t *testing.T) {
 					test.F(t) // inner disruptive tests do not run in parallel
 				})

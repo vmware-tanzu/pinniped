@@ -49,6 +49,7 @@ linters:
     - intrange
     - fatcontext
     # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
+    - spancheck
 
 issues:
   exclude-rules:
@@ -84,3 +85,9 @@ linters-settings:
           # Allow unused params that start with underscore. It can be nice to keep unused param names when implementing
           # an interface sometimes, to help readers understand why it is unused in that particular implementation.
           - allowRegex: "^_"
+  spancheck:
+    # https://golangci-lint.run/usage/linters/#spancheck
+    checks:
+    - end
+    - record-error
+    - set-status

@@ -150,7 +150,7 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 			// our code changes all the certs immediately thus this should be healthy fairly quickly
 			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					_, err := conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},

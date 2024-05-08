@@ -781,7 +781,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 	// without triggering the race detector.
 	iterations := 150
 	resultCh := make(chan authUserResult, iterations)
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		go func() {
 			authUserCtx, authUserCtxCancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer authUserCtxCancelFunc()
@@ -794,7 +794,7 @@ func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
 			}
 		}()
 	}
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		result := <-resultCh
 		// Record failures but allow the test to keep running so that all the background goroutines have a chance to try.
 		assert.NoError(t, result.err)
@@ -854,7 +854,7 @@ func findRecentlyUnusedLocalhostPorts(t *testing.T, howManyPorts int) []string {
 	t.Helper()
 
 	listeners := []net.Listener{}
-	for i := 0; i < howManyPorts; i++ {
+	for range howManyPorts {
 		unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
 		listeners = append(listeners, unusedPortGrabbingListener)

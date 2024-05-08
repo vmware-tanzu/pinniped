@@ -22,7 +22,7 @@ func TestInfiniteBackoff(t *testing.T) {
 			stepper: &InfiniteBackoff{},
 			expectedSequence: func() []time.Duration {
 				results := make([]time.Duration, 1000)
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					results[i] = time.Duration(0)
 				}
 				return results
@@ -69,7 +69,7 @@ func TestInfiniteBackoff(t *testing.T) {
 			},
 			expectedSequence: func() []time.Duration {
 				results := make([]time.Duration, 1000)
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					results[i] = 20 * time.Nanosecond
 				}
 				return results

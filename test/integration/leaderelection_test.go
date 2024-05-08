@@ -170,7 +170,7 @@ func leaderElectionClients(t *testing.T, namespace *corev1.Namespace, leaseName 
 	clients := make(map[string]*kubeclient.Client, count)
 	cancels := make(map[string]context.CancelFunc, count)
 
-	for i := 0; i < count; i++ {
+	for range count {
 		identity := "leader-election-client-" + rand.String(5)
 		clients[identity], cancels[identity] = leaderElectionClient(t, namespace, leaseName, identity)
 	}

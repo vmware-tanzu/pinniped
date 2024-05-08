@@ -533,7 +533,7 @@ func makeErrFix(reallyOld bool) []string {
 	out := make([]string, 0, total*6) // good enough allocation
 
 	// these servers do not show the actual index of where the error occurred
-	for i := 0; i < total; i++ {
+	for i := range total {
 		idx := fmt.Sprintf("[%d]", i)
 		out = append(out, idx+":", ":")
 		out = append(out, idx+" ", " ")

@@ -20,6 +20,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/testutil/totp"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -355,6 +356,85 @@ func LoginToUpstreamOIDC(t *testing.T, b *Browser, upstream testlib.TestOIDCUpst
 	time.Sleep(1 * time.Second)
 
 	b.ClickFirstMatch(t, cfg.LoginButtonSelector)
+}
+
+// LoginToUpstreamGitHub expects the page to be redirected to GitHub.
+// It knows how to enter the test username/password and submit the upstream login form.
+func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithubUpstream) {
+	t.Helper()
+
+	// Expect to be redirected to the login page.
+	t.Logf("waiting for redirect to GitHub login page")
+	b.WaitForURL(t, regexp.MustCompile(`\Ahttps://github\.com/login.+\z`))
+
+	usernameSelector := "input#login_field"
+	passwordSelector := "input#password"
+	loginButtonSelector := "input[type=submit]"
+
+	// Wait for the login page to be rendered.
+	b.WaitForVisibleElements(t, usernameSelector, passwordSelector, loginButtonSelector)
+
+	// Fill in the username and password and click "submit".
+	t.Logf("logging into GitHub")
+	b.SendKeysToFirstMatch(t, usernameSelector, upstream.TestUserUsername)
+	b.SendKeysToFirstMatch(t, passwordSelector, upstream.TestUserPassword)
+	b.ClickFirstMatch(t, loginButtonSelector)
+
+	// Next, GitHub should go to a new page and prompt for the six digit MFA/OTP code.
+	otpSelector := "input#app_totp"
+
+	// Wait for the MFA page to be rendered.
+	t.Logf("waiting for GitHub MFA page")
+	b.WaitForVisibleElements(t, otpSelector)
+
+	code, codeRemainingLifetimeSeconds := totp.GenerateOTPCode(t, upstream.TestUserOTPSecret, time.Now())
+	if codeRemainingLifetimeSeconds < 2 {
+		t.Log("sleeping for 2 seconds before generating another OTP code")
+		time.Sleep(2 * time.Second)
+		code, _ = totp.GenerateOTPCode(t, upstream.TestUserOTPSecret, time.Now())
+	}
+
+	// Fill in the OTP code. We do not need to click "verify" because entering the code automatically submits the page.
+	t.Logf("entering GitHub OTP code")
+	b.SendKeysToFirstMatch(t, otpSelector, code)
+
+	t.Log("sleeping for 2 seconds before looking at page title")
+	time.Sleep(2 * time.Second)
+	pageTitle := b.Title(t)
+	t.Logf("saw page title %q", pageTitle)
+
+	// Next Github might go to another page asking if you authorize the GitHub App to act on your behalf,
+	// if this user has never authorized this app.
+	if strings.HasPrefix(pageTitle, "Authorize ") { // the title is "Authorize <App Name>"
+		// Wait for the authorize app page to be rendered.
+		t.Logf("waiting for GitHub authorize button")
+		// There are unfortunately two very similar buttons on this page:
+		// <button name="authorize" value="0" type="submit" data-view-component="true" class="ws-normal btn width-full mr-2">Cancel
+		// <button name="authorize" value="1" type="submit" data-view-component="true" class="js-oauth-authorize-btn ws-normal btn-primary btn width-full">Authorize
+		submitAuthorizeAppButtonSelector := "button.btn-primary"
+		b.WaitForVisibleElements(t, submitAuthorizeAppButtonSelector)
+		t.Logf("clicking authorize button")
+		b.ClickFirstMatch(t, submitAuthorizeAppButtonSelector)
+
+		t.Log("sleeping for 2 seconds before looking at page title again")
+		time.Sleep(2 * time.Second)
+		pageTitle = b.Title(t)
+		t.Logf("saw page title %q", pageTitle)
+	}
+
+	// TODO I only saw this happen once, so I did not get a chance to finish this code. Not sure if it will happen again?
+	// Next GitHub might ask if we want to configure a passkey for auth.
+	if strings.HasPrefix(pageTitle, "Passkey TODO GET THIS PAGE TITLE") {
+		// The link that we want to click looks like this:
+		// <input class="btn-link" type="submit" value="Don't ask again for this browser">
+		dontAskAgainLinkSelector := `input[value="Don't ask again for this browser"]`
+		// Wait for the passkey page to be rendered.
+		t.Logf("waiting for GitHub's don't ask again button")
+		b.WaitForVisibleElements(t, dontAskAgainLinkSelector)
+		// Tell it that we do not want to use a passkey.
+		t.Logf("clicking don't ask again button")
+		b.ClickFirstMatch(t, dontAskAgainLinkSelector)
+	}
 }
 
 // LoginToUpstreamLDAP expects the page to be redirected to the Supervisor's login UI for an LDAP/AD IDP.

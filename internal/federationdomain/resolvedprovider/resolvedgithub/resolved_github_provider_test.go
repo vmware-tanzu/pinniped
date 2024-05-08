@@ -87,6 +87,9 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		"https://localhost/fake/path",
 	)
 	require.NoError(t, err)
+	// Note that GitHub does not require (or document) the standard response_type=code param, but in manual testing
+	// of GitHub authorize endpoint, it seems to ignore the param. The oauth2 package wants to add the param, so
+	// we will let it.
 	require.Equal(t,
 		"https://fake-authorization-url?"+
 			"client_id=fake-client-id&"+

@@ -828,7 +828,7 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 			Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 		},
 		Client: idpv1alpha1.OIDCClient{
-			SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 		},
 	}, idpv1alpha1.PhaseReady)
 

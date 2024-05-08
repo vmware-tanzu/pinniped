@@ -497,13 +497,23 @@ func CreateTestSecretBytes(t *testing.T, namespace string, baseName string, secr
 	return created
 }
 
-func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
+func CreateOIDCClientCredentialsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
+	t.Helper()
+	return createClientCredentialsSecret(t, clientID, clientSecret, "secrets.pinniped.dev/oidc-client")
+}
+
+func CreateGitHubClientCredentialsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
+	t.Helper()
+	return createClientCredentialsSecret(t, clientID, clientSecret, "secrets.pinniped.dev/github-client")
+}
+
+func createClientCredentialsSecret(t *testing.T, clientID string, clientSecret string, secretType string) *corev1.Secret {
 	t.Helper()
 	env := IntegrationEnv(t)
 	return CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"client-creds",
-		"secrets.pinniped.dev/oidc-client",
+		corev1.SecretType(secretType),
 		map[string]string{
 			"clientID":     clientID,
 			"clientSecret": clientSecret,
@@ -583,6 +593,50 @@ func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClie
 	require.Equal(t, 1, secretRequest.Status.TotalClientSecrets)
 
 	return generatedSecret
+}
+
+func CreateTestGitHubIdentityProvider(t *testing.T, spec idpv1alpha1.GitHubIdentityProviderSpec, expectedPhase idpv1alpha1.GitHubIdentityProviderPhase) *idpv1alpha1.GitHubIdentityProvider {
+	t.Helper()
+	return CreateTestGitHubIdentityProviderWithObjectMeta(t, spec, TestObjectMeta(t, "upstream-github-idp"), expectedPhase)
+}
+
+func CreateTestGitHubIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1.GitHubIdentityProviderSpec, objectMeta metav1.ObjectMeta, expectedPhase idpv1alpha1.GitHubIdentityProviderPhase) *idpv1alpha1.GitHubIdentityProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	upstreams := client.IDPV1alpha1().GitHubIdentityProviders(env.SupervisorNamespace)
+
+	// Create the GitHubIdentityProvider using GenerateName to get a random name.
+	created, err := upstreams.Create(ctx, &idpv1alpha1.GitHubIdentityProvider{
+		ObjectMeta: objectMeta,
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		notFound := k8serrors.IsNotFound(err)
+		// It's okay if it is not found, because it might have been deleted by another part of this test.
+		if !notFound {
+			require.NoErrorf(t, err, "could not cleanup test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
+		}
+	})
+	t.Logf("created test GitHubIdentityProvider %s", created.Name)
+
+	// Wait for the GitHubIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.GitHubIdentityProvider
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+		var err error
+		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+		requireEventually.NoErrorf(err, "error while getting GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
+		requireEventually.Equal(expectedPhase, result.Status.Phase)
+	}, 60*time.Second, 1*time.Second, "expected the GitHubIdentityProvider to go into phase %s, GitHubIdentityProvider was: %s", expectedPhase, Sdump(result))
+	return result
 }
 
 func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {

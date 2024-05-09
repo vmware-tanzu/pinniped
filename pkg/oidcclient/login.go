@@ -173,24 +173,11 @@ func WithScopes(scopes []string) Option {
 	}
 }
 
-// WithBrowserOpen overrides the default "open browser" functionality with a custom callback. If not specified,
-// an implementation using https://github.com/pkg/browser will be used by default.
-//
-// Deprecated: this option will be removed in a future version of Pinniped. See the
-// WithSkipBrowserOpen() option instead.
-func WithBrowserOpen(openURL func(url string) error) Option {
-	return func(h *handlerState) error {
-		h.openURL = openURL
-		return nil
-	}
-}
-
 // WithSkipBrowserOpen causes the login to only print the authorize URL, but skips attempting to
 // open the user's default web browser.
 func WithSkipBrowserOpen() Option {
 	return func(h *handlerState) error {
 		h.skipBrowser = true
-		h.openURL = func(_ string) error { return nil }
 		return nil
 	}
 }
@@ -629,14 +616,13 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 
 	// Open the authorize URL in the users browser, logging but otherwise ignoring any error.
 	// Keep track of whether the browser was opened.
-	openedBrowser := true
-	if err := h.openURL(authorizeURL); err != nil {
-		openedBrowser = false
-		h.logger.V(plog.KlogLevelDebug).Error(err, "could not open browser")
-	}
-	if h.skipBrowser {
-		// We didn't actually try to open the browser in the above call to openURL().
-		openedBrowser = false
+	openedBrowser := false
+	if !h.skipBrowser {
+		if err := h.openURL(authorizeURL); err != nil {
+			h.logger.V(plog.KlogLevelDebug).Error(err, "could not open browser")
+		} else {
+			openedBrowser = true
+		}
 	}
 
 	// Allow optionally skipping printing the login URL, for example because printing it may confuse
@@ -669,9 +655,10 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 // prompt to the screen and wait for user input, if needed. It can be cancelled by the context provided.
 // It returns a function which should be invoked by the caller to perform some cleanup.
 func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, printAuthorizeURL bool) func() {
-	if printAuthorizeURL {
-		_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+	if !printAuthorizeURL {
+		return func() {}
 	}
+	_, _ = fmt.Fprintf(h.out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
 
 	// If stdin is not a TTY, don't prompt for the manual paste, since we have no way of reading it.
 	if !h.stdinIsTTY() {

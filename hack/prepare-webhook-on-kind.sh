@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -32,6 +32,9 @@ EOF
 
 # Use the CLI to get a kubeconfig that will use this WebhookAuthenticator.
 go build -o /tmp/pinniped ./cmd/pinniped
-/tmp/pinniped get kubeconfig --static-token "$PINNIPED_TEST_USER_TOKEN" >/tmp/kubeconfig-with-webhook-auth.yaml
+/tmp/pinniped get kubeconfig \
+  --concierge-authenticator-type webhook \
+  --concierge-authenticator-name my-webhook \
+  --static-token "$PINNIPED_TEST_USER_TOKEN" >/tmp/kubeconfig-with-webhook-auth.yaml
 
 echo "export KUBECONFIG=/tmp/kubeconfig-with-webhook-auth.yaml"

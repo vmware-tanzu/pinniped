@@ -1,3 +1,6 @@
+// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package totp
 
 import (
@@ -6,11 +9,12 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // This code is borrowed from

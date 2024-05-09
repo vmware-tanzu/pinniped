@@ -35,7 +35,6 @@ func TestGenerateOTPCode(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		// This line can be removed when we upgrade golangci-lint to 1.58.1 and go1.22+
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

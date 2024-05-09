@@ -560,7 +560,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = nil })),
-			wantError: testutil.WantX509UntrustedCertErrorString(fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": %%s`, ldapsLocalhostPort), "Pinniped Test"),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": tls: failed to verify certificate: x509: certificate signed by unknown authority`, ldapsLocalhostPort),
 		},
 		{
 			name:     "when the CA bundle does not cause the host to be trusted with StartTLS",
@@ -571,7 +571,7 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.CABundle = nil
 			})),
-			wantError: testutil.WantX509UntrustedCertErrorString(fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (%%s)`, ldapLocalhostPort), "Pinniped Test"),
+			wantError: testutil.WantSprintfErrorString(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (tls: failed to verify certificate: x509: certificate signed by unknown authority)`, ldapLocalhostPort),
 		},
 		{
 			name:      "when trying to use TLS to connect to a port which only supports StartTLS",

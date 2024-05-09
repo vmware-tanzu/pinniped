@@ -28,7 +28,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/tlsassertions"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -2414,7 +2413,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  caForTestServerWithBadCertName.Bundle(),
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: testutil.WantExactErrorString(fmt.Sprintf(`LDAP Result Code 200 "Network Error": %sx509: certificate is valid for 10.2.3.4, not 127.0.0.1`, tlsassertions.GetTLSErrorPrefix())),
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": tls: failed to verify certificate: x509: certificate is valid for 10.2.3.4, not 127.0.0.1`),
 		},
 		{
 			name:      "invalid CA bundle with TLS",
@@ -2454,7 +2453,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  nil,
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: testutil.WantX509UntrustedCertErrorString(`LDAP Result Code 200 "Network Error": %s`, "Acme Co"),
+			wantError: testutil.WantExactErrorString(`LDAP Result Code 200 "Network Error": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
 		},
 		{
 			name: "cannot connect to host",

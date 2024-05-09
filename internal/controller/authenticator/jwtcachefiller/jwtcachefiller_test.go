@@ -1031,7 +1031,7 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantSyncLoopErr:  testutil.WantX509UntrustedCertErrorString(`could not perform oidc discovery on provider issuer: Get "`+goodIssuer+`/.well-known/openid-configuration": %s`, "Acme Co"),
+			wantSyncLoopErr:  testutil.WantSprintfErrorString(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, goodIssuer),
 			wantCacheEntries: 0,
 		},
 		{

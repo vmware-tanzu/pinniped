@@ -1029,8 +1029,8 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			wantError: true,
-			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
-				return testutil.WantX509UntrustedCertErrorString(fmt.Sprintf("Error: while fetching OIDC discovery data from issuer: Get \"%s/.well-known/openid-configuration\": %%s\n", issuerURL), "Acme Co")
+			wantStderr: func(_issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantSprintfErrorString(`Error: while fetching OIDC discovery data from issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority%s`, issuerURL, "\n")
 			},
 		},
 		{

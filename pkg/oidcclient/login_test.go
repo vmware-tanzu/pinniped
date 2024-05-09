@@ -712,6 +712,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.stdinIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(buildHTTPClientForPEM(formPostSuccessServerCA))(h))
 					require.NoError(t, WithSkipListen()(h))
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
 						require.NoError(t, err)
@@ -751,6 +752,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.stdinIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(buildHTTPClientForPEM(formPostSuccessServerCA))(h))
 					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
 						require.NoError(t, err)
@@ -794,6 +796,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					ctx, cancel := context.WithCancel(h.ctx)
 					h.ctx = ctx
 
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(_ string) error {
 						cancel()
 						return nil
@@ -824,6 +827,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 					h.stdinIsTTY = func() bool { return true }
 					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(_ string) error {
 						go func() {
 							h.callbacks <- callbackResult{err: fmt.Errorf("some callback error")}
@@ -876,6 +880,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -950,7 +955,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
-					h.skipBrowser = false
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -1016,7 +1021,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
-					h.skipBrowser = false
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -1095,33 +1100,15 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithClient(client)(h))
 
 					h.skipBrowser = true
-					h.openURL = func(actualURL string) error {
-						parsedActualURL, err := url.Parse(actualURL)
-						require.NoError(t, err)
-						actualParams := parsedActualURL.Query()
 
-						require.Contains(t, actualParams.Get("redirect_uri"), "http://127.0.0.1:")
-						actualParams.Del("redirect_uri")
+					// Allow the login to finish so this test does not hang waiting for the callback,
+					// and so we can check if the authorize URL was shown on stderr.
+					// The openURL function will be skipped, so we can't put this code inside the
+					// mock version of that function as we do for other tests in this file.
+					go func() {
+						h.callbacks <- callbackResult{token: &testToken}
+					}()
 
-						require.Equal(t, url.Values{
-							"code_challenge":        []string{testCodeChallenge},
-							"code_challenge_method": []string{"S256"},
-							"response_type":         []string{"code"},
-							"scope":                 []string{"test-scope"},
-							"nonce":                 []string{"test-nonce"},
-							"state":                 []string{"test-state"},
-							"access_type":           []string{"offline"},
-							"client_id":             []string{"test-client-id"},
-						}, actualParams)
-
-						parsedActualURL.RawQuery = ""
-						require.Equal(t, successServer.URL+"/authorize", parsedActualURL.String())
-
-						go func() {
-							h.callbacks <- callbackResult{token: &testToken}
-						}()
-						return nil
-					}
 					return nil
 				}
 			},
@@ -1185,6 +1172,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -1261,6 +1249,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					client.Timeout = 10 * time.Second
 					require.NoError(t, WithClient(client)(h))
 
+					h.skipBrowser = false // don't skip calling the following openURL func
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -2415,7 +2404,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				WithContext(context.Background()),
 				WithListenPort(0),
 				WithScopes([]string{"test-scope"}),
-				WithSkipBrowserOpen(),
+				WithSkipBrowserOpen(), // Skip by default so we don't really open a browser. Each test can override this.
 				tt.opt(t),
 				WithLogger(testLogger.Logger),
 				withOutWriter(t, &buffer),
@@ -2591,14 +2580,12 @@ func TestHandlePasteCallback(t *testing.T) {
 			},
 		},
 		{
-			name: "success, without printing auth url",
+			name: "skipping printing auth url (also skips prompting for authcode)",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.stdinIsTTY = func() bool { return true }
 					h.useFormPost = true
-					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
-						return "valid", nil
-					}
+					h.promptForValue = nil // shouldn't get called, so can be nil
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
 					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
@@ -2611,11 +2598,8 @@ func TestHandlePasteCallback(t *testing.T) {
 				}
 			},
 			authorizeURL:      testAuthURL,
-			printAuthorizeURL: false,                                 // do not want to print auth URL
-			wantStderr:        newlineAfterEveryAuthcodePromptOutput, // auth URL was not printed to stdout
-			wantCallback: &callbackResult{
-				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
-			},
+			printAuthorizeURL: false, // do not want to print auth URL
+			wantStderr:        "",    // auth URL was not printed, and prompt for pasting authcode was also not printed
 		},
 	}
 	for _, tt := range tests {

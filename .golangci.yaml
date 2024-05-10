@@ -1,8 +1,6 @@
-# https://github.com/golangci/golangci-lint#config-file
+# https://golangci-lint.run/usage/configuration/
 run:
-  deadline: 1m
-  skip-dirs:
-    - generated
+  timeout: 1m
 
 linters:
   disable-all: true
@@ -52,6 +50,8 @@ linters:
     - spancheck
 
 issues:
+  exclude-dirs:
+    - generated
   exclude-rules:
     # exclude tests from some rules for things that are useful in a testing context.
     - path: _test\.go

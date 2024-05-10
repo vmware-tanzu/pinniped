@@ -1814,7 +1814,6 @@ func TestController(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1872,7 +1871,7 @@ func TestController(t *testing.T) {
 			// Verify what's in the cache
 			actualIDPList := cache.GetGitHubIdentityProviders()
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
-			for i := 0; i < len(tt.wantResultingCache); i++ {
+			for i := range len(tt.wantResultingCache) {
 				// Do not expect any particular order in the cache
 				var actualProvider *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
@@ -1907,7 +1906,7 @@ func TestController(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, len(tt.wantResultingUpstreams), len(allGitHubIDPs.Items))
-			for i := 0; i < len(tt.wantResultingUpstreams); i++ {
+			for i := range len(tt.wantResultingUpstreams) {
 				require.Len(t, tt.wantResultingUpstreams[i].Status.Conditions, countExpectedConditions)
 
 				// Do not expect any particular order in the K8s objects
@@ -1924,7 +1923,7 @@ func TestController(t *testing.T) {
 
 				// Update all expected conditions to the frozenTime.
 				// TODO: Push this out to the test table
-				for j := 0; j < countExpectedConditions; j++ {
+				for j := range countExpectedConditions {
 					// Get this as a pointer so that we can update the value within the array
 					condition := &tt.wantResultingUpstreams[i].Status.Conditions[j]
 					condition.LastTransitionTime = metav1.Time{Time: frozenClock.Now()}
@@ -2208,7 +2207,6 @@ func TestController_OnlyWantActions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2323,7 +2321,6 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2395,7 +2392,6 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -174,7 +174,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+	cmd.RunE = func(cmd *cobra.Command, _args []string) error {
 		if flags.outputPath != "" {
 			out, err := os.Create(flags.outputPath)
 			if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package downward
@@ -51,7 +51,6 @@ func TestLoad(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := Load(tt.inputDir)
 			if tt.wantErr != "" {
@@ -103,7 +102,6 @@ example.com/bar="baz\x01"
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseMap(tt.input)
 			if tt.wantErr != "" {

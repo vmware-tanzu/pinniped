@@ -174,7 +174,6 @@ func TestParse(t *testing.T) {
 			expectErr:   `host "host.example.com:port1:port2" is not a valid hostname or IP address`,
 		},
 	} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := Parse(tt.input, tt.defaultPort)
 			if tt.expectErr == "" {
@@ -338,7 +337,6 @@ func TestParseFromURL(t *testing.T) {
 			expectErr:      `address [::1]]:443: missing port in address`,
 		},
 	} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			urlToProcess, err := url.Parse(tt.input)
 			require.NoError(t, err, "ParseFromURL expects a valid url.URL, parse errors here are not valuable")

@@ -231,7 +231,6 @@ func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -486,7 +485,6 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -722,9 +720,9 @@ func TestGitHubIDPTooManyOrganizationsStaticValidationOnCreate_Parallel(t *testi
 			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
 				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
 					Allowed: func() []string {
-						var orgs []string
-						for i := 0; i < 100; i++ {
-							orgs = append(orgs, fmt.Sprintf("org-%d", i))
+						orgs := make([]string, 100)
+						for i := range 100 {
+							orgs[i] = fmt.Sprintf("org-%d", i)
 						}
 						return orgs
 					}(),

@@ -75,7 +75,6 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			scheme := test.Scheme
 			addr := test.Address

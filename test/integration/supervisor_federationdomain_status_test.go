@@ -929,7 +929,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					// For the above tests, it should be enough to assume that there will only be indices up to 10.
 					// This is useful when the only difference in the message between old and new is the missing indices.
 					// Otherwise, use wantOldKubeErr to say what the expected message should be for old versions.
-					for i := 0; i < 10; i++ {
+					for i := range 10 {
 						wantErr = strings.ReplaceAll(wantErr, fmt.Sprintf("[%d]", i), "")
 					}
 				}

@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apiserver
@@ -117,7 +117,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	controllersCtx, cancelControllerCtx := context.WithCancel(context.Background())
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
-		func(postStartContext genericapiserver.PostStartHookContext) error {
+		func(_ genericapiserver.PostStartHookContext) error {
 			plog.Debug("start-controllers post start hook starting")
 			defer plog.Debug("start-controllers post start hook completed")
 

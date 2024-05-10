@@ -139,9 +139,9 @@ func LockADTestUser(t *testing.T, env *TestEnv, testUserName string) {
 	// our password policy allows 20 wrong attempts before locking the account, so do 21.
 	// these wrong password attempts could go to different domain controllers, but account
 	// lockout changes are urgently replicated, meaning that the domain controllers will be
-	// synced asap rather than in the usual 15 second interval.
+	// synced asap rather than in the usual 15-second interval.
 	// See https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/cc961787(v=technet.10)#urgent-replication-of-account-lockout-changes
-	for i := 0; i <= 21; i++ {
+	for i := range 22 {
 		err := conn.Bind(userDN, "not-the-right-password-"+fmt.Sprint(i))
 		require.Error(t, err) // this should be an error
 	}

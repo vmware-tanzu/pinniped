@@ -33,7 +33,7 @@ type REST struct {
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
 var _ interface {
-	rest.Creater
+	rest.Creater //nolint:misspell // this name comes from a dependency
 	rest.NamespaceScopedStrategy
 	rest.Scoper
 	rest.Storage

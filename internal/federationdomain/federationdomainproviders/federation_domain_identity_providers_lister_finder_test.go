@@ -296,7 +296,6 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}
 
 	for _, tt := range testFindUpstreamIDPByDisplayName {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -384,7 +383,6 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}
 
 	for _, tt := range testFindDefaultIDP {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -466,7 +464,6 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}
 
 	for _, tt := range testGetIdentityProviders {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -522,7 +519,6 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}
 
 	for _, tt := range testIDPCount {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -583,7 +579,6 @@ func TestFederationDomainIdentityProvidersListerFinder(t *testing.T) {
 	}
 
 	for _, tt := range testHasDefaultIDP {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

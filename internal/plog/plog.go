@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package plog implements a thin layer over logr to help enforce pinniped's logging convention.
@@ -190,7 +190,6 @@ func (p pLogger) withLogrMod(mod func(logr.Logger) logr.Logger) Logger {
 func (p pLogger) logr() logr.Logger {
 	l := Logr() // grab the current global logger and its current config
 	for _, mod := range p.mods {
-		mod := mod
 		l = mod(l) // and then update it with all modifications
 	}
 	return l // this logger is guaranteed to have the latest config and all modifications

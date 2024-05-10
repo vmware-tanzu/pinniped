@@ -3598,7 +3598,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			kubeClient := fake.NewSimpleClientset()
 			supervisorClient := supervisorfake.NewSimpleClientset()

@@ -72,7 +72,6 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			kubeClient := testlib.NewKubernetesClientset(t)
 			aggregatedClient := testlib.NewAggregatedClientset(t)
@@ -151,7 +150,7 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 			// our code changes all the certs immediately thus this should be healthy fairly quickly
 			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					_, err := conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},

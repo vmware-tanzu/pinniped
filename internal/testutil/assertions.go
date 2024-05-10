@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -16,8 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
-
-	"go.pinniped.dev/internal/testutil/tlsassertions"
 )
 
 func RequireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
@@ -177,27 +175,5 @@ func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...interface{}) Re
 func WantMatchingErrorString(wantErrRegexp string) RequireErrorStringFunc {
 	return func(t *testing.T, actualErrorStr string) {
 		require.Regexp(t, wantErrRegexp, actualErrorStr)
-	}
-}
-
-// WantX509UntrustedCertErrorString can be used to set up an expected value for an error string in a test table.
-// expectedErrorFormatString must contain exactly one formatting verb, which should usually be %s, which will
-// be replaced by the platform-specific X509 untrusted certs error string and then compared against expectedCommonName.
-func WantX509UntrustedCertErrorString(expectedErrorFormatSpecifier string, expectedCommonName string) RequireErrorStringFunc {
-	// Starting in Go 1.18.1, and until it was fixed in Go 1.19.5, Go on MacOS had an incorrect error string.
-	// We don't care which error string was returned, as long as it is either the normal error string from
-	// the Go x509 library, or the error string that was accidentally returned from the Go x509 library in
-	// those versions of Go on MacOS which had the bug.
-	return func(t *testing.T, actualErrorStr string) {
-		// This is the MacOS error string starting in Go 1.18.1, and until it was fixed in Go 1.19.5.
-		macOSErr := fmt.Sprintf(`x509: “%s” certificate is not trusted`, expectedCommonName)
-		// This is the normal Go x509 library error string.
-		standardErr := `x509: certificate signed by unknown authority`
-		allowedErrorStrings := []string{
-			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTLSErrorPrefix()+macOSErr),
-			fmt.Sprintf(expectedErrorFormatSpecifier, tlsassertions.GetTLSErrorPrefix()+standardErr),
-		}
-		// Allow either.
-		require.Contains(t, allowedErrorStrings, actualErrorStr)
 	}
 }

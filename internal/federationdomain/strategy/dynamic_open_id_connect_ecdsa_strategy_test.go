@@ -88,7 +88,6 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			jwksProvider := jwks.NewDynamicJWKSProvider()
 			if test.jwksProvider != nil {

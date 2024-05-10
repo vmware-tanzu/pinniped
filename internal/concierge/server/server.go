@@ -73,7 +73,7 @@ func (a *App) addServerCommand(ctx context.Context, args []string, stdout, stder
 			pinniped-concierge provides a generic API for mapping an external
 			credential from somewhere to an internal credential to be used for
 			authenticating to the Kubernetes API.`),
-		RunE: func(cmd *cobra.Command, args []string) error { return a.runServer(ctx) },
+		RunE: func(_ *cobra.Command, _args []string) error { return a.runServer(ctx) },
 		Args: cobra.NoArgs,
 	}
 

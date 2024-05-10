@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apiserver
@@ -113,7 +113,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	controllersCtx, cancelControllerCtx := context.WithCancel(context.Background())
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
-		func(postStartContext genericapiserver.PostStartHookContext) error {
+		func(_ genericapiserver.PostStartHookContext) error {
 			plog.Debug("start-controllers post start hook starting")
 			defer plog.Debug("start-controllers post start hook completed")
 
@@ -137,7 +137,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	)
 
 	s.GenericAPIServer.AddPostStartHookOrDie("fetch-impersonation-proxy-tokens",
-		func(postStartContext genericapiserver.PostStartHookContext) error {
+		func(_ genericapiserver.PostStartHookContext) error {
 			plog.Debug("fetch-impersonation-proxy-tokens start hook starting")
 			defer plog.Debug("fetch-impersonation-proxy-tokens start hook completed")
 

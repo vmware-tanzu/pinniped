@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -73,7 +73,6 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			scheme := test.Scheme
 			addr := test.Address

@@ -19,9 +19,9 @@ import (
 )
 
 func TestTransformer(t *testing.T) {
-	var veryLargeGroupList []string
-	for i := 0; i < 10000; i++ {
-		veryLargeGroupList = append(veryLargeGroupList, fmt.Sprintf("g%d", i))
+	veryLargeGroupList := make([]string, 10000)
+	for i := range 10000 {
+		veryLargeGroupList[i] = fmt.Sprintf("g%d", i)
 	}
 
 	alreadyCancelledContext, cancel := context.WithCancel(context.Background())
@@ -780,7 +780,6 @@ func TestTransformer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -850,11 +849,11 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	require.NoError(t, err)
 	pipeline.AppendTransformation(compiledTransform)
 
-	var groups []string
-	var wantGroups []string
-	for i := 0; i < 100; i++ {
-		groups = append(groups, fmt.Sprintf("g%d", i))
-		wantGroups = append(wantGroups, fmt.Sprintf("group_prefix:g%d", i))
+	groups := make([]string, 100)
+	wantGroups := make([]string, 100)
+	for i := range 100 {
+		groups[i] = fmt.Sprintf("g%d", i)
+		wantGroups[i] = fmt.Sprintf("group_prefix:g%d", i)
 	}
 	sort.Strings(wantGroups)
 
@@ -870,7 +869,7 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	// and 100 group names. It is not meant to be a pass/fail test or scientific benchmark test.
 	iterations := 1000
 	start := time.Now()
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		_, _ = pipeline.Evaluate(context.Background(), "ryan", groups)
 	}
 	elapsed := time.Since(start)
@@ -885,11 +884,11 @@ func TestTypicalPerformanceAndThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	numGoroutines := runtime.NumCPU() / 2
 	t.Logf("Running tight loops in %d simultaneous goroutines", numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		wg.Add(1) // increment WaitGroup counter for each goroutine
 		go func() {
 			defer wg.Done() // decrement WaitGroup counter when this goroutine finishes
-			for j := 0; j < iterations*2; j++ {
+			for range iterations * 2 {
 				localResult, localErr := pipeline.Evaluate(context.Background(), "ryan", groups)
 				require.NoError(t, localErr)
 				require.Equal(t, "username_prefix:ryan", localResult.Username)

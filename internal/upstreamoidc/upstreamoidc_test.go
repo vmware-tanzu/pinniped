@@ -22,6 +22,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -241,7 +242,6 @@ func TestProviderConfig(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
@@ -310,7 +310,7 @@ func TestProviderConfig(t *testing.T) {
 					return
 				}
 				require.NoError(t, err)
-				require.Equal(t, &tt.wantToken, tok)
+				require.Equal(t, ptr.To(tt.wantToken), tok)
 				require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
 			})
 		}
@@ -413,7 +413,6 @@ func TestProviderConfig(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
@@ -649,7 +648,6 @@ func TestProviderConfig(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			tt := tt
 			numRequests := 0
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1086,7 +1084,6 @@ func TestProviderConfig(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				p := ProviderConfig{
 					Name:          "test-name",
@@ -1334,7 +1331,6 @@ func TestProviderConfig(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
@@ -1404,7 +1400,7 @@ func TestProviderConfig(t *testing.T) {
 					return
 				}
 				require.NoError(t, err)
-				require.Equal(t, &tt.wantToken, tok)
+				require.Equal(t, ptr.To(tt.wantToken), tok)
 				require.Equal(t, tt.wantUserInfoCalled, p.Provider.(*mockProvider).called)
 			})
 		}

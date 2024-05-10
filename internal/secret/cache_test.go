@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package secret
@@ -74,7 +74,7 @@ func TestCacheSynchronized(t *testing.T) {
 	eg, _ := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			require.Equal(t, csrfCookieEncoderHashKey, c.GetCSRFCookieEncoderHashKey())
 			require.Equal(t, tokenHMACKey, c.GetTokenHMACKey(issuer))
 			require.Equal(t, stateEncoderHashKey, c.GetStateEncoderHashKey(issuer))
@@ -84,7 +84,7 @@ func TestCacheSynchronized(t *testing.T) {
 	})
 
 	eg.Go(func() error {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			require.Equal(t, csrfCookieEncoderHashKey, c.GetCSRFCookieEncoderHashKey())
 			require.Equal(t, tokenHMACKey, c.GetTokenHMACKey(issuer))
 			require.Equal(t, stateEncoderHashKey, c.GetStateEncoderHashKey(issuer))
@@ -94,7 +94,7 @@ func TestCacheSynchronized(t *testing.T) {
 	})
 
 	eg.Go(func() error {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			require.Nil(t, c.GetTokenHMACKey(otherIssuer))
 			require.Nil(t, c.GetStateEncoderHashKey(otherIssuer))
 			require.Nil(t, c.GetStateEncoderBlockKey(otherIssuer))

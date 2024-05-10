@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -107,8 +107,7 @@ func TestWhoami(t *testing.T) {
 				Current user info:
 
 				Username: some-username
-				Groups: 
-			`),
+				Groups:` + " \n"), // Linters and codeformatters don't like the extra space after "Groups:" and before the newline
 		},
 		{
 			name: "json output",
@@ -280,7 +279,6 @@ func TestWhoami(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			getClientset := func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
 				if test.gettingClientsetErr != nil {

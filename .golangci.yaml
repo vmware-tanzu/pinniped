@@ -1,8 +1,6 @@
-# https://github.com/golangci/golangci-lint#config-file
+# https://golangci-lint.run/usage/configuration/
 run:
-  deadline: 1m
-  skip-dirs:
-    - generated
+  timeout: 1m
 
 linters:
   disable-all: true
@@ -45,14 +43,25 @@ linters:
     - sqlclosecheck
     - unconvert
     - whitespace
+    - copyloopvar
+    - intrange
+    - fatcontext
+    # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
+    - spancheck
 
 issues:
+  exclude-dirs:
+    - generated
   exclude-rules:
     # exclude tests from some rules for things that are useful in a testing context.
     - path: _test\.go
       linters:
         - funlen
         - gochecknoglobals
+        - revive
+    - path: internal/testutil/
+      linters:
+      - revive
 
 linters-settings:
   funlen:
@@ -76,3 +85,9 @@ linters-settings:
           # Allow unused params that start with underscore. It can be nice to keep unused param names when implementing
           # an interface sometimes, to help readers understand why it is unused in that particular implementation.
           - allowRegex: "^_"
+  spancheck:
+    # https://golangci-lint.run/usage/linters/#spancheck
+    checks:
+    - end
+    - record-error
+    - set-status

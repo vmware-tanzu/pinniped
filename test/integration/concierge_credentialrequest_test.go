@@ -94,7 +94,6 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			authenticator := test.authenticator(ctx, t)
 			token, username, groups := test.token(t)
@@ -132,7 +131,6 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 				testlib.AccessAsUserTest(ctx, username, clientWithCertFromCredentialRequest),
 			)
 			for _, group := range groups {
-				group := group
 				t.Run(
 					"access as group "+group,
 					testlib.AccessAsGroupTest(ctx, group, clientWithCertFromCredentialRequest),

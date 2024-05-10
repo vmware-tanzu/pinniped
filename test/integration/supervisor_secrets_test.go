@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -78,7 +78,6 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			// Ensure a secret is created with the FederationDomain's JWKS.
 			var updatedFederationDomain *configv1alpha1.FederationDomain

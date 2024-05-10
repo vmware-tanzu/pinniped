@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerinit
@@ -34,8 +34,6 @@ type Informer interface {
 func Prepare(controllers Runner, controllersWrapper RunnerWrapper, informers ...Informer) RunnerBuilder {
 	return func(ctx context.Context) (Runner, error) {
 		for _, informer := range informers {
-			informer := informer
-
 			informer.Start(ctx.Done())
 
 			// prevent us from blocking forever due to a broken informer

@@ -168,7 +168,6 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -231,7 +230,6 @@ func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -264,11 +262,11 @@ func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T
 
 			unrelated := configv1alpha1.FederationDomain{}
 			filter := withInformer.GetFilterForInformer(federationDomainInformer)
-			require.Equal(t, test.wantAdd, filter.Add(&test.federationDomain))
-			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.federationDomain))
-			require.Equal(t, test.wantUpdate, filter.Update(&test.federationDomain, &unrelated))
-			require.Equal(t, test.wantDelete, filter.Delete(&test.federationDomain))
-			require.Equal(t, test.wantParent, filter.Parent(&test.federationDomain))
+			require.Equal(t, test.wantAdd, filter.Add(test.federationDomain.DeepCopy()))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.federationDomain.DeepCopy()))
+			require.Equal(t, test.wantUpdate, filter.Update(test.federationDomain.DeepCopy(), &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.federationDomain.DeepCopy()))
+			require.Equal(t, test.wantParent, filter.Parent(test.federationDomain.DeepCopy()))
 		})
 	}
 }
@@ -625,7 +623,6 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

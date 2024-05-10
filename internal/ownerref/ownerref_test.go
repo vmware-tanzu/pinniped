@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package ownerref
@@ -194,7 +194,6 @@ func TestOwnerReferenceMiddleware(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := New(tt.args.ref)
 
@@ -212,7 +211,6 @@ func TestOwnerReferenceMiddleware(t *testing.T) {
 
 			orig := tt.args.obj.DeepCopyObject().(kubeclient.Object)
 			for _, mutateRequest := range rt.MutateRequests {
-				mutateRequest := mutateRequest
 				require.NoError(t, mutateRequest(tt.args.obj))
 			}
 			if !tt.wantMutates {

@@ -602,7 +602,6 @@ func TestKubeclient(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			_, restConfig := fakekubeapi.Start(t, nil)
 
@@ -1134,7 +1133,6 @@ func testUnwrap(t *testing.T, client *Client, serverSubjects [][]byte, tlsConfig
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel() // make sure to run in parallel to confirm that our client-go TLS cache busting works (i.e. assert no data races)
 

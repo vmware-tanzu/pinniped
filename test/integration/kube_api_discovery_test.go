@@ -463,10 +463,9 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 	})
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.group.Name, func(t *testing.T) {
 			t.Parallel()
-			require.Contains(t, groups, &tt.group)
+			require.Contains(t, groups, tt.group.DeepCopy())
 
 			for groupVersion, expectedResources := range tt.resourceByVersion {
 				// Find the actual resource list and make a copy.

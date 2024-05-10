@@ -414,12 +414,12 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 	return nil
 }
 
-// DryRunAuthenticateUser provides a method for testing all of the Provider settings in a kind of dry run of
+// DryRunAuthenticateUser provides a method for testing all the Provider settings in a kind of dry run of
 // authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
 func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticators.Response, bool, error) {
-	endUserBindFunc := func(conn Conn, foundUserDN string) error {
+	endUserBindFunc := func(_ Conn, _foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
 	}

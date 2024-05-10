@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controller
@@ -21,16 +21,16 @@ func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerl
 // MatchAnythingIgnoringUpdatesFilter returns a controllerlib.Filter that allows all objects but ignores updates.
 func MatchAnythingIgnoringUpdatesFilter(parentFunc controllerlib.ParentFunc) controllerlib.Filter {
 	return controllerlib.FilterFuncs{
-		AddFunc:    func(object metav1.Object) bool { return true },
-		UpdateFunc: func(oldObj, newObj metav1.Object) bool { return false },
-		DeleteFunc: func(object metav1.Object) bool { return true },
+		AddFunc:    func(_ metav1.Object) bool { return true },
+		UpdateFunc: func(_oldObj, _newObj metav1.Object) bool { return false },
+		DeleteFunc: func(_ metav1.Object) bool { return true },
 		ParentFunc: parentFunc,
 	}
 }
 
 // MatchAnythingFilter returns a controllerlib.Filter that allows all objects.
 func MatchAnythingFilter(parentFunc controllerlib.ParentFunc) controllerlib.Filter {
-	return SimpleFilter(func(object metav1.Object) bool { return true }, parentFunc)
+	return SimpleFilter(func(_ metav1.Object) bool { return true }, parentFunc)
 }
 
 // SimpleFilter takes a single boolean match function on a metav1.Object and wraps it into a proper controllerlib.Filter.

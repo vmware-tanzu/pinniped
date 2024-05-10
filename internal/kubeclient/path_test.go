@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -127,7 +127,6 @@ func Test_updatePathNewGVK(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := updatePathNewGVK(tt.args.reqURL, tt.args.result, tt.args.apiPathPrefix, tt.args.reqInfo)
 			if (err != nil) != tt.wantErr {
@@ -213,7 +212,6 @@ func Test_reqWithoutPrefix(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			req := *tt.args.req
 			if got := reqWithoutPrefix(&req, tt.args.hostURL, tt.args.apiPathPrefix); !reflect.DeepEqual(got, tt.want) {

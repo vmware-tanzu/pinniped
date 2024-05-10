@@ -328,7 +328,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			testlib.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyKubeClient(t)),
 		)
 		for _, group := range env.TestUser.ExpectedGroups {
-			group := group
 			t.Run(
 				"access as group "+group,
 				testlib.AccessAsGroupTest(ctx, group, impersonationProxyKubeClient(t)),
@@ -2042,8 +2041,6 @@ func ensureDNSResolves(t *testing.T, urlString string) {
 		defer cancel()
 
 		for _, resolver := range []*net.Resolver{goResolver, notGoResolver} {
-			resolver := resolver
-
 			ips, ipErr := resolver.LookupIPAddr(ctx, host)
 			requireEventually.NoError(ipErr)
 			requireEventually.NotEmpty(ips)

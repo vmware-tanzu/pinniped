@@ -441,8 +441,8 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 
 	// Serve the /healthz endpoint and make all other paths result in 404.
 	healthMux := http.NewServeMux()
-	healthMux.Handle("/healthz", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		_, _ = writer.Write([]byte("ok"))
+	healthMux.Handle("/healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
 	}))
 
 	dynamicServingCertProvider := dynamiccert.NewServingCert("supervisor-serving-cert")

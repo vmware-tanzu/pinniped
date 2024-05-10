@@ -927,7 +927,6 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -961,7 +960,6 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1641,7 +1639,6 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4524,7 +4521,6 @@ func TestRefreshGrant(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -5473,7 +5469,6 @@ func TestDiffSortedGroups(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

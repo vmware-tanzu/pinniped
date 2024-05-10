@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -33,7 +33,6 @@ type Middlewares []Middleware
 
 func (m Middlewares) Handle(ctx context.Context, rt RoundTrip) {
 	for _, middleware := range m {
-		middleware := middleware
 		middleware.Handle(ctx, rt)
 	}
 }
@@ -116,7 +115,6 @@ func (r *request) mutateRequest(obj Object) (*mutationResult, error) {
 
 	var errs []error
 	for _, reqFunc := range r.reqFuncs {
-		reqFunc := reqFunc
 		if err := reqFunc(obj); err != nil {
 			errs = append(errs, err)
 		}
@@ -146,7 +144,6 @@ func (r *request) mutateResponse(obj Object) (bool, error) {
 
 	var errs []error
 	for _, respFunc := range r.respFuncs {
-		respFunc := respFunc
 		if err := respFunc(obj); err != nil {
 			errs = append(errs, err)
 		}

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccertauthority
@@ -89,7 +89,6 @@ func TestCAIssuePEM(t *testing.T) {
 		},
 	}
 	for _, step := range steps {
-		step := step
 		t.Run(step.name, func(t *testing.T) {
 			// Can't run these steps in parallel, because each one depends on the previous steps being
 			// run.

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -66,7 +66,7 @@ func FilterByNames(parentFunc ParentFunc, names ...string) Filter {
 	return FilterFuncs{
 		ParentFunc: parentFunc,
 		AddFunc:    has,
-		UpdateFunc: func(oldObj, newObj metav1.Object) bool {
+		UpdateFunc: func(_oldObj, newObj metav1.Object) bool {
 			return has(newObj)
 		},
 		DeleteFunc: has,

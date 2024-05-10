@@ -173,7 +173,7 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 		AuthorizeCodeLifespan: authorizationCodeLifespan,
 
 		AccessTokenLifespan: accessTokenLifespan,
-		OverrideDefaultAccessTokenLifespan: func(accessRequest fosite.AccessRequester) (time.Duration, bool) {
+		OverrideDefaultAccessTokenLifespan: func(_ fosite.AccessRequester) (time.Duration, bool) {
 			// Not currently overriding the defaults.
 			return 0, false
 		},
@@ -202,23 +202,23 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 
 		RefreshTokenLifespan: refreshTokenLifespan,
 
-		AuthorizationCodeSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+		AuthorizationCodeSessionStorageLifetime: func(_ fosite.Requester) time.Duration {
 			return authorizationCodeLifespan + refreshTokenLifespan
 		},
 
-		PKCESessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+		PKCESessionStorageLifetime: func(_ fosite.Requester) time.Duration {
 			return authorizationCodeLifespan + storageExtraLifetime
 		},
 
-		OIDCSessionStorageLifetime: func(_requester fosite.Requester) time.Duration {
+		OIDCSessionStorageLifetime: func(_ fosite.Requester) time.Duration {
 			return authorizationCodeLifespan + storageExtraLifetime
 		},
 
-		AccessTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+		AccessTokenSessionStorageLifetime: func(_ fosite.Requester) time.Duration {
 			return refreshTokenLifespan + accessTokenLifespan
 		},
 
-		RefreshTokenSessionStorageLifetime: func(requester fosite.Requester) time.Duration {
+		RefreshTokenSessionStorageLifetime: func(_ fosite.Requester) time.Duration {
 			return refreshTokenLifespan + accessTokenLifespan
 		},
 	}

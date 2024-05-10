@@ -11,14 +11,12 @@ cd "${ROOT}"
 # Print the Go version.
 go version
 
-lint_version=$(cat hack/lib/lint-version.txt)
+lint_version="v$(cat hack/lib/lint-version.txt)"
 
-echo "Will install golangci-lint@${lint_version}"
+echo "Installing golangci-lint@${lint_version}"
 
-# Install the same version of the linter that is used in the CI pipelines
+# Install the same version of the linter that the pipelines will use
 # so you can get the same results when running the linter locally.
-# Whenever the linter is updated in the CI pipelines, it should also be
-# updated here to make local development more convenient.
 go install -v "github.com/golangci/golangci-lint/cmd/golangci-lint@${lint_version}"
 golangci-lint --version
 

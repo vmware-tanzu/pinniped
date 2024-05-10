@@ -477,7 +477,7 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 
 	// Don't follow redirects automatically because we want to handle redirects here.
 	var sawRedirect bool
-	h.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	h.httpClient.CheckRedirect = func(_ *http.Request, _via []*http.Request) error {
 		sawRedirect = true
 		return http.ErrUseLastResponse
 	}

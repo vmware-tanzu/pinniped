@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -88,7 +88,6 @@ func TestExpirerControllerFilters(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name+"-"+test.namespace, func(t *testing.T) {
 			t.Parallel()
 
@@ -110,10 +109,10 @@ func TestExpirerControllerFilters(t *testing.T) {
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretsInformer)
-			require.Equal(t, test.want, filter.Add(&test.secret))
-			require.Equal(t, test.want, filter.Update(&unrelated, &test.secret))
-			require.Equal(t, test.want, filter.Update(&test.secret, &unrelated))
-			require.Equal(t, test.want, filter.Delete(&test.secret))
+			require.Equal(t, test.want, filter.Add(test.secret.DeepCopy()))
+			require.Equal(t, test.want, filter.Update(&unrelated, test.secret.DeepCopy()))
+			require.Equal(t, test.want, filter.Update(test.secret.DeepCopy(), &unrelated))
+			require.Equal(t, test.want, filter.Delete(test.secret.DeepCopy()))
 		})
 	}
 }
@@ -219,7 +218,6 @@ func TestExpirerControllerSync(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

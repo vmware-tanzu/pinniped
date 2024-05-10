@@ -626,7 +626,6 @@ func pluralize(pods []*corev1.Pod) string {
 
 func firstErr(errs ...error) error {
 	for _, err := range errs {
-		err := err
 		if err != nil {
 			return err
 		}

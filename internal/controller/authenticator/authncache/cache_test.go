@@ -55,7 +55,7 @@ func TestCache(t *testing.T) {
 		{APIGroup: "b", Kind: "b", Name: "a"},
 		{APIGroup: "b", Kind: "b", Name: "b"},
 	}
-	for tries := 0; tries < 10; tries++ {
+	for range 10 {
 		cache := New()
 		for _, i := range rand.Perm(len(keysInExpectedOrder)) {
 			cache.Store(keysInExpectedOrder[i], nil)

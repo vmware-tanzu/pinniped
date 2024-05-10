@@ -589,7 +589,6 @@ func TestFromPath(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			// this is a serial test because it sets the global logger
 

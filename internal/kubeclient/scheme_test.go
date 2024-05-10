@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -139,7 +139,6 @@ func Test_schemeRestMapper(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			schemeRestMapperFunc := schemeRestMapper(tt.args.scheme)
 			gvk, ok := schemeRestMapperFunc(tt.args.gvr, tt.args.v)

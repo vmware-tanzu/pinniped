@@ -398,7 +398,6 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				require.Len(t, statusErr.ErrStatus.Details.Causes, 4)
 				out := make([]string, 0, len(statusErr.ErrStatus.Details.Causes))
 				for _, cause := range statusErr.ErrStatus.Details.Causes {
-					cause := cause
 					out = append(out, fmt.Sprintf("%s: %s", cause.Field, cause.Message))
 				}
 				sort.Strings(out)
@@ -486,7 +485,6 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.skip {
 				t.Skip()
@@ -535,7 +533,7 @@ func makeErrFix(reallyOld bool) []string {
 	out := make([]string, 0, total*6) // good enough allocation
 
 	// these servers do not show the actual index of where the error occurred
-	for i := 0; i < total; i++ {
+	for i := range total {
 		idx := fmt.Sprintf("[%d]", i)
 		out = append(out, idx+":", ":")
 		out = append(out, idx+" ", " ")
@@ -688,7 +686,6 @@ func TestOIDCClientControllerValidations_Parallel(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

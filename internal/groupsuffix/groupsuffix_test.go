@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package groupsuffix
@@ -525,7 +525,6 @@ func TestMiddlware(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			m := New(test.apiGroupSuffix)
 			if test.wantNilMiddleware {
@@ -542,7 +541,6 @@ func TestMiddlware(t *testing.T) {
 				objMutated := test.requestObj.DeepCopyObject().(kubeclient.Object)
 				var mutateRequestErrors []string
 				for _, mutateRequest := range test.rt.MutateRequests {
-					mutateRequest := mutateRequest
 					if err := mutateRequest(objMutated); err != nil {
 						mutateRequestErrors = append(mutateRequestErrors, err.Error())
 					}
@@ -559,7 +557,6 @@ func TestMiddlware(t *testing.T) {
 				objMutated := test.responseObj.DeepCopyObject().(kubeclient.Object)
 				var mutateResponseErrors []string
 				for _, mutateResponse := range test.rt.MutateResponses {
-					mutateResponse := mutateResponse
 					if err := mutateResponse(objMutated); err != nil {
 						mutateResponseErrors = append(mutateResponseErrors, err.Error())
 					}
@@ -637,7 +634,6 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.apiGroupSuffix, func(t *testing.T) {
 			err := Validate(test.apiGroupSuffix)
 			if test.wantErrorPrefix != "" {

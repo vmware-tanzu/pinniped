@@ -6,6 +6,7 @@ package githubupstreamwatcher
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -368,13 +369,17 @@ func TestController(t *testing.T) {
 		name                    string
 		githubIdentityProviders []runtime.Object
 		secrets                 []runtime.Object
+		mockDialer              func(network, addr string, config *tls.Config) (*tls.Conn, error)
 		wantErr                 string
 		wantLogs                []string
 		wantResultingCache      []*upstreamgithub.ProviderConfig
 		wantResultingUpstreams  []v1alpha1.GitHubIdentityProvider
 	}{
 		{
-			name: "no GitHubIdentityProviders",
+			name:                   "no GitHubIdentityProviders",
+			wantResultingCache:     []*upstreamgithub.ProviderConfig{},
+			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{},
+			wantLogs:               []string{},
 		},
 		{
 			name:    "happy path with all fields",
@@ -386,17 +391,23 @@ func TestController(t *testing.T) {
 				{
 					Name:               "some-idp-name",
 					ResourceUID:        "some-resource-uid",
-					Host:               fmt.Sprintf("https://%s", *validFilledOutIDP.Spec.GitHubAPI.Host),
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", *validFilledOutIDP.Spec.GitHubAPI.Host),
 					UsernameAttribute:  "id",
 					GroupNameAttribute: "name",
 					OAuth2Config: &oauth2.Config{
 						ClientID:     "some-client-id",
 						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations:    []string{"organization1", "org2"},
-					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
-					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              nil, // let the test runner populate this for us
+					AllowedOrganizations: []string{"organization1", "org2"},
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -436,16 +447,22 @@ func TestController(t *testing.T) {
 				{
 					Name:               "minimal-idp-name",
 					ResourceUID:        "minimal-uid",
-					Host:               fmt.Sprintf("https://%s", goodServerDomain),
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", *validFilledOutIDP.Spec.GitHubAPI.Host),
 					UsernameAttribute:  "login",
 					GroupNameAttribute: "slug",
 					OAuth2Config: &oauth2.Config{
 						ClientID:     "some-client-id",
 						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
 					},
-					OrganizationLoginPolicy: "AllGitHubUsers",
-					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", goodServerDomain),
-					HttpClient:              nil, // let the test runner populate this for us
+					HttpClient: nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -476,6 +493,80 @@ func TestController(t *testing.T) {
 			},
 		},
 		{
+			name:    "happy path using github.com",
+			secrets: []runtime.Object{goodSecret},
+			githubIdentityProviders: []runtime.Object{
+				func() runtime.Object {
+					githubIDP := validMinimalIDP.DeepCopy()
+					githubIDP.Spec.GitHubAPI.Host = ptr.To("github.com")
+					// don't change the CA because we are not really going to dial github.com in this test
+					return githubIDP
+				}(),
+			},
+			mockDialer: func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+				require.Equal(t, "github.com:443", addr)
+				// don't actually dial github.com to avoid making external network calls in unit test
+				certPool, _, err := pinnipedcontroller.BuildCertPoolIDP(validMinimalIDP.Spec.GitHubAPI.TLS)
+				require.NoError(t, err)
+				configClone := config.Clone()
+				configClone.RootCAs = certPool
+				return tls.Dial(network, goodServerDomain, configClone)
+			},
+			wantResultingCache: []*upstreamgithub.ProviderConfig{
+				{
+					Name:               "minimal-idp-name",
+					ResourceUID:        "minimal-uid",
+					APIBaseURL:         "https://api.github.com",
+					UsernameAttribute:  "login",
+					GroupNameAttribute: "slug",
+					OAuth2Config: &oauth2.Config{
+						ClientID:     "some-client-id",
+						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       "https://github.com:443/login/oauth/authorize",
+							DeviceAuthURL: "", // not used
+							TokenURL:      "https://github.com:443/login/oauth/access_token",
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
+					},
+					HttpClient: nil, // let the test runner populate this for us
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+				{
+					ObjectMeta: validMinimalIDP.ObjectMeta,
+					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+						githubIDP := validMinimalIDP.DeepCopy()
+						githubIDP.Spec.GitHubAPI.Host = ptr.To("github.com")
+						// don't change the CA because we are not really going to dial github.com in this test
+						return githubIDP.Spec
+					}(),
+					Status: v1alpha1.GitHubIdentityProviderStatus{
+						Phase: v1alpha1.GitHubPhaseReady,
+						Conditions: []metav1.Condition{
+							buildClaimsValidatedTrue(t),
+							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildGitHubConnectionValidTrue(t, "github.com:443"),
+							buildHostValidTrue(t, "github.com"),
+							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
+							buildTLSConfigurationValidTrue(t),
+						},
+					},
+				},
+			},
+			wantLogs: []string{
+				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
+				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
+				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, "github.com"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, "github.com:443"),
+				buildLogForUpdatingPhase("minimal-idp-name", "Ready"),
+			},
+		},
+		{
 			name:    "happy path with IPv6",
 			secrets: []runtime.Object{goodSecret},
 			githubIdentityProviders: []runtime.Object{
@@ -492,16 +583,22 @@ func TestController(t *testing.T) {
 				{
 					Name:               "minimal-idp-name",
 					ResourceUID:        "minimal-uid",
-					Host:               fmt.Sprintf("https://%s", goodServerIPv6Domain),
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", goodServerIPv6Domain),
 					UsernameAttribute:  "login",
 					GroupNameAttribute: "slug",
 					OAuth2Config: &oauth2.Config{
 						ClientID:     "some-client-id",
 						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", goodServerIPv6Domain),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", goodServerIPv6Domain),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
 					},
-					OrganizationLoginPolicy: "AllGitHubUsers",
-					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", goodServerIPv6Domain),
-					HttpClient:              nil, // let the test runner populate this for us
+					HttpClient: nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -573,32 +670,44 @@ func TestController(t *testing.T) {
 				{
 					Name:               "some-idp-name",
 					ResourceUID:        "some-resource-uid",
-					Host:               fmt.Sprintf("https://%s", *validFilledOutIDP.Spec.GitHubAPI.Host),
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", *validFilledOutIDP.Spec.GitHubAPI.Host),
 					UsernameAttribute:  "id",
 					GroupNameAttribute: "name",
 					OAuth2Config: &oauth2.Config{
 						ClientID:     "some-client-id",
 						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations:    []string{"organization1", "org2"},
-					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
-					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              nil, // let the test runner populate this for us
+					AllowedOrganizations: []string{"organization1", "org2"},
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 				{
 					Name:               "other-idp-name",
 					ResourceUID:        "some-resource-uid",
-					Host:               fmt.Sprintf("https://%s", *validFilledOutIDP.Spec.GitHubAPI.Host),
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", *validFilledOutIDP.Spec.GitHubAPI.Host),
 					UsernameAttribute:  "login:id",
 					GroupNameAttribute: "name",
 					OAuth2Config: &oauth2.Config{
 						ClientID:     "other-client-id",
 						ClientSecret: "other-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations:    []string{"organization1", "org2"},
-					OrganizationLoginPolicy: "OnlyUsersFromAllowedOrganizations",
-					AuthorizationURL:        fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
-					HttpClient:              nil, // let the test runner populate this for us
+					AllowedOrganizations: []string{"organization1", "org2"},
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -1727,6 +1836,11 @@ func TestController(t *testing.T) {
 
 			gitHubIdentityProviderInformer := supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders()
 
+			dialer := tt.mockDialer
+			if dialer == nil {
+				dialer = tls.Dial
+			}
+
 			controller := New(
 				namespace,
 				cache,
@@ -1736,6 +1850,7 @@ func TestController(t *testing.T) {
 				logger,
 				controllerlib.WithInformer,
 				frozenClock,
+				dialer,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -1759,25 +1874,22 @@ func TestController(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := 0; i < len(tt.wantResultingCache); i++ {
 				// Do not expect any particular order in the cache
-				var actualIDP *upstreamgithub.Provider
+				var actualProvider *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
 					if possibleIDP.GetName() == tt.wantResultingCache[i].Name {
 						var ok bool
-						actualIDP, ok = possibleIDP.(*upstreamgithub.Provider)
+						actualProvider, ok = possibleIDP.(*upstreamgithub.Provider)
 						require.True(t, ok)
 						break
 					}
 				}
 
-				require.Equal(t, tt.wantResultingCache[i].Name, actualIDP.GetName())
-				require.Equal(t, tt.wantResultingCache[i].ResourceUID, actualIDP.GetResourceUID())
-				require.Equal(t, tt.wantResultingCache[i].Host, actualIDP.GetHost())
-				require.Equal(t, tt.wantResultingCache[i].OAuth2Config.ClientID, actualIDP.GetClientID())
-				require.Equal(t, tt.wantResultingCache[i].GroupNameAttribute, actualIDP.GetGroupNameAttribute())
-				require.Equal(t, tt.wantResultingCache[i].UsernameAttribute, actualIDP.GetUsernameAttribute())
-				require.Equal(t, tt.wantResultingCache[i].AllowedOrganizations, actualIDP.GetAllowedOrganizations())
-				require.Equal(t, tt.wantResultingCache[i].OrganizationLoginPolicy, actualIDP.GetOrganizationLoginPolicy())
-				require.Equal(t, tt.wantResultingCache[i].AuthorizationURL, actualIDP.GetAuthorizationURL())
+				require.Equal(t, tt.wantResultingCache[i].Name, actualProvider.GetName())
+				require.Equal(t, tt.wantResultingCache[i].ResourceUID, actualProvider.GetResourceUID())
+				require.Equal(t, tt.wantResultingCache[i].OAuth2Config.ClientID, actualProvider.GetClientID())
+				require.Equal(t, tt.wantResultingCache[i].GroupNameAttribute, actualProvider.GetGroupNameAttribute())
+				require.Equal(t, tt.wantResultingCache[i].UsernameAttribute, actualProvider.GetUsernameAttribute())
+				require.Equal(t, tt.wantResultingCache[i].AllowedOrganizations, actualProvider.GetAllowedOrganizations())
 
 				require.GreaterOrEqual(t, len(tt.githubIdentityProviders), i+1, "there must be at least as many input identity providers as items in the cache")
 				githubIDP, ok := tt.githubIdentityProviders[i].(*v1alpha1.GitHubIdentityProvider)
@@ -1785,8 +1897,9 @@ func TestController(t *testing.T) {
 				certPool, _, err := pinnipedcontroller.BuildCertPoolIDP(githubIDP.Spec.GitHubAPI.TLS)
 				require.NoError(t, err)
 
-				compareTLSClientConfigWithinHttpClients(t, phttp.Default(certPool), actualIDP.GetHttpClient())
-				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualIDP.GetOAuth2Config())
+				compareTLSClientConfigWithinHttpClients(t, phttp.Default(certPool), actualProvider.GetConfig().HttpClient)
+				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualProvider.GetConfig().OAuth2Config)
+				require.Contains(t, tt.wantResultingCache[i].APIBaseURL, actualProvider.GetConfig().APIBaseURL)
 			}
 
 			// Verify the status conditions as reported in Kubernetes
@@ -2120,6 +2233,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				logger,
 				controllerlib.WithInformer,
 				frozenClock,
+				tls.Dial,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2230,6 +2344,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
+				tls.Dial,
 			)
 
 			unrelated := &corev1.Secret{}
@@ -2299,6 +2414,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
+				tls.Dial,
 			)
 
 			unrelated := &v1alpha1.GitHubIdentityProvider{}

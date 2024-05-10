@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -60,7 +60,7 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: v1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
@@ -98,7 +98,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: v1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseReady)

@@ -417,7 +417,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)

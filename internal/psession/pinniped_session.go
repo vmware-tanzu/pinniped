@@ -145,6 +145,7 @@ func (s *ActiveDirectorySessionData) Clone() *ActiveDirectorySessionData {
 }
 
 type GitHubSessionData struct {
+	UpstreamAccessToken string `json:"upstreamAccessToken"`
 }
 
 func (s *GitHubSessionData) Clone() *GitHubSessionData {

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -62,10 +62,11 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	CLIUpstreamOIDC                   TestOIDCUpstream `json:"cliOIDCUpstream"`
-	SupervisorUpstreamOIDC            TestOIDCUpstream `json:"supervisorOIDCUpstream"`
-	SupervisorUpstreamLDAP            TestLDAPUpstream `json:"supervisorLDAPUpstream"`
-	SupervisorUpstreamActiveDirectory TestLDAPUpstream `json:"supervisorActiveDirectoryUpstream"`
+	CLIUpstreamOIDC                   TestOIDCUpstream   `json:"cliOIDCUpstream"`
+	SupervisorUpstreamOIDC            TestOIDCUpstream   `json:"supervisorOIDCUpstream"`
+	SupervisorUpstreamLDAP            TestLDAPUpstream   `json:"supervisorLDAPUpstream"`
+	SupervisorUpstreamActiveDirectory TestLDAPUpstream   `json:"supervisorActiveDirectoryUpstream"`
+	SupervisorUpstreamGithub          TestGithubUpstream `json:"supervisorGithubUpstream"`
 }
 
 type TestOIDCUpstream struct {
@@ -108,6 +109,14 @@ type TestLDAPUpstream struct {
 	TestUserIndirectGroupsSAMAccountPlusDomainNames []string `json:"TestUserIndirectGroupsSAMAccountPlusDomainNames"`
 	TestDeactivatedUserSAMAccountNameValue          string   `json:"TestDeactivatedUserSAMAccountNameValue"`
 	TestDeactivatedUserPassword                     string   `json:"TestDeactivatedUserPassword"`
+}
+
+type TestGithubUpstream struct {
+	GithubAppClientID     string `json:"githubAppClientId"`
+	GithubAppClientSecret string `json:"githubAppClientSecret"`
+	TestUserUsername      string `json:"testUserUsername"`
+	TestUserPassword      string `json:"testUserPassword"`
+	TestUserOTPSecret     string `json:"testUserOTPSecret"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -317,6 +326,14 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		DefaultNamingContextSearchBase:                  wantEnv("PINNIPED_TEST_AD_DEFAULTNAMINGCONTEXT_DN", ""),
 		UserSearchBase:                                  wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
 		GroupSearchBase:                                 wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
+	}
+
+	result.SupervisorUpstreamGithub = TestGithubUpstream{
+		GithubAppClientID:     wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_ID", ""),
+		GithubAppClientSecret: wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET", ""),
+		TestUserUsername:      wantEnv("PINNIPED_TEST_GITHUB_USER_USERNAME", ""),
+		TestUserPassword:      wantEnv("PINNIPED_TEST_GITHUB_USER_PASSWORD", ""),
+		TestUserOTPSecret:     wantEnv("PINNIPED_TEST_GITHUB_USER_OTP_SECRET", ""),
 	}
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)

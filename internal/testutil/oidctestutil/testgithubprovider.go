@@ -4,8 +4,6 @@
 package oidctestutil
 
 import (
-	"net/http"
-
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -15,16 +13,15 @@ import (
 
 type TestUpstreamGitHubIdentityProviderBuilder struct {
 	name                           string
-	clientID                       string
 	resourceUID                    types.UID
+	clientID                       string
+	scopes                         []string
 	displayNameForFederationDomain string
 	transformsForFederationDomain  *idtransform.TransformationPipeline
 	usernameAttribute              v1alpha1.GitHubUsernameAttribute
 	groupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	allowedOrganizations           []string
-	organizationLoginPolicy        v1alpha1.GitHubAllowedAuthOrganizationsPolicy
 	authorizationURL               string
-	httpClient                     *http.Client
 }
 
 func (u *TestUpstreamGitHubIdentityProviderBuilder) WithName(value string) *TestUpstreamGitHubIdentityProviderBuilder {
@@ -39,6 +36,11 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithResourceUID(value types.
 
 func (u *TestUpstreamGitHubIdentityProviderBuilder) WithClientID(value string) *TestUpstreamGitHubIdentityProviderBuilder {
 	u.clientID = value
+	return u
+}
+
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithScopes(value []string) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.scopes = value
 	return u
 }
 
@@ -62,18 +64,8 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAllowedOrganizations(val
 	return u
 }
 
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithOrganizationLoginPolicy(value v1alpha1.GitHubAllowedAuthOrganizationsPolicy) *TestUpstreamGitHubIdentityProviderBuilder {
-	u.organizationLoginPolicy = value
-	return u
-}
-
 func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAuthorizationURL(value string) *TestUpstreamGitHubIdentityProviderBuilder {
 	u.authorizationURL = value
-	return u
-}
-
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithHttpClient(value *http.Client) *TestUpstreamGitHubIdentityProviderBuilder {
-	u.httpClient = value
 	return u
 }
 
@@ -90,14 +82,13 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubI
 		Name:                           u.name,
 		ResourceUID:                    u.resourceUID,
 		ClientID:                       u.clientID,
+		Scopes:                         u.scopes,
 		DisplayNameForFederationDomain: u.displayNameForFederationDomain,
 		TransformsForFederationDomain:  u.transformsForFederationDomain,
 		UsernameAttribute:              u.usernameAttribute,
 		GroupNameAttribute:             u.groupNameAttribute,
 		AllowedOrganizations:           u.allowedOrganizations,
-		OrganizationLoginPolicy:        u.organizationLoginPolicy,
 		AuthorizationURL:               u.authorizationURL,
-		HttpClient:                     u.httpClient,
 	}
 }
 
@@ -109,15 +100,13 @@ type TestUpstreamGitHubIdentityProvider struct {
 	Name                           string
 	ClientID                       string
 	ResourceUID                    types.UID
-	Host                           string
+	Scopes                         []string
 	DisplayNameForFederationDomain string
 	TransformsForFederationDomain  *idtransform.TransformationPipeline
 	UsernameAttribute              v1alpha1.GitHubUsernameAttribute
 	GroupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	AllowedOrganizations           []string
-	OrganizationLoginPolicy        v1alpha1.GitHubAllowedAuthOrganizationsPolicy
 	AuthorizationURL               string
-	HttpClient                     *http.Client
 }
 
 var _ upstreamprovider.UpstreamGithubIdentityProviderI = &TestUpstreamGitHubIdentityProvider{}
@@ -130,8 +119,8 @@ func (u *TestUpstreamGitHubIdentityProvider) GetName() string {
 	return u.Name
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetHost() string {
-	return u.Host
+func (u *TestUpstreamGitHubIdentityProvider) GetScopes() []string {
+	return u.Scopes
 }
 
 func (u *TestUpstreamGitHubIdentityProvider) GetClientID() string {
@@ -150,14 +139,6 @@ func (u *TestUpstreamGitHubIdentityProvider) GetAllowedOrganizations() []string 
 	return u.AllowedOrganizations
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetOrganizationLoginPolicy() v1alpha1.GitHubAllowedAuthOrganizationsPolicy {
-	return u.OrganizationLoginPolicy
-}
-
 func (u *TestUpstreamGitHubIdentityProvider) GetAuthorizationURL() string {
 	return u.AuthorizationURL
-}
-
-func (u *TestUpstreamGitHubIdentityProvider) GetHttpClient() *http.Client {
-	return u.HttpClient
 }

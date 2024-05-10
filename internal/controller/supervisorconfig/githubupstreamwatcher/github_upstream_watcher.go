@@ -58,6 +58,9 @@ const (
 	ClientCredentialsObtained string = "ClientCredentialsObtained" //nolint:gosec // this is not a credential
 	GitHubConnectionValid     string = "GitHubConnectionValid"
 	ClaimsValid               string = "ClaimsValid"
+
+	defaultHost       = "github.com"
+	defaultApiBaseURL = "https://api.github.com"
 )
 
 // UpstreamGitHubIdentityProviderICache is a thread safe cache that holds a list of validated upstream GitHub IDP configurations.
@@ -73,6 +76,7 @@ type gitHubWatcherController struct {
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer
 	secretInformer                 corev1informers.SecretInformer
 	clock                          clock.Clock
+	dialFunc                       func(network, addr string, config *tls.Config) (*tls.Conn, error)
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamGitHubIdentityProviderICache.
@@ -85,6 +89,7 @@ func New(
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
+	dialFunc func(network, addr string, config *tls.Config) (*tls.Conn, error),
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
 		namespace:                      namespace,
@@ -94,6 +99,7 @@ func New(
 		gitHubIdentityProviderInformer: gitHubIdentityProviderInformer,
 		secretInformer:                 secretInformer,
 		clock:                          clock,
+		dialFunc:                       dialFunc,
 	}
 
 	return controllerlib.New(
@@ -202,7 +208,7 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 	}, clientID, clientSecret, nil
 }
 
-func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizationsSpec) (*metav1.Condition, v1alpha1.GitHubAllowedAuthOrganizationsPolicy) {
+func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizationsSpec) *metav1.Condition {
 	var policy v1alpha1.GitHubAllowedAuthOrganizationsPolicy
 	if organizationsSpec.Policy != nil {
 		policy = *organizationsSpec.Policy
@@ -217,7 +223,7 @@ func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizations
 			Status:  metav1.ConditionTrue,
 			Reason:  upstreamwatchers.ReasonSuccess,
 			Message: fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
-		}, policy
+		}
 	}
 
 	if len(organizationsSpec.Allowed) > 0 {
@@ -226,7 +232,7 @@ func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizations
 			Status:  metav1.ConditionFalse,
 			Reason:  "Invalid",
 			Message: "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed",
-		}, policy
+		}
 	}
 
 	return &metav1.Condition{
@@ -234,7 +240,7 @@ func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizations
 		Status:  metav1.ConditionFalse,
 		Reason:  "Invalid",
 		Message: "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty",
-	}, policy
+	}
 }
 
 func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx controllerlib.Context, upstream *v1alpha1.GitHubIdentityProvider) (
@@ -256,7 +262,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	userAndGroupCondition, groupNameAttribute, usernameAttribute := validateUserAndGroupAttributes(upstream)
 	conditions = append(conditions, userAndGroupCondition)
 
-	organizationPolicyCondition, policy := validateOrganizationsPolicy(&upstream.Spec.AllowAuthentication.Organizations)
+	organizationPolicyCondition := validateOrganizationsPolicy(&upstream.Spec.AllowAuthentication.Organizations)
 	conditions = append(conditions, organizationPolicyCondition)
 
 	hostCondition, hostPort := validateHost(upstream.Spec.GitHubAPI)
@@ -295,20 +301,34 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		upstreamgithub.ProviderConfig{
 			Name:               upstream.Name,
 			ResourceUID:        upstream.UID,
-			Host:               hostURL,
+			APIBaseURL:         apiBaseUrl(*upstream.Spec.GitHubAPI.Host, hostURL),
 			GroupNameAttribute: groupNameAttribute,
 			UsernameAttribute:  usernameAttribute,
 			OAuth2Config: &oauth2.Config{
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
+				// See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+				Endpoint: oauth2.Endpoint{
+					AuthURL:       fmt.Sprintf("%s/login/oauth/authorize", hostURL),
+					DeviceAuthURL: "", // we do not use device code flow
+					TokenURL:      fmt.Sprintf("%s/login/oauth/access_token", hostURL),
+					AuthStyle:     oauth2.AuthStyleInParams,
+				},
+				RedirectURL: "", // this will be different for each FederationDomain, so we do not set it here
+				Scopes:      []string{"read:user", "read:org"},
 			},
-			AllowedOrganizations:    upstream.Spec.AllowAuthentication.Organizations.Allowed,
-			OrganizationLoginPolicy: policy,
-			AuthorizationURL:        fmt.Sprintf("%s/login/oauth/authorize", hostURL),
-			HttpClient:              httpClient,
+			AllowedOrganizations: upstream.Spec.AllowAuthentication.Organizations.Allowed,
+			HttpClient:           httpClient,
 		},
 	)
 	return provider, k8sutilerrors.NewAggregate(applicationErrors)
+}
+
+func apiBaseUrl(upstreamSpecHost string, hostURL string) string {
+	if upstreamSpecHost != defaultHost {
+		return fmt.Sprintf("%s/api/v3", hostURL)
+	}
+	return defaultApiBaseURL
 }
 
 func validateHost(gitHubAPIConfig v1alpha1.GitHubAPIConfig) (*metav1.Condition, *endpointaddr.HostPort) {
@@ -376,7 +396,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		}, "", nil, nil
 	}
 
-	conn, tlsDialErr := tls.Dial("tcp", hostPort.Endpoint(), ptls.Default(certPool))
+	conn, tlsDialErr := c.dialFunc("tcp", hostPort.Endpoint(), ptls.Default(certPool))
 	if tlsDialErr != nil {
 		return &metav1.Condition{
 			Type:    GitHubConnectionValid,

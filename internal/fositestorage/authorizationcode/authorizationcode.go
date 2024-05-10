@@ -36,7 +36,8 @@ const (
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
 	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
-	authorizeCodeStorageVersion = "7"
+	// Version 8 is when GitHubIdentityProvider was added.
+	authorizeCodeStorageVersion = "8"
 )
 
 var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -383,16 +384,19 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
 				},
-				"github": {}
+				"github": {
+					"upstreamAccessToken": " 皦pSǬŝ社Vƅȭǝ*擦28ǅ"
+				}
 			}
 		},
 		"requestedAudience": [
-			"皦pSǬŝ社Vƅȭǝ*",
-			"Ƽĝ\"zvưã置bņ抰蛖a³"
+			"甍 ć\u003cʘ筫",
+			"蛖a³2ʫ承dʬ)ġ,TÀqy_"
 		],
 		"grantedAudience": [
-			"ʫ承dʬ)ġ,TÀqy_º"
+			"$+溪ŸȢŒų崓ļ憽",
+			"姧骦:駝重EȫʆɵʮGɃ"
 		]
 	},
-	"version": "7"
+	"version": "8"
 }`

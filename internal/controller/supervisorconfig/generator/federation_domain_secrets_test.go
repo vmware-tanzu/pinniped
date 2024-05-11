@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -553,7 +553,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				once := sync.Once{}
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
-					once.Do(func() { err = k8serrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
+					once.Do(func() { err = apierrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
 					return true, nil, err
 				})
 			},
@@ -606,7 +606,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				once := sync.Once{}
 				c.PrependReactor("update", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
-					once.Do(func() { err = k8serrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
+					once.Do(func() { err = apierrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
 					return true, nil, err
 				})
 			},

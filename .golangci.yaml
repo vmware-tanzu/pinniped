@@ -48,6 +48,7 @@ linters:
     - fatcontext
     # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
     - spancheck
+    - importas
 
 issues:
   exclude-dirs:
@@ -91,3 +92,11 @@ linters-settings:
     - end
     - record-error
     - set-status
+  importas:
+    no-unaliased: true # All packages explicitly listed below must be aliased
+    no-extra-aliases: false # Allow other aliases than the ones explicitly listed below
+    alias:
+    - pkg: k8s.io/apimachinery/pkg/util/errors
+      alias: utilerrors
+    - pkg: k8s.io/apimachinery/pkg/api/errors
+      alias: apierrors

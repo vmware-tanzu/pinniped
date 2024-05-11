@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 type Middleware interface {
@@ -119,7 +119,7 @@ func (r *request) mutateRequest(obj Object) (*mutationResult, error) {
 			errs = append(errs, err)
 		}
 	}
-	if err := errors.NewAggregate(errs); err != nil {
+	if err := utilerrors.NewAggregate(errs); err != nil {
 		return nil, fmt.Errorf("request mutation failed: %w", err)
 	}
 
@@ -148,7 +148,7 @@ func (r *request) mutateResponse(obj Object) (bool, error) {
 			errs = append(errs, err)
 		}
 	}
-	if err := errors.NewAggregate(errs); err != nil {
+	if err := utilerrors.NewAggregate(errs); err != nil {
 		return false, fmt.Errorf("response mutation failed: %w", err)
 	}
 

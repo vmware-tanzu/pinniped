@@ -13,11 +13,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 
@@ -185,7 +185,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 	}
 
-	return errorsutil.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 func (c *federationDomainWatcherController) processAllFederationDomains(
@@ -454,7 +454,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	switch {
 	case err == nil:
 		idpResourceUID = foundIDP.GetUID()
-	case errors.IsNotFound(err):
+	case apierrors.IsNotFound(err):
 		return "", false, nil
 	default:
 		return "", false, err // unexpected error from the informer

@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientwatcher
@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -94,7 +94,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 		secret, err := c.secretInformer.Lister().Secrets(oidcClient.Namespace).Get(correspondingSecretName)
 		if err != nil {
-			if !k8serrors.IsNotFound(err) {
+			if !apierrors.IsNotFound(err) {
 				// Anything other than a NotFound error is unexpected when reading from an informer.
 				return fmt.Errorf("failed to get %s/%s secret: %w", oidcClient.Namespace, correspondingSecretName, err)
 			}

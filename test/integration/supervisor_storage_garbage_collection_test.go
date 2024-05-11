@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -54,12 +54,12 @@ func TestStorageGarbageCollection_Parallel(t *testing.T) {
 	slightlyLongerThanGCControllerFullResyncPeriod := 3*time.Minute + 30*time.Second
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		_, err := secrets.Get(ctx, secretAlreadyExpired.Name, metav1.GetOptions{})
-		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
+		requireEventually.Truef(apierrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
 	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		_, err := secrets.Get(ctx, secretWhichWillExpireBeforeTheTestEnds.Name, metav1.GetOptions{})
-		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
+		requireEventually.Truef(apierrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
 	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
 
 	// The unexpired secret should not have been deleted within the timeframe of this test run.
@@ -96,7 +96,7 @@ func updateSecretEveryTwoSeconds(stopCh chan struct{}, errCh chan error, secrets
 		case updateErr == nil:
 			// continue to next update
 
-		case k8serrors.IsConflict(updateErr), k8serrors.IsNotFound(updateErr):
+		case apierrors.IsConflict(updateErr), apierrors.IsNotFound(updateErr):
 			select {
 			case _, ok := <-stopCh:
 				if !ok { // stopCh is closed meaning that test is already finished so these errors are expected
@@ -121,7 +121,7 @@ func createSecret(ctx context.Context, t *testing.T, secrets corev1client.Secret
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		if !notFound {
 			// it's okay if the Secret was already deleted, but other errors are cleanup failures
 			require.NoError(t, err)

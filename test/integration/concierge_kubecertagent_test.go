@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
@@ -133,7 +133,7 @@ func TestLegacyPodCleaner_Parallel(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
-		if !k8serrors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			require.NoError(t, err, "failed to clean up fake legacy agent pod")
 		}
 	})
@@ -141,7 +141,7 @@ func TestLegacyPodCleaner_Parallel(t *testing.T) {
 	// Expect the legacy-pod-cleaner controller to delete the pod.
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-		if k8serrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			t.Logf("fake legacy agent pod %s/%s was deleted as expected", pod.Namespace, pod.Name)
 			return true, nil
 		}

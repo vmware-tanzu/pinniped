@@ -18,7 +18,7 @@ import (
 	certificatesv1 "k8s.io/api/certificates/v1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/cert"
@@ -173,7 +173,7 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 	require.NoError(t, err)
 
 	_, tokenRequestProbeErr := coreV1client.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
-	if errors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
+	if apierrors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
 		return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 	}
 
@@ -210,7 +210,7 @@ func TestWhoAmI_ServiceAccount_TokenRequest_Parallel(t *testing.T) {
 
 	_, badAudErr := testlib.NewKubeclient(t, saBadAudConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.True(t, errors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
+	require.True(t, apierrors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
 
 	tokenRequest, err := coreV1client.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{

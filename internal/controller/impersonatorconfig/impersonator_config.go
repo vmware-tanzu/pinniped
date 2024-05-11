@@ -19,9 +19,8 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -221,7 +220,7 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 // recover on a following sync.
 func strategyReasonForError(err error) v1alpha1.StrategyReason {
 	switch {
-	case k8serrors.IsConflict(err), k8serrors.IsAlreadyExists(err):
+	case apierrors.IsConflict(err), apierrors.IsAlreadyExists(err):
 		return v1alpha1.PendingStrategyReason
 	default:
 		return v1alpha1.ErrorDuringSetupStrategyReason
@@ -442,7 +441,7 @@ func (c *impersonatorConfigController) shouldHaveClusterIPService(config *v1alph
 
 func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, *corev1.Service, error) {
 	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		return false, nil, nil
 	}
@@ -454,7 +453,7 @@ func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, 
 
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *corev1.Secret, error) {
 	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		return false, nil, nil
 	}
@@ -481,7 +480,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 			// and we'll have a chance to restart the server.
 			close(c.errorCh) // We don't want ensureImpersonatorIsStopped to block on reading this channel.
 			stoppingErr := c.ensureImpersonatorIsStopped(false)
-			return errors.NewAggregate([]error{runningErr, stoppingErr})
+			return utilerrors.NewAggregate([]error{runningErr, stoppingErr})
 		default:
 			// Seems like it is still running, so nothing to do.
 			return nil
@@ -581,7 +580,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 			ResourceVersion: &service.ResourceVersion,
 		},
 	})
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
@@ -626,7 +625,7 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 			ResourceVersion: &service.ResourceVersion,
 		},
 	})
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, desiredService *corev1.Service) error {
@@ -654,7 +653,7 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 
 	// Get the Service from the informer, and create it if it does not already exist.
 	existingService, err := c.servicesInformer.Lister().Services(c.namespace).Get(desiredService.Name)
-	if k8serrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		log.Info("creating service for impersonation proxy")
 		_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, desiredService, metav1.CreateOptions{})
 		return err
@@ -755,7 +754,7 @@ func (c *impersonatorConfigController) readExternalTLSSecret(externalTLSSecretNa
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {
 	secretFromInformer, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if !notFound && err != nil {
 		return err
 	}
@@ -898,12 +897,12 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 
 func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Context) (*certauthority.CA, error) {
 	caSecret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.caSecretName)
-	if err != nil && !k8serrors.IsNotFound(err) {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
 
 	var impersonationCA *certauthority.CA
-	if k8serrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		impersonationCA, err = c.createCASecret(ctx)
 	} else {
 		crtBytes := caSecret.Data[caCrtKey]
@@ -972,7 +971,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (*certNameInfo, error) {
 	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		// We aren't ready and will try again later in this case.
 		return &certNameInfo{ready: false}, nil
@@ -1006,7 +1005,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPService() (*certNameInfo, error) {
 	clusterIP, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		// We aren't ready and will try again later in this case.
 		return &certNameInfo{ready: false}, nil
@@ -1103,7 +1102,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	})
 	// it is okay if we tried to delete and we got a not found error. This probably means
 	// another instance of the concierge got here first so there's nothing to delete.
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) clearTLSSecret() {

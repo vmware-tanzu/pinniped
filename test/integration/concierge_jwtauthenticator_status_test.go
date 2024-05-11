@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -339,7 +339,7 @@ func TestConciergeJWTAuthenticatorCRDValidations_Parallel(t *testing.T) {
 			t.Cleanup(func() {
 				// delete if it exists
 				delErr := jwtAuthenticatorClient.Delete(ctx, tt.jwtAuthenticator.Name, metav1.DeleteOptions{})
-				if !errors.IsNotFound(delErr) {
+				if !apierrors.IsNotFound(delErr) {
 					require.NoError(t, delErr)
 				}
 			})

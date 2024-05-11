@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
@@ -273,7 +273,7 @@ func TestWhoami(t *testing.T) {
 		},
 		{
 			name:          "calling API fails because WhoAmI API is not installed",
-			callingAPIErr: errors.NewNotFound(identityv1alpha1.SchemeGroupVersion.WithResource("whoamirequests").GroupResource(), "whatever"),
+			callingAPIErr: apierrors.NewNotFound(identityv1alpha1.SchemeGroupVersion.WithResource("whoamirequests").GroupResource(), "whatever"),
 			wantError:     true,
 			wantStderr:    "Error: could not complete WhoAmIRequest (is the Pinniped WhoAmI API running and healthy?): whoamirequests.identity.concierge.pinniped.dev \"whatever\" not found\n",
 		},

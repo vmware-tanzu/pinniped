@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
 
 	"go.pinniped.dev/internal/crypto/ptls"
@@ -38,7 +38,7 @@ func TestSecureTLS(t *testing.T) {
 	podCommandExecutor := NewPodCommandExecutor(client.JSONConfig, client.Kubernetes)
 
 	got, err := podCommandExecutor.Exec(context.Background(), "podNamespace", "podName", "containerName", "command", "arg1", "arg2")
-	require.Equal(t, &errors.StatusError{}, err)
+	require.Equal(t, &apierrors.StatusError{}, err)
 	require.Empty(t, got)
 
 	require.True(t, sawRequest)

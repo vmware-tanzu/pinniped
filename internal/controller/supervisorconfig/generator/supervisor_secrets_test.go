@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -306,7 +306,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				client.PrependReactor("update", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
 					once.Do(func() {
-						err = k8serrors.NewConflict(secretsGVR.GroupResource(), generatedSecretName, errors.New("some error"))
+						err = apierrors.NewConflict(secretsGVR.GroupResource(), generatedSecretName, errors.New("some error"))
 					})
 					return true, nil, err
 				})
@@ -363,7 +363,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 			},
 			apiClient: func(t *testing.T, client *kubernetesfake.Clientset) {
 				client.PrependReactor("get", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
-					return true, nil, k8serrors.NewNotFound(secretsGVR.GroupResource(), generatedSecretName)
+					return true, nil, apierrors.NewNotFound(secretsGVR.GroupResource(), generatedSecretName)
 				})
 				client.PrependReactor("create", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, nil
@@ -382,7 +382,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 			},
 			apiClient: func(t *testing.T, client *kubernetesfake.Clientset) {
 				client.PrependReactor("get", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
-					return true, nil, k8serrors.NewNotFound(secretsGVR.GroupResource(), generatedSecretName)
+					return true, nil, apierrors.NewNotFound(secretsGVR.GroupResource(), generatedSecretName)
 				})
 				client.PrependReactor("create", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some create error")

@@ -19,7 +19,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -396,7 +396,7 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 
 	// Try to get the existing Deployment, if it exists.
 	existingDeployment, err := c.agentDeployments.Lister().Deployments(expectedDeployment.Namespace).Get(expectedDeployment.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf("could not get deployments: %w", err)
 	}

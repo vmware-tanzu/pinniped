@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -14,7 +14,7 @@ import (
 
 	"github.com/go-jose/go-jose/v3"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -110,7 +110,7 @@ func NewJWKSWriterController(
 // Sync implements controllerlib.Syncer.
 func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	federationDomain, err := c.federationDomainInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
 			"failed to get %s/%s FederationDomain: %w",
@@ -176,7 +176,7 @@ func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha
 
 	// This FederationDomain says it has a secret associated with it. Let's try to get it from the cache.
 	secret, err := c.secretInformer.Lister().Secrets(federationDomain.Namespace).Get(federationDomain.Status.Secrets.JWKS.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, fmt.Errorf("cannot get secret: %w", err)
 	}
@@ -254,7 +254,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 	secretClient := c.kubeClient.CoreV1().Secrets(newSecret.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldSecret, err := secretClient.Get(ctx, newSecret.Name, metav1.GetOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		if err != nil && !notFound {
 			return fmt.Errorf("cannot get secret: %w", err)
 		}

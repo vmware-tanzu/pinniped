@@ -19,7 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -33,7 +33,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 
@@ -80,13 +80,13 @@ func NewKubernetesClientset(t *testing.T) kubernetes.Interface {
 	return NewKubeclient(t, NewClientConfig(t)).Kubernetes
 }
 
-func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
+func NewSupervisorClientset(t *testing.T) pinnipedsupervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
 }
 
-func NewAnonymousSupervisorClientset(t *testing.T) supervisorclientset.Interface {
+func NewAnonymousSupervisorClientset(t *testing.T) pinnipedsupervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedSupervisor
@@ -380,7 +380,7 @@ func CreateTestFederationDomain(
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := federationDomainsClient.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
@@ -609,7 +609,7 @@ func CreateTestOIDCIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1
 	t.Cleanup(func() {
 		t.Logf("cleaning up test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)

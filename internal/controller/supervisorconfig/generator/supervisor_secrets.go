@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package generator provides a supervisorSecretsController that can ensure existence of a generated secret.
@@ -11,7 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -75,7 +75,7 @@ func NewSupervisorSecretsController(
 // Sync implements controllerlib.Syncer.Sync().
 func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 	secret, err := c.secretInformer.Lister().Secrets(ctx.Key.Namespace).Get(ctx.Key.Name)
-	isNotFound := k8serrors.IsNotFound(err)
+	isNotFound := apierrors.IsNotFound(err)
 	if !isNotFound && err != nil {
 		return fmt.Errorf("failed to list secret %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
@@ -115,7 +115,7 @@ func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecre
 	secrets := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		currentSecret, err := secrets.Get(ctx, secretName, metav1.GetOptions{})
-		isNotFound := k8serrors.IsNotFound(err)
+		isNotFound := apierrors.IsNotFound(err)
 		if !isNotFound && err != nil {
 			return fmt.Errorf("failed to get secret: %w", err)
 		}

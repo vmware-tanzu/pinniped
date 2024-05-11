@@ -15,7 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
@@ -916,7 +916,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 					_, err := kubeClient.CoreV1().Secrets(oidcClient.Namespace).
 						Get(cleanupCtx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
 					requireEventually.Error(err, "deleting OIDCClient should result in deleting storage secrets")
-					requireEventually.True(k8serrors.IsNotFound(err),
+					requireEventually.True(apierrors.IsNotFound(err),
 						"deleting OIDCClient should result in deleting storage secrets")
 				}, 2*time.Minute, 250*time.Millisecond)
 			})
@@ -984,7 +984,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 					Get(ctx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
 				if !hasSecretBeenGenerated {
 					require.Error(t, getStorageSecretError, "expected not found error")
-					require.True(t, k8serrors.IsNotFound(getStorageSecretError), "expected not found error")
+					require.True(t, apierrors.IsNotFound(getStorageSecretError), "expected not found error")
 					// no storage secret was created, so no reason to continue making assertions
 					continue
 				}

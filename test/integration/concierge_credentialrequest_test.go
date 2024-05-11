@@ -13,7 +13,7 @@ import (
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -176,7 +176,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken_Parallel(t *
 	)
 
 	require.Error(t, err)
-	statusError, isStatus := err.(*errors.StatusError)
+	statusError, isStatus := err.(*apierrors.StatusError)
 	require.True(t, isStatus, testlib.Sdump(err))
 
 	require.Equal(t, 1, len(statusError.ErrStatus.Details.Causes))

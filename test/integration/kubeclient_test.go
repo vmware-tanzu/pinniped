@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
@@ -98,7 +98,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := regularAggregationClient.ApiregistrationV1().APIServices().Delete(ctx, parentAPIService.Name, metav1.DeleteOptions{})
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return
 		}
 		require.NoError(t, err)
@@ -310,7 +310,7 @@ func isEventuallyDeleted(t *testing.T, f func() error) {
 		switch {
 		case err == nil:
 			return false, nil
-		case errors.IsNotFound(err):
+		case apierrors.IsNotFound(err):
 			return true, nil
 		default:
 			return false, err

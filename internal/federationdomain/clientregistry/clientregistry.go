@@ -12,7 +12,7 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -95,7 +95,7 @@ func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client
 
 	// Try to look up an OIDCClient with the given client ID (which will be the Name of the OIDCClient).
 	oidcClient, err := m.oidcClientsClient.Get(ctx, id, metav1.GetOptions{})
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return nil, fosite.ErrNotFound.WithDescription("no such client")
 	}
 	if err != nil {

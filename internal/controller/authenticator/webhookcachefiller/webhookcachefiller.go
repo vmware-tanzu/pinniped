@@ -14,9 +14,9 @@ import (
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
@@ -95,7 +95,7 @@ type webhookCacheFillerController struct {
 // Sync implements controllerlib.Syncer.
 func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 		return nil
 	}
@@ -141,7 +141,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	//   object. The controller simply must wait for a user to correct before running again.
 	// - other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
-	return errorsutil.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle

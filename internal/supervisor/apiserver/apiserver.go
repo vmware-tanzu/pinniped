@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -109,7 +109,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 			),
 		)
 	}
-	if err := errors.NewAggregate(errs); err != nil {
+	if err := utilerrors.NewAggregate(errs); err != nil {
 		return nil, fmt.Errorf("could not install API groups: %w", err)
 	}
 

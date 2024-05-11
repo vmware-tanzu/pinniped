@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
@@ -112,7 +112,7 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	if err != nil {
 		c.issuerTLSCertSetter.SetDefaultTLSCert(nil)
 		// It's okay if the default TLS cert Secret is not found (it is not required).
-		if !k8serrors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			// For any other error, log a message which is visible at the default log level.
 			plog.Error("error loading TLS certificate from Secret for Supervisor default TLS cert", err,
 				"defaultCertSecretName", c.defaultTLSCertificateSecretName,

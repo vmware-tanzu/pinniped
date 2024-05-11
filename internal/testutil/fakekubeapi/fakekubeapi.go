@@ -32,7 +32,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
 	aggregatorclientscheme "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
@@ -127,7 +127,7 @@ func decodeObj(r *http.Request) (runtime.Object, error) {
 		}
 		errs = append(errs, err)
 	}
-	return nil, errors.NewAggregate(errs)
+	return nil, utilerrors.NewAggregate(errs)
 }
 
 func tryDecodeObj(

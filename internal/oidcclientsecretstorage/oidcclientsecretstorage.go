@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -56,7 +56,7 @@ func New(secrets corev1client.SecretInterface) *OIDCClientSecretStorage {
 func (s *OIDCClientSecretStorage) Get(ctx context.Context, oidcClientUID types.UID) (string, []string, error) {
 	clientSecret := &storedClientSecret{}
 	rv, err := s.storage.Get(ctx, uidToName(oidcClientUID), clientSecret)
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return "", nil, nil
 	}
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidc
 // Returns nil,nil when the corev1.Secret was not found, as this is not an error for a client to not have any secrets yet.
 func (s *OIDCClientSecretStorage) GetStorageSecret(ctx context.Context, oidcClientUID types.UID) (*corev1.Secret, error) {
 	secret, err := s.secrets.Get(ctx, s.GetName(oidcClientUID), metav1.GetOptions{})
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return nil, nil
 	}
 	if err != nil {

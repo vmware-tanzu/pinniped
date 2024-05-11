@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -376,7 +376,7 @@ func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 
 	// Also remove the supervisor's default TLS cert
 	originalSecret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, defaultTLSCertSecretName, metav1.GetOptions{})
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	require.False(t, err != nil && !notFound, "unexpected error when getting %s", defaultTLSCertSecretName)
 	if notFound {
 		originalSecret = nil

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package generator
@@ -9,7 +9,7 @@ import (
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -75,7 +75,7 @@ func NewFederationDomainSecretsController(
 
 func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) error {
 	federationDomain, err := c.federationDomainInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
 			"failed to get %s/%s FederationDomain: %w",
@@ -149,7 +149,7 @@ func (c *federationDomainSecretsController) secretNeedsUpdate(
 ) (bool, *corev1.Secret, error) {
 	// This FederationDomain says it has a secret associated with it. Let's try to get it from the cache.
 	secret, err := c.secretInformer.Lister().Secrets(federationDomain.Namespace).Get(secretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, nil, fmt.Errorf("cannot get secret: %w", err)
 	}
@@ -174,7 +174,7 @@ func (c *federationDomainSecretsController) createOrUpdateSecret(
 	secretClient := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldSecret, err := secretClient.Get(ctx, (*newSecret).Name, metav1.GetOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		if err != nil && !notFound {
 			return fmt.Errorf("failed to get secret %s/%s: %w", (*newSecret).Namespace, (*newSecret).Name, err)
 		}

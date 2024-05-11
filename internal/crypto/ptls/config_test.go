@@ -143,13 +143,12 @@ func TestBuildTLSConfig(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
 			allowedCipherSuites := make([]*tls.CipherSuite, 0)
-			for _, allowedCipher := range tt.allowedCipherIDs {
+			for _, allowedCipher := range test.allowedCipherIDs {
 				for _, cipherSuite := range tls.CipherSuites() {
 					if allowedCipher == cipherSuite.ID {
 						allowedCipherSuites = append(allowedCipherSuites, cipherSuite)
@@ -157,8 +156,8 @@ func TestBuildTLSConfig(t *testing.T) {
 				}
 			}
 
-			actualConfig := buildTLSConfig(tt.rootCAs, tt.configuredCipherSuites, allowedCipherSuites)
-			require.Equal(t, tt.wantConfig, actualConfig)
+			actualConfig := buildTLSConfig(test.rootCAs, test.configuredCipherSuites, allowedCipherSuites)
+			require.Equal(t, test.wantConfig, actualConfig)
 		})
 	}
 }

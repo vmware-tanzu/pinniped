@@ -131,17 +131,16 @@ func TestValidateAllowedCiphers(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := validateAllowedCiphers(tt.allowedCipherNames)
-			if len(tt.wantErr) > 0 {
-				require.ErrorContains(t, err, tt.wantErr)
+			actual, err := validateAllowedCiphers(test.allowedCipherNames)
+			if len(test.wantErr) > 0 {
+				require.ErrorContains(t, err, test.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.wantCipherSuites, actual)
+				require.Equal(t, test.wantCipherSuites, actual)
 			}
 		})
 	}

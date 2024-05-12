@@ -16,7 +16,7 @@ import (
 	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
@@ -93,14 +93,14 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		oidcClient configv1alpha1.OIDCClient
+		oidcClient supervisorconfigv1alpha1.OIDCClient
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
 	}{
 		{
 			name: "name has client.oauth.pinniped.dev- prefix",
-			oidcClient: configv1alpha1.OIDCClient{
+			oidcClient: supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Name: "client.oauth.pinniped.dev-foo"},
 			},
 			wantAdd:    true,
@@ -109,7 +109,7 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 		},
 		{
 			name: "name does not have client.oauth.pinniped.dev- prefix",
-			oidcClient: configv1alpha1.OIDCClient{
+			oidcClient: supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Name: "something.oauth.pinniped.dev-foo"},
 			},
 			wantAdd:    false,
@@ -118,7 +118,7 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 		},
 		{
 			name: "other names without any particular pinniped.dev prefixes",
-			oidcClient: configv1alpha1.OIDCClient{
+			oidcClient: supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Name: "something"},
 			},
 			wantAdd:    false,
@@ -147,7 +147,7 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 				withInformer.WithInformer,
 			)
 
-			unrelated := configv1alpha1.OIDCClient{}
+			unrelated := supervisorconfigv1alpha1.OIDCClient{}
 			filter := withInformer.GetFilterForInformer(oidcClientsInformer)
 			require.Equal(t, tt.wantAdd, filter.Add(&tt.oidcClient))
 			require.Equal(t, tt.wantUpdate, filter.Update(&unrelated, &tt.oidcClient))
@@ -251,7 +251,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		inputObjects             []runtime.Object
 		inputSecrets             []runtime.Object
 		wantErr                  string
-		wantResultingOIDCClients []configv1alpha1.OIDCClient
+		wantResultingOIDCClients []supervisorconfigv1alpha1.OIDCClient
 		wantAPIActions           int
 	}{
 		{
@@ -260,37 +260,37 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "OIDCClient with wrong prefix is ignored",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
 			}},
 			wantAPIActions: 0, // no updates
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
 			}},
 		},
 		{
 			name: "successfully validate minimal OIDCClient and one client secret stored (while ignoring client with wrong prefix)",
 			inputObjects: []runtime.Object{
-				&configv1alpha1.OIDCClient{
+				&supervisorconfigv1alpha1.OIDCClient{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
 				},
-				&configv1alpha1.OIDCClient{
+				&supervisorconfigv1alpha1.OIDCClient{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-						AllowedScopes:     []configv1alpha1.Scope{"openid"},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+						AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 					},
 				},
 			},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "wrong-prefix-name", Generation: 1234, UID: testUID},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Status: configv1alpha1.OIDCClientStatus{
+					Status: supervisorconfigv1alpha1.OIDCClientStatus{
 						Phase: "Ready",
 						Conditions: []metav1.Condition{
 							happyAllowedGrantTypesCondition(now, 1234),
@@ -304,18 +304,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate minimal OIDCClient and two client secrets stored",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword2AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -328,13 +328,13 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "an already validated OIDCClient does not have its conditions updated when everything is still valid",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(earlier, 1234),
@@ -346,9 +346,9 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 0, // no updates
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(earlier, 1234),
@@ -361,14 +361,14 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "missing required minimum settings and missing client secret storage",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec:       configv1alpha1.OIDCClientSpec{},
+				Spec:       supervisorconfigv1alpha1.OIDCClientSpec{},
 			}},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"authorization_code" must always be included in "allowedGrantTypes"`),
@@ -380,18 +380,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "client secret storage exists but cannot be read",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUIDWithWrongVersion(t, testNamespace, testUID)},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -403,18 +403,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "client secret storage exists but does not contain any client secrets",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -427,11 +427,11 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "client secret storage exists but some of the client secrets are invalid bcrypt hashes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets: []runtime.Object{
@@ -439,9 +439,9 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 					[]string{testutil.HashedPassword1AtSupervisorMinCost, testutil.HashedPassword1JustBelowSupervisorMinCost, testutil.HashedPassword1InvalidFormat}),
 			},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -458,24 +458,24 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		{
 			name: "can operate on multiple at a time, e.g. one is valid one another is missing required minimum settings",
 			inputObjects: []runtime.Object{
-				&configv1alpha1.OIDCClient{
+				&supervisorconfigv1alpha1.OIDCClient{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test1", Generation: 1234, UID: "uid1"},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-						AllowedScopes:     []configv1alpha1.Scope{"openid"},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+						AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 					},
 				},
-				&configv1alpha1.OIDCClient{
+				&supervisorconfigv1alpha1.OIDCClient{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test2", Generation: 4567, UID: "uid2"},
-					Spec:       configv1alpha1.OIDCClientSpec{},
+					Spec:       supervisorconfigv1alpha1.OIDCClientSpec{},
 				},
 			},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, "uid1", []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 2, // one update for each OIDCClient
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test1", Generation: 1234, UID: "uid1"},
-					Status: configv1alpha1.OIDCClientStatus{
+					Status: supervisorconfigv1alpha1.OIDCClientStatus{
 						Phase: "Ready",
 						Conditions: []metav1.Condition{
 							happyAllowedGrantTypesCondition(now, 1234),
@@ -487,7 +487,7 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "client.oauth.pinniped.dev-test2", Generation: 4567, UID: "uid2"},
-					Status: configv1alpha1.OIDCClientStatus{
+					Status: supervisorconfigv1alpha1.OIDCClientStatus{
 						Phase: "Error",
 						Conditions: []metav1.Condition{
 							sadAllowedGrantTypesCondition(now, 4567, `"authorization_code" must always be included in "allowedGrantTypes"`),
@@ -501,14 +501,14 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "a previously invalid OIDCClient has its spec changed to become valid so the conditions are updated",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 4567, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 				// was invalid on previous run of controller which observed an old generation at an earlier time
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(earlier, 1234, `"authorization_code" must always be included in "allowedGrantTypes"`),
@@ -520,10 +520,10 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 4567, UID: testUID},
 				// status was updated to reflect the current generation at the current time
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 4567),
@@ -536,18 +536,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "refresh_token must be included in allowedGrantTypes when offline_access is included in allowedScopes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access"},
 				},
 			}},
 			wantAPIActions: 1, // one update
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"refresh_token" must be included in "allowedGrantTypes" when "offline_access" is included in "allowedScopes"`),
@@ -560,18 +560,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "multiple errors on allowedScopes and allowedGrantTypes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"pinniped:request-audience"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"pinniped:request-audience"},
 				},
 			}},
 			wantAPIActions: 1, // one update
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234,
@@ -589,18 +589,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "another combination of multiple errors on allowedScopes and allowedGrantTypes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"urn:ietf:params:oauth:grant-type:token-exchange"},
-					AllowedScopes:     []configv1alpha1.Scope{"offline_access"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"offline_access"},
 				},
 			}},
 			wantAPIActions: 1, // one update
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234,
@@ -617,18 +617,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "urn:ietf:params:oauth:grant-type:token-exchange must be included in allowedGrantTypes when pinniped:request-audience is included in allowedScopes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "username", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "pinniped:request-audience", "username", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						sadAllowedGrantTypesCondition(now, 1234, `"urn:ietf:params:oauth:grant-type:token-exchange" must be included in "allowedGrantTypes" when "pinniped:request-audience" is included in "allowedScopes"`),
@@ -641,18 +641,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "offline_access must be included in allowedScopes when refresh_token is included in allowedGrantTypes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -665,18 +665,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "username and groups must also be included in allowedScopes when pinniped:request-audience is included in allowedScopes: both missing",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "pinniped:request-audience"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -689,18 +689,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "username and groups must also be included in allowedScopes when pinniped:request-audience is included in allowedScopes: username missing",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "pinniped:request-audience", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -713,18 +713,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "username and groups must also be included in allowedScopes when pinniped:request-audience is included in allowedScopes: groups missing",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "pinniped:request-audience", "username"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "pinniped:request-audience", "username"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -737,18 +737,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "pinniped:request-audience must be included in allowedScopes when urn:ietf:params:oauth:grant-type:token-exchange is included in allowedGrantTypes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -761,18 +761,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient with all allowedGrantTypes and all allowedScopes",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -785,18 +785,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient for offline access without kube API access without username/groups",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -809,18 +809,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient for offline access without kube API access with username",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "username"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -833,18 +833,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient for offline access without kube API access with groups",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -857,18 +857,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient for offline access without kube API access with both username and groups",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -881,18 +881,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient without offline access without kube API access with username",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "username"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "username"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -905,18 +905,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient without offline access without kube API access with groups",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "username"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "username"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -929,18 +929,18 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "successfully validate an OIDCClient without offline access without kube API access with both username and groups",
-			inputObjects: []runtime.Object{&configv1alpha1.OIDCClient{
+			inputObjects: []runtime.Object{&supervisorconfigv1alpha1.OIDCClient{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Spec: configv1alpha1.OIDCClientSpec{
-					AllowedGrantTypes: []configv1alpha1.GrantType{"authorization_code"},
-					AllowedScopes:     []configv1alpha1.Scope{"openid", "username", "groups"},
+				Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedGrantTypes: []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+					AllowedScopes:     []supervisorconfigv1alpha1.Scope{"openid", "username", "groups"},
 				},
 			}},
 			inputSecrets:   []runtime.Object{testutil.OIDCClientSecretStorageSecretForUID(t, testNamespace, testUID, []string{testutil.HashedPassword1AtSupervisorMinCost})},
 			wantAPIActions: 1, // one update
-			wantResultingOIDCClients: []configv1alpha1.OIDCClient{{
+			wantResultingOIDCClients: []supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-				Status: configv1alpha1.OIDCClientStatus{
+				Status: supervisorconfigv1alpha1.OIDCClientStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAllowedGrantTypesCondition(now, 1234),
@@ -995,13 +995,13 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 	}
 }
 
-func normalizeOIDCClients(oidcClients []configv1alpha1.OIDCClient, now metav1.Time) []configv1alpha1.OIDCClient {
-	result := make([]configv1alpha1.OIDCClient, 0, len(oidcClients))
+func normalizeOIDCClients(oidcClients []supervisorconfigv1alpha1.OIDCClient, now metav1.Time) []supervisorconfigv1alpha1.OIDCClient {
+	result := make([]supervisorconfigv1alpha1.OIDCClient, 0, len(oidcClients))
 	for _, u := range oidcClients {
 		normalized := u.DeepCopy()
 
 		// We're only interested in comparing the status, so zero out the spec.
-		normalized.Spec = configv1alpha1.OIDCClientSpec{}
+		normalized.Spec = supervisorconfigv1alpha1.OIDCClientSpec{}
 
 		// Round down the LastTransitionTime values to `now` if they were just updated. This makes
 		// it much easier to encode assertions about the expected timestamps.

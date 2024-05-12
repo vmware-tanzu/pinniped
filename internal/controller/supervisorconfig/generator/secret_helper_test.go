@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 const keyWith32Bytes = "0123456789abcdef0123456789abcdef"
@@ -24,13 +24,13 @@ func TestSymmetricSecretHelper(t *testing.T) {
 		name                         string
 		secretUsage                  SecretUsage
 		wantSecretType               corev1.SecretType
-		wantSetFederationDomainField func(*configv1alpha1.FederationDomain) string
+		wantSetFederationDomainField func(*supervisorconfigv1alpha1.FederationDomain) string
 	}{
 		{
 			name:           "token signing key",
 			secretUsage:    SecretUsageTokenSigningKey,
 			wantSecretType: "secrets.pinniped.dev/federation-domain-token-signing-key",
-			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+			wantSetFederationDomainField: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
 		},
@@ -38,7 +38,7 @@ func TestSymmetricSecretHelper(t *testing.T) {
 			name:           "state signing key",
 			secretUsage:    SecretUsageStateSigningKey,
 			wantSecretType: "secrets.pinniped.dev/federation-domain-state-signing-key",
-			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+			wantSetFederationDomainField: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
 		},
@@ -46,7 +46,7 @@ func TestSymmetricSecretHelper(t *testing.T) {
 			name:           "state encryption key",
 			secretUsage:    SecretUsageStateEncryptionKey,
 			wantSecretType: "secrets.pinniped.dev/federation-domain-state-encryption-key",
-			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+			wantSetFederationDomainField: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
 		},
@@ -74,7 +74,7 @@ func TestSymmetricSecretHelper(t *testing.T) {
 				},
 			)
 
-			parent := &configv1alpha1.FederationDomain{
+			parent := &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: metav1.ObjectMeta{
 					UID:       "some-uid",
 					Namespace: "some-namespace",
@@ -89,8 +89,8 @@ func TestSymmetricSecretHelper(t *testing.T) {
 					Labels:    labels,
 					OwnerReferences: []metav1.OwnerReference{
 						*metav1.NewControllerRef(parent, schema.GroupVersionKind{
-							Group:   configv1alpha1.SchemeGroupVersion.Group,
-							Version: configv1alpha1.SchemeGroupVersion.Version,
+							Group:   supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+							Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 							Kind:    "FederationDomain",
 						}),
 					},
@@ -124,7 +124,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 		name        string
 		secretUsage SecretUsage
 		child       func(*corev1.Secret)
-		parent      func(*configv1alpha1.FederationDomain)
+		parent      func(*supervisorconfigv1alpha1.FederationDomain)
 		want        bool
 	}{
 		{
@@ -167,7 +167,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 			child: func(s *corev1.Secret) {
 				s.Type = FederationDomainTokenSigningKeyType
 			},
-			parent: func(federationDomain *configv1alpha1.FederationDomain) {
+			parent: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) {
 				federationDomain.UID = "wrong"
 			},
 			want: false,
@@ -184,7 +184,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, test.secretUsage, nil)
 
-			parent := &configv1alpha1.FederationDomain{
+			parent := &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "some-parent-name",
 					Namespace: "some-namespace",
@@ -197,8 +197,8 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						*metav1.NewControllerRef(parent, schema.GroupVersionKind{
-							Group:   configv1alpha1.SchemeGroupVersion.Group,
-							Version: configv1alpha1.SchemeGroupVersion.Version,
+							Group:   supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+							Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 							Kind:    "FederationDomain",
 						}),
 					},

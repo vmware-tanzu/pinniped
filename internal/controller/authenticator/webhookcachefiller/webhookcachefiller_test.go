@@ -410,7 +410,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -452,7 +452,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -501,7 +501,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -551,7 +551,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  hostLocalIPv6Server.URL,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -859,7 +859,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpointBut404,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -912,7 +912,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -1050,7 +1050,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  hostAs127001WebhookServer.URL,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -1177,7 +1177,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -1217,7 +1217,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},
@@ -1278,7 +1278,7 @@ func TestController(t *testing.T) {
 					"logger":    "webhookcachefiller-controller",
 					"message":   "added new webhook authenticator",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]interface{}{
+					"webhook": map[string]any{
 						"name": "test-name",
 					},
 				},

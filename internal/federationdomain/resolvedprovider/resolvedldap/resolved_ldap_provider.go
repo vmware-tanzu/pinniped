@@ -64,7 +64,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) GetTransforms() *idtransf
 	return p.Transforms
 }
 
-func (p *FederationDomainResolvedLDAPIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{} {
+func (p *FederationDomainResolvedLDAPIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) any {
 	switch p.GetSessionProviderType() {
 	case psession.ProviderTypeLDAP:
 		if session.LDAP == nil {
@@ -83,7 +83,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) CloneIDPSpecificSessionDa
 	}
 }
 
-func (p *FederationDomainResolvedLDAPIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{}) {
+func (p *FederationDomainResolvedLDAPIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData any) {
 	if p.GetSessionProviderType() == psession.ProviderTypeActiveDirectory {
 		session.ActiveDirectory = idpSpecificSessionData.(*psession.ActiveDirectorySessionData)
 		return
@@ -139,7 +139,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) Login(
 	upstreamUsername := authenticateResponse.User.GetName()
 	upstreamGroups := authenticateResponse.User.GetGroups()
 
-	var sessionData interface{}
+	var sessionData any
 	switch p.GetSessionProviderType() {
 	case psession.ProviderTypeLDAP:
 		sessionData = &psession.LDAPSessionData{

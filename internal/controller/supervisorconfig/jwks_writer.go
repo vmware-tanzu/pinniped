@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -52,7 +52,7 @@ const (
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
 var generateKey = generateECKey //nolint:gochecknoglobals
 
-func generateECKey(r io.Reader) (interface{}, error) {
+func generateECKey(r io.Reader) (any, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), r)
 }
 
@@ -168,7 +168,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha1.FederationDomain) (bool, error) {
+func (c *jwksWriterController) secretNeedsUpdate(federationDomain *supervisorconfigv1alpha1.FederationDomain) (bool, error) {
 	if federationDomain.Status.Secrets.JWKS.Name == "" {
 		// If the FederationDomain says it doesn't have a secret associated with it, then let's create one.
 		return true, nil
@@ -193,7 +193,7 @@ func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha
 	return false, nil
 }
 
-func (c *jwksWriterController) generateSecret(federationDomain *configv1alpha1.FederationDomain) (*corev1.Secret, error) {
+func (c *jwksWriterController) generateSecret(federationDomain *supervisorconfigv1alpha1.FederationDomain) (*corev1.Secret, error) {
 	// Note! This is where we could potentially add more handling of FederationDomain spec fields which tell us how
 	// this FederationDomain should sign and verify ID tokens (e.g., hardcoded token secret, gRPC
 	// connection to KMS, etc).
@@ -231,8 +231,8 @@ func (c *jwksWriterController) generateSecret(federationDomain *configv1alpha1.F
 			Labels:    c.jwksSecretLabels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(federationDomain, schema.GroupVersionKind{
-					Group:   configv1alpha1.SchemeGroupVersion.Group,
-					Version: configv1alpha1.SchemeGroupVersion.Version,
+					Group:   supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+					Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 					Kind:    federationDomainKind,
 				}),
 			},
@@ -284,7 +284,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 
 func (c *jwksWriterController) updateFederationDomainStatus(
 	ctx context.Context,
-	newFederationDomain *configv1alpha1.FederationDomain,
+	newFederationDomain *supervisorconfigv1alpha1.FederationDomain,
 ) error {
 	federationDomainClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newFederationDomain.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {

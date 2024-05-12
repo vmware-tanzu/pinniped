@@ -15,7 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -30,48 +30,48 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 
 	// Create our FederationDomain under test.
 	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
-		configv1alpha1.FederationDomainSpec{
+		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: fmt.Sprintf("http://test-issuer-%s.pinniped.dev", testlib.RandHex(t, 8)),
 		},
-		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created, but this test does not care
+		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created, but this test does not care
 	)
 
 	tests := []struct {
 		name        string
-		secretName  func(federationDomain *configv1alpha1.FederationDomain) string
+		secretName  func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string
 		ensureValid func(t *testing.T, secret *corev1.Secret)
 	}{
 		{
 			name: "csrf cookie signing key",
-			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return env.SupervisorAppName + "-key"
 			},
 			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/supervisor-csrf-signing-key"),
 		},
 		{
 			name: "jwks",
-			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.JWKS.Name
 			},
 			ensureValid: ensureValidJWKS,
 		},
 		{
 			name: "hmac signing secret",
-			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-token-signing-key"),
 		},
 		{
 			name: "state signature secret",
-			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-signing-key"),
 		},
 		{
 			name: "state encryption secret",
-			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *supervisorconfigv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
 			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-encryption-key"),
@@ -80,7 +80,7 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Ensure a secret is created with the FederationDomain's JWKS.
-			var updatedFederationDomain *configv1alpha1.FederationDomain
+			var updatedFederationDomain *supervisorconfigv1alpha1.FederationDomain
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				resp, err := supervisorClient.
 					ConfigV1alpha1().

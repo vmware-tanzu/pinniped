@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package upstreamwatchers
@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
@@ -110,7 +110,7 @@ type UpstreamGenericLDAPIDP interface {
 
 type UpstreamGenericLDAPSpec interface {
 	Host() string
-	TLSSpec() *v1alpha1.TLSSpec
+	TLSSpec() *idpv1alpha1.TLSSpec
 	BindSecretName() string
 	UserSearch() UpstreamGenericLDAPUserSearch
 	GroupSearch() UpstreamGenericLDAPGroupSearch
@@ -135,7 +135,7 @@ type UpstreamGenericLDAPStatus interface {
 	Conditions() []metav1.Condition
 }
 
-func ValidateTLSConfig(tlsSpec *v1alpha1.TLSSpec, config *upstreamldap.ProviderConfig) *metav1.Condition {
+func ValidateTLSConfig(tlsSpec *idpv1alpha1.TLSSpec, config *upstreamldap.ProviderConfig) *metav1.Condition {
 	if tlsSpec == nil {
 		return validTLSCondition(noTLSConfigurationMessage)
 	}

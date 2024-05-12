@@ -184,7 +184,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 
 type audienceFreeContext struct{}
 
-func (audienceFreeContext) Matches(in interface{}) bool {
+func (audienceFreeContext) Matches(in any) bool {
 	ctx, isCtx := in.(context.Context)
 	if !isCtx {
 		return false

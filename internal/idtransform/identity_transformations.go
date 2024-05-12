@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package idtransform defines upstream-to-downstream identity transformations which could be
@@ -28,7 +28,7 @@ type IdentityTransformation interface {
 
 	// Source returns some representation of the original source code of the transformation, which is
 	// useful for tests to be able to check that a compiled transformation came from the right source.
-	Source() interface{}
+	Source() any
 }
 
 // TransformationPipeline is a list of identity transforms, which can be evaluated in order against some given input
@@ -89,8 +89,8 @@ func (p *TransformationPipeline) Evaluate(ctx context.Context, username string, 
 	return accumulatedResult, nil
 }
 
-func (p *TransformationPipeline) Source() []interface{} {
-	result := []interface{}{}
+func (p *TransformationPipeline) Source() []any {
+	result := []any{}
 	for _, transform := range p.transforms {
 		result = append(result, transform.Source())
 	}

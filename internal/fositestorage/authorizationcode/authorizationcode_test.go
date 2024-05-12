@@ -324,24 +324,24 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 			*fs = pinnipedSession
 		},
 
-		// these types contain an interface{} that we need to handle
+		// these types contain an any that we need to handle
 		// this is safe because we explicitly provide the PinnipedSession concrete type
-		func(value *map[string]interface{}, c fuzz.Continue) {
+		func(value *map[string]any, c fuzz.Continue) {
 			// cover all the JSON data types just in case
-			*value = map[string]interface{}{
+			*value = map[string]any{
 				randString(c): float64(c.Intn(1 << 32)),
-				randString(c): map[string]interface{}{
-					randString(c): []interface{}{float64(c.Intn(1 << 32))},
-					randString(c): map[string]interface{}{
+				randString(c): map[string]any{
+					randString(c): []any{float64(c.Intn(1 << 32))},
+					randString(c): map[string]any{
 						randString(c): nil,
-						randString(c): map[string]interface{}{
+						randString(c): map[string]any{
 							randString(c): c.RandBool(),
 						},
 					},
 				},
 			}
 		},
-		// JWK contains an interface{} Key that we need to handle
+		// JWK contains an any Key that we need to handle
 		// this is safe because JWK explicitly implements JSON marshalling and unmarshalling
 		func(jwk *jose.JSONWebKey, c fuzz.Continue) {
 			key, _, err := ed25519.GenerateKey(c)
@@ -471,7 +471,7 @@ func TestReadFromSecret(t *testing.T) {
 							Username: "snorlax",
 							Subject:  "panda",
 							Claims:   &jwt.IDTokenClaims{JTI: "xyz"},
-							Headers:  &jwt.Headers{Extra: map[string]interface{}{"myheader": "foo"}},
+							Headers:  &jwt.Headers{Extra: map[string]any{"myheader": "foo"}},
 						},
 						Custom: &psession.CustomSessionData{
 							Username:         "fake-username",

@@ -27,7 +27,7 @@ type stsParams struct {
 	requestedAudience  string
 }
 
-func HandlerFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
+func HandlerFactory(config fosite.Configurator, storage any, strategy any) any {
 	return &tokenExchangeHandler{
 		idTokenStrategy:     strategy.(openid.OpenIDConnectTokenStrategy),
 		accessTokenStrategy: strategy.(fositeoauth2.AccessTokenStrategy),

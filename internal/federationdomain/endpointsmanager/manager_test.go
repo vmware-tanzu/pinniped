@@ -247,7 +247,7 @@ func TestManager(t *testing.T) {
 
 			// Minimal check to ensure that the right endpoint was called
 			r.Equal(http.StatusOK, recorder.Code, "unexpected response:", recorder)
-			var body map[string]interface{}
+			var body map[string]any
 			r.NoError(json.Unmarshal(recorder.Body.Bytes(), &body))
 			r.Contains(body, "id_token")
 			r.Contains(body, "access_token")

@@ -86,14 +86,14 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) GetTransforms() *idtransf
 	return p.Transforms
 }
 
-func (p *FederationDomainResolvedOIDCIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{} {
+func (p *FederationDomainResolvedOIDCIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) any {
 	if session.OIDC == nil {
 		return nil
 	}
 	return session.OIDC.Clone()
 }
 
-func (p *FederationDomainResolvedOIDCIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{}) {
+func (p *FederationDomainResolvedOIDCIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData any) {
 	session.OIDC = idpSpecificSessionData.(*psession.OIDCSessionData)
 }
 
@@ -325,7 +325,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 }
 
 func validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(
-	mergedClaims map[string]interface{},
+	mergedClaims map[string]any,
 	s *psession.OIDCSessionData,
 	providerName string,
 	providerType psession.ProviderType,
@@ -361,7 +361,7 @@ func validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(
 	return nil
 }
 
-func getString(m map[string]interface{}, key string) (string, bool) {
+func getString(m map[string]any, key string) (string, bool) {
 	val, ok := m[key].(string)
 	return val, ok
 }
@@ -386,7 +386,7 @@ func makeDownstreamOIDCSessionData(
 
 	const pleaseCheck = "please check configuration of OIDCIdentityProvider and the client in the " +
 		"upstream provider's API/UI and try to get a refresh token if possible"
-	logKV := []interface{}{
+	logKV := []any{
 		"upstreamName", oidcUpstream.GetName(),
 		"scopes", oidcUpstream.GetScopes(),
 		"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams(),
@@ -425,7 +425,7 @@ func makeDownstreamOIDCSessionData(
 // getIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
 func getIdentityFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
-	idTokenClaims map[string]interface{},
+	idTokenClaims map[string]any,
 	idpDisplayName string,
 ) (string, string, []string, error) {
 	subject, username, err := getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims, idpDisplayName)
@@ -444,9 +444,9 @@ func getIdentityFromUpstreamIDToken(
 // mapAdditionalClaimsFromUpstreamIDToken returns the additionalClaims mapped from the upstream token, if any.
 func mapAdditionalClaimsFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
-	idTokenClaims map[string]interface{},
-) map[string]interface{} {
-	mapped := make(map[string]interface{}, len(upstreamIDPConfig.GetAdditionalClaimMappings()))
+	idTokenClaims map[string]any,
+) map[string]any {
+	mapped := make(map[string]any, len(upstreamIDPConfig.GetAdditionalClaimMappings()))
 	for downstreamClaimName, upstreamClaimName := range upstreamIDPConfig.GetAdditionalClaimMappings() {
 		upstreamClaimValue, ok := idTokenClaims[upstreamClaimName]
 		if !ok {
@@ -464,7 +464,7 @@ func mapAdditionalClaimsFromUpstreamIDToken(
 
 func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
-	idTokenClaims map[string]interface{},
+	idTokenClaims map[string]any,
 	idpDisplayName string,
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
@@ -516,7 +516,7 @@ func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 	return subject, username, nil
 }
 
-func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenClaims map[string]interface{}) (string, error) {
+func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenClaims map[string]any) (string, error) {
 	value, ok := idTokenClaims[claimName]
 	if !ok {
 		plog.Warning(
@@ -560,7 +560,7 @@ func mappedUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, upstre
 // in the provided map of claims. It returns an error when the claim exists but its value cannot be parsed.
 func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig upstreamprovider.UpstreamOIDCIdentityProviderI,
-	idTokenClaims map[string]interface{},
+	idTokenClaims map[string]any,
 ) ([]string, error) {
 	groupsClaimName := upstreamIDPConfig.GetGroupsClaim()
 	if groupsClaimName == "" {
@@ -590,7 +590,7 @@ func getGroupsFromUpstreamIDToken(
 	return groupsAsArray, nil
 }
 
-func extractGroups(groupsAsInterface interface{}) ([]string, bool) {
+func extractGroups(groupsAsInterface any) ([]string, bool) {
 	groupsAsString, okAsString := groupsAsInterface.(string)
 	if okAsString {
 		return []string{groupsAsString}, true
@@ -601,7 +601,7 @@ func extractGroups(groupsAsInterface interface{}) ([]string, bool) {
 		return groupsAsStringArray, true
 	}
 
-	groupsAsInterfaceArray, okAsArray := groupsAsInterface.([]interface{})
+	groupsAsInterfaceArray, okAsArray := groupsAsInterface.([]any)
 	if !okAsArray {
 		return nil, false
 	}

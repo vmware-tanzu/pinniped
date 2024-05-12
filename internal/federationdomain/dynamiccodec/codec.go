@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package dynamiccodec provides a type that can encode information using a just-in-time signing and
@@ -41,12 +41,12 @@ func New(lifespan time.Duration, signingKeyFunc, encryptionKeyFunc KeyFunc) *Cod
 }
 
 // Encode implements oidc.Encode().
-func (c *Codec) Encode(name string, value interface{}) (string, error) {
+func (c *Codec) Encode(name string, value any) (string, error) {
 	return c.delegate().Encode(name, value)
 }
 
 // Decode implements oidc.Decode().
-func (c *Codec) Decode(name string, value string, into interface{}) error {
+func (c *Codec) Decode(name string, value string, into any) error {
 	return c.delegate().Decode(name, value, into)
 }
 

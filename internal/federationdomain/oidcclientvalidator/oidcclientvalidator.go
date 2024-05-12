@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidcclientvalidator
@@ -11,7 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
@@ -37,7 +37,7 @@ const (
 // get the validation error for that case. It returns a bool to indicate if the client is valid,
 // along with a slice of conditions containing more details, and the list of client secrets in the
 // case that the client was valid.
-func Validate(oidcClient *v1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string) {
+func Validate(oidcClient *supervisorconfigv1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string) {
 	conds := make([]*metav1.Condition, 0, 3)
 
 	conds, clientSecrets := validateSecret(secret, conds, minBcryptCost)
@@ -55,7 +55,7 @@ func Validate(oidcClient *v1alpha1.OIDCClient, secret *corev1.Secret, minBcryptC
 }
 
 // validateAllowedScopes checks if allowedScopes is valid on the OIDCClient.
-func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
+func validateAllowedScopes(oidcClient *supervisorconfigv1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
 	m := make([]string, 0, 4)
 
 	if !allowedScopesContains(oidcClient, oidcapi.ScopeOpenID) {
@@ -95,7 +95,7 @@ func validateAllowedScopes(oidcClient *v1alpha1.OIDCClient, conditions []*metav1
 }
 
 // validateAllowedGrantTypes checks if allowedGrantTypes is valid on the OIDCClient.
-func validateAllowedGrantTypes(oidcClient *v1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
+func validateAllowedGrantTypes(oidcClient *supervisorconfigv1alpha1.OIDCClient, conditions []*metav1.Condition) []*metav1.Condition {
 	m := make([]string, 0, 3)
 
 	if !allowedGrantTypesContains(oidcClient, oidcapi.GrantTypeAuthorizationCode) {
@@ -207,18 +207,18 @@ func validateSecret(secret *corev1.Secret, conditions []*metav1.Condition, minBc
 	return conditions, storedClientSecrets
 }
 
-func allowedGrantTypesContains(haystack *v1alpha1.OIDCClient, needle string) bool {
+func allowedGrantTypesContains(haystack *supervisorconfigv1alpha1.OIDCClient, needle string) bool {
 	for _, hay := range haystack.Spec.AllowedGrantTypes {
-		if hay == v1alpha1.GrantType(needle) {
+		if hay == supervisorconfigv1alpha1.GrantType(needle) {
 			return true
 		}
 	}
 	return false
 }
 
-func allowedScopesContains(haystack *v1alpha1.OIDCClient, needle string) bool {
+func allowedScopesContains(haystack *supervisorconfigv1alpha1.OIDCClient, needle string) bool {
 	for _, hay := range haystack.Spec.AllowedScopes {
-		if hay == v1alpha1.Scope(needle) {
+		if hay == supervisorconfigv1alpha1.Scope(needle) {
 			return true
 		}
 	}

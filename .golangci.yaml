@@ -49,6 +49,9 @@ linters:
     # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
     - spancheck
     - importas
+    - makezero
+    - prealloc
+    - gofmt
 
 issues:
   exclude-dirs:
@@ -116,6 +119,22 @@ linters-settings:
       alias: authenticationv1alpha1
     - pkg: go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1
       alias: clientsecretv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1
+      alias: supervisorconfigv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
+      alias: idpv1alpha1
     # Pinniped internal
     - pkg: go.pinniped.dev/internal/concierge/scheme
       alias: conciergescheme
+  gofmt:
+    # Simplify code: gofmt with `-s` option.
+    # Default: true
+    simplify: false
+    # Apply the rewrite rules to the source before reformatting.
+    # https://pkg.go.dev/cmd/gofmt
+    # Default: []
+    rewrite-rules:
+    - pattern: 'interface{}'
+      replacement: 'any'
+    - pattern: 'a[b:len(a)]'
+      replacement: 'a[b:]'

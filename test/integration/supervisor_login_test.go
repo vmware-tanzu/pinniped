@@ -29,7 +29,7 @@ import (
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -237,7 +237,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
 		// Also return the displayName of the IDP that should be used during authentication (or empty string for no IDP name in the auth request).
 		// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
-		federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
+		federationDomainIDPs func(t *testing.T, idpName string) (idps []supervisorconfigv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
 
 		// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
 		// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
@@ -280,7 +280,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		wantDownstreamIDTokenGroups []string
 		// The expected ID token additional claims, which will be nested under claim "additionalClaims",
 		// for the original ID token and the refreshed ID token.
-		wantDownstreamIDTokenAdditionalClaims map[string]interface{}
+		wantDownstreamIDTokenAdditionalClaims map[string]any
 		// The expected ID token lifetime, as calculated by token claim 'exp' subtracting token claim 'iat'.
 		// ID tokens issued through authcode exchange or token refresh should have the configured lifetime (or default if not configured).
 		// ID tokens issued through a token exchange should have the default lifetime.
@@ -454,7 +454,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
-			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]any{
 				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
 				"upstream_username": env.SupervisorUpstreamOIDC.Username,
 			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
@@ -479,7 +479,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
-			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]any{
 				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
 				"upstream_username": env.SupervisorUpstreamOIDC.Username,
 			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
@@ -1423,11 +1423,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
@@ -1449,14 +1449,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-					TokenLifetimes: configv1alpha1.OIDCClientTokenLifetimes{
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+					TokenLifetimes: supervisorconfigv1alpha1.OIDCClientTokenLifetimes{
 						IDTokenSeconds: ptr.To[int32](1234),
 					},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
@@ -1478,9 +1478,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my oidc idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: displayName,
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -1494,11 +1494,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				// which should cause the authorize endpoint to show the IDP chooser page
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDCWithIDPChooserPage,
 			wantDownstreamIDTokenSubjectToMatch: "^" +
@@ -1530,17 +1530,17 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			requestAuthorization:                 requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch:  expectedIDTokenSubjectRegexForUpstreamOIDC,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
-			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]interface{}{
+			wantDownstreamIDTokenAdditionalClaims: wantGroupsInAdditionalClaimsIfGroupsExist(map[string]any{
 				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
 				"upstream_username": env.SupervisorUpstreamOIDC.Username,
 			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
@@ -1553,11 +1553,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1580,11 +1580,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // token exchange grant type not allowed
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // a validation requires that we also disallow the pinniped:request-audience scope
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},        // token exchange grant type not allowed
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // a validation requires that we also disallow the pinniped:request-audience scope
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1614,11 +1614,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1648,11 +1648,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1674,11 +1674,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1700,11 +1700,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1728,11 +1728,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1762,11 +1762,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access"}, // validations require that when username/groups are excluded, then token exchange must also not be allowed
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access"}, // validations require that when username/groups are excluded, then token exchange must also not be allowed
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1796,11 +1796,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				return testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				return testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 			},
 			testUser: func(t *testing.T) (string, string) {
 				// return the username and password of the existing user that we want to use for this test
@@ -1823,11 +1823,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				return idp.Name
 			},
 			createOIDCClient: func(t *testing.T, callbackURL string) (string, string) {
-				clientID, _ := testlib.CreateOIDCClient(t, configv1alpha1.OIDCClientSpec{
-					AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(callbackURL)},
-					AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-					AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-				}, configv1alpha1.OIDCClientPhaseReady)
+				clientID, _ := testlib.CreateOIDCClient(t, supervisorconfigv1alpha1.OIDCClientSpec{
+					AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(callbackURL)},
+					AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+					AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+				}, supervisorconfigv1alpha1.OIDCClientPhaseReady)
 				return clientID, "wrong-client-secret"
 			},
 			testUser: func(t *testing.T) (string, string) {
@@ -1852,9 +1852,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}
 				return testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady).Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my oidc idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
 						ObjectRef: corev1.TypedLocalObjectReference{
@@ -1862,8 +1862,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							Kind:     "OIDCIdentityProvider",
 							Name:     idpName,
 						},
-						Transforms: configv1alpha1.FederationDomainTransforms{
-							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								{
 									Type: "username/v1",
 									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
@@ -1913,9 +1913,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my ldap idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
 						ObjectRef: corev1.TypedLocalObjectReference{
@@ -1923,8 +1923,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							Kind:     "LDAPIdentityProvider",
 							Name:     idpName,
 						},
-						Transforms: configv1alpha1.FederationDomainTransforms{
-							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								{
 									Type: "username/v1",
 									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
@@ -1980,9 +1980,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createLDAPIdentityProvider(t, nil)
 				return idp.Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my ldap idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
 						ObjectRef: corev1.TypedLocalObjectReference{
@@ -1990,8 +1990,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							Kind:     "LDAPIdentityProvider",
 							Name:     idpName,
 						},
-						Transforms: configv1alpha1.FederationDomainTransforms{
-							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								{
 									Type: "username/v1",
 									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
@@ -2044,9 +2044,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
 				return idp.Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my ad idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
 						ObjectRef: corev1.TypedLocalObjectReference{
@@ -2054,8 +2054,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							Kind:     "ActiveDirectoryIdentityProvider",
 							Name:     idpName,
 						},
-						Transforms: configv1alpha1.FederationDomainTransforms{
-							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								{
 									Type: "username/v1",
 									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
@@ -2113,9 +2113,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
 				return idp.Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "my ad idp"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 					{
 						DisplayName: displayName,
 						ObjectRef: corev1.TypedLocalObjectReference{
@@ -2123,8 +2123,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							Kind:     "ActiveDirectoryIdentityProvider",
 							Name:     idpName,
 						},
-						Transforms: configv1alpha1.FederationDomainTransforms{
-							Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								{
 									Type: "username/v1",
 									Expression: fmt.Sprintf(`username == "%s" ? "username-prefix:" + username : username`,
@@ -2206,9 +2206,9 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	}
 }
 
-func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]interface{}, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]interface{} {
+func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]any, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]any {
 	if len(wantGroups) > 0 {
-		var wantGroupsAnyType []interface{}
+		var wantGroupsAnyType []any
 		for _, group := range wantGroups {
 			wantGroupsAnyType = append(wantGroupsAnyType, group)
 		}
@@ -2338,7 +2338,7 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
-	federationDomainIDPs func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string),
+	federationDomainIDPs func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string),
 	requestAuthorization func(t *testing.T, downstreamIssuer string, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
 	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
@@ -2351,7 +2351,7 @@ func testSupervisorLogin(
 	wantDownstreamIDTokenSubjectToMatch string,
 	wantDownstreamIDTokenUsernameToMatch func(username string) string,
 	wantDownstreamIDTokenGroups []string,
-	wantDownstreamIDTokenAdditionalClaims map[string]interface{},
+	wantDownstreamIDTokenAdditionalClaims map[string]any,
 	wantDownstreamIDTokenLifetime *time.Duration,
 	wantAuthorizationErrorType string,
 	wantAuthorizationErrorDescription string,
@@ -2420,7 +2420,7 @@ func testSupervisorLogin(
 	idpName := createIDP(t)
 
 	// Determine if and how we should set spec.identityProviders for the FederationDomain.
-	var fdIDPSpec []configv1alpha1.FederationDomainIdentityProvider
+	var fdIDPSpec []supervisorconfigv1alpha1.FederationDomainIdentityProvider
 	useIDPDisplayName := ""
 	if federationDomainIDPs != nil {
 		fdIDPSpec, useIDPDisplayName = federationDomainIDPs(t, idpName)
@@ -2428,14 +2428,14 @@ func testSupervisorLogin(
 
 	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		configv1alpha1.FederationDomainSpec{
+		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer:            issuerURL.String(),
-			TLS:               &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:               &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 			IdentityProviders: fdIDPSpec,
 		},
 		// The IDP CR already exists, so even for legacy FederationDomains which do not explicitly list
 		// the IDPs in the spec, the FederationDomain should be ready.
-		configv1alpha1.FederationDomainPhaseReady,
+		supervisorconfigv1alpha1.FederationDomainPhaseReady,
 	)
 
 	// Ensure that the JWKS data is created and ready for the new FederationDomain by waiting for
@@ -2739,9 +2739,9 @@ func verifyTokenResponse(
 	expectedIDTokenClaims []string,
 	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
 	wantDownstreamIDTokenGroups []string,
-	wantDownstreamIDTokenAdditionalClaims map[string]interface{},
+	wantDownstreamIDTokenAdditionalClaims map[string]any,
 	wantDownstreamIDTokenLifetime time.Duration,
-) map[string]interface{} {
+) map[string]any {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -2762,7 +2762,7 @@ func verifyTokenResponse(
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(wantDownstreamIDTokenLifetime), idToken.Expiry, time.Second*30)
 
 	// Check the full list of claim names of the ID token.
-	idTokenClaims := map[string]interface{}{}
+	idTokenClaims := map[string]any{}
 	err = idToken.Claims(&idTokenClaims)
 	require.NoError(t, err)
 	idTokenClaimNames := []string{}
@@ -2819,7 +2819,7 @@ func verifyTokenResponse(
 	return idTokenClaims
 }
 
-func getFloat64Claim(t *testing.T, claims map[string]interface{}, claim string) float64 {
+func getFloat64Claim(t *testing.T, claims map[string]any, claim string) float64 {
 	t.Helper()
 
 	v, ok := claims[claim]
@@ -3104,7 +3104,7 @@ func doTokenExchange(
 	httpClient *http.Client,
 	provider *coreosoidc.Provider,
 	wantTokenExchangeResponse func(t *testing.T, status int, body string),
-	previousIDTokenClaims map[string]interface{},
+	previousIDTokenClaims map[string]any,
 	wantIDTokenLifetime time.Duration,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -3154,7 +3154,7 @@ func doTokenExchange(
 	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
 	require.NoError(t, err)
 
-	var claims map[string]interface{}
+	var claims map[string]any
 	require.NoError(t, exchangedToken.Claims(&claims))
 	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
 	require.NoError(t, err)

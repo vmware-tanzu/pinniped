@@ -22,7 +22,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
@@ -71,7 +71,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -87,7 +87,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 							Kind:       "FederationDomain",
 							Name:       "some-name",
 						},
@@ -103,7 +103,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
@@ -127,7 +127,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 							Kind: "UnrelatedKind",
 						},
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
@@ -148,7 +148,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
@@ -204,7 +204,7 @@ func TestJWKSWriterControllerFilterFederationDomain(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		federationDomain configv1alpha1.FederationDomain
+		federationDomain supervisorconfigv1alpha1.FederationDomain
 		wantAdd          bool
 		wantUpdate       bool
 		wantDelete       bool
@@ -212,7 +212,7 @@ func TestJWKSWriterControllerFilterFederationDomain(t *testing.T) {
 	}{
 		{
 			name:             "anything goes",
-			federationDomain: configv1alpha1.FederationDomain{},
+			federationDomain: supervisorconfigv1alpha1.FederationDomain{},
 			wantAdd:          true,
 			wantUpdate:       true,
 			wantDelete:       true,
@@ -241,7 +241,7 @@ func TestJWKSWriterControllerFilterFederationDomain(t *testing.T) {
 				withInformer.WithInformer,
 			)
 
-			unrelated := configv1alpha1.FederationDomain{}
+			unrelated := supervisorconfigv1alpha1.FederationDomain{}
 			filter := withInformer.GetFilterForInformer(federationDomainInformer)
 			require.Equal(t, test.wantAdd, filter.Add(test.federationDomain.DeepCopy()))
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.federationDomain.DeepCopy()))
@@ -265,18 +265,18 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 	require.NoError(t, err)
 
 	federationDomainGVR := schema.GroupVersionResource{
-		Group:    configv1alpha1.SchemeGroupVersion.Group,
-		Version:  configv1alpha1.SchemeGroupVersion.Version,
+		Group:    supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+		Version:  supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 		Resource: "federationdomains",
 	}
 
-	goodFederationDomain := &configv1alpha1.FederationDomain{
+	goodFederationDomain := &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "good-federationDomain",
 			Namespace: namespace,
 			UID:       "good-federationDomain-uid",
 		},
-		Spec: configv1alpha1.FederationDomainSpec{
+		Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: "https://some-issuer.com",
 		},
 	}
@@ -332,7 +332,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		secrets                     []*corev1.Secret
 		configKubeClient            func(*kubernetesfake.Clientset)
 		configPinnipedClient        func(*pinnipedfake.Clientset)
-		federationDomains           []*configv1alpha1.FederationDomain
+		federationDomains           []*supervisorconfigv1alpha1.FederationDomain
 		generateKeyErr              error
 		wantGenerateKeyCount        int
 		wantSecretActions           []kubetesting.Action
@@ -342,7 +342,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "new federationDomain with no secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			wantGenerateKeyCount: 1,
@@ -358,7 +358,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "federationDomain without status with existing secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			secrets: []*corev1.Secret{
@@ -376,7 +376,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "existing federationDomain with no secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			wantGenerateKeyCount: 1,
@@ -391,7 +391,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "existing federationDomain with existing secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -406,7 +406,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing jwk in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -424,7 +424,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing jwks in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -442,7 +442,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "wrong type in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -460,7 +460,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwk JSON in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -478,7 +478,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwks JSON in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -496,7 +496,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "public jwk in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -514,7 +514,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "private jwks in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -532,7 +532,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwk key in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -550,7 +550,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwks key in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -568,7 +568,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing active jwks in secret",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -586,7 +586,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "generate key fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomainWithStatus,
 			},
 			generateKeyErr: errors.New("some generate error"),
@@ -595,7 +595,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "get secret fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			configKubeClient: func(client *kubernetesfake.Clientset) {
@@ -608,7 +608,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "create secret fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			configKubeClient: func(client *kubernetesfake.Clientset) {
@@ -621,7 +621,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "update secret fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			secrets: []*corev1.Secret{
@@ -637,7 +637,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "get FederationDomain fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			configPinnipedClient: func(client *pinnipedfake.Clientset) {
@@ -650,7 +650,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "update federationDomain fails",
 			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
-			federationDomains: []*configv1alpha1.FederationDomain{
+			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
 			configPinnipedClient: func(client *pinnipedfake.Clientset) {
@@ -665,7 +665,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// We shouldn't run this test in parallel since it messes with a global function (generateKey).
 			generateKeyCount := 0
-			generateKey = func(_ io.Reader) (interface{}, error) {
+			generateKey = func(_ io.Reader) (any, error) {
 				generateKeyCount++
 				return goodKey, test.generateKeyErr
 			}

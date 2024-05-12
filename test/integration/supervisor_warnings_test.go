@@ -25,7 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -83,11 +83,11 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		configv1alpha1.FederationDomainSpec{
+		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 		},
-		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
+		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
@@ -110,7 +110,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -258,7 +258,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -420,7 +420,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.

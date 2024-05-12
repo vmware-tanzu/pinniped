@@ -106,9 +106,9 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 
 type testingT interface {
 	Helper()
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 	FailNow()
-	Logf(format string, args ...interface{})
+	Logf(format string, args ...any)
 }
 
 func runPinnipedCLI(t testingT, envVars []string, pinnipedExe string, args ...string) (string, string) {
@@ -194,7 +194,7 @@ func TestCLILoginOIDC_Browser(t *testing.T) {
 	require.NotEmpty(t, credOutput.Status.Token)
 	jws, err := jose.ParseSigned(credOutput.Status.Token)
 	require.NoError(t, err)
-	claims := map[string]interface{}{}
+	claims := map[string]any{}
 	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))
 	require.Equal(t, env.CLIUpstreamOIDC.Issuer, claims["iss"])
 	require.Equal(t, env.CLIUpstreamOIDC.ClientID, claims["aud"])

@@ -22,7 +22,7 @@ func (a fakeNoopTransformer) Evaluate(_ctx context.Context, username string, gro
 	}, nil
 }
 
-func (a fakeNoopTransformer) Source() interface{} {
+func (a fakeNoopTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -37,7 +37,7 @@ func (a fakeNilGroupTransformer) Evaluate(_ctx context.Context, username string,
 	}, nil
 }
 
-func (a fakeNilGroupTransformer) Source() interface{} {
+func (a fakeNilGroupTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -56,7 +56,7 @@ func (a fakeAppendStringTransformer) Evaluate(_ctx context.Context, username str
 	}, nil
 }
 
-func (a fakeAppendStringTransformer) Source() interface{} {
+func (a fakeAppendStringTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -71,7 +71,7 @@ func (a fakeDeleteUsernameAndGroupsTransformer) Evaluate(_ctx context.Context, _
 	}, nil
 }
 
-func (a fakeDeleteUsernameAndGroupsTransformer) Source() interface{} {
+func (a fakeDeleteUsernameAndGroupsTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -90,7 +90,7 @@ func (a fakeAuthenticationDisallowedTransformer) Evaluate(_ctx context.Context, 
 	}, nil
 }
 
-func (a fakeAuthenticationDisallowedTransformer) Source() interface{} {
+func (a fakeAuthenticationDisallowedTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -100,7 +100,7 @@ func (a fakeErrorTransformer) Evaluate(_ctx context.Context, _username string, _
 	return &TransformationResult{}, errors.New("unexpected catastrophic error")
 }
 
-func (a fakeErrorTransformer) Source() interface{} {
+func (a fakeErrorTransformer) Source() any {
 	return nil // not needed for this test
 }
 
@@ -112,7 +112,7 @@ func (a fakeTransformerWithSource) Evaluate(_ctx context.Context, _username stri
 	return nil, nil // not needed for this test
 }
 
-func (a fakeTransformerWithSource) Source() interface{} {
+func (a fakeTransformerWithSource) Source() any {
 	return a.source
 }
 
@@ -334,6 +334,6 @@ func TestTransformationSource(t *testing.T) {
 		pipeline.AppendTransformation(transform)
 	}
 
-	require.Equal(t, []interface{}{"foo", "bar", "baz"}, pipeline.Source())
-	require.NotEqual(t, []interface{}{"foo", "something-else", "baz"}, pipeline.Source())
+	require.Equal(t, []any{"foo", "bar", "baz"}, pipeline.Source())
+	require.NotEqual(t, []any{"foo", "something-else", "baz"}, pipeline.Source())
 }

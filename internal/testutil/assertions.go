@@ -163,7 +163,7 @@ func WantExactErrorString(wantErrStr string) RequireErrorStringFunc {
 
 // WantSprintfErrorString can be used to set up an expected value for an error string in a test table.
 // Use when you want to express that an expected string built using fmt.Sprintf semantics must be an exact match.
-func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...interface{}) RequireErrorStringFunc {
+func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...any) RequireErrorStringFunc {
 	wantErrStr := fmt.Sprintf(wantErrSprintfSpecifier, a...)
 	return func(t *testing.T, actualErrorStr string) {
 		require.Equal(t, wantErrStr, actualErrorStr)

@@ -35,7 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
@@ -105,11 +105,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
-		configv1alpha1.FederationDomainSpec{
+		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 		},
-		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
+		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
@@ -163,7 +163,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -249,7 +249,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -337,7 +337,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -461,7 +461,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -592,7 +592,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -665,7 +665,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -729,7 +729,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -788,7 +788,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -851,7 +851,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -922,7 +922,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -981,7 +981,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -1054,7 +1054,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -1109,7 +1109,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -1164,7 +1164,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -1241,7 +1241,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 
 		// Having one IDP should put the FederationDomain into a ready state.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
@@ -1275,7 +1275,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		}, idpv1alpha1.PhaseReady)
 
 		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Update the FederationDomain to use the two IDPs.
@@ -1290,7 +1290,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		ldapIDPDisplayName := "My LDAP IDP 💾"
 		oidcIDPDisplayName := "My OIDC IDP 🚀"
 
-		gotFederationDomain.Spec.IdentityProviders = []configv1alpha1.FederationDomainIdentityProvider{
+		gotFederationDomain.Spec.IdentityProviders = []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 			{
 				DisplayName: ldapIDPDisplayName,
 				ObjectRef: corev1.TypedLocalObjectReference{
@@ -1298,21 +1298,21 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 					Kind:     "LDAPIdentityProvider",
 					Name:     createdLDAPProvider.Name,
 				},
-				Transforms: configv1alpha1.FederationDomainTransforms{
-					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+				Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+					Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamLDAPUsername},
 						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamLDAPUsername, "someone else"}},
 					},
-					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+					Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
 						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
 						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
 					},
-					Examples: []configv1alpha1.FederationDomainTransformsExample{
+					Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 						{
 							Username: expectedUpstreamLDAPUsername,
 							Groups:   []string{"a", "b"},
-							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Username: expectedDownstreamLDAPUsername,
 								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
 							},
@@ -1320,7 +1320,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 						{
 							Username: "someone other user",
 							Groups:   []string{"a", "b"},
-							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Rejected: true,
 								Message:  "only special users allowed",
 							},
@@ -1335,21 +1335,21 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 					Kind:     "OIDCIdentityProvider",
 					Name:     createdOIDCProvider.Name,
 				},
-				Transforms: configv1alpha1.FederationDomainTransforms{
-					Constants: []configv1alpha1.FederationDomainTransformsConstant{
+				Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+					Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 						{Name: "allowedUser", Type: "string", StringValue: expectedUpstreamOIDCUsername},
 						{Name: "allowedUsers", Type: "stringList", StringListValue: []string{"someone else", expectedUpstreamOIDCUsername, "someone else"}},
 					},
-					Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+					Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 						{Type: "policy/v1", Expression: `username == strConst.allowedUser && username in strListConst.allowedUsers`, Message: "only special users allowed"},
 						{Type: "username/v1", Expression: fmt.Sprintf(`"%s" + username`, downstreamPrefix)},
 						{Type: "groups/v1", Expression: fmt.Sprintf(`groups.map(g, "%s" + g)`, downstreamPrefix)},
 					},
-					Examples: []configv1alpha1.FederationDomainTransformsExample{
+					Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 						{
 							Username: expectedUpstreamOIDCUsername,
 							Groups:   []string{"a", "b"},
-							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Username: expectedDownstreamOIDCUsername,
 								Groups:   []string{downstreamPrefix + "a", downstreamPrefix + "b"},
 							},
@@ -1357,7 +1357,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 						{
 							Username: "someone other user",
 							Groups:   []string{"a", "b"},
-							Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Rejected: true,
 								Message:  "only special users allowed",
 							},
@@ -1370,7 +1370,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, err)
 
 		// The FederationDomain should be valid after the above update.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
@@ -1504,7 +1504,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			requireEventually.Equal(fd.Generation, fd.Status.Conditions[0].ObservedGeneration)
 		}, 20*time.Second, 250*time.Millisecond)
 		// The FederationDomain should be valid after the above update.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Log out so we can try fresh logins again.
@@ -1968,7 +1968,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	ctx context.Context,
 	t *testing.T,
 	env *testlib.TestEnv,
-	downstream *configv1alpha1.FederationDomain,
+	downstream *supervisorconfigv1alpha1.FederationDomain,
 	upstreamProviderName string,
 	kubeconfigPath string,
 	sessionCachePath string,
@@ -2009,8 +2009,8 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	if expectedGroups == nil {
 		require.Nil(t, idTokenClaims["groups"])
 	} else {
-		// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
-		expectedGroupsAsEmptyInterfaces := make([]interface{}, 0, len(expectedGroups))
+		// The groups claim in the file ends up as an []any, so adjust our expectation to match.
+		expectedGroupsAsEmptyInterfaces := make([]any, 0, len(expectedGroups))
 		for _, g := range expectedGroups {
 			expectedGroupsAsEmptyInterfaces = append(expectedGroupsAsEmptyInterfaces, g)
 		}

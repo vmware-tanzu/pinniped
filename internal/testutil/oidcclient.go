@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 const (
@@ -35,10 +35,10 @@ const (
 )
 
 // allDynamicClientScopes returns a slice of all scopes that are supported by the Supervisor for dynamic clients.
-func allDynamicClientScopes() []configv1alpha1.Scope {
-	scopes := []configv1alpha1.Scope{}
+func allDynamicClientScopes() []supervisorconfigv1alpha1.Scope {
+	scopes := []supervisorconfigv1alpha1.Scope{}
 	for _, s := range strings.Split(AllDynamicClientScopesSpaceSep, " ") {
-		scopes = append(scopes, configv1alpha1.Scope(s))
+		scopes = append(scopes, supervisorconfigv1alpha1.Scope(s))
 	}
 	return scopes
 }
@@ -48,24 +48,24 @@ func newOIDCClient(
 	clientID string,
 	clientUID string,
 	redirectURI string,
-	allowedGrantTypes []configv1alpha1.GrantType,
-	allowedScopes []configv1alpha1.Scope,
+	allowedGrantTypes []supervisorconfigv1alpha1.GrantType,
+	allowedScopes []supervisorconfigv1alpha1.Scope,
 	tokenLifetimesIDTokenSeconds *int32,
-) *configv1alpha1.OIDCClient {
-	return &configv1alpha1.OIDCClient{
+) *supervisorconfigv1alpha1.OIDCClient {
+	return &supervisorconfigv1alpha1.OIDCClient{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: clientID, Generation: 1, UID: types.UID(clientUID)},
-		Spec: configv1alpha1.OIDCClientSpec{
+		Spec: supervisorconfigv1alpha1.OIDCClientSpec{
 			AllowedGrantTypes:   allowedGrantTypes,
 			AllowedScopes:       allowedScopes,
-			AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(redirectURI)},
-			TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: tokenLifetimesIDTokenSeconds},
+			AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(redirectURI)},
+			TokenLifetimes:      supervisorconfigv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: tokenLifetimesIDTokenSeconds},
 		},
 	}
 }
 
 // OIDCClientValidatorFunc is an interface-like type that allows these test helpers to avoid having a direct dependency
 // on the production code, to avoid circular module dependencies. Implemented by oidcclientvalidator.Validate.
-type OIDCClientValidatorFunc func(oidcClient *configv1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string)
+type OIDCClientValidatorFunc func(oidcClient *supervisorconfigv1alpha1.OIDCClient, secret *corev1.Secret, minBcryptCost int) (bool, []*metav1.Condition, []string)
 
 // FullyCapableOIDCClientAndStorageSecret returns an OIDC client which is allowed to use all grant types and all scopes
 // that are supported by the Supervisor for dynamic clients, along with a corresponding client secret storage Secret.
@@ -78,10 +78,10 @@ func FullyCapableOIDCClientAndStorageSecret(
 	tokenLifetimesIDTokenSeconds *int32,
 	hashes []string,
 	validateFunc OIDCClientValidatorFunc,
-) (*configv1alpha1.OIDCClient, *corev1.Secret) {
+) (*supervisorconfigv1alpha1.OIDCClient, *corev1.Secret) {
 	allScopes := allDynamicClientScopes()
 
-	allGrantTypes := []configv1alpha1.GrantType{
+	allGrantTypes := []supervisorconfigv1alpha1.GrantType{
 		"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token",
 	}
 
@@ -96,13 +96,13 @@ func OIDCClientAndStorageSecret(
 	namespace string,
 	clientID string,
 	clientUID string,
-	allowedGrantTypes []configv1alpha1.GrantType,
-	allowedScopes []configv1alpha1.Scope,
+	allowedGrantTypes []supervisorconfigv1alpha1.GrantType,
+	allowedScopes []supervisorconfigv1alpha1.Scope,
 	redirectURI string,
 	tokenLifetimesIDTokenSeconds *int32,
 	hashes []string,
 	validateFunc OIDCClientValidatorFunc,
-) (*configv1alpha1.OIDCClient, *corev1.Secret) {
+) (*supervisorconfigv1alpha1.OIDCClient, *corev1.Secret) {
 	oidcClient := newOIDCClient(namespace, clientID, clientUID, redirectURI, allowedGrantTypes, allowedScopes, tokenLifetimesIDTokenSeconds)
 	secret := OIDCClientSecretStorageSecretForUID(t, namespace, clientUID, hashes)
 

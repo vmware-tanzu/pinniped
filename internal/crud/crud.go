@@ -48,7 +48,7 @@ type Storage interface {
 	GetName(signature string) string
 }
 
-type JSON interface{} // document that we need valid JSON types
+type JSON any // document that we need valid JSON types
 
 func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time) Storage {
 	return &secretsStorage{

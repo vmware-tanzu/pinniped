@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidctypes provides core data types for OIDC token structures.
@@ -33,7 +33,7 @@ type IDToken struct {
 	Expiry metav1.Time `json:"expiryTimestamp,omitempty"`
 
 	// Claims are the claims expressed by the Token.
-	Claims map[string]interface{} `json:"claims,omitempty"`
+	Claims map[string]any `json:"claims,omitempty"`
 }
 
 // Token contains the elements of an OIDC session.

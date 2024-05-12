@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package secret
@@ -63,7 +63,7 @@ func (c *Cache) getFederationDomainCache(oidcIssuer string) *federationDomainCac
 	return value.(*federationDomainCache)
 }
 
-func bytesOrNil(b interface{}) []byte {
+func bytesOrNil(b any) []byte {
 	if b == nil {
 		return nil
 	}

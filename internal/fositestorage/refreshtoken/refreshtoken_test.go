@@ -392,7 +392,7 @@ func TestReadFromSecret(t *testing.T) {
 							Username: "snorlax",
 							Subject:  "panda",
 							Claims:   &jwt.IDTokenClaims{JTI: "xyz"},
-							Headers:  &jwt.Headers{Extra: map[string]interface{}{"myheader": "foo"}},
+							Headers:  &jwt.Headers{Extra: map[string]any{"myheader": "foo"}},
 						},
 						Custom: &psession.CustomSessionData{
 							Username:         "fake-username",

@@ -298,7 +298,7 @@ func validateAndGetDownstreamGroupsFromSession(session *psession.PinnipedSession
 	if downstreamGroupsInterface == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
-	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]interface{})
+	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]any)
 	if !ok {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}

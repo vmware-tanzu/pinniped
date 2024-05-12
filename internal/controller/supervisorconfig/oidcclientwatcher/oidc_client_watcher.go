@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configInformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
@@ -127,7 +127,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 func (c *oidcClientWatcherController) updateStatus(
 	ctx context.Context,
-	upstream *v1alpha1.OIDCClient,
+	upstream *supervisorconfigv1alpha1.OIDCClient,
 	conditions []*metav1.Condition,
 	totalClientSecrets int,
 ) error {
@@ -136,9 +136,9 @@ func (c *oidcClientWatcherController) updateStatus(
 	hadErrorCondition := conditionsutil.MergeConfigConditions(conditions,
 		upstream.Generation, &updated.Status.Conditions, plog.New(), metav1.Now())
 
-	updated.Status.Phase = v1alpha1.OIDCClientPhaseReady
+	updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseReady
 	if hadErrorCondition {
-		updated.Status.Phase = v1alpha1.OIDCClientPhaseError
+		updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseError
 	}
 
 	updated.Status.TotalClientSecrets = int32(totalClientSecrets)

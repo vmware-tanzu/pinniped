@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 )
@@ -84,7 +84,7 @@ func (s *OIDCClientSecretStorage) Set(ctx context.Context, resourceVersion, oidc
 		// Setup an owner reference for garbage collection purposes. When the OIDCClient is deleted, then this
 		// corresponding client secret storage secret should also be automatically deleted (by Kube garbage collection).
 		ownerReferences := []metav1.OwnerReference{{
-			APIVersion:         configv1alpha1.SchemeGroupVersion.String(),
+			APIVersion:         supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 			Kind:               "OIDCClient",
 			Name:               oidcClientName,
 			UID:                oidcClientUID,

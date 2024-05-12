@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package scheme contains code to construct a proper runtime.Scheme for the Concierge aggregated
@@ -75,7 +75,7 @@ func New(apiGroupSuffix string) (_ *runtime.Scheme, login, identity schema.Group
 
 	// on incoming requests, restore the authenticator API group to the standard group
 	// note that we are responsible for duplicating this logic for every external API version
-	scheme.AddTypeDefaultingFunc(&loginv1alpha1.TokenCredentialRequest{}, func(obj interface{}) {
+	scheme.AddTypeDefaultingFunc(&loginv1alpha1.TokenCredentialRequest{}, func(obj any) {
 		credentialRequest := obj.(*loginv1alpha1.TokenCredentialRequest)
 
 		if credentialRequest.Spec.Authenticator.APIGroup == nil {

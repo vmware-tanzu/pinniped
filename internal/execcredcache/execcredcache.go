@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package execcredcache implements a cache for Kubernetes ExecCredential data.
@@ -50,7 +50,7 @@ func New(path string) *Cache {
 	}
 }
 
-func (c *Cache) Get(key interface{}) *clientauthenticationv1beta1.ExecCredential {
+func (c *Cache) Get(key any) *clientauthenticationv1beta1.ExecCredential {
 	// If the cache file does not exist, exit immediately with no error log
 	if _, err := os.Stat(c.path); errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -80,7 +80,7 @@ func (c *Cache) Get(key interface{}) *clientauthenticationv1beta1.ExecCredential
 	return result
 }
 
-func (c *Cache) Put(key interface{}, cred *clientauthenticationv1beta1.ExecCredential) {
+func (c *Cache) Put(key any, cred *clientauthenticationv1beta1.ExecCredential) {
 	// Create the cache directory if it does not exist.
 	if err := os.MkdirAll(filepath.Dir(c.path), 0700); err != nil && !errors.Is(err, os.ErrExist) {
 		c.errReporter(fmt.Errorf("could not create credential cache directory: %w", err))
@@ -111,7 +111,7 @@ func (c *Cache) Put(key interface{}, cred *clientauthenticationv1beta1.ExecCrede
 	})
 }
 
-func jsonSHA256Hex(key interface{}) string {
+func jsonSHA256Hex(key any) string {
 	hash := sha256.New()
 	if err := json.NewEncoder(hash).Encode(key); err != nil {
 		panic(err)

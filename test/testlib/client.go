@@ -30,7 +30,7 @@ import (
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -357,9 +357,9 @@ func WaitForJWTAuthenticatorStatusConditions(ctx context.Context, t *testing.T, 
 func CreateTestFederationDomain(
 	ctx context.Context,
 	t *testing.T,
-	spec configv1alpha1.FederationDomainSpec,
-	expectStatus configv1alpha1.FederationDomainPhase,
-) *configv1alpha1.FederationDomain {
+	spec supervisorconfigv1alpha1.FederationDomainSpec,
+	expectStatus supervisorconfigv1alpha1.FederationDomainPhase,
+) *supervisorconfigv1alpha1.FederationDomain {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -367,7 +367,7 @@ func CreateTestFederationDomain(
 	defer cancel()
 
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
-	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
+	federationDomain, err := federationDomainsClient.Create(createContext, &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
@@ -393,7 +393,7 @@ func CreateTestFederationDomain(
 	return federationDomain
 }
 
-func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase configv1alpha1.FederationDomainPhase) {
+func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase supervisorconfigv1alpha1.FederationDomainPhase) {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
@@ -404,7 +404,7 @@ func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, feder
 		requireEventually.Equalf(expectPhase, fd.Status.Phase, "actual status conditions were: %#v", fd.Status.Conditions)
 
 		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-		if expectPhase == configv1alpha1.FederationDomainPhaseReady {
+		if expectPhase == supervisorconfigv1alpha1.FederationDomainPhaseReady {
 			requireEventually.NotEmpty(fd.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
 			requireEventually.NotEmpty(fd.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
 			requireEventually.NotEmpty(fd.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
@@ -510,7 +510,7 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	)
 }
 
-func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expectedPhase configv1alpha1.OIDCClientPhase) (string, string) {
+func CreateOIDCClient(t *testing.T, spec supervisorconfigv1alpha1.OIDCClientSpec, expectedPhase supervisorconfigv1alpha1.OIDCClientPhase) (string, string) {
 	t.Helper()
 	env := IntegrationEnv(t)
 	client := NewSupervisorClientset(t)
@@ -520,7 +520,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	oidcClientClient := client.ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
 
 	// Create the OIDCClient using GenerateName to get a random name.
-	created, err := oidcClientClient.Create(ctx, &configv1alpha1.OIDCClient{
+	created, err := oidcClientClient.Create(ctx, &supervisorconfigv1alpha1.OIDCClient{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "client.oauth.pinniped.dev-test-", // use the required name prefix
 			Labels:       map[string]string{"pinniped.dev/test": ""},
@@ -542,7 +542,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	clientSecret := createOIDCClientSecret(t, created)
 
 	// Wait for the OIDCClient to enter the expected phase (or time out).
-	var result *configv1alpha1.OIDCClient
+	var result *supervisorconfigv1alpha1.OIDCClient
 	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
 		result, err = oidcClientClient.Get(ctx, created.Name, metav1.GetOptions{})
@@ -553,7 +553,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	return created.Name, clientSecret
 }
 
-func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClient) string {
+func createOIDCClientSecret(t *testing.T, forOIDCClient *supervisorconfigv1alpha1.OIDCClient) string {
 	t.Helper()
 	env := IntegrationEnv(t)
 	supervisorClient := NewSupervisorClientset(t)

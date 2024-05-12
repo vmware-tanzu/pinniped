@@ -72,8 +72,8 @@ func unsyncedInformers(status map[reflect.Type]bool) []string {
 	return names
 }
 
-func anyToFullname(any interface{}) string {
-	typ := reflect.TypeOf(any)
+func anyToFullname(a any) string {
+	typ := reflect.TypeOf(a)
 	return typeToFullname(typ)
 }
 

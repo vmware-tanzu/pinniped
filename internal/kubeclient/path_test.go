@@ -17,7 +17,7 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 func Test_updatePathNewGVK(t *testing.T) {
@@ -92,12 +92,12 @@ func Test_updatePathNewGVK(t *testing.T) {
 		{
 			name: "namespace-scoped list path",
 			args: args{
-				reqURL: mustParse(t, "https://walrus.tld/apis/"+configv1alpha1.SchemeGroupVersion.String()+"/namespaces/default/federationdomains"),
+				reqURL: mustParse(t, "https://walrus.tld/apis/"+supervisorconfigv1alpha1.SchemeGroupVersion.String()+"/namespaces/default/federationdomains"),
 				result: &mutationResult{
-					origGVK: configv1alpha1.SchemeGroupVersion.WithKind("FederationDomain"),
+					origGVK: supervisorconfigv1alpha1.SchemeGroupVersion.WithKind("FederationDomain"),
 					newGVK: schema.GroupVersionKind{
 						Group:   "config.supervisor.tuna.io",
-						Version: configv1alpha1.SchemeGroupVersion.Version,
+						Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 						Kind:    "FederationDomain",
 					},
 					gvkChanged: true,
@@ -110,12 +110,12 @@ func Test_updatePathNewGVK(t *testing.T) {
 		{
 			name: "namespace-scoped get path",
 			args: args{
-				reqURL: mustParse(t, "https://walrus.tld/apis/"+configv1alpha1.SchemeGroupVersion.String()+"/namespaces/default/federationdomains/some-name"),
+				reqURL: mustParse(t, "https://walrus.tld/apis/"+supervisorconfigv1alpha1.SchemeGroupVersion.String()+"/namespaces/default/federationdomains/some-name"),
 				result: &mutationResult{
-					origGVK: configv1alpha1.SchemeGroupVersion.WithKind("FederationDomain"),
+					origGVK: supervisorconfigv1alpha1.SchemeGroupVersion.WithKind("FederationDomain"),
 					newGVK: schema.GroupVersionKind{
 						Group:   "config.supervisor.tuna.io",
-						Version: configv1alpha1.SchemeGroupVersion.Version,
+						Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 						Kind:    "FederationDomain",
 					},
 					gvkChanged: true,

@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -43,9 +43,9 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 			name: "valid spec in without explicit identity providers makes status error unless there is exactly one identity provider",
 			run: func(t *testing.T) {
 				// Creating FederationDomain without any explicit IDPs should put the FederationDomain into an error status.
-				fd := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
+				fd := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com/fake",
-				}, v1alpha1.FederationDomainPhaseError)
+				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulLegacyFederationDomainConditions("", fd.Spec),
 					[]metav1.Condition{
@@ -65,7 +65,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, idpv1alpha1.PhaseError)
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseReady)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name,
 					allSuccessfulLegacyFederationDomainConditions(oidcIdentityProvider1.Name, fd.Spec))
 
@@ -74,7 +74,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, idpv1alpha1.PhaseError)
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulLegacyFederationDomainConditions(oidcIdentityProvider2.Name, fd.Spec),
 					[]metav1.Condition{
@@ -98,9 +98,9 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				oidcIDP1Meta := testlib.ObjectMetaWithRandomName(t, "upstream-oidc-idp")
 				oidcIDP2Meta := testlib.ObjectMetaWithRandomName(t, "upstream-oidc-idp")
 				// Creating FederationDomain with explicit IDPs that don't exist should put the FederationDomain into an error status.
-				fd := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
+				fd := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com/fake",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "idp1",
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -108,7 +108,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 								Kind:     "OIDCIdentityProvider",
 								Name:     oidcIDP1Meta.Name,
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{},
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{},
 						},
 						{
 							DisplayName: "idp2",
@@ -117,10 +117,10 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 								Kind:     "OIDCIdentityProvider",
 								Name:     oidcIDP2Meta.Name,
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{},
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{},
 						},
 					},
-				}, v1alpha1.FederationDomainPhaseError)
+				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
@@ -144,7 +144,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, oidcIDP1Meta, idpv1alpha1.PhaseError)
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
@@ -164,7 +164,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Issuer: "https://example.cluster.local/fake-issuer-url-does-not-matter",
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, oidcIDP2Meta, idpv1alpha1.PhaseError)
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseReady)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name,
 					allSuccessfulFederationDomainConditions(fd.Spec))
 
@@ -172,7 +172,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				oidcIDPClient := supervisorClient.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 				err := oidcIDPClient.Delete(ctx, oidcIdentityProvider1.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseError)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
@@ -198,9 +198,9 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, idpv1alpha1.PhaseError)
 
-				fd := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{
+				fd := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com/fake",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "not unique",
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -208,17 +208,17 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 								Kind:     "OIDCIdentityProvider",
 								Name:     "will not be found",
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "foo", Type: "string", StringValue: "bar"},
 								},
-								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 									{Type: "username/v1", Expression: "this is not a valid cel expression"},
 									{Type: "groups/v1", Expression: "this is also not a valid cel expression"},
 									{Type: "username/v1", Expression: "username"}, // valid
 									{Type: "policy/v1", Expression: "still not a valid cel expression"},
 								},
-								Examples: []v1alpha1.FederationDomainTransformsExample{
+								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 									{
 										Username: "does not matter because expressions did not compile",
 									},
@@ -240,23 +240,23 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 								Kind:     "this is the wrong kind",
 								Name:     "also will not be found",
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "ryan", Type: "string", StringValue: "ryan"},
 									{Name: "unused", Type: "stringList", StringListValue: []string{"foo", "bar"}},
 									{Name: "rejectMe", Type: "string", StringValue: "rejectMeWithDefaultMessage"},
 								},
-								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 									{Type: "policy/v1", Expression: `username == strConst.ryan || username == strConst.rejectMe`, Message: "only special users allowed"},
 									{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
 									{Type: "username/v1", Expression: `"pre:" + username`},
 									{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
 								},
-								Examples: []v1alpha1.FederationDomainTransformsExample{
+								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 									{ // this example should pass
 										Username: "ryan",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Username: "pre:ryan",
 											Groups:   []string{"pre:b", "pre:a", "pre:b", "pre:a"}, // order and repeats don't matter, treated like a set
 											Rejected: false,
@@ -264,7 +264,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									},
 									{ // this example should pass
 										Username: "other",
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Rejected: true,
 											Message:  "only special users allowed",
 										},
@@ -272,7 +272,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it expects the user to be rejected but the user was actually not rejected
 										Username: "ryan",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Rejected: true,
 											Message:  "this input is ignored in this case",
 										},
@@ -280,7 +280,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it expects the user not to be rejected but they were actually rejected
 										Username: "other",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Username: "pre:other",
 											Groups:   []string{"pre:a", "pre:b"},
 											Rejected: false,
@@ -289,7 +289,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it expects the wrong rejection message
 										Username: "other",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Rejected: true,
 											Message:  "wrong message",
 										},
@@ -298,14 +298,14 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 										// because the message assertions defaults to asserting the default rejection message
 										Username: "rejectMeWithDefaultMessage",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Rejected: true,
 										},
 									},
 									{ // this example should fail because it expects both the wrong username and groups
 										Username: "ryan",
 										Groups:   []string{"b", "a"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Username: "wrong",
 											Groups:   []string{},
 											Rejected: false,
@@ -314,7 +314,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it expects the wrong username only
 										Username: "ryan",
 										Groups:   []string{"a", "b"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Username: "wrong",
 											Groups:   []string{"pre:b", "pre:a"},
 											Rejected: false,
@@ -323,7 +323,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it expects the wrong groups only
 										Username: "ryan",
 										Groups:   []string{"b", "a"},
-										Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+										Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 											Username: "pre:ryan",
 											Groups:   []string{"wrong2", "wrong1"},
 											Rejected: false,
@@ -332,13 +332,13 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 									{ // this example should fail because it does not expect anything but the auth actually was successful
 										Username: "ryan",
 										Groups:   []string{"b", "a"},
-										Expects:  v1alpha1.FederationDomainTransformsExampleExpects{},
+										Expects:  supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{},
 									},
 								},
 							},
 						},
 					},
-				}, v1alpha1.FederationDomainPhaseError)
+				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
 					allSuccessfulFederationDomainConditions(fd.Spec),
@@ -437,7 +437,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					gotFD, err := federationDomainsClient.Get(ctx, fd.Name, metav1.GetOptions{})
 					require.NoError(t, err)
 
-					gotFD.Spec.IdentityProviders[0] = v1alpha1.FederationDomainIdentityProvider{
+					gotFD.Spec.IdentityProviders[0] = supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						// Fix the display name.
 						DisplayName: "now made unique",
 						// Fix the objectRef.
@@ -446,19 +446,19 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 							Kind:     "OIDCIdentityProvider",
 							Name:     oidcIdentityProvider.Name,
 						},
-						Transforms: v1alpha1.FederationDomainTransforms{
-							Constants: []v1alpha1.FederationDomainTransformsConstant{
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 								{Name: "foo", Type: "string", StringValue: "bar"},
 							},
-							Expressions: []v1alpha1.FederationDomainTransformsExpression{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 								// Fix the compile errors.
 								{Type: "username/v1", Expression: `"pre:" + username`},
 							},
-							Examples: []v1alpha1.FederationDomainTransformsExample{
+							Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 								{ // this example should fail because it expects both the wrong username and groups
 									Username: "ryan",
 									Groups:   []string{"b", "a"},
-									Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+									Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 										Username: "wrong",
 										Groups:   []string{},
 										Rejected: false,
@@ -468,10 +468,10 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						},
 					}
 
-					gotFD.Spec.IdentityProviders[2].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+					gotFD.Spec.IdentityProviders[2].Transforms.Examples = []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 						{ // this example should pass
 							Username: "other",
-							Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Rejected: true,
 								Message:  "only special users allowed",
 							},
@@ -525,11 +525,11 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						Name:     oidcIdentityProvider.Name,
 					}
 
-					gotFD.Spec.IdentityProviders[0].Transforms.Examples = []v1alpha1.FederationDomainTransformsExample{
+					gotFD.Spec.IdentityProviders[0].Transforms.Examples = []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 						{ // this example should pass
 							Username: "ryan",
 							Groups:   []string{"b", "a"},
-							Expects: v1alpha1.FederationDomainTransformsExampleExpects{
+							Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 								Username: "pre:ryan",
 								Groups:   []string{"a", "b"},
 							},
@@ -541,7 +541,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, v1alpha1.FederationDomainPhaseReady)
+				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, allSuccessfulFederationDomainConditions(fd.Spec))
 			},
 		},
@@ -570,16 +570,16 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		fd                   *v1alpha1.FederationDomain
+		fd                   *supervisorconfigv1alpha1.FederationDomain
 		wantErr              string
 		wantOldKubeErr       string
 		wantReallyOldKubeErr string
 	}{
 		{
 			name: "issuer cannot be empty",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "",
 				},
 			},
@@ -589,11 +589,11 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP display names cannot be empty",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "",
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -610,18 +610,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constants must have unique names",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "notUnique", Type: "string", StringValue: "foo"},
 									{Name: "notUnique", Type: "string", StringValue: "bar"},
 								},
@@ -639,18 +639,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names cannot be empty",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "", Type: "string"},
 								},
 							},
@@ -665,18 +665,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names cannot be more than 64 characters",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "12345678901234567890123456789012345678901234567890123456789012345", Type: "string"},
 								},
 							},
@@ -698,18 +698,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names must be a legal CEL variable name",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "cannot have spaces", Type: "string"},
 									{Name: "1mustStartWithLetter", Type: "string"},
 									{Name: "_mustStartWithLetter", Type: "string"},
@@ -740,18 +740,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant types must be one of the allowed enum strings",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "a", Type: "this is invalid"},
 									{Name: "b", Type: "string"},
 									{Name: "c", Type: "stringList"},
@@ -768,18 +768,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform expression types must be one of the allowed enum strings",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 									{Type: "this is invalid", Expression: "foo"},
 									{Type: "policy/v1", Expression: "foo"},
 									{Type: "username/v1", Expression: "foo"},
@@ -797,18 +797,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform expressions cannot be empty",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 									{Type: "username/v1", Expression: ""},
 								},
 							},
@@ -823,18 +823,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform example usernames cannot be empty",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Examples: []v1alpha1.FederationDomainTransformsExample{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 									{Username: ""},
 									{Username: "non-empty"},
 								},
@@ -850,20 +850,20 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "minimum valid",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
 				},
 			},
 		},
 		{
 			name: "minimum valid when IDPs are included",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -876,24 +876,24 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "minimum valid when IDP has transform constants, expressions, and examples",
-			fd: &v1alpha1.FederationDomain{
+			fd: &supervisorconfigv1alpha1.FederationDomain{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: v1alpha1.FederationDomainSpec{
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com",
-					IdentityProviders: []v1alpha1.FederationDomainIdentityProvider{
+					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: "foo",
 							ObjectRef: corev1.TypedLocalObjectReference{
 								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 							},
-							Transforms: v1alpha1.FederationDomainTransforms{
-								Constants: []v1alpha1.FederationDomainTransformsConstant{
+							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 									{Name: "foo", Type: "string"},
 								},
-								Expressions: []v1alpha1.FederationDomainTransformsExpression{
+								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 									{Type: "username/v1", Expression: "foo"},
 								},
-								Examples: []v1alpha1.FederationDomainTransformsExample{
+								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 									{Username: "foo"},
 								},
 							},
@@ -964,7 +964,7 @@ func replaceSomeConditions(conditions []metav1.Condition, replaceWithTheseCondit
 	return cp
 }
 
-func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDomainSpec v1alpha1.FederationDomainSpec) []metav1.Condition {
+func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDomainSpec supervisorconfigv1alpha1.FederationDomainSpec) []metav1.Condition {
 	return replaceSomeConditions(
 		allSuccessfulFederationDomainConditions(federationDomainSpec),
 		[]metav1.Condition{
@@ -979,7 +979,7 @@ func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDom
 	)
 }
 
-func allSuccessfulFederationDomainConditions(federationDomainSpec v1alpha1.FederationDomainSpec) []metav1.Condition {
+func allSuccessfulFederationDomainConditions(federationDomainSpec supervisorconfigv1alpha1.FederationDomainSpec) []metav1.Condition {
 	return []metav1.Condition{
 		{
 			Type: "IdentityProvidersDisplayNamesUnique", Status: "True", Reason: "Success",

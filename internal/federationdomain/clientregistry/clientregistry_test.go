@@ -20,7 +20,7 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
@@ -39,7 +39,7 @@ func TestClientManager(t *testing.T) {
 	tests := []struct {
 		name                   string
 		secrets                []*corev1.Secret
-		oidcClients            []*configv1alpha1.OIDCClient
+		oidcClients            []*supervisorconfigv1alpha1.OIDCClient
 		addKubeReactions       func(client *fake.Clientset)
 		addSupervisorReactions func(client *supervisorfake.Clientset)
 		run                    func(t *testing.T, subject *ClientManager)
@@ -62,7 +62,7 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find pinniped-cli client when some dynamic clients also exist",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID}},
 			},
 			run: func(t *testing.T, subject *ClientManager) {
@@ -74,7 +74,7 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "client not found",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID}},
 			},
 			run: func(t *testing.T, subject *ClientManager) {
@@ -89,13 +89,13 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find a dynamic client when its storage secret does not exist (client is invalid because is has no client secret)",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
 					},
 				},
 			},
@@ -107,13 +107,13 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find a dynamic client which is invalid due to its spec",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code"},
-						AllowedScopes:       []configv1alpha1.Scope{}, // at least "openid" is required here, so this makes the client invalid
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80"},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code"},
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{}, // at least "openid" is required here, so this makes the client invalid
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"http://localhost:80"},
 					},
 				},
 			},
@@ -128,13 +128,13 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find a dynamic client which somehow does not have the required prefix in its name, just in case, although should not be possible since prefix is a validation on the CRD",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "does-not-have-prefix", Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
 					},
 				},
 			},
@@ -166,7 +166,7 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "when there is an unexpected error getting the storage secret for the OIDCClient",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID}},
 			},
 			addKubeReactions: func(client *fake.Clientset) {
@@ -182,14 +182,14 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find a valid dynamic client without an ID token lifetime configuration",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
-						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
-						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: nil},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange", "refresh_token"},
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"http://localhost:80", "https://foobar.com/callback"},
+						TokenLifetimes:      supervisorconfigv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: nil},
 					},
 				},
 				{
@@ -217,14 +217,14 @@ func TestClientManager(t *testing.T) {
 		},
 		{
 			name: "find a valid dynamic client with an ID token lifetime configuration",
-			oidcClients: []*configv1alpha1.OIDCClient{
+			oidcClients: []*supervisorconfigv1alpha1.OIDCClient{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},
-						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{"http://localhost:8080"},
-						TokenLifetimes:      configv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: ptr.To[int32](4242)},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username", "groups"},
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{"http://localhost:8080"},
+						TokenLifetimes:      supervisorconfigv1alpha1.OIDCClientTokenLifetimes{IDTokenSeconds: ptr.To[int32](4242)},
 					},
 				},
 				{

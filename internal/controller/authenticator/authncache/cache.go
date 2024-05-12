@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package authncache implements a cache of active authenticators.
@@ -65,7 +65,7 @@ func (c *Cache) Delete(key Key) {
 // Keys currently stored in the cache.
 func (c *Cache) Keys() []Key {
 	var result []Key
-	c.cache.Range(func(key, _ interface{}) bool {
+	c.cache.Range(func(key, _ any) bool {
 		result = append(result, key.(Key))
 		return true
 	})

@@ -104,7 +104,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				return []string{"create", "-f", filePath, "-o", "yaml"}
 			},
 			assertOnStdOut: func(t *testing.T, oidcClientName string, stdOutString string) {
-				var yamlObj map[string]interface{}
+				var yamlObj map[string]any
 				err := yaml.Unmarshal([]byte(stdOutString), &yamlObj)
 				require.NoError(t, err)
 
@@ -112,7 +112,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.Equal(t, yamlObj["apiVersion"], fmt.Sprintf("clientsecret.supervisor.%s/v1alpha1", env.APIGroupSuffix))
 				require.Equal(t, yamlObj["kind"], "OIDCClientSecretRequest")
 
-				metadataMap, ok := yamlObj["metadata"].(map[string]interface{})
+				metadataMap, ok := yamlObj["metadata"].(map[string]any)
 				require.True(t, ok, "metadata should be a map")
 				require.Len(t, metadataMap, 3, "metadata should contain only 3 keys (creationTimestamp, name, namespace): %v", metadataMap)
 				require.Equal(t, metadataMap["name"], oidcClientName)
@@ -124,13 +124,13 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.NoError(t, err)
 				testutil.RequireTimeInDelta(t, parsedTime, time.Now(), 1*time.Minute)
 
-				specMap, ok := yamlObj["spec"].(map[string]interface{})
+				specMap, ok := yamlObj["spec"].(map[string]any)
 				require.True(t, ok, "spec should be a map")
 				require.Len(t, specMap, 2, "spec should contain only 2 keys (generateNewSecret, revokeOldSecrets): %v", specMap)
 				require.Equal(t, specMap["generateNewSecret"], true)
 				require.Equal(t, specMap["revokeOldSecrets"], false)
 
-				statusMap, ok := yamlObj["status"].(map[string]interface{})
+				statusMap, ok := yamlObj["status"].(map[string]any)
 				require.True(t, ok, "status should be a map")
 				require.Len(t, specMap, 2, "status should contain only 2 keys (generatedSecret, totalClientSecrets): %v", statusMap)
 				require.Regexp(t, "^[0-9a-z]{64}$", statusMap["generatedSecret"], "generated secret must be precisely 40 hex encoded characters")

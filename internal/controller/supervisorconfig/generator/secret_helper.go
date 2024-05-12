@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 // SecretHelper describes an object that can Generate() a Secret and determine whether a Secret
@@ -20,9 +20,9 @@ import (
 // A SecretHelper has a NamePrefix() that can be used to identify it from other SecretHelper instances.
 type SecretHelper interface {
 	NamePrefix() string
-	Generate(*configv1alpha1.FederationDomain) (*corev1.Secret, error)
-	IsValid(*configv1alpha1.FederationDomain, *corev1.Secret) bool
-	ObserveActiveSecretAndUpdateParentFederationDomain(*configv1alpha1.FederationDomain, *corev1.Secret) *configv1alpha1.FederationDomain
+	Generate(*supervisorconfigv1alpha1.FederationDomain) (*corev1.Secret, error)
+	IsValid(*supervisorconfigv1alpha1.FederationDomain, *corev1.Secret) bool
+	ObserveActiveSecretAndUpdateParentFederationDomain(*supervisorconfigv1alpha1.FederationDomain, *corev1.Secret) *supervisorconfigv1alpha1.FederationDomain
 	Handles(metav1.Object) bool
 }
 
@@ -89,7 +89,7 @@ type symmetricSecretHelper struct {
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
 
 // Generate implements SecretHelper.Generate().
-func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.FederationDomain) (*corev1.Secret, error) {
+func (s *symmetricSecretHelper) Generate(parent *supervisorconfigv1alpha1.FederationDomain) (*corev1.Secret, error) {
 	key := make([]byte, symmetricKeySize)
 	if _, err := s.rand.Read(key); err != nil {
 		return nil, err
@@ -102,8 +102,8 @@ func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.FederationDomain
 			Labels:    s.labels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(parent, schema.GroupVersionKind{
-					Group:   configv1alpha1.SchemeGroupVersion.Group,
-					Version: configv1alpha1.SchemeGroupVersion.Version,
+					Group:   supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+					Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 					Kind:    federationDomainKind,
 				}),
 			},
@@ -116,7 +116,7 @@ func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.FederationDomain
 }
 
 // IsValid implements SecretHelper.IsValid().
-func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.FederationDomain, secret *corev1.Secret) bool {
+func (s *symmetricSecretHelper) IsValid(parent *supervisorconfigv1alpha1.FederationDomain, secret *corev1.Secret) bool {
 	if !metav1.IsControlledBy(secret, parent) {
 		return false
 	}
@@ -138,9 +138,9 @@ func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.FederationDomain,
 
 // ObserveActiveSecretAndUpdateParentFederationDomain implements SecretHelper.ObserveActiveSecretAndUpdateParentFederationDomain().
 func (s *symmetricSecretHelper) ObserveActiveSecretAndUpdateParentFederationDomain(
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	secret *corev1.Secret,
-) *configv1alpha1.FederationDomain {
+) *supervisorconfigv1alpha1.FederationDomain {
 	s.updateCacheFunc(federationDomain.Spec.Issuer, secret.Data[symmetricSecretDataKey])
 
 	switch s.secretUsage {
@@ -189,6 +189,6 @@ func IsFederationDomainSecretOfType(obj metav1.Object, secretType corev1.SecretT
 func isFederationDomainControllee(obj metav1.Object) bool {
 	controller := metav1.GetControllerOf(obj)
 	return controller != nil &&
-		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.APIVersion == supervisorconfigv1alpha1.SchemeGroupVersion.String() &&
 		controller.Kind == federationDomainKind
 }

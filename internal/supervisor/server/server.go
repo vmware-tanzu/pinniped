@@ -38,7 +38,7 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/utils/clock"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
@@ -238,7 +238,7 @@ func prepareControllers(
 						secretCache.SetTokenHMACKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+				func(fd *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
 					return &fd.Secrets.TokenSigningKey
 				},
 				kubeClient,
@@ -261,7 +261,7 @@ func prepareControllers(
 						secretCache.SetStateEncoderHashKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+				func(fd *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
 					return &fd.Secrets.StateSigningKey
 				},
 				kubeClient,
@@ -284,7 +284,7 @@ func prepareControllers(
 						secretCache.SetStateEncoderBlockKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+				func(fd *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
 					return &fd.Secrets.StateEncryptionKey
 				},
 				kubeClient,

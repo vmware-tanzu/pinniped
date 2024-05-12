@@ -104,7 +104,7 @@ func OpenBrowser(t *testing.T) *Browser {
 	b := &Browser{chromeCtx: chromeCtx}
 
 	// Subscribe to console events and exceptions to make them available later.
-	chromedp.ListenTarget(chromeCtx, func(ev interface{}) {
+	chromedp.ListenTarget(chromeCtx, func(ev any) {
 		switch ev := ev.(type) {
 		case *chromedpruntime.EventConsoleAPICalled:
 			args := make([]string, len(ev.Args))

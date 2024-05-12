@@ -19,7 +19,7 @@ const idTokenLifetimeOverrideKey contextKey = iota
 
 // OpenIDConnectExplicitFactory is similar to the function of the same name in the fosite compose package,
 // except it allows wrapping the IDTokenLifespanProvider.
-func OpenIDConnectExplicitFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
+func OpenIDConnectExplicitFactory(config fosite.Configurator, storage any, strategy any) any {
 	openIDConnectExplicitHandler := compose.OpenIDConnectExplicitFactory(config, storage, strategy).(*openid.OpenIDConnectExplicitHandler)
 	// Overwrite the config with a wrapper around the fosite.IDTokenLifespanProvider.
 	openIDConnectExplicitHandler.Config = &contextAwareIDTokenLifespanProvider{DelegateConfig: config}
@@ -28,7 +28,7 @@ func OpenIDConnectExplicitFactory(config fosite.Configurator, storage interface{
 
 // OpenIDConnectRefreshFactory is similar to the function of the same name in the fosite compose package,
 // except it allows wrapping the IDTokenLifespanProvider.
-func OpenIDConnectRefreshFactory(config fosite.Configurator, _ interface{}, strategy interface{}) interface{} {
+func OpenIDConnectRefreshFactory(config fosite.Configurator, _ any, strategy any) any {
 	openIDConnectRefreshHandler := compose.OpenIDConnectRefreshFactory(config, nil, strategy).(*openid.OpenIDConnectRefreshHandler)
 	// Overwrite the config with a wrapper around the fosite.IDTokenLifespanProvider.
 	openIDConnectRefreshHandler.Config = &contextAwareIDTokenLifespanProvider{DelegateConfig: config}

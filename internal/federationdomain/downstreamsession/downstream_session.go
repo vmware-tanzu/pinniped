@@ -73,7 +73,7 @@ func NewPinnipedSession(
 		Custom: customSessionData,
 	}
 
-	extras := map[string]interface{}{}
+	extras := map[string]any{}
 
 	extras[oidcapi.IDTokenClaimAuthorizedParty] = c.ClientID
 

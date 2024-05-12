@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package strategy
@@ -69,7 +69,7 @@ func (s *DynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 		return "", fosite.ErrServerError.WithWrap(constable.Error("JWK must be of type ecdsa"))
 	}
 
-	keyGetter := func(context.Context) (interface{}, error) {
+	keyGetter := func(context.Context) (any, error) {
 		return key, nil
 	}
 	strategy := compose.NewOpenIDConnectStrategy(keyGetter, s.fositeConfig)

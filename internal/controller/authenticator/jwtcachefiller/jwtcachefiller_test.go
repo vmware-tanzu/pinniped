@@ -141,8 +141,8 @@ func TestController(t *testing.T) {
 
 		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
 
-		builder = builder.Claims(map[string]interface{}{customGroupsClaim: distributedGroups})
-		builder = builder.Claims(map[string]interface{}{"groups": distributedGroups})
+		builder = builder.Claims(map[string]any{customGroupsClaim: distributedGroups})
+		builder = builder.Claims(map[string]any{"groups": distributedGroups})
 
 		distributedClaimsJwt, err := builder.CompactSerialize()
 		require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestController(t *testing.T) {
 
 		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
 
-		builder = builder.Claims(map[string]interface{}{"some-other-claim": distributedGroups})
+		builder = builder.Claims(map[string]any{"some-other-claim": distributedGroups})
 
 		distributedClaimsJwt, err := builder.CompactSerialize()
 		require.NoError(t, err)
@@ -634,7 +634,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -679,7 +679,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -727,7 +727,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -769,7 +769,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -812,7 +812,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -866,7 +866,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -919,7 +919,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "actual jwt authenticator and desired jwt authenticator are the same",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -965,7 +965,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -1530,7 +1530,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -1568,7 +1568,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -1648,7 +1648,7 @@ func TestController(t *testing.T) {
 				"logger":    "jwtcachefiller-controller",
 				"message":   "added new jwt authenticator",
 				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]interface{}{
+				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
 			}},
@@ -1791,13 +1791,13 @@ func TestController(t *testing.T) {
 						NotBefore: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 						IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					}
-					var groups interface{}
+					var groups any
 					username := goodUsername
 					if test.jwtClaims != nil {
 						test.jwtClaims(&wellKnownClaims, &groups, &username)
 					}
 
-					var signingKey interface{} = goodECSigningKey
+					var signingKey any = goodECSigningKey
 					signingAlgo := goodECSigningAlgo
 					signingKID := goodECSigningKeyID
 					if test.jwtSignature != nil {
@@ -1860,8 +1860,8 @@ func testTableForAuthenticateTokenTests(
 	issuer string,
 ) []struct {
 	name                      string
-	jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
-	jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
+	jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *any, username *string)
+	jwtSignature              func(key *any, algo *jose.SignatureAlgorithm, kid *string)
 	wantResponse              *authenticator.Response
 	wantAuthenticated         bool
 	wantErr                   testutil.RequireErrorStringFunc
@@ -1869,8 +1869,8 @@ func testTableForAuthenticateTokenTests(
 } {
 	tests := []struct {
 		name                      string
-		jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
-		jwtSignature              func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
+		jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *any, username *string)
+		jwtSignature              func(key *any, algo *jose.SignatureAlgorithm, kid *string)
 		wantResponse              *authenticator.Response
 		wantAuthenticated         bool
 		wantErr                   testutil.RequireErrorStringFunc
@@ -1887,7 +1887,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token without groups and with RSA signature",
-			jwtSignature: func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string) {
+			jwtSignature: func(key *any, algo *jose.SignatureAlgorithm, kid *string) {
 				*key = goodRSASigningKey
 				*algo = goodRSASigningAlgo
 				*kid = goodRSASigningKeyID
@@ -1901,7 +1901,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with groups as array",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
 				*groups = []string{group0, group1}
 			},
 			wantResponse: &authenticator.Response{
@@ -1914,7 +1914,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with good distributed groups",
-			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/claim_source",
 			wantResponse: &authenticator.Response{
@@ -1927,21 +1927,21 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "distributed groups returns a 404",
-			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/not_found_claim_source",
 			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: while getting distributed claim "` + expectedGroupsClaim + `": error while getting distributed claim JWT: 404 Not Found`),
 		},
 		{
 			name: "distributed groups doesn't return the right claim",
-			jwtClaims: func(claims *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/wrong_claim_source",
 			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: jwt returned by distributed claim endpoint "` + issuer + `/wrong_claim_source" did not contain claim: `),
 		},
 		{
 			name: "good token with groups as string",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
 				*groups = group0
 			},
 			wantResponse: &authenticator.Response{
@@ -1954,7 +1954,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with nbf unset",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.NotBefore = nil
 			},
 			wantResponse: &authenticator.Response{
@@ -1966,14 +1966,14 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "bad token with groups as map",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
+			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
 				*groups = map[string]string{"not an array": "or a string"}
 			},
 			wantErr: testutil.WantMatchingErrorString("oidc: parse groups claim \"" + expectedGroupsClaim + "\": json: cannot unmarshal object into Go value of type string"),
 		},
 		{
 			name: "bad token with wrong issuer",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.Issuer = "wrong-issuer"
 			},
 			wantResponse:      nil,
@@ -1981,49 +1981,49 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "bad token with no audience",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.Audience = nil
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \[\]`),
 		},
 		{
 			name: "bad token with wrong audience",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.Audience = []string{"wrong-audience"}
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \["wrong-audience"\]`),
 		},
 		{
 			name: "bad token with nbf in the future",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.NotBefore = jwt.NewNumericDate(time.Date(3020, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: current time .* before the nbf \(not before\) time: 3020-.*`),
 		},
 		{
 			name: "bad token with exp in past",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.Expiry = jwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "bad token without exp",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				claims.Expiry = nil
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "token does not have username claim",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
 				*username = ""
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: parse username claims "` + expectedUsernameClaim + `": claim not present`),
 		},
 		{
 			name: "signing key is wrong",
-			jwtSignature: func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string) {
+			jwtSignature: func(key *any, algo *jose.SignatureAlgorithm, kid *string) {
 				var err error
 				*key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 				require.NoError(t, err)
@@ -2033,7 +2033,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "signing algo is unsupported",
-			jwtSignature: func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string) {
+			jwtSignature: func(key *any, algo *jose.SignatureAlgorithm, kid *string) {
 				var err error
 				*key, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 				require.NoError(t, err)
@@ -2048,12 +2048,12 @@ func testTableForAuthenticateTokenTests(
 
 func createJWT(
 	t *testing.T,
-	signingKey interface{},
+	signingKey any,
 	signingAlgo jose.SignatureAlgorithm,
 	kid string,
 	claims *jwt.Claims,
 	groupsClaim string,
-	groupsValue interface{},
+	groupsValue any,
 	distributedGroupsClaimURL string,
 	usernameClaim string,
 	usernameValue string,
@@ -2068,14 +2068,14 @@ func createJWT(
 
 	builder := jwt.Signed(sig).Claims(claims)
 	if groupsValue != nil {
-		builder = builder.Claims(map[string]interface{}{groupsClaim: groupsValue})
+		builder = builder.Claims(map[string]any{groupsClaim: groupsValue})
 	}
 	if distributedGroupsClaimURL != "" {
-		builder = builder.Claims(map[string]interface{}{"_claim_names": map[string]string{groupsClaim: "src1"}})
-		builder = builder.Claims(map[string]interface{}{"_claim_sources": map[string]interface{}{"src1": map[string]string{"endpoint": distributedGroupsClaimURL}}})
+		builder = builder.Claims(map[string]any{"_claim_names": map[string]string{groupsClaim: "src1"}})
+		builder = builder.Claims(map[string]any{"_claim_sources": map[string]any{"src1": map[string]string{"endpoint": distributedGroupsClaimURL}}})
 	}
 	if usernameValue != "" {
-		builder = builder.Claims(map[string]interface{}{usernameClaim: usernameValue})
+		builder = builder.Claims(map[string]any{usernameClaim: usernameValue})
 	}
 	jwt, err := builder.CompactSerialize()
 	require.NoError(t, err)

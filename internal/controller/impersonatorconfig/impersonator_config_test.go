@@ -715,7 +715,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		// If an object is added to the informer's client *before* the informer is started, then waiting is
 		// not needed because the informer's initial "list" will pick up the object.
 		var waitForObjectToAppearInInformer = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
-			var objFromInformer interface{}
+			var objFromInformer any
 			var exists bool
 			var err error
 			assert.Eventually(t, func() bool {
@@ -728,7 +728,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		}
 
 		var waitForClusterScopedObjectToAppearInInformer = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
-			var objFromInformer interface{}
+			var objFromInformer any
 			var exists bool
 			var err error
 			assert.Eventually(t, func() bool {
@@ -742,7 +742,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		// See comment for waitForObjectToAppearInInformer above.
 		var waitForObjectToBeDeletedFromInformer = func(resourceName string, informer controllerlib.InformerGetter) {
-			var objFromInformer interface{}
+			var objFromInformer any
 			var exists bool
 			var err error
 			assert.Eventually(t, func() bool {

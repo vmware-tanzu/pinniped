@@ -126,7 +126,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  validIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo": "bar",
 							"bat": "baz",
 							"aud": "test-client-id",
@@ -154,7 +154,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  validIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo":    "awesomeness", // overwrite existing claim
 							"bat":    "baz",
 							"aud":    "test-client-id",
@@ -227,7 +227,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  invalidSubClaim,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo": "bar",
 							"bat": "baz",
 							"aud": "test-client-id",
@@ -328,7 +328,7 @@ func TestProviderConfig(t *testing.T) {
 
 			wantErr         string
 			wantToken       *oauth2.Token
-			wantTokenExtras map[string]interface{}
+			wantTokenExtras map[string]any
 		}{
 			{
 				name:             "success when the server returns all tokens in the refresh result",
@@ -344,7 +344,7 @@ func TestProviderConfig(t *testing.T) {
 					TokenType:    "test-token-type",
 					Expiry:       time.Now().Add(42 * time.Second),
 				},
-				wantTokenExtras: map[string]interface{}{
+				wantTokenExtras: map[string]any{
 					// the ID token only appears in the extras map
 					"id_token": "test-id-token",
 					// the library also repeats all the other keys/values returned by the server in the raw extras map
@@ -371,7 +371,7 @@ func TestProviderConfig(t *testing.T) {
 					TokenType:    "test-token-type",
 					Expiry:       time.Now().Add(42 * time.Second),
 				},
-				wantTokenExtras: map[string]interface{}{
+				wantTokenExtras: map[string]any{
 					// the ID token only appears in the extras map
 					"id_token": "test-id-token",
 					// the library also repeats all the other keys/values returned by the server in the raw extras map
@@ -396,7 +396,7 @@ func TestProviderConfig(t *testing.T) {
 					TokenType:    "test-token-type",
 					Expiry:       time.Now().Add(42 * time.Second),
 				},
-				wantTokenExtras: map[string]interface{}{
+				wantTokenExtras: map[string]any{
 					// the library also repeats all the other keys/values returned by the server in the raw extras map
 					"access_token":  "test-access-token",
 					"refresh_token": "test-refresh-token",
@@ -754,7 +754,7 @@ func TestProviderConfig(t *testing.T) {
 		}{
 			{
 				name:           "token with id, access and refresh tokens, valid nonce, and no userinfo",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -769,7 +769,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -779,7 +779,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "id token not required but is provided",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: false,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -795,7 +795,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -806,7 +806,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "token with id, access and refresh tokens, valid nonce, and userinfo with a value that doesn't exist in the id token",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -822,7 +822,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -833,7 +833,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:            "userinfo is required, token with id, access and refresh tokens, valid nonce, and userinfo with a value that doesn't exist in the id token",
-				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:           "some-nonce",
 				requireIDToken:  true,
 				requireUserInfo: true,
@@ -850,7 +850,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -861,7 +861,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "claims from userinfo override id token claims",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA"}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA"}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -877,7 +877,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzb21lLXN1YmplY3QiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.sBWi3_4cfGwrmMFZWkCghw4uvCnHN35h9xNX1gkwOtj6Oz_yKqpj7wfO4AqeWsRyrDGnkmIZbVuhAAJqPSi4GlNzN4NU8zh53PGDUpFlpDI1dvqDjIRb9iIEJpRIj34--Sz41H0ooxviIzvUdZFvQlaSzLOqgjR3ddHe2urhbtUuz_DsabP84AWo2DSg0y3ull6DRvk_DvzC6HNN8JwVi08fFvvV9BVq8kjdVeob7gajJkuGSTjsxNZGs5rbBuxBx0MZTQ8boR1fDNdG70GoIb4SsCoBSs7pZxtmGZPHInteY1SilHDDDmpQuE-LvSmvvPN_Cyk1d3eS-IR7hBbCAA",
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer", // takes the issuer from the ID token, since the userinfo one is unreliable.
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -888,7 +888,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "token with id, access and refresh tokens and valid nonce, but userinfo has a different issuer",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -904,7 +904,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer", // takes the issuer from the ID token, since the userinfo one is unreliable.
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -915,7 +915,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:            "token with id, access and refresh tokens and valid nonce, but no userinfo endpoint from discovery and it's not required",
-				tok:             testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:             testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:           "some-nonce",
 				requireIDToken:  true,
 				requireUserInfo: false,
@@ -931,7 +931,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: goodIDToken,
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"nonce": "some-nonce",
 							"sub":   "some-subject",
@@ -957,7 +957,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: "",
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":  "some-subject",
 							"name": "Pinny TheSeal",
 						},
@@ -980,13 +980,13 @@ func TestProviderConfig(t *testing.T) {
 						Token: "test-initial-refresh-token",
 					},
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{},
+						Claims: map[string]any{},
 					},
 				},
 			},
 			{
 				name:           "token with id, access and refresh tokens, valid nonce, and userinfo subject that doesn't match",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -995,7 +995,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "id token not required but is provided, and subjects don't match",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-nonce",
 				requireIDToken: false,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -1004,7 +1004,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "invalid id token",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "not-an-id-token"}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": "not-an-id-token"}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -1013,7 +1013,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "invalid nonce",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": goodIDToken}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": goodIDToken}),
 				nonce:          "some-other-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -1057,7 +1057,7 @@ func TestProviderConfig(t *testing.T) {
 			},
 			{
 				name:           "id token missing subject, skip userinfo check",
-				tok:            testTokenWithoutIDToken.WithExtra(map[string]interface{}{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.aIhrhikAnQ4Mb1g6RAT08qqflT2LLLi2yj4F2S4zud8nYad4tfEd2ITVJ4Njdjf70ubqyzZ6XxojtC4OqaWbDaQOcd95sd3PW58SYrf4NMvEStFkcMG0HMhJEZLVGnuJQstuq3G9h5Z5bFCkx4mFNo5ho_isBWyHpk-uF14duXXlIDB10SnyZ9dRbcmu-3mMOq0g4oCUPEDiHWkv-Rf70Mk0harL2xvcpxlSMLK4glDfiiki5gl6IReIo4rTVosXAqv3JmjLDeVLtJQRG6F8YcIlDCIfUEUfk0GeYacBVjoDIO570ywVJy1LGvyUuvgXNQUjq2JgzCfb8HWGp7iJdQ"}),
+				tok:            testTokenWithoutIDToken.WithExtra(map[string]any{"id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.aIhrhikAnQ4Mb1g6RAT08qqflT2LLLi2yj4F2S4zud8nYad4tfEd2ITVJ4Njdjf70ubqyzZ6XxojtC4OqaWbDaQOcd95sd3PW58SYrf4NMvEStFkcMG0HMhJEZLVGnuJQstuq3G9h5Z5bFCkx4mFNo5ho_isBWyHpk-uF14duXXlIDB10SnyZ9dRbcmu-3mMOq0g4oCUPEDiHWkv-Rf70Mk0harL2xvcpxlSMLK4glDfiiki5gl6IReIo4rTVosXAqv3JmjLDeVLtJQRG6F8YcIlDCIfUEUfk0GeYacBVjoDIO570ywVJy1LGvyUuvgXNQUjq2JgzCfb8HWGp7iJdQ"}),
 				nonce:          "some-nonce",
 				requireIDToken: true,
 				rawClaims:      []byte(`{"userinfo_endpoint": "not-empty"}`),
@@ -1073,7 +1073,7 @@ func TestProviderConfig(t *testing.T) {
 					},
 					IDToken: &oidctypes.IDToken{
 						Token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJzb21lLWlzc3VlciIsIm5vbmNlIjoic29tZS1ub25jZSJ9.aIhrhikAnQ4Mb1g6RAT08qqflT2LLLi2yj4F2S4zud8nYad4tfEd2ITVJ4Njdjf70ubqyzZ6XxojtC4OqaWbDaQOcd95sd3PW58SYrf4NMvEStFkcMG0HMhJEZLVGnuJQstuq3G9h5Z5bFCkx4mFNo5ho_isBWyHpk-uF14duXXlIDB10SnyZ9dRbcmu-3mMOq0g4oCUPEDiHWkv-Rf70Mk0harL2xvcpxlSMLK4glDfiiki5gl6IReIo4rTVosXAqv3JmjLDeVLtJQRG6F8YcIlDCIfUEUfk0GeYacBVjoDIO570ywVJy1LGvyUuvgXNQUjq2JgzCfb8HWGp7iJdQ",
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"iss":   "some-issuer",
 							"name":  "John Doe",
 							"nonce": "some-nonce",
@@ -1176,7 +1176,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  invalidNonceIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"aud":   "test-client-id",
 							"iat":   1.602283741e+09,
 							"jti":   "test-jti",
@@ -1204,7 +1204,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  validIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo": "bar",
 							"bat": "baz",
 							"aud": "test-client-id",
@@ -1234,7 +1234,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  validIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo": "bar",
 							"bat": "baz",
 							"aud": "test-client-id",
@@ -1285,7 +1285,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  validIDToken,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo":    "awesomeness", // overwrite existing claim
 							"bat":    "baz",
 							"aud":    "test-client-id",
@@ -1316,7 +1316,7 @@ func TestProviderConfig(t *testing.T) {
 					IDToken: &oidctypes.IDToken{
 						Token:  invalidSubClaim,
 						Expiry: metav1.Time{},
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"foo": "bar",
 							"bat": "baz",
 							"aud": "test-client-id",
@@ -1438,7 +1438,7 @@ func (m *mockProvider) Verifier(_ *coreosoidc.Config) *coreosoidc.IDTokenVerifie
 	return mockVerifier()
 }
 
-func (m *mockProvider) Claims(v interface{}) error {
+func (m *mockProvider) Claims(v any) error {
 	return json.Unmarshal(m.rawClaims, v)
 }
 

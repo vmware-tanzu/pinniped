@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -37,7 +37,7 @@ func (log *TranscriptLogger) Transcript() []TranscriptLogMessage {
 	return result
 }
 
-func (log *TranscriptLogger) Info(_level int, msg string, keysAndValues ...interface{}) {
+func (log *TranscriptLogger) Info(_level int, msg string, keysAndValues ...any) {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 	log.transcript = append(log.transcript, TranscriptLogMessage{
@@ -46,7 +46,7 @@ func (log *TranscriptLogger) Info(_level int, msg string, keysAndValues ...inter
 	})
 }
 
-func (log *TranscriptLogger) Error(_ error, msg string, _ ...interface{}) {
+func (log *TranscriptLogger) Error(_ error, msg string, _ ...any) {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 	log.transcript = append(log.transcript, TranscriptLogMessage{
@@ -67,7 +67,7 @@ func (log *TranscriptLogger) WithName(_ string) logr.LogSink {
 	return log
 }
 
-func (log *TranscriptLogger) WithValues(_ ...interface{}) logr.LogSink {
+func (log *TranscriptLogger) WithValues(_ ...any) logr.LogSink {
 	return log
 }
 

@@ -96,20 +96,26 @@ linters-settings:
     no-unaliased: true # All packages explicitly listed below must be aliased
     no-extra-aliases: false # Allow other aliases than the ones explicitly listed below
     alias:
+    # k8s.io/apimachinery
     - pkg: k8s.io/apimachinery/pkg/util/errors
       alias: utilerrors
     - pkg: k8s.io/apimachinery/pkg/api/errors
       alias: apierrors
     - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
       alias: metav1
-    # k8s.io libs
+    # k8s.io
     - pkg: k8s.io/api/core/v1
       alias: corev1
-    # OAuth2/OIDC/Fosite libs
+    # OAuth2/OIDC/Fosite
     - pkg: github.com/coreos/go-oidc/v3/oidc
       alias: coreosoidc
     - pkg: github.com/ory/fosite/handler/oauth2
       alias: fositeoauth2
-    # Generated Pinniped libs
+    # Generated Pinniped
     - pkg: go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1
       alias: authenticationv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1
+      alias: clientsecretv1alpha1
+    # Pinniped internal
+    - pkg: go.pinniped.dev/internal/concierge/scheme
+      alias: conciergescheme

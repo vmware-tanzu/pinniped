@@ -26,7 +26,7 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -380,7 +380,7 @@ func getCurrentContext(currentKubeConfig clientcmdapi.Config, flags getKubeconfi
 	return &kubeconfigNames{ContextName: contextName, UserName: ctx.AuthInfo, ClusterName: ctx.Cluster}, nil
 }
 
-func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.Interface, flags getKubeconfigParams, deps kubeconfigDeps) (*configv1alpha1.CredentialIssuer, error) {
+func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.Interface, flags getKubeconfigParams, deps kubeconfigDeps) (*conciergeconfigv1alpha1.CredentialIssuer, error) {
 	credentialIssuer, err := lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
 	if err != nil {
 		return nil, err
@@ -416,7 +416,7 @@ func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.I
 	return credentialIssuer, nil
 }
 
-func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log plog.MinLogger) error {
+func discoverConciergeParams(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log plog.MinLogger) error {
 	// Autodiscover the --concierge-mode.
 	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
 	if err != nil {
@@ -427,10 +427,10 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	// Auto-set --concierge-mode if it wasn't explicitly set.
 	if flags.concierge.mode == modeUnknown {
 		switch frontend.Type {
-		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType:
 			log.Info("discovered Concierge operating in TokenCredentialRequest API mode")
 			flags.concierge.mode = modeTokenCredentialRequestAPI
-		case configv1alpha1.ImpersonationProxyFrontendType:
+		case conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
 			log.Info("discovered Concierge operating in impersonation proxy mode")
 			flags.concierge.mode = modeImpersonationProxy
 		}
@@ -439,9 +439,9 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	// Auto-set --concierge-endpoint if it wasn't explicitly set.
 	if flags.concierge.endpoint == "" {
 		switch frontend.Type {
-		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType:
 			flags.concierge.endpoint = v1Cluster.Server
-		case configv1alpha1.ImpersonationProxyFrontendType:
+		case conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
 			flags.concierge.endpoint = frontend.ImpersonationProxyInfo.Endpoint
 		}
 		log.Info("discovered Concierge endpoint", "endpoint", flags.concierge.endpoint)
@@ -450,9 +450,9 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	// Auto-set --concierge-ca-bundle if it wasn't explicitly set..
 	if len(flags.concierge.caBundle) == 0 {
 		switch frontend.Type {
-		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType:
 			flags.concierge.caBundle = v1Cluster.CertificateAuthorityData
-		case configv1alpha1.ImpersonationProxyFrontendType:
+		case conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
 			data, err := base64.StdEncoding.DecodeString(frontend.ImpersonationProxyInfo.CertificateAuthorityData)
 			if err != nil {
 				return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
@@ -464,7 +464,7 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	return nil
 }
 
-func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log plog.MinLogger) {
+func logStrategies(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, log plog.MinLogger) {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		log.Info("found CredentialIssuer strategy",
 			"type", strategy.Type,
@@ -520,19 +520,19 @@ func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconf
 	return nil
 }
 
-func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mode conciergeModeFlag) (*configv1alpha1.CredentialIssuerFrontend, error) {
+func getConciergeFrontend(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, mode conciergeModeFlag) (*conciergeconfigv1alpha1.CredentialIssuerFrontend, error) {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		// Skip unhealthy strategies.
-		if strategy.Status != configv1alpha1.SuccessStrategyStatus {
+		if strategy.Status != conciergeconfigv1alpha1.SuccessStrategyStatus {
 			continue
 		}
 
 		// Backfill the .status.strategies[].frontend field from .status.kubeConfigInfo for backwards compatibility.
-		if strategy.Type == configv1alpha1.KubeClusterSigningCertificateStrategyType && strategy.Frontend == nil && credentialIssuer.Status.KubeConfigInfo != nil {
+		if strategy.Type == conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType && strategy.Frontend == nil && credentialIssuer.Status.KubeConfigInfo != nil {
 			strategy = *strategy.DeepCopy()
-			strategy.Frontend = &configv1alpha1.CredentialIssuerFrontend{
-				Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-				TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+			strategy.Frontend = &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+				Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+				TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 					Server:                   credentialIssuer.Status.KubeConfigInfo.Server,
 					CertificateAuthorityData: credentialIssuer.Status.KubeConfigInfo.CertificateAuthorityData,
 				},
@@ -546,7 +546,7 @@ func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mod
 
 		//	Skip any unknown frontend types.
 		switch strategy.Frontend.Type {
-		case configv1alpha1.TokenCredentialRequestAPIFrontendType, configv1alpha1.ImpersonationProxyFrontendType:
+		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType, conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
 		default:
 			continue
 		}
@@ -574,7 +574,7 @@ func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.E
 	}
 }
 
-func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string, log plog.MinLogger) (*configv1alpha1.CredentialIssuer, error) {
+func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string, log plog.MinLogger) (*conciergeconfigv1alpha1.CredentialIssuer, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
@@ -736,9 +736,9 @@ func countCACerts(pemData []byte) int {
 	return len(pool.Subjects())
 }
 
-func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool {
+func hasPendingStrategy(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer) bool {
 	for _, strategy := range credentialIssuer.Status.Strategies {
-		if strategy.Reason == configv1alpha1.PendingStrategyReason {
+		if strategy.Reason == conciergeconfigv1alpha1.PendingStrategyReason {
 			return true
 		}
 	}

@@ -62,10 +62,10 @@ import (
 	"k8s.io/utils/ptr"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/roundtripper"
@@ -132,7 +132,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		mostRecentTokenCredentialRequestResponseLock sync.Mutex
 	)
 
-	refreshCredentialHelper := func(t *testing.T, client pinnipedconciergeclientset.Interface) *loginv1alpha1.ClusterCredential {
+	refreshCredentialHelper := func(t *testing.T, client conciergeclientset.Interface) *loginv1alpha1.ClusterCredential {
 		t.Helper()
 
 		mostRecentTokenCredentialRequestResponseLock.Lock()
@@ -209,11 +209,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	switch {
 	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
 		// configure the credential issuer spec to have the impersonation proxy in auto mode
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeAuto,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeAuto,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
 					Annotations: map[string]string{
 						"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000",
 					},
@@ -241,9 +241,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
 
 		// Create configuration to make the impersonation proxy turn on with no endpoint (i.e. automatically create a load balancer).
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 			},
 		})
 
@@ -267,12 +267,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Truef(t, isErr, "wanted error %q to be service unavailable via squid error, but: %s", err, message)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
 			},
 		})
@@ -1759,12 +1759,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Skip("Skipping ClusterIP test because squid proxy is not present")
 		}
 		clusterIPServiceURL := fmt.Sprintf("%s.%s.svc.cluster.local", impersonationProxyClusterIPName(env), env.ConciergeNamespace)
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: clusterIPServiceURL,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
 			},
 		})
@@ -1815,12 +1815,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Cleanup(func() {
 			// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
 			// internally generated TLS serving cert derived from the original CA.
-			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-				ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-					Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+					Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 					ExternalEndpoint: proxyServiceEndpoint,
-					Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-						Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+					Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+						Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 					},
 				},
 			})
@@ -1833,14 +1833,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 2*time.Minute, 500*time.Millisecond)
 		})
 
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
-				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+				TLS: &conciergeconfigv1alpha1.ImpersonationProxyTLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
 					SecretName:               externallyProvidedTLSServingCertSecret.Name,
 				},
@@ -1887,12 +1887,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Cleanup(func() {
 			// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
 			// internally generated TLS serving cert derived from the original CA.
-			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-				ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-					Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+					Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 					ExternalEndpoint: proxyServiceEndpoint,
-					Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-						Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+					Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+						Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 					},
 				},
 			})
@@ -1905,14 +1905,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 2*time.Minute, 500*time.Millisecond)
 		})
 
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
-				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+				TLS: &conciergeconfigv1alpha1.ImpersonationProxyTLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
 					SecretName:               externallyProvidedTLSServingCertSecret.Name,
 				},
@@ -1934,9 +1934,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeDisabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeDisabled,
 			},
 		})
 
@@ -2101,7 +2101,7 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 }
 
 func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
-	adminClient kubernetes.Interface, adminConciergeClient pinnipedconciergeclientset.Interface,
+	adminClient kubernetes.Interface, adminConciergeClient conciergeclientset.Interface,
 	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
 	t.Helper()
 
@@ -2157,7 +2157,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
+func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface) (string, []byte) {
 	t.Helper()
 
 	var impersonationProxyURL string
@@ -2173,7 +2173,7 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType && strategy.Status == conciergev1alpha.SuccessStrategyStatus { //nolint:nestif
+			if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType && strategy.Status == conciergeconfigv1alpha1.SuccessStrategyStatus { //nolint:nestif
 				if strategy.Frontend == nil {
 					return false, fmt.Errorf("did not find a Frontend") // unexpected, fail the test
 				}
@@ -2187,10 +2187,10 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 					return false, err // unexpected, fail the test
 				}
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for successful impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergeconfigv1alpha1.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while starting the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}
@@ -2204,7 +2204,7 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) {
+func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface) {
 	t.Helper()
 
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -2215,14 +2215,14 @@ func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.Tes
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType &&
-				strategy.Status == conciergev1alpha.ErrorStrategyStatus &&
-				strategy.Reason == conciergev1alpha.DisabledStrategyReason {
+			if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType &&
+				strategy.Status == conciergeconfigv1alpha1.ErrorStrategyStatus &&
+				strategy.Reason == conciergeconfigv1alpha1.DisabledStrategyReason {
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for disabled impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergeconfigv1alpha1.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while stopping the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}
@@ -2283,7 +2283,7 @@ func kubeconfigProxyFunc(t *testing.T, squidProxyURL string) func(req *http.Requ
 	}
 }
 
-func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface, spec conciergev1alpha.CredentialIssuerSpec) {
+func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface, spec conciergeconfigv1alpha1.CredentialIssuerSpec) {
 	t.Helper()
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -2445,7 +2445,7 @@ func requireClose(t *testing.T, c chan struct{}, timeout time.Duration) {
 
 func createTokenCredentialRequest(
 	spec loginv1alpha1.TokenCredentialRequestSpec,
-	client pinnipedconciergeclientset.Interface,
+	client conciergeclientset.Interface,
 ) (*loginv1alpha1.TokenCredentialRequest, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

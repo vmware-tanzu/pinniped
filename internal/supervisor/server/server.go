@@ -39,7 +39,7 @@ import (
 	"k8s.io/utils/clock"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	supervisoropenapi "go.pinniped.dev/generated/latest/client/supervisor/openapi"
@@ -141,7 +141,7 @@ func prepareControllers(
 	secretCache *secret.Cache,
 	supervisorDeployment *appsv1.Deployment,
 	kubeClient kubernetes.Interface,
-	pinnipedClient pinnipedsupervisorclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	aggregatorClient aggregatorclient.Interface,
 	kubeInformers k8sinformers.SharedInformerFactory,
 	pinnipedInformers supervisorinformers.SharedInformerFactory,

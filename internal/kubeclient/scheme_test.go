@@ -16,8 +16,8 @@ import (
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
-	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
+	conciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
+	supervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 )
 
 func Test_schemeRestMapper(t *testing.T) {
@@ -96,7 +96,7 @@ func Test_schemeRestMapper(t *testing.T) {
 		{
 			name: "token credential delete",
 			args: args{
-				scheme: pinnipedconciergeclientsetscheme.Scheme,
+				scheme: conciergeclientsetscheme.Scheme,
 				gvr:    loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"),
 				v:      VerbDelete,
 			},
@@ -105,7 +105,7 @@ func Test_schemeRestMapper(t *testing.T) {
 		{
 			name: "token credential list",
 			args: args{
-				scheme: pinnipedconciergeclientsetscheme.Scheme,
+				scheme: conciergeclientsetscheme.Scheme,
 				gvr:    loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"),
 				v:      VerbList,
 			},
@@ -114,7 +114,7 @@ func Test_schemeRestMapper(t *testing.T) {
 		{
 			name: "oidc idp update",
 			args: args{
-				scheme: pinnipedsupervisorclientsetscheme.Scheme,
+				scheme: supervisorclientsetscheme.Scheme,
 				gvr:    idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"),
 				v:      VerbUpdate,
 			},
@@ -123,7 +123,7 @@ func Test_schemeRestMapper(t *testing.T) {
 		{
 			name: "oidc idp list",
 			args: args{
-				scheme: pinnipedsupervisorclientsetscheme.Scheme,
+				scheme: supervisorclientsetscheme.Scheme,
 				gvr:    idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"),
 				v:      VerbList,
 			},
@@ -132,7 +132,7 @@ func Test_schemeRestMapper(t *testing.T) {
 		{
 			name: "oidc idp list - wrong scheme",
 			args: args{
-				scheme: pinnipedconciergeclientsetscheme.Scheme,
+				scheme: conciergeclientsetscheme.Scheme,
 				gvr:    idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"),
 				v:      VerbList,
 			},

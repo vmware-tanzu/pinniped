@@ -121,6 +121,20 @@ linters-settings:
       alias: clientsecretv1alpha1
     - pkg: go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1
       alias: supervisorconfigv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1
+      alias: conciergeconfigv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned
+      alias: conciergeclientset
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme
+      alias: conciergeclientsetscheme
+#    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
+#      alias: conciergefake
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned
+      alias: supervisorclientset
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme
+      alias: supervisorclientsetscheme
+#    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
+#      alias: supervisorfake
     - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
       alias: idpv1alpha1
     # Pinniped internal

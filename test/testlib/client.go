@@ -33,7 +33,7 @@ import (
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 
@@ -80,13 +80,13 @@ func NewKubernetesClientset(t *testing.T) kubernetes.Interface {
 	return NewKubeclient(t, NewClientConfig(t)).Kubernetes
 }
 
-func NewSupervisorClientset(t *testing.T) pinnipedsupervisorclientset.Interface {
+func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
 }
 
-func NewAnonymousSupervisorClientset(t *testing.T) pinnipedsupervisorclientset.Interface {
+func NewAnonymousSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
 	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedSupervisor

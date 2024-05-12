@@ -37,8 +37,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	aggregatorclientscheme "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
 
-	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
-	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
+	conciergeclientsetscheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
+	supervisorclientsetscheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/testutil/tlsserver"
@@ -117,8 +117,8 @@ func decodeObj(r *http.Request) (runtime.Object, error) {
 	codecsThatWeUseInOurCode := []runtime.NegotiatedSerializer{
 		kubescheme.Codecs,
 		aggregatorclientscheme.Codecs,
-		pinnipedconciergeclientsetscheme.Codecs,
-		pinnipedsupervisorclientsetscheme.Codecs,
+		conciergeclientsetscheme.Codecs,
+		supervisorclientsetscheme.Codecs,
 	}
 	for _, codec := range codecsThatWeUseInOurCode {
 		obj, err = tryDecodeObj(mediaType, body, codec)

@@ -17,7 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
@@ -28,7 +28,7 @@ type federationDomainSecretsController struct {
 	secretHelper             SecretHelper
 	secretRefFunc            func(domain *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference
 	kubeClient               kubernetes.Interface
-	pinnipedClient           pinnipedsupervisorclientset.Interface
+	pinnipedClient           supervisorclientset.Interface
 	federationDomainInformer configinformers.FederationDomainInformer
 	secretInformer           corev1informers.SecretInformer
 }
@@ -40,7 +40,7 @@ func NewFederationDomainSecretsController(
 	secretHelper SecretHelper,
 	secretRefFunc func(domain *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference,
 	kubeClient kubernetes.Interface,
-	pinnipedClient pinnipedsupervisorclientset.Interface,
+	pinnipedClient supervisorclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
 	federationDomainInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,

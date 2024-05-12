@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/clock"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedsupervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/celtransformer"
@@ -82,7 +82,7 @@ type federationDomainWatcherController struct {
 	federationDomainsSetter FederationDomainsSetter
 	apiGroup                string
 	clock                   clock.Clock
-	client                  pinnipedsupervisorclientset.Interface
+	client                  supervisorclientset.Interface
 
 	federationDomainInformer                configinformers.FederationDomainInformer
 	oidcIdentityProviderInformer            idpinformers.OIDCIdentityProviderInformer
@@ -99,7 +99,7 @@ func NewFederationDomainWatcherController(
 	federationDomainsSetter FederationDomainsSetter,
 	apiGroupSuffix string,
 	clock clock.Clock,
-	client pinnipedsupervisorclientset.Interface,
+	client supervisorclientset.Interface,
 	federationDomainInformer configinformers.FederationDomainInformer,
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,

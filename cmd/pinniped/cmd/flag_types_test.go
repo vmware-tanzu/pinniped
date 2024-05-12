@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 )
 
@@ -24,14 +24,14 @@ func TestConciergeModeFlag(t *testing.T) {
 	require.NoError(t, f.Set(""))
 	require.Equal(t, modeUnknown, f)
 	require.EqualError(t, f.Set("foo"), `invalid mode "foo", valid modes are TokenCredentialRequestAPI and ImpersonationProxy`)
-	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	require.True(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.True(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType}))
 
 	require.NoError(t, f.Set("TokenCredentialRequestAPI"))
 	require.Equal(t, modeTokenCredentialRequestAPI, f)
 	require.Equal(t, "TokenCredentialRequestAPI", f.String())
-	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.False(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	require.True(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.False(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType}))
 
 	require.NoError(t, f.Set("tokencredentialrequestapi"))
 	require.Equal(t, modeTokenCredentialRequestAPI, f)
@@ -40,8 +40,8 @@ func TestConciergeModeFlag(t *testing.T) {
 	require.NoError(t, f.Set("ImpersonationProxy"))
 	require.Equal(t, modeImpersonationProxy, f)
 	require.Equal(t, "ImpersonationProxy", f.String())
-	require.False(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	require.False(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.True(t, f.MatchesFrontend(&conciergeconfigv1alpha1.CredentialIssuerFrontend{Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType}))
 
 	require.NoError(t, f.Set("impersonationproxy"))
 	require.Equal(t, modeImpersonationProxy, f)

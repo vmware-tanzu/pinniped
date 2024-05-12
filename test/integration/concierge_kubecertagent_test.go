@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
 
-	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -60,7 +60,7 @@ func TestKubeCertAgent(t *testing.T) {
 		}
 
 		// If there's no successful strategy yet, wait until there is.
-		strategy := findSuccessfulStrategy(credentialIssuer, conciergev1alpha.KubeClusterSigningCertificateStrategyType)
+		strategy := findSuccessfulStrategy(credentialIssuer, conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType)
 		if strategy == nil {
 			t.Log("could not find a successful TokenCredentialRequestAPI strategy in the CredentialIssuer:")
 			for _, s := range credentialIssuer.Status.Strategies {
@@ -73,19 +73,19 @@ func TestKubeCertAgent(t *testing.T) {
 		if strategy.Frontend == nil {
 			return false, fmt.Errorf("strategy did not find a Frontend")
 		}
-		if strategy.Frontend.Type != conciergev1alpha.TokenCredentialRequestAPIFrontendType {
+		if strategy.Frontend.Type != conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType {
 			return false, fmt.Errorf("strategy had unexpected frontend type %q", strategy.Frontend.Type)
 		}
 		return true, nil
 	}, 3*time.Minute, 2*time.Second)
 }
 
-func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer, strategyType conciergev1alpha.StrategyType) *conciergev1alpha.CredentialIssuerStrategy {
+func findSuccessfulStrategy(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, strategyType conciergeconfigv1alpha1.StrategyType) *conciergeconfigv1alpha1.CredentialIssuerStrategy {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		if strategy.Type != strategyType {
 			continue
 		}
-		if strategy.Status != conciergev1alpha.SuccessStrategyStatus {
+		if strategy.Status != conciergeconfigv1alpha1.SuccessStrategyStatus {
 			continue
 		}
 		return &strategy

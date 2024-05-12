@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	fositepkce "github.com/ory/fosite/handler/pkce"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -27,7 +27,7 @@ import (
 
 type KubeStorage struct {
 	clientManager            fosite.ClientManager
-	authorizationCodeStorage oauth2.AuthorizeCodeStorage
+	authorizationCodeStorage fositeoauth2.AuthorizeCodeStorage
 	pkceStorage              fositepkce.PKCERequestStorage
 	oidcStorage              openid.OpenIDConnectRequestStorage
 	accessTokenStorage       accesstoken.RevocationStorage

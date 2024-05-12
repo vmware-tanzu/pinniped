@@ -18,7 +18,7 @@ import (
 	"github.com/go-jose/go-jose/v3"
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
@@ -276,7 +276,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
-func makeTestSubject(lifetimeFunc timeouts.StorageLifetime) (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
+func makeTestSubject(lifetimeFunc timeouts.StorageLifetime) (context.Context, *fake.Clientset, corev1client.SecretInterface, fositeoauth2.AuthorizeCodeStorage) {
 	client := fake.NewSimpleClientset()
 	secrets := client.CoreV1().Secrets(namespace)
 	return context.Background(),

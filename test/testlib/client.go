@@ -27,7 +27,7 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/utils/ptr"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -174,8 +174,8 @@ func NewKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 func CreateTestWebhookAuthenticator(
 	ctx context.Context,
 	t *testing.T,
-	webhookSpec *auth1alpha1.WebhookAuthenticatorSpec,
-	expectedStatus auth1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
+	webhookSpec *authenticationv1alpha1.WebhookAuthenticatorSpec,
+	expectedStatus authenticationv1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -184,7 +184,7 @@ func CreateTestWebhookAuthenticator(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
+	webhook, err := webhooks.Create(createContext, &authenticationv1alpha1.WebhookAuthenticator{
 		ObjectMeta: testObjectMeta(t, "webhook"),
 		Spec:       *webhookSpec,
 	}, metav1.CreateOptions{})
@@ -205,7 +205,7 @@ func CreateTestWebhookAuthenticator(
 	}
 
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+		APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
 	}
@@ -215,7 +215,7 @@ func WaitForWebhookAuthenticatorStatusPhase(
 	ctx context.Context,
 	t *testing.T,
 	webhookName string,
-	expectPhase auth1alpha1.WebhookAuthenticatorPhase) {
+	expectPhase authenticationv1alpha1.WebhookAuthenticatorPhase) {
 	t.Helper()
 	webhookAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().WebhookAuthenticators()
 
@@ -256,25 +256,25 @@ func WaitForWebhookAuthenticatorStatusConditions(ctx context.Context, t *testing
 // deleted at the end of the current test's lifetime.
 //
 // CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLIUpstreamOIDC.
-func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *auth1alpha1.JWTAuthenticator {
+func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *authenticationv1alpha1.JWTAuthenticator {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
-	spec := auth1alpha1.JWTAuthenticatorSpec{
+	spec := authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   testEnv.CLIUpstreamOIDC.Issuer,
 		Audience: testEnv.CLIUpstreamOIDC.ClientID,
 		// The default UsernameClaim is "username" but the upstreams that we use for
 		// integration tests won't necessarily have that claim, so use "sub" here.
-		Claims: auth1alpha1.JWTTokenClaims{Username: "sub"},
+		Claims: authenticationv1alpha1.JWTTokenClaims{Username: "sub"},
 	}
 	// If the test upstream does not have a CA bundle specified, then don't configure one in the
 	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
 	// CA store.
 	if testEnv.CLIUpstreamOIDC.CABundle != "" {
-		spec.TLS = &auth1alpha1.TLSSpec{
+		spec.TLS = &authenticationv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLIUpstreamOIDC.CABundle)),
 		}
 	}
-	authenticator := CreateTestJWTAuthenticator(ctx, t, spec, auth1alpha1.JWTAuthenticatorPhaseReady)
+	authenticator := CreateTestJWTAuthenticator(ctx, t, spec, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 	return authenticator
 }
 
@@ -283,8 +283,8 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 func CreateTestJWTAuthenticator(
 	ctx context.Context,
 	t *testing.T,
-	spec auth1alpha1.JWTAuthenticatorSpec,
-	expectedStatus auth1alpha1.JWTAuthenticatorPhase) *auth1alpha1.JWTAuthenticator {
+	spec authenticationv1alpha1.JWTAuthenticatorSpec,
+	expectedStatus authenticationv1alpha1.JWTAuthenticatorPhase) *authenticationv1alpha1.JWTAuthenticator {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -293,7 +293,7 @@ func CreateTestJWTAuthenticator(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
+	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &authenticationv1alpha1.JWTAuthenticator{
 		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
@@ -314,7 +314,7 @@ func CreateTestJWTAuthenticator(
 	return jwtAuthenticator
 }
 
-func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase auth1alpha1.JWTAuthenticatorPhase) {
+func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase authenticationv1alpha1.JWTAuthenticatorPhase) {
 	t.Helper()
 	jwtAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().JWTAuthenticators()
 

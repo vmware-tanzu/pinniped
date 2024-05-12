@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	authv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/kubeclient"
@@ -154,11 +154,11 @@ func TestMiddlware(t *testing.T) {
 	)
 	tokenCredentialRequestWithPinnipedAuthenticator := with(
 		tokenCredentialRequest,
-		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+		authenticatorAPIGroup(authenticationv1alpha1.SchemeGroupVersion.Group),
 	)
 	tokenCredentialRequestWithCustomAPIGroupAuthenticator := with(
 		tokenCredentialRequest,
-		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+		authenticatorAPIGroup(replaceGV(t, authenticationv1alpha1.SchemeGroupVersion, newSuffix).Group),
 	)
 	tokenCredentialRequestWithNewGroup := with(
 		tokenCredentialRequest,
@@ -166,11 +166,11 @@ func TestMiddlware(t *testing.T) {
 	)
 	tokenCredentialRequestWithNewGroupAndPinnipedAuthenticator := with(
 		tokenCredentialRequestWithNewGroup,
-		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+		authenticatorAPIGroup(authenticationv1alpha1.SchemeGroupVersion.Group),
 	)
 	tokenCredentialRequestWithNewGroupAndCustomAPIGroupAuthenticator := with(
 		tokenCredentialRequestWithNewGroup,
-		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+		authenticatorAPIGroup(replaceGV(t, authenticationv1alpha1.SchemeGroupVersion, newSuffix).Group),
 	)
 
 	tests := []struct {

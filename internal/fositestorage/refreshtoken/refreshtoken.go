@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -39,7 +39,7 @@ const (
 )
 
 type RevocationStorage interface {
-	oauth2.RefreshTokenStorage
+	fositeoauth2.RefreshTokenStorage
 	RevokeRefreshToken(ctx context.Context, requestID string) error
 	RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error
 }

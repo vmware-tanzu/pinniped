@@ -33,7 +33,7 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -216,72 +216,72 @@ func TestController(t *testing.T) {
 	timeInThePast := time.Date(1111, time.January, 1, 1, 1, 1, 111111, time.Local)
 	frozenTimeInThePast := metav1.NewTime(timeInThePast)
 
-	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	someJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
-	someJWTAuthenticatorSpecWithUsernameClaim := &auth1alpha1.JWTAuthenticatorSpec{
+	someJWTAuthenticatorSpecWithUsernameClaim := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
-		Claims: auth1alpha1.JWTTokenClaims{
+		Claims: authenticationv1alpha1.JWTTokenClaims{
 			Username: "my-custom-username-claim",
 		},
 	}
-	someJWTAuthenticatorSpecWithGroupsClaim := &auth1alpha1.JWTAuthenticatorSpec{
+	someJWTAuthenticatorSpecWithGroupsClaim := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
-		Claims: auth1alpha1.JWTTokenClaims{
+		Claims: authenticationv1alpha1.JWTTokenClaims{
 			Groups: customGroupsClaim,
 		},
 	}
-	otherJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	otherJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   someOtherIssuer,
 		Audience: goodAudience,
 		// Some random generated cert
 		// Issuer: C=US, O=Pivotal
 		// No SAN provided
-		TLS: &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
+		TLS: &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
 	}
-	missingTLSJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	missingTLSJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer,
 		Audience: goodAudience,
 	}
-	invalidTLSJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	invalidTLSJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   someOtherIssuer,
 		Audience: goodAudience,
-		TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid base64-encoded data"},
+		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: "invalid base64-encoded data"},
 	}
 
-	invalidIssuerJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	invalidIssuerJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://.café   .com/café/café/café/coffee",
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
-	invalidIssuerSchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	invalidIssuerSchemeJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "http://.café.com/café/café/café/coffee",
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
 
-	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer + "/foo/bar/baz/shizzle",
 		Audience: goodAudience,
 	}
-	badIssuerJWKSURIJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	badIssuerJWKSURIJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURI,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
 	}
-	badIssuerJWKSURISchemeJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	badIssuerJWKSURISchemeJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   badIssuerInvalidJWKSURIScheme,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
 	}
 
-	jwksFetchShouldFailJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+	jwksFetchShouldFailJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   jwksFetchShouldFailServer.URL,
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(jwksFetchShouldFailServer.TLS),
@@ -617,12 +617,12 @@ func TestController(t *testing.T) {
 			name:    "Sync: valid and unchanged JWTAuthenticator: loop will preserve existing status conditions",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -649,13 +649,13 @@ func TestController(t *testing.T) {
 			name:    "Sync: changed JWTAuthenticator: loop will update timestamps only on relevant statuses",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "test-name",
 						Generation: 1234,
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 1233),
 							[]metav1.Condition{
@@ -684,13 +684,13 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "test-name",
 						Generation: 1234,
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 1234),
 							[]metav1.Condition{
@@ -714,7 +714,7 @@ func TestController(t *testing.T) {
 			name:    "Sync: valid JWTAuthenticator with CA: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -732,12 +732,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -756,7 +756,7 @@ func TestController(t *testing.T) {
 			name:    "Sync: JWTAuthenticator with custom username claim: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -774,12 +774,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpecWithUsernameClaim,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -799,7 +799,7 @@ func TestController(t *testing.T) {
 			name:    "Sync: JWTAuthenticator with custom groups claim: loop will complete successfully and update status conditions.",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -817,12 +817,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpecWithGroupsClaim,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -845,7 +845,7 @@ func TestController(t *testing.T) {
 					authncache.Key{
 						Name:     "test-name",
 						Kind:     "JWTAuthenticator",
-						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
 					newCacheValue(t, *otherJWTAuthenticatorSpec, wantClose),
 				)
@@ -853,7 +853,7 @@ func TestController(t *testing.T) {
 			wantClose: true,
 			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -871,12 +871,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -898,7 +898,7 @@ func TestController(t *testing.T) {
 					authncache.Key{
 						Name:     "test-name",
 						Kind:     "JWTAuthenticator",
-						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
 					newCacheValue(t, *someJWTAuthenticatorSpec, wantClose),
 				)
@@ -906,7 +906,7 @@ func TestController(t *testing.T) {
 			wantClose: false,
 			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -939,14 +939,14 @@ func TestController(t *testing.T) {
 					authncache.Key{
 						Name:     "test-name",
 						Kind:     "JWTAuthenticator",
-						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
 					struct{ authenticator.Token }{},
 				)
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -970,12 +970,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -994,7 +994,7 @@ func TestController(t *testing.T) {
 			name:    "Sync: valid JWTAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1002,12 +1002,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *missingTLSJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1038,7 +1038,7 @@ func TestController(t *testing.T) {
 			name:    "validateTLS: JWTAuthenticator with invalid CA: loop will fail, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1046,12 +1046,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *invalidTLSJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(someOtherIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1077,7 +1077,7 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1086,12 +1086,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *invalidIssuerJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1116,7 +1116,7 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateIssuer: parsing error (spec.issuer URL has invalid scheme, requires https): loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1125,12 +1125,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *invalidIssuerSchemeJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1155,11 +1155,11 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateIssuer: issuer cannot include fragment: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
@@ -1168,16 +1168,16 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1202,11 +1202,11 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateIssuer: issuer cannot include query params: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
@@ -1215,16 +1215,16 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/?query-params=not-allowed",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1249,11 +1249,11 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateIssuer: issuer cannot include .well-known in path: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
@@ -1262,16 +1262,16 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://www.example.com/foo/bar/.well-known/openid-configuration",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1296,7 +1296,7 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateProviderDiscovery: could not perform oidc discovery on provider issuer: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1305,12 +1305,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *validIssuerURLButDoesNotExistJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1337,11 +1337,11 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateProviderDiscovery: excessively long errors truncated: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   goodIssuer + "/path/to/not/found",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
@@ -1350,16 +1350,16 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
+					Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 						Issuer:   goodIssuer + "/path/to/not/found",
 						Audience: goodAudience,
 						TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 					},
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1392,7 +1392,7 @@ func TestController(t *testing.T) {
 		{
 			name: "validateProviderJWKSURL: could not parse provider jwks_uri: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1401,12 +1401,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1431,7 +1431,7 @@ func TestController(t *testing.T) {
 		}, {
 			name: "validateProviderJWKSURL: invalid scheme, requires 'https': loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1440,12 +1440,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *badIssuerJWKSURISchemeJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1473,7 +1473,7 @@ func TestController(t *testing.T) {
 		{
 			name: "validateJWKSFetch: could not fetch keys: loop will fail sync, will write failed and unknown status conditions, and will enqueue a resync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
@@ -1482,12 +1482,12 @@ func TestController(t *testing.T) {
 			},
 			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *jwksFetchShouldFailJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1512,12 +1512,12 @@ func TestController(t *testing.T) {
 		{
 			name: "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -1545,12 +1545,12 @@ func TestController(t *testing.T) {
 		{
 			name: "updateStatus: called with different original and updated conditions: will make request to update conditions",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1573,12 +1573,12 @@ func TestController(t *testing.T) {
 				},
 			}},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -1595,12 +1595,12 @@ func TestController(t *testing.T) {
 		{
 			name: "updateStatus: when update request fails: error will enqueue a resync",
 			jwtAuthenticators: []runtime.Object{
-				&auth1alpha1.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 							[]metav1.Condition{
@@ -1625,12 +1625,12 @@ func TestController(t *testing.T) {
 				// This captures that there was an attempt to update to Ready, allHappyConditions,
 				// but the wantSyncLoopErr indicates that there is a failure, so the JWTAuthenticator
 				// remains with a bad phase and at least 1 sad condition
-				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &auth1alpha1.JWTAuthenticator{
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
-					Status: auth1alpha1.JWTAuthenticatorStatus{
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
 						Phase:      "Ready",
 					},
@@ -1742,7 +1742,7 @@ func TestController(t *testing.T) {
 
 			// We expected the cache to have an entry, so pull that entry from the cache and test it.
 			expectedCacheKey := authncache.Key{
-				APIGroup: auth1alpha1.GroupName,
+				APIGroup: authenticationv1alpha1.GroupName,
 				Kind:     "JWTAuthenticator",
 				Name:     syncCtx.Key.Name,
 			}
@@ -2083,7 +2083,7 @@ func createJWT(
 	return jwt
 }
 
-func newCacheValue(t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec, wantClose bool) authncache.Value {
+func newCacheValue(t *testing.T, spec authenticationv1alpha1.JWTAuthenticatorSpec, wantClose bool) authncache.Value {
 	t.Helper()
 	wasClosed := false
 

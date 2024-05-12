@@ -17,7 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 )
@@ -75,7 +75,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		},
 		Spec: loginapi.TokenCredentialRequestSpec{
 			Authenticator: corev1.TypedLocalObjectReference{
-				APIGroup: &authv1alpha.SchemeGroupVersion.Group,
+				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 				Kind:     "WebhookAuthenticator",
 				Name:     "test-name",
 			},

@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package authenticator contains helper code for dealing with *Authenticator CRDs.
@@ -11,7 +11,7 @@ import (
 
 	"k8s.io/client-go/util/cert"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
 // Closer is a type that can be closed idempotently.
@@ -25,7 +25,7 @@ type Closer interface {
 // CABundle returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
 // nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
 // encoded, an error will be returned.
-func CABundle(spec *auth1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
+func CABundle(spec *authenticationv1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
 	if spec == nil || len(spec.CertificateAuthorityData) == 0 {
 		return nil, nil, nil
 	}

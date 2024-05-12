@@ -16,7 +16,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -108,7 +108,7 @@ func TestProviderConfig(t *testing.T) {
 			wantToken             oidctypes.Token
 
 			rawClaims          []byte
-			userInfo           *oidc.UserInfo
+			userInfo           *coreosoidc.UserInfo
 			userInfoErr        error
 			wantUserInfoCalled bool
 		}{
@@ -204,7 +204,7 @@ func TestProviderConfig(t *testing.T) {
 				name:        "user info sub error",
 				returnIDTok: validIDToken,
 				wantErr:     "could not fetch user info claims: userinfo 'sub' claim (test-user-2) did not match id_token 'sub' claim (test-user)",
-				userInfo:    &oidc.UserInfo{Subject: "test-user-2"},
+				userInfo:    &coreosoidc.UserInfo{Subject: "test-user-2"},
 			},
 			{
 				name:        "user info is not json",
@@ -746,7 +746,7 @@ func TestProviderConfig(t *testing.T) {
 			nonce            nonce.Nonce
 			requireIDToken   bool
 			requireUserInfo  bool
-			userInfo         *oidc.UserInfo
+			userInfo         *coreosoidc.UserInfo
 			rawClaims        []byte
 			userInfoErr      error
 			wantErr          string
@@ -1127,7 +1127,7 @@ func TestProviderConfig(t *testing.T) {
 			wantToken   oidctypes.Token
 
 			rawClaims          []byte
-			userInfo           *oidc.UserInfo
+			userInfo           *coreosoidc.UserInfo
 			userInfoErr        error
 			wantUserInfoCalled bool
 		}{
@@ -1260,7 +1260,7 @@ func TestProviderConfig(t *testing.T) {
 				authCode:    "valid",
 				returnIDTok: validIDToken,
 				wantErr:     "could not fetch user info claims: userinfo 'sub' claim (test-user-2) did not match id_token 'sub' claim (test-user)",
-				userInfo:    &oidc.UserInfo{Subject: "test-user-2"},
+				userInfo:    &coreosoidc.UserInfo{Subject: "test-user-2"},
 			},
 			{
 				name:        "user info is not json",
@@ -1407,8 +1407,8 @@ func TestProviderConfig(t *testing.T) {
 	})
 }
 
-// mockVerifier returns an *oidc.IDTokenVerifier that validates any correctly serialized JWT without doing much else.
-func mockVerifier() *oidc.IDTokenVerifier {
+// mockVerifier returns an *coreosoidc.IDTokenVerifier that validates any correctly serialized JWT without doing much else.
+func mockVerifier() *coreosoidc.IDTokenVerifier {
 	mockKeySet := mockkeyset.NewMockKeySet(gomock.NewController(nil))
 	mockKeySet.EXPECT().VerifySignature(gomock.Any(), gomock.Any()).
 		AnyTimes().
@@ -1420,7 +1420,7 @@ func mockVerifier() *oidc.IDTokenVerifier {
 			return jws.UnsafePayloadWithoutVerification(), nil
 		})
 
-	return oidc.NewVerifier("", mockKeySet, &oidc.Config{
+	return coreosoidc.NewVerifier("", mockKeySet, &coreosoidc.Config{
 		SkipIssuerCheck:   true,
 		SkipExpiryCheck:   true,
 		SkipClientIDCheck: true,
@@ -1430,17 +1430,19 @@ func mockVerifier() *oidc.IDTokenVerifier {
 type mockProvider struct {
 	called      bool
 	rawClaims   []byte
-	userInfo    *oidc.UserInfo
+	userInfo    *coreosoidc.UserInfo
 	userInfoErr error
 }
 
-func (m *mockProvider) Verifier(_ *oidc.Config) *oidc.IDTokenVerifier { return mockVerifier() }
+func (m *mockProvider) Verifier(_ *coreosoidc.Config) *coreosoidc.IDTokenVerifier {
+	return mockVerifier()
+}
 
 func (m *mockProvider) Claims(v interface{}) error {
 	return json.Unmarshal(m.rawClaims, v)
 }
 
-func (m *mockProvider) UserInfo(_ context.Context, tokenSource oauth2.TokenSource) (*oidc.UserInfo, error) {
+func (m *mockProvider) UserInfo(_ context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error) {
 	m.called = true
 
 	token, err := tokenSource.Token()
@@ -1454,8 +1456,8 @@ func (m *mockProvider) UserInfo(_ context.Context, tokenSource oauth2.TokenSourc
 	return m.userInfo, m.userInfoErr
 }
 
-func forceUserInfoWithClaims(subject string, claims string) *oidc.UserInfo {
-	userInfo := &oidc.UserInfo{Subject: subject}
+func forceUserInfoWithClaims(subject string, claims string) *coreosoidc.UserInfo {
+	userInfo := &coreosoidc.UserInfo{Subject: subject}
 
 	// this is some dark magic to set a private field
 	claimsField := reflect.ValueOf(userInfo).Elem().FieldByName("claims")

@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -43,7 +43,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
-	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
+	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)

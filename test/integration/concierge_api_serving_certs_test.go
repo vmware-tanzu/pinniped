@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
@@ -83,7 +83,7 @@ func TestAPIServingCertificateAutoCreationAndRotation_Disruptive(t *testing.T) {
 
 			// Create a testWebhook so we have a legitimate authenticator to pass to the
 			// TokenCredentialRequest API.
-			testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
+			testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})

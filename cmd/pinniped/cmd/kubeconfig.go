@@ -25,7 +25,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/utils/strings/slices"
 
-	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
@@ -477,7 +477,7 @@ func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log plog.M
 
 func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log plog.MinLogger) error {
 	switch auth := authenticator.(type) {
-	case *conciergev1alpha1.WebhookAuthenticator:
+	case *authenticationv1alpha1.WebhookAuthenticator:
 		// If the --concierge-authenticator-type/--concierge-authenticator-name flags were not set explicitly, set
 		// them to point at the discovered WebhookAuthenticator.
 		if flags.concierge.authenticatorType == "" && flags.concierge.authenticatorName == "" {
@@ -485,7 +485,7 @@ func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconf
 			flags.concierge.authenticatorType = "webhook"
 			flags.concierge.authenticatorName = auth.Name
 		}
-	case *conciergev1alpha1.JWTAuthenticator:
+	case *authenticationv1alpha1.JWTAuthenticator:
 		// If the --concierge-authenticator-type/--concierge-authenticator-name flags were not set explicitly, set
 		// them to point at the discovered JWTAuthenticator.
 		if flags.concierge.authenticatorType == "" && flags.concierge.authenticatorName == "" {

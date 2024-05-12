@@ -12,7 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -25,30 +25,30 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		spec            func() *v1alpha1.WebhookAuthenticatorSpec
-		initialPhase    v1alpha1.WebhookAuthenticatorPhase
+		spec            func() *authenticationv1alpha1.WebhookAuthenticatorSpec
+		initialPhase    authenticationv1alpha1.WebhookAuthenticatorPhase
 		finalConditions []metav1.Condition
 		run             func(t *testing.T)
 	}{
 		{
 			name: "Basic test to see if the WebhookAuthenticator wakes up or not.",
-			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
+			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				return &testlib.IntegrationEnv(t).TestWebhook
 			},
-			initialPhase:    v1alpha1.WebhookAuthenticatorPhaseReady,
+			initialPhase:    authenticationv1alpha1.WebhookAuthenticatorPhaseReady,
 			finalConditions: allSuccessfulWebhookAuthenticatorConditions(),
 		},
 		{
 			name: "valid spec with invalid CA in TLS config will result in a WebhookAuthenticator that is not ready",
-			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
+			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				caBundleString := "invalid base64-encoded data"
 				webhookSpec := testEnv.TestWebhook.DeepCopy()
-				webhookSpec.TLS = &v1alpha1.TLSSpec{
+				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleString,
 				}
 				return webhookSpec
 			},
-			initialPhase: v1alpha1.WebhookAuthenticatorPhaseError,
+			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
 			finalConditions: replaceSomeConditions(
 				allSuccessfulWebhookAuthenticatorConditions(),
 				[]metav1.Condition{
@@ -78,14 +78,14 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		},
 		{
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a WebhookAuthenticator that is not ready",
-			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
+			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				webhookSpec := testEnv.TestWebhook.DeepCopy()
-				webhookSpec.TLS = &v1alpha1.TLSSpec{
+				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
 				return webhookSpec
 			},
-			initialPhase: v1alpha1.WebhookAuthenticatorPhaseError,
+			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
 			finalConditions: replaceSomeConditions(
 				allSuccessfulWebhookAuthenticatorConditions(),
 				[]metav1.Condition{
@@ -110,15 +110,15 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		},
 		{
 			name: "invalid with unresponsive endpoint will result in a WebhookAuthenticator that is not ready",
-			spec: func() *v1alpha1.WebhookAuthenticatorSpec {
+			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				webhookSpec := testEnv.TestWebhook.DeepCopy()
-				webhookSpec.TLS = &v1alpha1.TLSSpec{
+				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
 				webhookSpec.Endpoint = "https://127.0.0.1:443/some-fake-endpoint"
 				return webhookSpec
 			},
-			initialPhase: v1alpha1.WebhookAuthenticatorPhaseError,
+			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
 			finalConditions: replaceSomeConditions(
 				allSuccessfulWebhookAuthenticatorConditions(),
 				[]metav1.Condition{
@@ -171,14 +171,14 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 	objectMeta := testlib.ObjectMetaWithRandomName(t, "webhook-authenticator")
 	tests := []struct {
 		name                 string
-		webhookAuthenticator *v1alpha1.WebhookAuthenticator
+		webhookAuthenticator *authenticationv1alpha1.WebhookAuthenticator
 		wantErr              string
 	}{
 		{
 			name: "endpoint can not be empty string",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "",
 				},
 			},
@@ -187,9 +187,9 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "endpoint must be https",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: objectMeta,
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "http://www.example.com",
 				},
 			},
@@ -198,30 +198,30 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "minimum valid authenticator",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhook"),
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
 				},
 			},
 		},
 		{
 			name: "valid authenticator can have empty TLS block",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhook"),
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
-					TLS:      &v1alpha1.TLSSpec{},
+					TLS:      &authenticationv1alpha1.TLSSpec{},
 				},
 			},
 		},
 		{
 			name: "valid authenticator can have empty TLS CertificateAuthorityData",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
-					TLS: &v1alpha1.TLSSpec{
+					TLS: &authenticationv1alpha1.TLSSpec{
 						CertificateAuthorityData: "",
 					},
 				},
@@ -230,11 +230,11 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		{
 			// since the CRD validations do not assess fitness of the value provided
 			name: "valid authenticator can have TLS CertificateAuthorityData string that is an invalid certificate",
-			webhookAuthenticator: &v1alpha1.WebhookAuthenticator{
+			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
 				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
-				Spec: v1alpha1.WebhookAuthenticatorSpec{
+				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
-					TLS: &v1alpha1.TLSSpec{
+					TLS: &authenticationv1alpha1.TLSSpec{
 						CertificateAuthorityData: "pretend-this-is-a-certificate",
 					},
 				},

@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
-	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	controllerAuthenticator "go.pinniped.dev/internal/controller/authenticator"
@@ -65,12 +65,12 @@ func TestController(t *testing.T) {
 				cache.Store(testJWTAuthenticatorKey1, nil)
 			},
 			objects: []runtime.Object{
-				&authv1alpha.WebhookAuthenticator{
+				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testWebhookKey1.Name,
 					},
 				},
-				&authv1alpha.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testJWTAuthenticatorKey1.Name,
 					},
@@ -81,22 +81,22 @@ func TestController(t *testing.T) {
 		{
 			name: "authenticators not yet added",
 			objects: []runtime.Object{
-				&authv1alpha.WebhookAuthenticator{
+				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testWebhookKey1.Name,
 					},
 				},
-				&authv1alpha.WebhookAuthenticator{
+				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testWebhookKey2.Name,
 					},
 				},
-				&authv1alpha.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testJWTAuthenticatorKey1.Name,
 					},
 				},
-				&authv1alpha.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testJWTAuthenticatorKey2.Name,
 					},
@@ -114,12 +114,12 @@ func TestController(t *testing.T) {
 				cache.Store(testKeyUnknownType, nil)
 			},
 			objects: []runtime.Object{
-				&authv1alpha.WebhookAuthenticator{
+				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testWebhookKey1.Name,
 					},
 				},
-				&authv1alpha.JWTAuthenticator{
+				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testJWTAuthenticatorKey1.Name,
 					},

@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -126,7 +126,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 
 	if !conditionsutil.HadErrorCondition(conditions) {
 		c.cache.Store(authncache.Key{
-			APIGroup: auth1alpha1.GroupName,
+			APIGroup: authenticationv1alpha1.GroupName,
 			Kind:     "WebhookAuthenticator",
 			Name:     ctx.Key.Name,
 		}, webhookAuthenticator)
@@ -264,7 +264,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
 	rootCAs, pemBytes, err := pinnipedauthenticator.CABundle(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
@@ -337,13 +337,13 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 
 func (c *webhookCacheFillerController) updateStatus(
 	ctx context.Context,
-	original *auth1alpha1.WebhookAuthenticator,
+	original *authenticationv1alpha1.WebhookAuthenticator,
 	conditions []*metav1.Condition,
 ) error {
 	updated := original.DeepCopy()
 
 	if conditionsutil.HadErrorCondition(conditions) {
-		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseError
+		updated.Status.Phase = authenticationv1alpha1.WebhookAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
@@ -351,7 +351,7 @@ func (c *webhookCacheFillerController) updateStatus(
 			Message: "the WebhookAuthenticator is not ready: see other conditions for details",
 		})
 	} else {
-		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseReady
+		updated.Status.Phase = authenticationv1alpha1.WebhookAuthenticatorPhaseReady
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionTrue,

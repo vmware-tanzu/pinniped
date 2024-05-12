@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package nonce
@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
@@ -25,10 +25,10 @@ func TestNonce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, n.String(), authCodeURL.Query().Get("nonce"))
 
-	require.Error(t, n.Validate(&oidc.IDToken{}))
-	require.NoError(t, n.Validate(&oidc.IDToken{Nonce: string(n)}))
+	require.Error(t, n.Validate(&coreosoidc.IDToken{}))
+	require.NoError(t, n.Validate(&coreosoidc.IDToken{Nonce: string(n)}))
 
-	err = n.Validate(&oidc.IDToken{Nonce: string(n) + "x"})
+	err = n.Validate(&coreosoidc.IDToken{Nonce: string(n) + "x"})
 	require.Error(t, err)
 	require.True(t, errors.As(err, &InvalidNonceError{}))
 	require.Contains(t, err.Error(), string(n)+"x")

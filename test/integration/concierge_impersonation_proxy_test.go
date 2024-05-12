@@ -61,7 +61,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -121,7 +121,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// Create a WebhookAuthenticator and prepare a TokenCredentialRequestSpec using the authenticator for use later.
 	credentialRequestSpecWithWorkingCredentials := loginv1alpha1.TokenCredentialRequestSpec{
 		Token:         env.TestUser.Token,
-		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady),
+		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady),
 	}
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).

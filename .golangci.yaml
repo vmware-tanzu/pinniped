@@ -127,16 +127,20 @@ linters-settings:
       alias: conciergeclientset
     - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme
       alias: conciergeclientsetscheme
-#    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
-#      alias: conciergefake
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
+      alias: conciergefake
     - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned
       alias: supervisorclientset
     - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme
       alias: supervisorclientsetscheme
-#    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
-#      alias: supervisorfake
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
+      alias: supervisorfake
     - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
       alias: idpv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/informers/externalversions
+      alias: conciergeinformers
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions
+      alias: supervisorinformers
     # Pinniped internal
     - pkg: go.pinniped.dev/internal/concierge/scheme
       alias: conciergescheme

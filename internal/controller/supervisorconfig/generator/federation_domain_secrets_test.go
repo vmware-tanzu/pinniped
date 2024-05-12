@@ -23,8 +23,8 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/mocks/mocksecrethelper"
 	"go.pinniped.dev/internal/testutil"
@@ -183,8 +183,8 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -245,8 +245,8 @@ func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -360,7 +360,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 	tests := []struct {
 		name                        string
 		storage                     func(**supervisorconfigv1alpha1.FederationDomain, **corev1.Secret)
-		client                      func(*pinnipedfake.Clientset, *kubernetesfake.Clientset)
+		client                      func(*supervisorfake.Clientset, *kubernetesfake.Clientset)
 		secretHelper                func(*mocksecrethelper.MockSecretHelper)
 		wantFederationDomainActions []kubetesting.Action
 		wantSecretActions           []kubetesting.Action
@@ -406,7 +406,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+			client: func(c *supervisorfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, goodFederationDomainWithJWKS, nil
 				})
@@ -429,7 +429,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+			client: func(c *supervisorfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, goodFederationDomainWithJWKSAndTokenSigningKey, nil
 				})
@@ -493,7 +493,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(1).Return(false)
 			},
-			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
+			client: func(_ *supervisorfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
@@ -511,7 +511,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 			},
-			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
+			client: func(_ *supervisorfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("create", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some create error")
 				})
@@ -528,7 +528,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(2).Return(false)
 			},
-			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
+			client: func(_ *supervisorfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some update error")
 				})
@@ -549,7 +549,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(3).Return(false)
 				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
+			client: func(_ *supervisorfake.Clientset, c *kubernetesfake.Clientset) {
 				once := sync.Once{}
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
@@ -578,7 +578,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(2).Return(false)
 				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+			client: func(c *supervisorfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
@@ -602,7 +602,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(2).Return(false)
 				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+			client: func(c *supervisorfake.Clientset, _ *kubernetesfake.Clientset) {
 				once := sync.Once{}
 				c.PrependReactor("update", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
@@ -629,8 +629,8 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
+			pinnipedAPIClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformerClient := supervisorfake.NewSimpleClientset()
 
 			kubeAPIClient := kubernetesfake.NewSimpleClientset()
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
@@ -657,7 +657,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				kubeInformerClient,
 				0,
 			)
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(
 				pinnipedInformerClient,
 				0,
 			)

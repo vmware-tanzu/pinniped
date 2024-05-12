@@ -23,8 +23,8 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -174,8 +174,8 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -227,8 +227,8 @@ func TestJWKSWriterControllerFilterFederationDomain(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -331,7 +331,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		key                         controllerlib.Key
 		secrets                     []*corev1.Secret
 		configKubeClient            func(*kubernetesfake.Clientset)
-		configPinnipedClient        func(*pinnipedfake.Clientset)
+		configPinnipedClient        func(*supervisorfake.Clientset)
 		federationDomains           []*supervisorconfigv1alpha1.FederationDomain
 		generateKeyErr              error
 		wantGenerateKeyCount        int
@@ -640,7 +640,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
-			configPinnipedClient: func(client *pinnipedfake.Clientset) {
+			configPinnipedClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
@@ -653,7 +653,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 			federationDomains: []*supervisorconfigv1alpha1.FederationDomain{
 				goodFederationDomain,
 			},
-			configPinnipedClient: func(client *pinnipedfake.Clientset) {
+			configPinnipedClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor("update", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some update error")
 				})
@@ -683,8 +683,8 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				test.configKubeClient(kubeAPIClient)
 			}
 
-			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
+			pinnipedAPIClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformerClient := supervisorfake.NewSimpleClientset()
 			for _, federationDomain := range test.federationDomains {
 				require.NoError(t, pinnipedAPIClient.Tracker().Add(federationDomain))
 				require.NoError(t, pinnipedInformerClient.Tracker().Add(federationDomain))
@@ -697,7 +697,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				kubeInformerClient,
 				0,
 			)
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(
 				pinnipedInformerClient,
 				0,
 			)

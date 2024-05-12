@@ -24,8 +24,8 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -38,10 +38,10 @@ import (
 func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 	t.Parallel()
 
-	federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
-	oidcIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
-	ldapIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
-	adIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
+	federationDomainInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
+	oidcIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
+	ldapIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
+	adIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
 
 	tests := []struct {
 		name       string
@@ -521,7 +521,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	tests := []struct {
 		name              string
 		inputObjects      []runtime.Object
-		configClient      func(*pinnipedfake.Clientset)
+		configClient      func(*supervisorfake.Clientset)
 		wantErr           string
 		wantStatusUpdates []*supervisorconfigv1alpha1.FederationDomain
 		wantFDIssuers     []*federationdomainproviders.FederationDomainIssuer
@@ -671,7 +671,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 				oidcIdentityProvider,
 			},
-			configClient: func(client *pinnipedfake.Clientset) {
+			configClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor(
 					"update",
 					"federationdomains",
@@ -736,7 +736,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 				oidcIdentityProvider,
 			},
-			configClient: func(client *pinnipedfake.Clientset) {
+			configClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor(
 					"update",
 					"federationdomains",
@@ -2002,8 +2002,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			t.Parallel()
 
 			federationDomainsSetter := &fakeFederationDomainsSetter{}
-			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
+			pinnipedAPIClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformerClient := supervisorfake.NewSimpleClientset()
 			for _, o := range tt.inputObjects {
 				require.NoError(t, pinnipedAPIClient.Tracker().Add(o))
 				require.NoError(t, pinnipedInformerClient.Tracker().Add(o))
@@ -2011,7 +2011,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			if tt.configClient != nil {
 				tt.configClient(pinnipedAPIClient)
 			}
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 
 			controller := NewFederationDomainWatcherController(
 				federationDomainsSetter,

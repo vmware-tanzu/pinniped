@@ -15,7 +15,7 @@ import (
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	fakeconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
 )
@@ -284,7 +284,7 @@ func TestWhoami(t *testing.T) {
 				if test.gettingClientsetErr != nil {
 					return nil, test.gettingClientsetErr
 				}
-				clientset := fakeconciergeclientset.NewSimpleClientset()
+				clientset := conciergefake.NewSimpleClientset()
 				clientset.PrependReactor("create", "whoamirequests", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					if test.callingAPIErr != nil {
 						return true, nil, test.callingAPIErr

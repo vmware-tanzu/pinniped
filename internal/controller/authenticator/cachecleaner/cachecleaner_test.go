@@ -13,8 +13,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	controllerAuthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
@@ -136,8 +136,8 @@ func TestController(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// When we have t.Parallel() here, this test blocks pretty consistently...y tho?
 
-			fakeClient := pinnipedfake.NewSimpleClientset(tt.objects...)
-			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
+			fakeClient := conciergefake.NewSimpleClientset(tt.objects...)
+			informers := conciergeinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
 			if tt.initialCache != nil {
 				tt.initialCache(t, cache)

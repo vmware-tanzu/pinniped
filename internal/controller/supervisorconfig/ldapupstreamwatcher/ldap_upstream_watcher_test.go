@@ -22,8 +22,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
@@ -73,8 +73,8 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
@@ -117,8 +117,8 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
@@ -1132,8 +1132,8 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset(tt.inputUpstreams...)
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputUpstreams...)
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()

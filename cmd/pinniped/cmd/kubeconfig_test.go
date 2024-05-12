@@ -23,7 +23,7 @@ import (
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	fakeconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -3247,9 +3247,9 @@ func TestGetKubeconfig(t *testing.T) {
 					if tt.getClientsetErr != nil {
 						return nil, tt.getClientsetErr
 					}
-					fake := fakeconciergeclientset.NewSimpleClientset()
+					fake := conciergefake.NewSimpleClientset()
 					if tt.conciergeObjects != nil {
-						fake = fakeconciergeclientset.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
+						fake = conciergefake.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
 					}
 					if len(tt.conciergeReactions) > 0 {
 						fake.ReactionChain = append(tt.conciergeReactions, fake.ReactionChain...)

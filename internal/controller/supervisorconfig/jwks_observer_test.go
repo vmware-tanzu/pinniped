@@ -18,8 +18,8 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -37,7 +37,7 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewJWKSObserverController(
 				nil,
 				secretsInformer,
@@ -125,9 +125,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 		var (
 			r                       *require.Assertions
 			subject                 controllerlib.Controller
-			pinnipedInformerClient  *pinnipedfake.Clientset
+			pinnipedInformerClient  *supervisorfake.Clientset
 			kubeInformerClient      *kubernetesfake.Clientset
-			pinnipedInformers       pinnipedinformers.SharedInformerFactory
+			pinnipedInformers       supervisorinformers.SharedInformerFactory
 			kubeInformers           k8sinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
@@ -169,8 +169,8 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = k8sinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
-			pinnipedInformers = pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
+			pinnipedInformerClient = supervisorfake.NewSimpleClientset()
+			pinnipedInformers = supervisorinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 			issuerToJWKSSetter = &fakeIssuerToJWKSMapSetter{}
 
 			unrelatedSecret := &corev1.Secret{

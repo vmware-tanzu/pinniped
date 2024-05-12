@@ -36,8 +36,8 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
@@ -68,7 +68,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			pinnipedInformerFactory := pinnipedinformers.NewSharedInformerFactory(nil, 0)
+			pinnipedInformerFactory := conciergeinformers.NewSharedInformerFactory(nil, 0)
 			sharedInformerFactory := k8sinformers.NewSharedInformerFactory(nil, 0)
 			credIssuerInformer := pinnipedInformerFactory.Config().V1alpha1().CredentialIssuers()
 			servicesInformer := sharedInformerFactory.Core().V1().Services()
@@ -281,9 +281,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
-		var pinnipedAPIClient *pinnipedfake.Clientset
-		var pinnipedInformerClient *pinnipedfake.Clientset
-		var pinnipedInformers pinnipedinformers.SharedInformerFactory
+		var pinnipedAPIClient *conciergefake.Clientset
+		var pinnipedInformerClient *conciergefake.Clientset
+		var pinnipedInformers conciergeinformers.SharedInformerFactory
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers k8sinformers.SharedInformerFactory
 		var cancelContext context.Context
@@ -609,7 +609,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
-		var addCredentialIssuerToTrackers = func(credIssuer conciergeconfigv1alpha1.CredentialIssuer, informerClient *pinnipedfake.Clientset, mainClient *pinnipedfake.Clientset) {
+		var addCredentialIssuerToTrackers = func(credIssuer conciergeconfigv1alpha1.CredentialIssuer, informerClient *conciergefake.Clientset, mainClient *conciergefake.Clientset) {
 			t.Logf("adding CredentialIssuer %s to informer and main clientsets", credIssuer.Name)
 			r.NoError(informerClient.Tracker().Add(&credIssuer))
 			r.NoError(mainClient.Tracker().Add(&credIssuer))
@@ -1123,15 +1123,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			queue = &testQueue{}
 			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
-			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
-			pinnipedInformers = pinnipedinformers.NewSharedInformerFactoryWithOptions(pinnipedInformerClient, 0)
+			pinnipedInformerClient = conciergefake.NewSimpleClientset()
+			pinnipedInformers = conciergeinformers.NewSharedInformerFactoryWithOptions(pinnipedInformerClient, 0)
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = k8sinformers.NewSharedInformerFactoryWithOptions(kubeInformerClient, 0,
 				k8sinformers.WithNamespace(installedInNamespace),
 			)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
-			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
+			pinnipedAPIClient = conciergefake.NewSimpleClientset()
 			frozenNow = time.Date(2021, time.March, 2, 7, 42, 0, 0, time.Local)
 			mTLSClientCertProvider = dynamiccert.NewCA(name)
 

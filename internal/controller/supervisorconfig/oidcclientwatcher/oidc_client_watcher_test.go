@@ -17,8 +17,8 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -66,8 +66,8 @@ func TestOIDCClientWatcherControllerFilterSecret(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			oidcClientsInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			oidcClientsInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().OIDCClients()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -135,8 +135,8 @@ func TestOIDCClientWatcherControllerFilterOIDCClient(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			oidcClientsInformer := pinnipedinformers.NewSharedInformerFactory(
-				pinnipedfake.NewSimpleClientset(),
+			oidcClientsInformer := supervisorinformers.NewSharedInformerFactory(
+				supervisorfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().OIDCClients()
 			withInformer := testutil.NewObservableWithInformerOption()
@@ -956,9 +956,9 @@ func TestOIDCClientWatcherControllerSync(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset(tt.inputObjects...)
-			fakePinnipedClientForInformers := pinnipedfake.NewSimpleClientset(tt.inputObjects...)
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClientForInformers, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputObjects...)
+			fakePinnipedClientForInformers := supervisorfake.NewSimpleClientset(tt.inputObjects...)
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClientForInformers, 0)
 			fakeKubeClient := kubernetesfake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(fakeKubeClient, 0)
 

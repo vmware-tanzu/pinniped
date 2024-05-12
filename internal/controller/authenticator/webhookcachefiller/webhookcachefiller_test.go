@@ -29,8 +29,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
@@ -363,7 +363,7 @@ func TestController(t *testing.T) {
 		syncKey  controllerlib.Key
 		webhooks []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
-		configClient     func(*pinnipedfake.Clientset)
+		configClient     func(*conciergefake.Clientset)
 		wantSyncLoopErr  testutil.RequireErrorStringFunc
 		wantLogs         []map[string]any
 		wantActions      func() []coretesting.Action
@@ -1245,7 +1245,7 @@ func TestController(t *testing.T) {
 		{
 			name:    "updateStatus: when update request fails: error will enqueue a resync",
 			syncKey: controllerlib.Key{Name: "test-name"},
-			configClient: func(client *pinnipedfake.Clientset) {
+			configClient: func(client *conciergefake.Clientset) {
 				client.PrependReactor(
 					"update",
 					"webhookauthenticators",
@@ -1309,11 +1309,11 @@ func TestController(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			pinnipedAPIClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
+			pinnipedAPIClient := conciergefake.NewSimpleClientset(tt.webhooks...)
 			if tt.configClient != nil {
 				tt.configClient(pinnipedAPIClient)
 			}
-			informers := pinnipedinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			informers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
 			cache := authncache.New()
 
 			var log bytes.Buffer

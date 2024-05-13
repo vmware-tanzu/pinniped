@@ -20,9 +20,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// Until goboring supports TLS 1.3, use TLS 1.2.
-const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
-
+// init: see comment in profiles.go.
 func init() {
 	switch filepath.Base(os.Args[0]) {
 	case "pinniped-server", "pinniped-supervisor", "pinniped-concierge", "pinniped-concierge-kube-cert-agent":
@@ -32,9 +30,16 @@ func init() {
 
 	// this init runs before we have parsed our config to determine our log level
 	// thus we must use a log statement that will always print instead of conditionally print
-	plog.Always("using boring crypto in fips only mode", "go version", runtime.Version())
+	plog.Always("this server was compiled to use boring crypto in FIPS-only mode",
+		"go version", runtime.Version())
 }
 
+// SecureTLSConfigMinTLSVersion: see comment in profiles.go.
+// Until goboring supports TLS 1.3, use TLS 1.2.
+const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
+
+// Default: see comment in profiles.go.
+// This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -64,16 +69,22 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 	}
 }
 
+// DefaultLDAP: see comment in profiles.go.
+// This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
+func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
+	return Default(rootCAs)
+}
+
+// Secure: see comment in profiles.go.
+// This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
 // Until goboring supports TLS 1.3, make the Secure profile the same as the Default profile in FIPS mode.
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
 }
 
-func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
-	return Default(rootCAs)
-}
-
-// Until goboring supports TLS 1.3, make secureServing use the same as the defaultServing profile in FIPS mode.
-func secureServing(opts *options.SecureServingOptionsWithLoopback) {
+// SecureServing: see comment in profiles.go.
+// This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
+// Until goboring supports TLS 1.3, make SecureServing use the same as the defaultServing profile in FIPS mode.
+func SecureServing(opts *options.SecureServingOptionsWithLoopback) {
 	defaultServing(opts)
 }

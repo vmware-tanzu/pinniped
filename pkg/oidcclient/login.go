@@ -80,12 +80,14 @@ func stdin() int { return int(os.Stdin.Fd()) }
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
-	logger   logr.Logger
+	logger   Logger
 	issuer   string
 	clientID string
 	scopes   []string
 	cache    SessionCache
 	out      io.Writer // this is stderr except in unit tests
+
+	loggerOptionsCount int
 
 	// Tracking the usage of some other functional options.
 	upstreamIdentityProviderName string
@@ -143,11 +145,57 @@ func WithContext(ctx context.Context) Option {
 	}
 }
 
+type Logger interface {
+	Error(msg string, err error, keysAndValues ...any)
+	Info(msg string, keysAndValues ...any)
+}
+
+type logrLoggerWrapper struct {
+	logger logr.Logger
+}
+
+var _ Logger = (*logrLoggerWrapper)(nil)
+
+func (l *logrLoggerWrapper) Error(msg string, err error, keysAndValues ...any) {
+	l.logger.V(plog.KlogLevelDebug).Error(err, msg, keysAndValues...)
+}
+
+func (l *logrLoggerWrapper) Info(msg string, keysAndValues ...any) {
+	l.logger.V(plog.KlogLevelDebug).Info(msg, keysAndValues...)
+}
+
+type emptyLogger struct{}
+
+var _ Logger = (*emptyLogger)(nil)
+
+func (e emptyLogger) Error(_ string, _ error, _ ...any) {
+	// NOOP
+}
+
+func (e emptyLogger) Info(_ string, _ ...any) {
+	// NOOP
+}
+
 // WithLogger specifies a PLogger to use with the login.
-// If not specified this will default to a new logger.
+// If not specified this will default to a no-op logger.
+//
+// Deprecated: Use WithLoginLogger instead.
+// This option will be removed in a future version of Pinniped.
+// If this option is used along with WithLoginLogger, it will cause an error.
 func WithLogger(logger logr.Logger) Option {
 	return func(h *handlerState) error {
+		h.logger = &logrLoggerWrapper{logger: logger}
+		h.loggerOptionsCount++
+		return nil
+	}
+}
+
+// WithLoginLogger specifies a Logger to use.
+// If not specified this will default to a no-op logger.
+func WithLoginLogger(logger Logger) Option {
+	return func(h *handlerState) error {
 		h.logger = logger
+		h.loggerOptionsCount++
 		return nil
 	}
 }
@@ -319,7 +367,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
-		logger:       logr.Discard(), // discard logs unless a logger is specified
+		logger:       &emptyLogger{},
 		callbacks:    make(chan callbackResult, 2),
 		httpClient:   phttp.Default(nil),
 
@@ -350,6 +398,10 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 			return nil, fmt.Errorf("do not use deprecated option WithCLISendingCredentials when using option WithLoginFlow")
 		}
 		h.loginFlow = idpdiscoveryv1alpha1.IDPFlowCLIPassword
+	}
+
+	if h.loggerOptionsCount > 1 {
+		return nil, fmt.Errorf("please use only one mechanism to specify the logger")
 	}
 
 	// Copy the configured HTTP client to set a request timeout (the Go default client has no timeout configured).
@@ -444,7 +496,7 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	// return the cached tokens immediately and skip the rest of the flow.
 	cached := h.cache.GetToken(cacheKey)
 	if valid, whichTokenWasValid := h.tokenValidForNearFuture(cached); valid {
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Found unexpired cached token.", "type", whichTokenWasValid)
+		h.logger.Info("Pinniped: Found unexpired cached token.", "type", whichTokenWasValid)
 		return cached, nil
 	}
 
@@ -713,7 +765,7 @@ func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 			return "", "", fmt.Errorf("error prompting for username: %w", err)
 		}
 	} else {
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Read username from environment variable", "name", defaultUsernameEnvVarName)
+		h.logger.Info("Pinniped: Read username from environment variable", "name", defaultUsernameEnvVarName)
 	}
 
 	password := h.getEnv(defaultPasswordEnvVarName)
@@ -723,7 +775,7 @@ func (h *handlerState) getUsernameAndPassword() (string, string, error) {
 			return "", "", fmt.Errorf("error prompting for password: %w", err)
 		}
 	} else {
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Read password from environment variable", "name", defaultPasswordEnvVarName)
+		h.logger.Info("Pinniped: Read password from environment variable", "name", defaultPasswordEnvVarName)
 	}
 
 	return username, password, nil
@@ -735,7 +787,7 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	// Attempt to open a local TCP listener, logging but otherwise ignoring any error.
 	listener, err := h.listen("tcp", h.listenAddr)
 	if err != nil {
-		h.logger.V(plog.KlogLevelDebug).Error(err, "could not open callback listener")
+		h.logger.Error("could not open callback listener", err)
 	}
 
 	// If the listener failed to start and stdin is not a TTY, then we have no hope of succeeding,
@@ -774,7 +826,7 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	openedBrowser := false
 	if !h.skipBrowser {
 		if err := h.openURL(authorizeURL); err != nil {
-			h.logger.V(plog.KlogLevelDebug).Error(err, "could not open browser")
+			h.logger.Error("could not open browser", err)
 		} else {
 			openedBrowser = true
 		}
@@ -924,7 +976,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return err
 	}
 
-	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
+	h.logger.Info("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
 	var err error
 	h.provider, err = coreosoidc.NewProvider(h.ctx, h.issuer)
 	if err != nil {
@@ -1027,7 +1079,7 @@ func validateURLUsesHTTPS(uri string, uriName string) error {
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {
-	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Performing RFC8693 token exchange", "requestedAudience", h.requestedAudience)
+	h.logger.Info("Pinniped: Performing RFC8693 token exchange", "requestedAudience", h.requestedAudience)
 	// Perform OIDC discovery. This may have already been performed if there was not a cached base token.
 	if err := h.initOIDCDiscovery(); err != nil {
 		return nil, err
@@ -1098,13 +1150,13 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
-	h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Refreshing cached tokens.")
+	h.logger.Info("Pinniped: Refreshing cached tokens.")
 	upstreamOIDCIdentityProvider := h.getProvider(h.oauth2Config, h.provider, h.httpClient)
 
 	refreshed, err := upstreamOIDCIdentityProvider.PerformRefresh(ctx, refreshToken.Token)
 	if err != nil {
 		// Ignore errors during refresh, but return nil which will trigger the full login flow.
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Refresh failed.", "error", err.Error())
+		h.logger.Info("Pinniped: Refresh failed.", "error", err.Error())
 		return nil, nil
 	}
 
@@ -1153,11 +1205,11 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		origin := r.Header.Get("Origin")
 		if origin == "" {
 			// The CORS preflight request should have an origin.
-			h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got OPTIONS request without origin header")
+			h.logger.Info("Pinniped: Got OPTIONS request without origin header")
 			w.WriteHeader(http.StatusBadRequest)
 			return nil // keep listening for more requests
 		}
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
+		h.logger.Info("Pinniped: Got CORS preflight request from browser", "origin", origin)
 		// To tell the browser that it is okay to make the real POST or GET request, return the following response.
 		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 		w.Header().Set("Vary", "*") // supposed to use Vary when Access-Control-Allow-Origin is a specific host
@@ -1188,7 +1240,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	default:
 		// Return HTTP 405 for anything that's not a POST, GET, or an OPTIONS request.
-		h.logger.V(plog.KlogLevelDebug).Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
+		h.logger.Info("Pinniped: Got unexpected request on callback listener", "method", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return nil // keep listening for more requests
 	}

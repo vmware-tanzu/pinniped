@@ -117,6 +117,20 @@ func (mr *MockOIDCClientOptionsMockRecorder) WithLoginFlow(arg0, arg1 any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginFlow", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginFlow), arg0, arg1)
 }
 
+// WithLoginLogger mocks base method.
+func (m *MockOIDCClientOptions) WithLoginLogger(arg0 oidcclient.Logger) oidcclient.Option {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithLoginLogger", arg0)
+	ret0, _ := ret[0].(oidcclient.Option)
+	return ret0
+}
+
+// WithLoginLogger indicates an expected call of WithLoginLogger.
+func (mr *MockOIDCClientOptionsMockRecorder) WithLoginLogger(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginLogger", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginLogger), arg0)
+}
+
 // WithRequestAudience mocks base method.
 func (m *MockOIDCClientOptions) WithRequestAudience(arg0 string) oidcclient.Option {
 	m.ctrl.T.Helper()

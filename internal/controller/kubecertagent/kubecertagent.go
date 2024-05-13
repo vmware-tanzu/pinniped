@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -143,7 +142,7 @@ type agentController struct {
 	executor             PodCommandExecutor
 	dynamicCertProvider  dynamiccert.Private
 	clock                clock.Clock
-	log                  logr.Logger
+	log                  plog.Logger
 	execCache            *cache.Expiring
 }
 
@@ -183,7 +182,7 @@ func NewAgentController(
 		dynamicCertProvider,
 		&clock.RealClock{},
 		cache.NewExpiring(),
-		plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+		plog.New(),
 	)
 }
 
@@ -199,7 +198,7 @@ func newAgentController(
 	dynamicCertProvider dynamiccert.Private,
 	clock clock.Clock,
 	execCache *cache.Expiring,
-	log logr.Logger,
+	log plog.Logger,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{

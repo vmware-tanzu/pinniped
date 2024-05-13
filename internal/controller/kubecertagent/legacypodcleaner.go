@@ -6,7 +6,6 @@ package kubecertagent
 import (
 	"fmt"
 
-	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -16,6 +15,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 )
 
 // NewLegacyPodCleanerController returns a controller that cleans up legacy kube-cert-agent Pods created by Pinniped v0.7.0 and below.
@@ -23,7 +23,7 @@ func NewLegacyPodCleanerController(
 	cfg AgentConfig,
 	client *kubeclient.Client,
 	agentPods corev1informers.PodInformer,
-	log logr.Logger,
+	log plog.Logger,
 ) controllerlib.Controller {
 	// legacyAgentLabels are the Kubernetes labels we previously added to agent pods (the new value is "v2").
 	// We also expect these pods to have the "extra" labels configured on the Concierge.

@@ -48,7 +48,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 	defaultWantedOptions := func(f *mockoidcclientoptions.MockOIDCClientOptions) {
 		f.EXPECT().WithContext(gomock.Any())
-		f.EXPECT().WithLogger(gomock.Any())
+		f.EXPECT().WithLoginLogger(gomock.Any())
 		f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
 		f.EXPECT().WithSessionCache(gomock.Any())
 	}
@@ -304,7 +304,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			env: map[string]string{"PINNIPED_DEBUG": "true", "PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
 			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
 				f.EXPECT().WithContext(gomock.Any())
-				f.EXPECT().WithLogger(gomock.Any())
+				f.EXPECT().WithLoginLogger(gomock.Any())
 				f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
 				f.EXPECT().WithSessionCache(gomock.Any())
 				f.EXPECT().WithListenPort(uint16(1234))

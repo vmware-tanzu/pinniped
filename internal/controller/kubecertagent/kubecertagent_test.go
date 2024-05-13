@@ -1032,8 +1032,8 @@ func TestAgentController(t *testing.T) {
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
 
-			var buf bytes.Buffer
-			log := plog.TestZapr(t, &buf)
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -1071,7 +1071,7 @@ func TestAgentController(t *testing.T) {
 				mockDynamicCert,
 				fakeClock,
 				execCache,
-				log,
+				logger,
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1085,7 +1085,7 @@ func TestAgentController(t *testing.T) {
 			allAllowedErrors := slices.Concat(tt.wantDistinctErrors, tt.alsoAllowUndesiredDistinctErrors)
 			assert.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
-			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(buf.String())), "unexpected logs")
+			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(log.String())), "unexpected logs")
 
 			// Assert on all actions that happened to deployments.
 			var actualDeploymentActionVerbs []string

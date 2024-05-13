@@ -7,7 +7,6 @@ package cachecleaner
 import (
 	"fmt"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
@@ -17,6 +16,7 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 // New instantiates a new controllerlib.Controller which will garbage collect authenticators from the provided Cache.
@@ -24,7 +24,7 @@ func New(
 	cache *authncache.Cache,
 	webhooks authinformers.WebhookAuthenticatorInformer,
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer,
-	log logr.Logger,
+	log plog.Logger,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -53,7 +53,7 @@ type controller struct {
 	cache             *authncache.Cache
 	webhooks          authinformers.WebhookAuthenticatorInformer
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer
-	log               logr.Logger
+	log               plog.Logger
 }
 
 // Sync implements controllerlib.Syncer.

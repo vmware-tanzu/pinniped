@@ -19,6 +19,7 @@ import (
 type OIDCClientOptions interface {
 	WithContext(ctx context.Context) oidcclient.Option
 	WithLogger(logger logr.Logger) oidcclient.Option
+	WithLoginLogger(logger oidcclient.Logger) oidcclient.Option
 	WithListenPort(port uint16) oidcclient.Option
 	WithSkipBrowserOpen() oidcclient.Option
 	WithSkipListen() oidcclient.Option
@@ -41,7 +42,11 @@ func (o *clientOptions) WithContext(ctx context.Context) oidcclient.Option {
 }
 
 func (o *clientOptions) WithLogger(logger logr.Logger) oidcclient.Option {
-	return oidcclient.WithLogger(logger)
+	return oidcclient.WithLogger(logger) //nolint:staticcheck // this is a shim for the deprecated code
+}
+
+func (o *clientOptions) WithLoginLogger(logger oidcclient.Logger) oidcclient.Option {
+	return oidcclient.WithLoginLogger(logger)
 }
 
 func (o *clientOptions) WithListenPort(port uint16) oidcclient.Option {

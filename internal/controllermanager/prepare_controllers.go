@@ -227,7 +227,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				agentConfig,
 				client,
 				informers.installationNamespaceK8s.Core().V1().Pods(),
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				plog.New(),
 			),
 			singletonWorker,
 		).
@@ -258,7 +258,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				c.AuthenticatorCache,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				plog.New(),
 			),
 			singletonWorker,
 		).
@@ -284,7 +284,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				plog.New(),
 				c.ImpersonationProxyTokenCache,
 			),
 			singletonWorker,

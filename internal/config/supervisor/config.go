@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/plog"
 )
@@ -35,7 +36,7 @@ const (
 // FromPath loads an Config from a provided local file path, inserts any
 // defaults (from the Config documentation), and verifies that the config is
 // valid (Config documentation).
-func FromPath(ctx context.Context, path string) (*Config, error) {
+func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowedCiphers) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
@@ -94,6 +95,9 @@ func FromPath(ctx context.Context, path string) (*Config, error) {
 	}
 	if err := validateAtLeastOneEnabledEndpoint(*config.Endpoints.HTTPS, *config.Endpoints.HTTP); err != nil {
 		return nil, fmt.Errorf("validate endpoints: %w", err)
+	}
+	if err := setAllowedCiphers(config.TLS.OneDotTwo.AllowedCiphers); err != nil {
+		return nil, fmt.Errorf("validate tls: %w", err)
 	}
 
 	return &config, nil

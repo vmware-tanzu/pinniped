@@ -5,6 +5,7 @@ package concierge
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -17,10 +18,11 @@ import (
 
 func TestFromPath(t *testing.T) {
 	tests := []struct {
-		name       string
-		yaml       string
-		wantConfig *Config
-		wantError  string
+		name                string
+		yaml                string
+		allowedCiphersError error
+		wantConfig          *Config
+		wantError           string
 	}{
 		{
 			name: "Fully filled out",
@@ -59,6 +61,12 @@ func TestFromPath(t *testing.T) {
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
 				log:
 				  level: debug
+				tls:
+				  onedottwo:
+				    allowedCiphers:
+				    - foo
+				    - bar
+					- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -97,6 +105,15 @@ func TestFromPath(t *testing.T) {
 				},
 				Log: plog.LogSpec{
 					Level: plog.LevelDebug,
+				},
+				TLS: TLSSpec{
+					OneDotTwo: TLSProtocolSpec{
+						AllowedCiphers: []string{
+							"foo",
+							"bar",
+							"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+						},
+					},
 				},
 			},
 		},
@@ -587,6 +604,31 @@ func TestFromPath(t *testing.T) {
 			`),
 			wantError: "validate apiGroupSuffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
 		},
+		{
+			name: "returns setAllowedCiphers errors",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
+				  impersonationProxyLegacySecret: impersonationProxyLegacySecret-value
+				tls:
+				  onedottwo:
+				    allowedCiphers:
+				    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			`),
+			allowedCiphersError: fmt.Errorf("some error from setAllowedCiphers"),
+			wantError:           "validate tls: some error from setAllowedCiphers",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -595,10 +637,10 @@ func TestFromPath(t *testing.T) {
 			// Write yaml to temp file
 			f, err := os.CreateTemp("", "pinniped-test-config-yaml-*")
 			require.NoError(t, err)
-			defer func() {
+			t.Cleanup(func() {
 				err := os.Remove(f.Name())
 				require.NoError(t, err)
-			}()
+			})
 			_, err = f.WriteString(test.yaml)
 			require.NoError(t, err)
 			err = f.Close()
@@ -607,14 +649,23 @@ func TestFromPath(t *testing.T) {
 			// Test FromPath()
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
-			config, err := FromPath(ctx, f.Name())
+
+			var actualCiphers []string
+			setAllowedCiphers := func(ciphers []string) error {
+				actualCiphers = ciphers
+				return test.allowedCiphersError
+			}
+
+			config, err := FromPath(ctx, f.Name(), setAllowedCiphers)
 
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.wantConfig, config)
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.wantConfig, config)
+			require.Equal(t, test.wantConfig.TLS.OneDotTwo.AllowedCiphers, actualCiphers)
 		})
 	}
 }

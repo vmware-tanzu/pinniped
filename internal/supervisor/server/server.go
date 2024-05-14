@@ -742,10 +742,12 @@ func main() error { // return an error instead of plog.Fatal to allow defer stat
 	ctx := signalCtx()
 
 	// Read the server config file.
-	cfg, err := supervisor.FromPath(ctx, os.Args[2])
+	cfg, err := supervisor.FromPath(ctx, os.Args[2], ptls.SetUserConfiguredCiphersForTLSOneDotTwo)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
+
+	ptls.LogAllProfiles(plog.New())
 
 	return runSupervisor(ctx, podInfo, cfg)
 }

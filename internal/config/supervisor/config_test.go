@@ -18,10 +18,11 @@ import (
 
 func TestFromPath(t *testing.T) {
 	tests := []struct {
-		name       string
-		yaml       string
-		wantConfig *Config
-		wantError  string
+		name                string
+		yaml                string
+		allowedCiphersError error
+		wantConfig          *Config
+		wantError           string
 	}{
 		{
 			name: "Happy",
@@ -45,6 +46,12 @@ func TestFromPath(t *testing.T) {
 				  level: info
 				  format: json
 				aggregatedAPIServerPort: 12345
+				tls:
+				  onedottwo:
+				    allowedCiphers:
+				    - foo
+				    - bar
+				    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: ptr.To("some.suffix.com"),
@@ -70,6 +77,15 @@ func TestFromPath(t *testing.T) {
 					Format: plog.FormatJSON,
 				},
 				AggregatedAPIServerPort: ptr.To[int64](12345),
+				TLS: TLSSpec{
+					OneDotTwo: TLSProtocolSpec{
+						AllowedCiphers: []string{
+							"foo",
+							"bar",
+							"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+						},
+					},
+				},
 			},
 		},
 		{
@@ -251,6 +267,20 @@ func TestFromPath(t *testing.T) {
 			`),
 			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
 		},
+		{
+			name: "returns setAllowedCiphers errors",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				tls:
+				  onedottwo:
+				    allowedCiphers:
+				    - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			`),
+			allowedCiphersError: fmt.Errorf("some error from setAllowedCiphers"),
+			wantError:           "validate tls: some error from setAllowedCiphers",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -259,10 +289,10 @@ func TestFromPath(t *testing.T) {
 			// Write yaml to temp file
 			f, err := os.CreateTemp("", "pinniped-test-config-yaml-*")
 			require.NoError(t, err)
-			defer func() {
+			t.Cleanup(func() {
 				err := os.Remove(f.Name())
 				require.NoError(t, err)
-			}()
+			})
 			_, err = f.WriteString(test.yaml)
 			require.NoError(t, err)
 			err = f.Close()
@@ -271,14 +301,23 @@ func TestFromPath(t *testing.T) {
 			// Test FromPath()
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
-			config, err := FromPath(ctx, f.Name())
+
+			var actualCiphers []string
+			setAllowedCiphers := func(ciphers []string) error {
+				actualCiphers = ciphers
+				return test.allowedCiphersError
+			}
+
+			config, err := FromPath(ctx, f.Name(), setAllowedCiphers)
 
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, test.wantConfig, config)
+				return
 			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.wantConfig, config)
+			require.Equal(t, test.wantConfig.TLS.OneDotTwo.AllowedCiphers, actualCiphers)
 		})
 	}
 }

@@ -24,16 +24,21 @@ import (
 // before they die.
 // Never run this test in parallel since deleting the pods is disruptive, see main_test.go.
 func TestPodShutdown_Disruptive(t *testing.T) {
-	// Only run this test in CI on Kind clusters, because something about restarting the pods
-	// in this test breaks the "kubectl port-forward" commands that we are using in CI for
-	// AKS, EKS, and GKE clusters. The Go code that we wrote for graceful pod shutdown should
-	// not be sensitive to which distribution it runs on, so running this test only on Kind
-	// should give us sufficient coverage for what we are trying to test here.
-	env := testlib.IntegrationEnv(t, testlib.SkipPodRestartAssertions()).
-		WithKubeDistribution(testlib.KindDistro)
+	env := testOnKindWithPodShutdown(t)
 
 	shutdownAllPodsOfApp(t, env, env.ConciergeNamespace, env.ConciergeAppName, true)
 	shutdownAllPodsOfApp(t, env, env.SupervisorNamespace, env.SupervisorAppName, false)
+}
+
+// testOnKindWithPodShutdown builds an env with the following description:
+// Only run this test in CI on Kind clusters, because something about restarting the pods
+// in this test breaks the "kubectl port-forward" commands that we are using in CI for
+// AKS, EKS, and GKE clusters. The Go code that we wrote for graceful pod shutdown should
+// not be sensitive to which distribution it runs on, so running this test only on Kind
+// should give us sufficient coverage for what we are trying to test here.
+func testOnKindWithPodShutdown(t *testing.T) *testlib.TestEnv {
+	return testlib.IntegrationEnv(t, testlib.SkipPodRestartAssertions()).
+		WithKubeDistribution(testlib.KindDistro)
 }
 
 func shutdownAllPodsOfApp(

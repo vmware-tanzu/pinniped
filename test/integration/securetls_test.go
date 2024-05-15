@@ -94,7 +94,7 @@ func TestSecureTLSConciergeAggregatedAPI_Parallel(t *testing.T) {
 	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10446)
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil)), "stdout:\n%s", stdout)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil), testlib.DefaultCipherSuitePreference), "stdout:\n%s", stdout)
 }
 
 // TLS checks safe to run in parallel with serial tests, see main_test.go.
@@ -109,7 +109,7 @@ func TestSecureTLSSupervisorAggregatedAPI_Parallel(t *testing.T) {
 	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10447)
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil)), "stdout:\n%s", stdout)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Secure(nil), testlib.DefaultCipherSuitePreference), "stdout:\n%s", stdout)
 }
 
 func TestSecureTLSSupervisor(t *testing.T) {
@@ -136,7 +136,7 @@ func TestSecureTLSSupervisor(t *testing.T) {
 	defaultECDSAOnly.CipherSuites = ciphers
 
 	require.Empty(t, stderr)
-	require.Contains(t, stdout, testlib.GetExpectedCiphers(defaultECDSAOnly), "stdout:\n%s", stdout)
+	require.Contains(t, stdout, testlib.GetExpectedCiphers(defaultECDSAOnly, testlib.DefaultCipherSuitePreference), "stdout:\n%s", stdout)
 }
 
 type fakeT struct {

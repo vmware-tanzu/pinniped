@@ -50,7 +50,7 @@ func RunNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 	return stdout.String(), stderr.String()
 }
 
-func GetExpectedCiphers(config *tls.Config) string {
+func GetExpectedCiphers(config *tls.Config, preference string) string {
 	skip12 := config.MinVersion == tls.VersionTLS13
 	skip13 := config.MaxVersion == tls.VersionTLS12
 
@@ -86,7 +86,7 @@ func GetExpectedCiphers(config *tls.Config) string {
 			}
 			s.WriteString("\n")
 		}
-		tls12Bit = fmt.Sprintf(tls12Base, s.String(), cipherSuitePreference)
+		tls12Bit = fmt.Sprintf(tls12Base, s.String(), preference)
 	}
 
 	if !skip13 {

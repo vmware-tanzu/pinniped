@@ -1,9 +1,9 @@
 ---
 title: "Concierge Impersonation Proxy | External Certificate Management"
 authors: [ "@joshuatcasey" ]
-status: "in-review"
+status: "implemented"
 sponsor: [ "@cfryanr", "@benjaminapetersen" ]
-approval_date: ""
+approval_date: "August 8, 2023"
 ---
 
 *Disclaimer*: Proposals are point-in-time designs and decisions.

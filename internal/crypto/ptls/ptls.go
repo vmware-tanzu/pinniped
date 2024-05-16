@@ -77,7 +77,7 @@ func DefaultRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFun
 // certain well known clients which we expect will always use modern TLS settings (like the Kube API server).
 // It returns a PrepareServerConfigFunc which must be used on a RecommendedConfig before passing it to RecommendedOptions.ApplyTo().
 func SecureRecommendedOptions(opts *options.RecommendedOptions, f RestConfigFunc) (PrepareServerConfigFunc, error) {
-	secureServing(opts.SecureServing)
+	SecureServing(opts.SecureServing)
 	return secureClient(opts, f)
 }
 

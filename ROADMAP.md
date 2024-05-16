@@ -5,8 +5,6 @@
 This document provides a high-level overview of the next big features the maintainers are planning to work on. This
 should serve as a reference point for Pinniped users and contributors to understand where the project is heading, and
 help determine if a contribution could be conflicting with a longer term plan.
-The [Pinniped project backlog](https://github.com/orgs/vmware-tanzu/projects/43/) is prioritized based on this roadmap,
-and it provides a more granular view of what the maintainers are working on a day-to-day basis.
 
 ### How to help
 
@@ -23,19 +21,6 @@ a [proposal](https://github.com/vmware-tanzu/pinniped/tree/main/proposals) in ou
 For smaller enhancements, you can open an issue to track that initiative or feature request.
 We work with and rely on community feedback to focus our efforts to improve Pinniped and maintain a healthy roadmap.
 
-### Current Roadmap
-
-The following table includes the current roadmap for Pinniped. Please take the timelines and dates as proposals and
-goals. Priorities and requirements change based on community feedback, roadblocks encountered, community contributions,
+Priorities and requirements change based on community feedback, roadblocks encountered, community contributions,
 etc. If you depend on a specific item, we encourage you to reach out for updated status information, or help us deliver
 that feature by [contributing](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md) to Pinniped.
-
-Last Updated: Sept 2022
-|Theme|Description|Timeline|
-|--|--|--|
-|Improving Usability|Dynamic Oauth Client Support for integrating with UI/Dashboards |Sept/Oct 2022|
-|Improving Usability|Support for custom claim mappings in OIDCIdentityProvider |Q4 2022|
-|Improving Usability|Support for Multiple Identity Providers |Q4 2022|
-|Improving Security Posture|Support Audit logging of security events related to Authentication |Q4 2022|
-|Improving Security Posture|Session Management |2022/2023|
-|Improving Security Posture|Secrets Rotation and Management |2022/2023|

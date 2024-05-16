@@ -34,18 +34,6 @@ func TestDefaultServing(t *testing.T) {
 	}, *opts)
 }
 
-func TestSecureServing(t *testing.T) {
-	t.Parallel()
-
-	opts := &options.SecureServingOptionsWithLoopback{SecureServingOptions: &options.SecureServingOptions{}}
-	secureServing(opts)
-	require.Equal(t, options.SecureServingOptionsWithLoopback{
-		SecureServingOptions: &options.SecureServingOptions{
-			MinTLSVersion: "VersionTLS13",
-		},
-	}, *opts)
-}
-
 func TestMerge(t *testing.T) {
 	t.Parallel()
 

@@ -14,12 +14,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	clocktesting "k8s.io/utils/clock/testing"
 
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/mocks/mockoidcclientoptions"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/conciergeclient"
@@ -42,6 +46,13 @@ func TestLoginOIDCCommand(t *testing.T) {
 	require.NoError(t, err)
 	nowStr := now.Local().Format(time.RFC1123)
 
+	defaultWantedOptions := func(f *mockoidcclientoptions.MockOIDCClientOptions) {
+		f.EXPECT().WithContext(gomock.Any())
+		f.EXPECT().WithLogger(gomock.Any())
+		f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
+		f.EXPECT().WithSessionCache(gomock.Any())
+	}
+
 	tests := []struct {
 		name             string
 		args             []string
@@ -51,6 +62,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 		wantError        bool
 		wantStdout       string
 		wantStderr       string
+		wantOptions      func(f *mockoidcclientoptions.MockOIDCClientOptions)
 		wantOptionsCount int
 		wantLogs         []string
 	}{
@@ -109,7 +121,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--enable-concierge",
 			},
-			wantError: true,
+			wantOptions: defaultWantedOptions,
+			wantError:   true,
 			wantStderr: here.Doc(`
 				Error: invalid Concierge parameters: endpoint must not be empty
 			`),
@@ -121,7 +134,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--ca-bundle", "./does/not/exist",
 			},
-			wantError: true,
+			wantOptions: defaultWantedOptions,
+			wantError:   true,
 			wantStderr: here.Doc(`
 				Error: could not read --ca-bundle: open ./does/not/exist: no such file or directory
 			`),
@@ -133,7 +147,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--ca-bundle-data", "invalid-base64",
 			},
-			wantError: true,
+			wantOptions: defaultWantedOptions,
+			wantError:   true,
 			wantStderr: here.Doc(`
 				Error: could not read --ca-bundle-data: illegal base64 data at input byte 7
 			`),
@@ -148,32 +163,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 			},
-			wantError: true,
+			wantOptions: defaultWantedOptions,
+			wantError:   true,
 			wantStderr: here.Doc(`
 				Error: invalid Concierge parameters: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
-			`),
-		},
-		{
-			name: "invalid upstream type is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--upstream-identity-provider-type", "invalid",
-			},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory, github)
-			`),
-		},
-		{
-			name: "invalid upstream type when flow override env var is used is still an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--upstream-identity-provider-type", "invalid",
-			},
-			env:       map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "browser_authcode"},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory, github)
 			`),
 		},
 		{
@@ -184,6 +177,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-type", "oidc",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
+			wantOptions:      defaultWantedOptions,
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
@@ -195,268 +189,44 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-type", "oidc",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
-			env:              map[string]string{"PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
+			env: map[string]string{"PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
+			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
+				defaultWantedOptions(f)
+				f.EXPECT().WithSkipPrintLoginURL()
+			},
 			wantOptionsCount: 5,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
-			name: "oidc upstream type with CLI flow is allowed",
+			name: "--upstream-identity-provider-flow adds an option",
 			args: []string{
 				"--issuer", "test-issuer",
 				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
 				"--upstream-identity-provider-flow", "cli_password",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "oidc upstream type with browser flow is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "oidc upstream type with CLI flow in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "cli_password"},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "oidc upstream type with with browser flow in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
-				"--upstream-identity-provider-flow", "cli_password",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "browser_authcode"},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "oidc upstream type with unsupported flow is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
-				"--upstream-identity-provider-flow", "foobar",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-flow value not recognized for identity provider type "oidc": foobar (supported values: browser_authcode, cli_password)
-			`),
-		},
-		{
-			name: "oidc upstream type with unsupported flow in flow override env var is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "oidc",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:       map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "foo"},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW value not recognized for identity provider type "oidc": foo (supported values: browser_authcode, cli_password)
-			`),
-		},
-		{
-			name: "ldap upstream type with default flow is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
+				defaultWantedOptions(f)
+				f.EXPECT().WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "--upstream-identity-provider-flow")
 			},
 			wantOptionsCount: 5,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
-			name: "activedirectory upstream type with default flow is allowed",
+			name: "PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW adds an option that overrides --upstream-identity-provider-flow",
 			args: []string{
 				"--issuer", "test-issuer",
 				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
+				"--upstream-identity-provider-flow", "ignored-value-from-param",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			env: map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "actual-value-from-env"},
+			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
+				defaultWantedOptions(f)
+				f.EXPECT().WithLoginFlow(idpdiscoveryv1alpha1.IDPFlow("actual-value-from-env"), "PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW")
 			},
 			wantOptionsCount: 5,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "ldap upstream type with CLI flow is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "cli_password",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "ldap upstream type with browser_authcode flow is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "ldap upstream type with CLI flow in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "cli_password"},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "ldap upstream type with browser_authcode flow in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "cli_password",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "browser_authcode"},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "ldap upstream type with unsupported flow is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "foo",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-flow value not recognized for identity provider type "ldap": foo (supported values: cli_password, browser_authcode)
-			`),
-		},
-		{
-			name: "ldap upstream type with unsupported flow in flow override env var is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "ldap",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:       map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "foo"},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW value not recognized for identity provider type "ldap": foo (supported values: cli_password, browser_authcode)
-			`),
-		},
-		{
-			name: "active directory upstream type with CLI flow is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "cli_password",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "active directory upstream type with browser_authcode is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "active directory upstream type with CLI flow in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "cli_password"},
-			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "active directory upstream type with browser_authcode in flow override env var is allowed",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "cli_password",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:              map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "browser_authcode"},
-			wantOptionsCount: 4,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
-		},
-		{
-			name: "active directory upstream type with unsupported flow is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "foo",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-flow value not recognized for identity provider type "activedirectory": foo (supported values: cli_password, browser_authcode)
-			`),
-		},
-		{
-			name: "active directory upstream type with unsupported flow in flow override env var is an error",
-			args: []string{
-				"--issuer", "test-issuer",
-				"--client-id", "test-client-id",
-				"--upstream-identity-provider-type", "activedirectory",
-				"--upstream-identity-provider-flow", "browser_authcode",
-				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
-			},
-			env:       map[string]string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW": "foo"},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW value not recognized for identity provider type "activedirectory": foo (supported values: cli_password, browser_authcode)
-			`),
 		},
 		{
 			name: "login error",
@@ -466,6 +236,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			loginErr:         fmt.Errorf("some login error"),
+			wantOptions:      defaultWantedOptions,
 			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
@@ -484,6 +255,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			conciergeErr:     fmt.Errorf("some concierge error"),
+			wantOptions:      defaultWantedOptions,
 			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
@@ -498,11 +270,12 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			env:              map[string]string{"PINNIPED_DEBUG": "true"},
+			wantOptions:      defaultWantedOptions,
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:260  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:280  No concierge configured, skipping token credential exchange`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:259  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:279  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -526,15 +299,30 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", t.TempDir() + "/credentials.yaml", // must specify --credential-cache or else the cache file on disk causes test pollution
 				"--upstream-identity-provider-name", "some-upstream-name",
 				"--upstream-identity-provider-type", "ldap",
+				"--upstream-identity-provider-flow", "some-flow-type",
 			},
-			env:              map[string]string{"PINNIPED_DEBUG": "true", "PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
+			env: map[string]string{"PINNIPED_DEBUG": "true", "PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
+			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
+				f.EXPECT().WithContext(gomock.Any())
+				f.EXPECT().WithLogger(gomock.Any())
+				f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
+				f.EXPECT().WithSessionCache(gomock.Any())
+				f.EXPECT().WithListenPort(uint16(1234))
+				f.EXPECT().WithSkipBrowserOpen()
+				f.EXPECT().WithSkipListen()
+				f.EXPECT().WithSkipPrintLoginURL()
+				f.EXPECT().WithClient(gomock.Any())
+				f.EXPECT().WithRequestAudience("cluster-1234")
+				f.EXPECT().WithLoginFlow(idpdiscoveryv1alpha1.IDPFlow("some-flow-type"), "--upstream-identity-provider-flow")
+				f.EXPECT().WithUpstreamIdentityProvider("some-upstream-name", "ldap")
+			},
 			wantOptionsCount: 12,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:260  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:270  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:278  Successfully exchanged token for cluster credential.`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:285  caching cluster credential for future use.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:259  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:269  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:277  Successfully exchanged token for cluster credential.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:284  caching cluster credential for future use.`,
 			},
 		},
 	}
@@ -542,6 +330,13 @@ func TestLoginOIDCCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			ctx := plog.AddZapOverridesToContext(context.Background(), t, &buf, nil, clocktesting.NewFakeClock(now))
+
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+			optionsFactory := mockoidcclientoptions.NewMockOIDCClientOptions(ctrl)
+			if tt.wantOptions != nil {
+				tt.wantOptions(optionsFactory)
+			}
 
 			var gotOptions []oidcclient.Option
 			cmd := oidcLoginCommand(oidcLoginCommandDeps{
@@ -578,6 +373,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 						},
 					}, nil
 				},
+				optionsFactory: optionsFactory,
 			})
 			require.NotNil(t, cmd)
 

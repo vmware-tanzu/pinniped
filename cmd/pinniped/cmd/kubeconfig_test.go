@@ -908,7 +908,7 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"},
-					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-oidc-idp", "type": "oidc", "flows": ["flow1", "flow2"]},
 					{"name": "some-github-idp", "type": "github"}
 				]
 			}`),
@@ -928,7 +928,7 @@ func TestGetKubeconfig(t *testing.T) {
 			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
 				return testutil.WantExactErrorString(`Error: multiple Supervisor upstream identity providers were found, ` +
 					`so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified. ` +
-					`Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"},{"name":"some-github-idp","type":"github"}]` + "\n")
+					`Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc","flows":["flow1","flow2"]},{"name":"some-github-idp","type":"github"}]` + "\n")
 			},
 		},
 		{

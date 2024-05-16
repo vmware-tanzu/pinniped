@@ -94,13 +94,6 @@ if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_u
   exit 1
 fi
 
-if [[ "$use_github_upstream" == "yes" ]]; then
-  if [[ "${PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID:-}" == "" || "${PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET:-}" == "" ]]; then
-    echo "Error: Please set environment vars PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID and PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET when using --github flag"
-    exit 1
-  fi
-fi
-
 # Read the env vars output by hack/prepare-for-integration-tests.sh
 source /tmp/integration-test-env
 
@@ -303,7 +296,7 @@ EOF
 fi
 
 if [[ "$use_github_upstream" == "yes" ]]; then
-  # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.  
+  # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: GitHubIdentityProvider
@@ -317,7 +310,7 @@ spec:
       policy: AllGitHubUsers
 EOF
 
-  # Make a Secret for the above GitHubIdentityProvider to describe the GitHub client configured.  
+  # Make a Secret for the above GitHubIdentityProvider to describe the GitHub client configured.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: v1
 kind: Secret
@@ -325,9 +318,15 @@ type: "secrets.pinniped.dev/github-client"
 metadata:
   name: my-github-provider-client-secret
 stringData:
-  clientID: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_ID"
-  clientSecret: "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_GITHUB_CLIENT_SECRET"
+  clientID: "$PINNIPED_TEST_GITHUB_APP_CLIENT_ID"
+  clientSecret: "$PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET"
 EOF
+
+  # Grant the test user some RBAC permissions so we can play with kubectl as that user.
+  # TODO
+#  kubectl create clusterrolebinding github-test-user-can-view --clusterrole view \
+#    --user "$PINNIPED_TEST_GITHUB_TODO_WE_DONT_HAVE_THIS_VARIABLE_YET" \
+#    --dry-run=client --output yaml | kubectl apply -f -
 fi
 
 # Create a CA and TLS serving certificates for the Supervisor's FederationDomain.
@@ -588,6 +587,12 @@ fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "    AD Username: $PINNIPED_TEST_AD_USER_USER_PRINCIPAL_NAME"
   echo "    AD Password: $PINNIPED_TEST_AD_USER_PASSWORD"
+  echo
+fi
+
+if [[ "$use_github_upstream" == "yes" ]]; then
+  echo "    GitHub Username: $PINNIPED_TEST_GITHUB_USER_USERNAME (or use your own account)"
+  echo "    GitHub Password: $PINNIPED_TEST_GITHUB_USER_PASSWORD (also requires OTP, or use your own account)"
   echo
 fi
 

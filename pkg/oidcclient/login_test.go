@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -29,6 +29,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/federationdomain/endpoints/discovery"
+	federationdomainoidc "go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/roundtripper"
@@ -189,6 +193,70 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 		})
 	})
 
+	// Start a test server that returns IDP discovery at some other location
+	emptyIDPDiscoveryMux := http.NewServeMux()
+	emptyIDPDiscoveryServer, emptyIDPDiscoveryServerCA := tlsserver.TestServerIPv4(t, emptyIDPDiscoveryMux, nil)
+	emptyIDPDiscoveryMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&struct {
+			Issuer                 string                                                `json:"issuer"`
+			AuthURL                string                                                `json:"authorization_endpoint"`
+			TokenURL               string                                                `json:"token_endpoint"`
+			JWKSURL                string                                                `json:"jwks_uri"`
+			ResponseModesSupported []string                                              `json:"response_modes_supported,omitempty"`
+			SupervisorDiscovery    idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+		}{
+			Issuer:                 emptyIDPDiscoveryServer.URL,
+			AuthURL:                emptyIDPDiscoveryServer.URL + "/authorize",
+			TokenURL:               emptyIDPDiscoveryServer.URL + "/token",
+			JWKSURL:                emptyIDPDiscoveryServer.URL + "/keys",
+			ResponseModesSupported: []string{},
+			SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+				PinnipedIDPsEndpoint: "https://example.com" + federationdomainoidc.PinnipedIDPsPathV1Alpha1,
+			},
+		})
+	})
+
+	// Start a test server that has invalid IDP discovery
+	invalidIDPDiscoveryMux := http.NewServeMux()
+	invalidIDPDiscoveryServer, invalidIDPDiscoveryServerCA := tlsserver.TestServerIPv4(t, invalidIDPDiscoveryMux, nil)
+	invalidIDPDiscoveryMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&struct {
+			Issuer                 string                                                `json:"issuer"`
+			AuthURL                string                                                `json:"authorization_endpoint"`
+			TokenURL               string                                                `json:"token_endpoint"`
+			JWKSURL                string                                                `json:"jwks_uri"`
+			ResponseModesSupported []string                                              `json:"response_modes_supported,omitempty"`
+			SupervisorDiscovery    idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+		}{
+			Issuer:                 invalidIDPDiscoveryServer.URL,
+			AuthURL:                invalidIDPDiscoveryServer.URL + "/authorize",
+			TokenURL:               invalidIDPDiscoveryServer.URL + "/token",
+			JWKSURL:                invalidIDPDiscoveryServer.URL + "/keys",
+			ResponseModesSupported: []string{},
+			SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+				PinnipedIDPsEndpoint: invalidIDPDiscoveryServer.URL + federationdomainoidc.PinnipedIDPsPathV1Alpha1,
+			},
+		})
+	})
+	invalidIDPDiscoveryMux.HandleFunc(federationdomainoidc.PinnipedIDPsPathV1Alpha1, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("content-type", "application/json")
+		_, _ = fmt.Fprint(w, "not real json")
+	})
+
 	discoveryHandler := func(server *httptest.Server, responseModes []string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
@@ -197,17 +265,55 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			}
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&struct {
-				Issuer                 string   `json:"issuer"`
-				AuthURL                string   `json:"authorization_endpoint"`
-				TokenURL               string   `json:"token_endpoint"`
-				JWKSURL                string   `json:"jwks_uri"`
-				ResponseModesSupported []string `json:"response_modes_supported,omitempty"`
+				Issuer                 string                                                `json:"issuer"`
+				AuthURL                string                                                `json:"authorization_endpoint"`
+				TokenURL               string                                                `json:"token_endpoint"`
+				JWKSURL                string                                                `json:"jwks_uri"`
+				ResponseModesSupported []string                                              `json:"response_modes_supported,omitempty"`
+				SupervisorDiscovery    idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
 			}{
 				Issuer:                 server.URL,
 				AuthURL:                server.URL + "/authorize",
 				TokenURL:               server.URL + "/token",
 				JWKSURL:                server.URL + "/keys",
 				ResponseModesSupported: responseModes,
+				SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+					PinnipedIDPsEndpoint: server.URL + federationdomainoidc.PinnipedIDPsPathV1Alpha1,
+				},
+			})
+		}
+	}
+
+	idpDiscoveryHandler := func(server *httptest.Server) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(idpdiscoveryv1alpha1.IDPDiscoveryResponse{
+				PinnipedIDPs: []idpdiscoveryv1alpha1.PinnipedIDP{
+					{
+						Name: "upstream-idp-name-with-cli-password-flow-first",
+						Type: "upstream-idp-type-with-cli-password-flow-first",
+						Flows: []idpdiscoveryv1alpha1.IDPFlow{
+							idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+							idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+						},
+					},
+					{
+						Name: "upstream-idp-name-with-browser-authcode-flow-first",
+						Type: "upstream-idp-type-with-browser-authcode-flow-first",
+						Flows: []idpdiscoveryv1alpha1.IDPFlow{
+							idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+							idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+						},
+					},
+				},
+				PinnipedSupportedIDPTypes: []idpdiscoveryv1alpha1.PinnipedSupportedIDPType{
+					{Type: "upstream-idp-type-with-cli-password-flow-first"},
+					{Type: "upstream-idp-type-with-browser-authcode-flow-first"},
+				},
 			})
 		}
 	}
@@ -299,13 +405,17 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 	providerMux := http.NewServeMux()
 	successServer, successServerCA := tlsserver.TestServerIPv4(t, providerMux, nil)
 	providerMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(successServer, nil))
+	providerMux.HandleFunc(federationdomainoidc.PinnipedIDPsPathV1Alpha1, idpDiscoveryHandler(successServer))
 	providerMux.HandleFunc("/token", tokenHandler)
 
 	// Start a test server that returns a real discovery document and answers refresh requests, _and_ supports form_mode=post.
 	formPostProviderMux := http.NewServeMux()
 	formPostSuccessServer, formPostSuccessServerCA := tlsserver.TestServerIPv4(t, formPostProviderMux, nil)
 	formPostProviderMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(formPostSuccessServer, []string{"query", "form_post"}))
+	formPostProviderMux.HandleFunc(federationdomainoidc.PinnipedIDPsPathV1Alpha1, idpDiscoveryHandler(formPostSuccessServer))
 	formPostProviderMux.HandleFunc("/token", tokenHandler)
+
+	// TODO: Use a test server without federationdomainoidc.PinnipedIDPsPathV1Alpha1 (e.g. a non-Supervisor server)
 
 	defaultDiscoveryResponse := func(req *http.Request) (*http.Response, error) {
 		// Call the handler function from the test server to calculate the response.
@@ -330,20 +440,22 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			ClientID:             "test-client-id",
 			Scopes:               []string{"test-scope"},
 			RedirectURI:          "http://localhost:0/callback",
-			UpstreamProviderName: "some-upstream-name",
+			UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
 		}
 		t.Cleanup(func() {
 			require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
 		})
 		require.NoError(t, WithSessionCache(cache)(h))
-		require.NoError(t, WithCLISendingCredentials()(h))
-		require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
+		require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
+		require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "upstream-idp-type-with-cli-password-flow-first")(h))
 		require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
 		require.NoError(t, WithClient(&http.Client{
 			Transport: roundtripper.Func(func(req *http.Request) (*http.Response, error) {
 				switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 				case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+					return defaultDiscoveryResponse(req)
+				case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
 					return defaultDiscoveryResponse(req)
 				case "https://" + successServer.Listener.Addr().String() + "/authorize":
 					return authResponse, authError
@@ -374,6 +486,42 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			wantErr: "some option error",
+		},
+		{
+			name: "WithLoginFlow option and deprecated WithCLISendingCredentials option cannot be used together (with CLI flow selected)",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithCLISendingCredentials()(h)) // This is meant to call a deprecated function
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
+					return nil
+				}
+			},
+			wantErr: "do not use deprecated option WithCLISendingCredentials when using option WithLoginFlow",
+		},
+		{
+			name: "WithLoginFlow option and deprecated WithCLISendingCredentials option cannot be used together (with browser flow selected)",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithCLISendingCredentials()(h)) // This is meant to call a deprecated function
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, "flowSource")(h))
+					return nil
+				}
+			},
+			wantErr: "do not use deprecated option WithCLISendingCredentials when using option WithLoginFlow",
+		},
+		{
+			name: "WithLoginFlow option rejects a non-enum value",
+			opt: func(t *testing.T) Option {
+				return WithLoginFlow("this is not one of the enum values", "some-flow-source")
+			},
+			wantErr: "WithLoginFlow error: loginFlow 'this is not one of the enum values' from 'some-flow-source' must be 'cli_password' or 'browser_authcode'",
+		},
+		{
+			name: "WithLoginFlow option will not accept empty string either",
+			opt: func(t *testing.T) Option {
+				return WithLoginFlow("", "other-flow-source")
+			},
+			wantErr: "WithLoginFlow error: loginFlow '' from 'other-flow-source' must be 'cli_password' or 'browser_authcode'",
 		},
 		{
 			name: "error generating state",
@@ -512,7 +660,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -563,7 +711,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -680,6 +828,30 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			issuer:   insecureAuthURLServer.URL,
 			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + insecureAuthURLServer.URL + `"`},
 			wantErr:  `discovered authorize URL from issuer must be an https URL, but had scheme "http" instead`,
+		},
+		{
+			name: "issuer has Pinniped Supervisor's IDP discovery, but from another location",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(buildHTTPClientForPEM(emptyIDPDiscoveryServerCA))(h))
+					return nil
+				}
+			},
+			issuer:   emptyIDPDiscoveryServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + emptyIDPDiscoveryServer.URL + `"`},
+			wantErr:  fmt.Sprintf(`the Pinniped IDP discovery document must always be hosted by the issuer: %q`, emptyIDPDiscoveryServer.URL),
+		},
+		{
+			name: "issuer has Pinniped Supervisor's IDP discovery, but it cannot be unmarshaled",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					require.NoError(t, WithClient(buildHTTPClientForPEM(invalidIDPDiscoveryServerCA))(h))
+					return nil
+				}
+			},
+			issuer:   invalidIDPDiscoveryServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + invalidIDPDiscoveryServer.URL + `"`},
+			wantErr:  "unable to fetch the Pinniped IDP discovery document: could not parse response JSON: invalid character 'o' in literal null (expecting 'u')",
 		},
 		{
 			name: "listen failure and non-tty stdin",
@@ -1219,6 +1391,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
+			// TODO: This test name says that "upstream type" is included in the session cache key but I don't see that below.
 			name:     "upstream name and type are included in authorize request and session cache key if upstream name is provided",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
@@ -1235,7 +1408,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						ClientID:             "test-client-id",
 						Scopes:               []string{"test-scope"},
 						RedirectURI:          "http://localhost:0/callback",
-						UpstreamProviderName: "some-upstream-name",
+						UpstreamProviderName: "upstream-idp-name-with-browser-authcode-flow-first",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1243,7 +1416,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "oidc")(h))
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-browser-authcode-flow-first", "upstream-idp-type-with-browser-authcode-flow-first")(h))
 
 					client := buildHTTPClientForPEM(successServerCA)
 					client.Timeout = 10 * time.Second
@@ -1267,8 +1440,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 							"state":                 []string{"test-state"},
 							"access_type":           []string{"offline"},
 							"client_id":             []string{"test-client-id"},
-							"pinniped_idp_name":     []string{"some-upstream-name"},
-							"pinniped_idp_type":     []string{"oidc"},
+							"pinniped_idp_name":     []string{"upstream-idp-name-with-browser-authcode-flow-first"},
+							"pinniped_idp_type":     []string{"upstream-idp-type-with-browser-authcode-flow-first"},
 						}, actualParams)
 
 						parsedActualURL.RawQuery = ""
@@ -1289,7 +1462,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				regexp.QuoteMeta("    https://127.0.0.1:") +
 				"[0-9]+" + // random port
 				regexp.QuoteMeta("/authorize?access_type=offline&client_id=test-client-id&code_challenge="+testCodeChallenge+
-					"&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=oidc"+
+					"&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=upstream-idp-name-with-browser-authcode-flow-first&pinniped_idp_type=upstream-idp-type-with-browser-authcode-flow-first"+
 					"&redirect_uri=http%3A%2F%2F127.0.0.1%3A") +
 				"[0-9]+" + // random port
 				regexp.QuoteMeta("%2Fcallback&response_type=code&scope=test-scope&state=test-state") +
@@ -1312,7 +1485,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    "error prompting for username: some prompt error",
 		},
 		{
@@ -1327,7 +1500,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    "error prompting for password: some prompt error",
 		},
 		{
@@ -1382,11 +1555,11 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr: `authorization response error: Get "https://` + successServer.Listener.Addr().String() +
 				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=` + testCodeChallenge +
-				`&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&` +
-				`pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code` +
+				`&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=upstream-idp-name-with-cli-password-flow-first&` +
+				`pinniped_idp_type=upstream-idp-type-with-cli-password-flow-first&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code` +
 				`&scope=test-scope&state=test-state": some error fetching authorize endpoint`,
 		},
 		{
@@ -1399,7 +1572,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    `error getting authorization: expected to be redirected, but response status was 502 Bad Gateway`,
 		},
 		{
@@ -1417,7 +1590,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    `login failed with code "access_denied": optional-error-description`,
 		},
 		{
@@ -1435,7 +1608,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    `error getting authorization: redirected to the wrong location: http://other-server.example.com/callback?code=foo&state=test-state`,
 		},
 		{
@@ -1453,7 +1626,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    `login failed with code "access_denied"`,
 		},
 		{
@@ -1469,7 +1642,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    `missing or invalid state parameter in authorization response: http://127.0.0.1:0/callback?code=foo&state=wrong-state`,
 		},
 		{
@@ -1484,7 +1657,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 							fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
 						}},
 					}, nil)
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1497,7 +1670,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantErr:    "could not complete authorization code exchange: some authcode exchange or token validation error",
 		},
 		{
@@ -1507,7 +1680,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1537,7 +1710,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						ClientID:             "test-client-id",
 						Scopes:               []string{"test-scope"},
 						RedirectURI:          "http://localhost:0/callback",
-						UpstreamProviderName: "some-upstream-name",
+						UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1545,8 +1718,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithCLISendingCredentials()(h))
-					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "upstream-idp-type-with-cli-password-flow-first")(h))
 
 					discoveryRequestWasMade := false
 					authorizeRequestWasMade := false
@@ -1560,6 +1733,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
 							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
 							return defaultDiscoveryResponse(req)
 						case "https://" + successServer.Listener.Addr().String() + "/authorize":
 							authorizeRequestWasMade = true
@@ -1575,8 +1750,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 								"access_type":           []string{"offline"},
 								"client_id":             []string{"test-client-id"},
 								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-								"pinniped_idp_name":     []string{"some-upstream-name"},
-								"pinniped_idp_type":     []string{"ldap"},
+								"pinniped_idp_name":     []string{"upstream-idp-name-with-cli-password-flow-first"},
+								"pinniped_idp_type":     []string{"upstream-idp-type-with-cli-password-flow-first"},
 							}, req.URL.Query())
 							return &http.Response{
 								StatusCode: http.StatusFound,
@@ -1596,7 +1771,278 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			},
 			issuer:     successServer.URL,
 			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
+			wantToken:  &testToken,
+		},
+		{
+			name:     "unable to login with unknown IDP, when Supervisor provides its supported IDP types",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.getEnv = func(_ string) string {
+						return "" // asking for any env var returns empty as if it were unset
+					}
+					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Username: ", promptLabel)
+						return "some-upstream-username", nil
+					}
+					h.promptForSecret = func(promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Password: ", promptLabel)
+						return "some-upstream-password", nil
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey(nil), cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token(nil), cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "INVALID UPSTREAM TYPE")(h))
+
+					discoveryRequestWasMade := false
+					idpDiscoveryRequestWasMade := false
+					t.Cleanup(func() {
+						require.True(t, discoveryRequestWasMade, "should have made an discovery request")
+						require.True(t, idpDiscoveryRequestWasMade, "should have made an discovery request")
+					})
+
+					client := buildHTTPClientForPEM(successServerCA)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
+							idpDiscoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
+					return nil
+				}
+			},
+			issuer:   successServer.URL,
+			wantLogs: []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
+			wantErr:  `unable to find upstream identity provider with type "INVALID UPSTREAM TYPE", this Pinniped Supervisor supports IDP types ["upstream-idp-type-with-browser-authcode-flow-first", "upstream-idp-type-with-cli-password-flow-first"]`,
+		},
+		{
+			name:     "successful ldap login with prompts for username and password, using deprecated WithCLISendingCredentials option",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					fakeAuthCode := "test-authcode-value"
+
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(
+								gomock.Any(), fakeAuthCode, pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), "http://127.0.0.1:0/callback").
+							Return(&testToken, nil)
+						return mock
+					}
+
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.getEnv = func(_ string) string {
+						return "" // asking for any env var returns empty as if it were unset
+					}
+					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Username: ", promptLabel)
+						return "some-upstream-username", nil
+					}
+					h.promptForSecret = func(promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Password: ", promptLabel)
+						return "some-upstream-password", nil
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithCLISendingCredentials()(h)) // This is meant to call a deprecated function
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "upstream-idp-type-with-cli-password-flow-first")(h))
+
+					discoveryRequestWasMade := false
+					authorizeRequestWasMade := false
+					t.Cleanup(func() {
+						require.True(t, discoveryRequestWasMade, "should have made an discovery request")
+						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
+					})
+
+					client := buildHTTPClientForPEM(successServerCA)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + "/authorize":
+							authorizeRequestWasMade = true
+							require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+							require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+							require.Equal(t, url.Values{
+								"code_challenge":        []string{testCodeChallenge},
+								"code_challenge_method": []string{"S256"},
+								"response_type":         []string{"code"},
+								"scope":                 []string{"test-scope"},
+								"nonce":                 []string{"test-nonce"},
+								"state":                 []string{"test-state"},
+								"access_type":           []string{"offline"},
+								"client_id":             []string{"test-client-id"},
+								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+								"pinniped_idp_name":     []string{"upstream-idp-name-with-cli-password-flow-first"},
+								"pinniped_idp_type":     []string{"upstream-idp-type-with-cli-password-flow-first"},
+							}, req.URL.Query())
+							return &http.Response{
+								StatusCode: http.StatusFound,
+								Header: http.Header{"Location": []string{
+									fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+								}},
+							}, nil
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
+					return nil
+				}
+			},
+			issuer:     successServer.URL,
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
+			wantToken:  &testToken,
+		},
+		{
+			name:     "successful ldap login with prompts for username and password, infers flow when not specified",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					fakeAuthCode := "test-authcode-value"
+
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(
+								gomock.Any(), fakeAuthCode, pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), "http://127.0.0.1:0/callback").
+							Return(&testToken, nil)
+						return mock
+					}
+
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+					h.getEnv = func(_ string) string {
+						return "" // asking for any env var returns empty as if it were unset
+					}
+					h.promptForValue = func(_ context.Context, promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Username: ", promptLabel)
+						return "some-upstream-username", nil
+					}
+					h.promptForSecret = func(promptLabel string, _ io.Writer) (string, error) {
+						require.Equal(t, "Password: ", promptLabel)
+						return "some-upstream-password", nil
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:               successServer.URL,
+						ClientID:             "test-client-id",
+						Scopes:               []string{"test-scope"},
+						RedirectURI:          "http://localhost:0/callback",
+						UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "upstream-idp-type-with-cli-password-flow-first")(h))
+
+					discoveryRequestWasMade := false
+					idpDiscoveryRequestWasMade := false
+					authorizeRequestWasMade := false
+					t.Cleanup(func() {
+						require.True(t, discoveryRequestWasMade, "should have made an discovery request")
+						require.True(t, idpDiscoveryRequestWasMade, "should have made an IDP discovery request")
+						require.True(t, authorizeRequestWasMade, "should have made an authorize request")
+					})
+
+					client := buildHTTPClientForPEM(successServerCA)
+					client.Transport = roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
+						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
+							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
+							idpDiscoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + "/authorize":
+							authorizeRequestWasMade = true
+							require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+							require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
+							require.Equal(t, url.Values{
+								"code_challenge":        []string{testCodeChallenge},
+								"code_challenge_method": []string{"S256"},
+								"response_type":         []string{"code"},
+								"scope":                 []string{"test-scope"},
+								"nonce":                 []string{"test-nonce"},
+								"state":                 []string{"test-state"},
+								"access_type":           []string{"offline"},
+								"client_id":             []string{"test-client-id"},
+								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
+								"pinniped_idp_name":     []string{"upstream-idp-name-with-cli-password-flow-first"},
+								"pinniped_idp_type":     []string{"upstream-idp-type-with-cli-password-flow-first"},
+							}, req.URL.Query())
+							return &http.Response{
+								StatusCode: http.StatusFound,
+								Header: http.Header{"Location": []string{
+									fmt.Sprintf("http://127.0.0.1:0/callback?code=%s&state=test-state", fakeAuthCode),
+								}},
+							}, nil
+						default:
+							// Note that "/token" requests should not be made. They are mocked by mocking calls to ExchangeAuthcodeAndValidateTokens().
+							require.FailNow(t, fmt.Sprintf("saw unexpected http call from the CLI: %s", req.URL.String()))
+							return nil, nil
+						}
+					})
+					require.NoError(t, WithClient(client)(h))
+					return nil
+				}
+			},
+			issuer:     successServer.URL,
+			wantLogs:   []string{`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`},
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantToken:  &testToken,
 		},
 		{
@@ -1606,7 +2052,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1650,7 +2096,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithCLISendingCredentials()(h))
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
 
 					discoveryRequestWasMade := false
 					authorizeRequestWasMade := false
@@ -1664,6 +2110,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
 							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
 							return defaultDiscoveryResponse(req)
 						case "https://" + successServer.Listener.Addr().String() + "/authorize":
 							authorizeRequestWasMade = true
@@ -1711,7 +2159,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				return func(h *handlerState) error {
 					fakeAuthCode := "test-authcode-value"
 
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(
@@ -1748,7 +2196,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						ClientID:             "test-client-id",
 						Scopes:               []string{"test-scope"},
 						RedirectURI:          "http://localhost:0/callback",
-						UpstreamProviderName: "some-upstream-name",
+						UpstreamProviderName: "upstream-idp-name-with-cli-password-flow-first",
 					}
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
@@ -1756,8 +2204,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithCLISendingCredentials()(h))
-					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
+					require.NoError(t, WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "flowSource")(h))
+					require.NoError(t, WithUpstreamIdentityProvider("upstream-idp-name-with-cli-password-flow-first", "upstream-idp-type-with-cli-password-flow-first")(h))
 
 					discoveryRequestWasMade := false
 					authorizeRequestWasMade := false
@@ -1771,6 +2219,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						switch req.URL.Scheme + "://" + req.URL.Host + req.URL.Path {
 						case "https://" + successServer.Listener.Addr().String() + "/.well-known/openid-configuration":
 							discoveryRequestWasMade = true
+							return defaultDiscoveryResponse(req)
+						case "https://" + successServer.Listener.Addr().String() + federationdomainoidc.PinnipedIDPsPathV1Alpha1:
 							return defaultDiscoveryResponse(req)
 						case "https://" + successServer.Listener.Addr().String() + "/authorize":
 							authorizeRequestWasMade = true
@@ -1786,8 +2236,8 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 								"access_type":           []string{"offline"},
 								"client_id":             []string{"test-client-id"},
 								"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-								"pinniped_idp_name":     []string{"some-upstream-name"},
-								"pinniped_idp_type":     []string{"ldap"},
+								"pinniped_idp_name":     []string{"upstream-idp-name-with-cli-password-flow-first"},
+								"pinniped_idp_type":     []string{"upstream-idp-type-with-cli-password-flow-first"},
 							}, req.URL.Query())
 							return &http.Response{
 								StatusCode: http.StatusSeeOther,
@@ -1811,7 +2261,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				`"level"=4 "msg"="Pinniped: Read username from environment variable"  "name"="PINNIPED_USERNAME"`,
 				`"level"=4 "msg"="Pinniped: Read password from environment variable"  "name"="PINNIPED_PASSWORD"`,
 			},
-			wantStdErr: "^\nLog in to some-upstream-name\n\n$",
+			wantStdErr: "^\nLog in to upstream-idp-name-with-cli-password-flow-first\n\n$",
 			wantToken:  &testToken,
 		},
 		{
@@ -2153,10 +2603,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-audience")(h))
 
-					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+					h.validateIDToken = func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 						require.Equal(t, "test-audience", audience)
 						require.Equal(t, "test-id-token-with-requested-audience", token)
-						return &oidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
+						return &coreosoidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
 					}
 					return nil
 				}
@@ -2196,7 +2646,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("request-this-test-audience")(h))
 
-					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+					h.validateIDToken = func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 						require.FailNow(t, "should not have performed a token exchange because the cached ID token already had the requested audience")
 						return nil, nil
 					}
@@ -2204,7 +2654,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				}
 			},
 			wantLogs: []string{`"level"=4 "msg"="Pinniped: Found unexpired cached token."  "type"="id_token"`},
-			wantToken: &oidctypes.Token{ // the same tokens that were pulled from from the cache
+			wantToken: &oidctypes.Token{ // the same tokens that were pulled from the cache
 				AccessToken: testToken.AccessToken,
 				IDToken: &oidctypes.IDToken{
 					Token:  testToken.IDToken.Token,
@@ -2248,7 +2698,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("test-custom-request-audience")(h))
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -2310,10 +2760,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithRequestAudience("request-this-test-audience")(h))
 
-					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+					h.validateIDToken = func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 						require.Equal(t, "request-this-test-audience", audience)
 						require.Equal(t, "test-id-token-with-requested-audience", token)
-						return &oidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
+						return &coreosoidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
 					}
 					return nil
 				}
@@ -2358,7 +2808,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 					})
 					h.cache = cache
 
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateTokenAndMergeWithUserInfo(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce(""), true, false).
@@ -2374,10 +2824,10 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 
 					require.NoError(t, WithRequestAudience("test-audience")(h))
 
-					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+					h.validateIDToken = func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 						require.Equal(t, "test-audience", audience)
 						require.Equal(t, "test-id-token-with-requested-audience", token)
-						return &oidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
+						return &coreosoidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
 					}
 					return nil
 				}
@@ -2534,7 +2984,7 @@ func TestHandlePasteCallback(t *testing.T) {
 						return "invalid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2561,7 +3011,7 @@ func TestHandlePasteCallback(t *testing.T) {
 						return "valid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2586,7 +3036,7 @@ func TestHandlePasteCallback(t *testing.T) {
 					h.useFormPost = true
 					h.promptForValue = nil // shouldn't get called, so can be nil
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2821,7 +3271,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2845,7 +3295,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2870,7 +3320,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -2898,7 +3348,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
-					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *coreosoidc.Provider, _ *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
@@ -3016,4 +3466,401 @@ func (m hasAccessTokenMatcher) String() string {
 
 func HasAccessToken(expected string) gomock.Matcher {
 	return hasAccessTokenMatcher{expected: expected}
+}
+
+func TestMaybePerformPinnipedSupervisorIDPDiscovery(t *testing.T) {
+	withContextAndProvider := func(t *testing.T, issuerURL string) Option {
+		return func(h *handlerState) error {
+			t.Helper()
+
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+
+			h.ctx = cancelCtx
+
+			cancelCtx = coreosoidc.ClientContext(cancelCtx, h.httpClient)
+			provider, err := coreosoidc.NewProvider(cancelCtx, issuerURL)
+			require.NoError(t, err)
+			h.provider = provider
+			return nil
+		}
+	}
+
+	t.Run("with valid IDP discovery information, returns the information", func(t *testing.T) {
+		issuerMux := http.NewServeMux()
+		issuerServer, issuerServerCA := tlsserver.TestServerIPv4(t, issuerMux, nil)
+
+		oidcDiscoveryMetadata := discovery.Metadata{
+			Issuer: issuerServer.URL,
+			OIDCDiscoveryResponse: idpdiscoveryv1alpha1.OIDCDiscoveryResponse{
+				SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+					PinnipedIDPsEndpoint: issuerServer.URL + "/some-path-for-pinnipeds-idp-discovery",
+				},
+			},
+		}
+
+		idpDiscoveryMetadata := &idpdiscoveryv1alpha1.IDPDiscoveryResponse{
+			PinnipedIDPs: []idpdiscoveryv1alpha1.PinnipedIDP{
+				{
+					Name:  "some-idp-name",
+					Type:  "some-idp-type",
+					Flows: []idpdiscoveryv1alpha1.IDPFlow{"some-flow", "some-other-flow"},
+				},
+			},
+			PinnipedSupportedIDPTypes: []idpdiscoveryv1alpha1.PinnipedSupportedIDPType{
+				{Type: "type-alpha"},
+				{Type: "type-beta"},
+				{Type: "type-gamma"},
+			},
+		}
+
+		issuerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			jsonBytes, err := json.Marshal(&oidcDiscoveryMetadata)
+			require.NoError(t, err)
+			_, err = w.Write(jsonBytes)
+			require.NoError(t, err)
+		})
+
+		issuerMux.HandleFunc("/some-path-for-pinnipeds-idp-discovery", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			jsonBytes, err := json.Marshal(idpDiscoveryMetadata)
+			require.NoError(t, err)
+			_, err = w.Write(jsonBytes)
+			require.NoError(t, err)
+		})
+
+		var h handlerState
+		require.NoError(t, WithClient(buildHTTPClientForPEM(issuerServerCA))(&h))
+		require.NoError(t, withContextAndProvider(t, issuerServer.URL)(&h))
+
+		actualError := h.maybePerformPinnipedSupervisorIDPDiscovery()
+		require.NoError(t, actualError)
+		require.Equal(t, idpDiscoveryMetadata, h.idpDiscovery)
+	})
+
+	t.Run("when IDP discovery returns 500, return an error", func(t *testing.T) {
+		issuerMux := http.NewServeMux()
+		issuerServer, issuerServerCA := tlsserver.TestServerIPv4(t, issuerMux, nil)
+
+		oidcDiscoveryMetadata := discovery.Metadata{
+			Issuer: issuerServer.URL,
+			OIDCDiscoveryResponse: idpdiscoveryv1alpha1.OIDCDiscoveryResponse{
+				SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+					PinnipedIDPsEndpoint: issuerServer.URL + "/some-path-for-pinnipeds-idp-discovery",
+				},
+			},
+		}
+
+		issuerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			jsonBytes, err := json.Marshal(&oidcDiscoveryMetadata)
+			require.NoError(t, err)
+			_, err = w.Write(jsonBytes)
+			require.NoError(t, err)
+		})
+
+		issuerMux.HandleFunc("/some-path-for-pinnipeds-idp-discovery", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+
+		var h handlerState
+		require.NoError(t, WithClient(buildHTTPClientForPEM(issuerServerCA))(&h))
+		require.NoError(t, withContextAndProvider(t, issuerServer.URL)(&h))
+
+		actualError := h.maybePerformPinnipedSupervisorIDPDiscovery()
+		require.EqualError(t, actualError, "unable to fetch IDP discovery data from issuer: unexpected http response status: 500 Internal Server Error")
+		require.Empty(t, h.idpDiscovery)
+	})
+
+	t.Run("when IDP discovery returns garbled data, return an error", func(t *testing.T) {
+		issuerMux := http.NewServeMux()
+		issuerServer, issuerServerCA := tlsserver.TestServerIPv4(t, issuerMux, nil)
+
+		oidcDiscoveryMetadata := discovery.Metadata{
+			Issuer: issuerServer.URL,
+			OIDCDiscoveryResponse: idpdiscoveryv1alpha1.OIDCDiscoveryResponse{
+				SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+					PinnipedIDPsEndpoint: issuerServer.URL + "/some-path-for-pinnipeds-idp-discovery",
+				},
+			},
+		}
+
+		issuerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			jsonBytes, err := json.Marshal(&oidcDiscoveryMetadata)
+			require.NoError(t, err)
+			_, err = w.Write(jsonBytes)
+			require.NoError(t, err)
+		})
+
+		issuerMux.HandleFunc("/some-path-for-pinnipeds-idp-discovery", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			_, err := w.Write([]byte("foo"))
+			require.NoError(t, err)
+		})
+
+		var h handlerState
+		require.NoError(t, WithClient(buildHTTPClientForPEM(issuerServerCA))(&h))
+		require.NoError(t, withContextAndProvider(t, issuerServer.URL)(&h))
+
+		actualError := h.maybePerformPinnipedSupervisorIDPDiscovery()
+		require.EqualError(t, actualError, "unable to fetch the Pinniped IDP discovery document: could not parse response JSON: invalid character 'o' in literal false (expecting 'a')")
+		require.Empty(t, h.idpDiscovery)
+	})
+
+	t.Run("when http client cannot perform request, return an error", func(t *testing.T) {
+		issuerMux := http.NewServeMux()
+		issuerServer, issuerServerCA := tlsserver.TestServerIPv4(t, issuerMux, nil)
+
+		oidcDiscoveryMetadata := discovery.Metadata{
+			Issuer: issuerServer.URL,
+			OIDCDiscoveryResponse: idpdiscoveryv1alpha1.OIDCDiscoveryResponse{
+				SupervisorDiscovery: idpdiscoveryv1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+					PinnipedIDPsEndpoint: issuerServer.URL + "/some-path-for-pinnipeds-idp-discovery",
+				},
+			},
+		}
+
+		issuerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			jsonBytes, err := json.Marshal(&oidcDiscoveryMetadata)
+			require.NoError(t, err)
+			_, err = w.Write(jsonBytes)
+			require.NoError(t, err)
+		})
+
+		issuerMux.HandleFunc("/some-path-for-pinnipeds-idp-discovery", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Location", "foo")
+			w.WriteHeader(http.StatusSeeOther)
+		})
+
+		var h handlerState
+		require.NoError(t, WithClient(buildHTTPClientForPEM(issuerServerCA))(&h))
+		require.NoError(t, withContextAndProvider(t, issuerServer.URL)(&h))
+		h.httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("redirect error")
+		}
+
+		actualError := h.maybePerformPinnipedSupervisorIDPDiscovery()
+		require.EqualError(t, actualError, `IDP Discovery response error: Get "foo": redirect error`)
+		require.Empty(t, h.idpDiscovery)
+	})
+
+	tests := []struct {
+		name              string
+		pinnipedDiscovery string
+		wantErr           string
+	}{
+		{
+			name: "when not a Supervisor, returns nothing",
+		},
+		{
+			name:              "when the Supervisor returns empty discovery information, returns nothing",
+			pinnipedDiscovery: `{"pinniped_identity_providers_endpoint":""}`,
+		},
+		{
+			name:              "when the Supervisor returns invalid discovery information, returns an error",
+			pinnipedDiscovery: `"not-valid-discovery-claim"`,
+			wantErr:           `could not decode the Pinniped IDP discovery document URL in OIDC discovery from "FAKE-ISSUER": json: cannot unmarshal string into Go struct field OIDCDiscoveryResponse.discovery.supervisor.pinniped.dev/v1alpha1 of type v1alpha1.OIDCDiscoveryResponseIDPEndpoint`,
+		},
+		{
+			name:              "when the Supervisor has invalid pinniped_identity_providers_endpoint, returns an error",
+			pinnipedDiscovery: `{"pinniped_identity_providers_endpoint":"asdf"}`,
+			wantErr:           `the Pinniped IDP discovery document must always be hosted by the issuer: "FAKE-ISSUER"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			issuerMux := http.NewServeMux()
+			issuerServer, issuerServerCA := tlsserver.TestServerIPv4(t, issuerMux, nil)
+
+			issuerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
+				_, _ = fmt.Fprintf(w, `{"issuer": %q`, issuerServer.URL)
+				if len(test.pinnipedDiscovery) > 0 {
+					_, _ = fmt.Fprintf(w, `, "discovery.supervisor.pinniped.dev/v1alpha1": %s`, test.pinnipedDiscovery)
+				}
+				_, _ = fmt.Fprint(w, `}`)
+			})
+
+			var h handlerState
+			h.issuer = "FAKE-ISSUER"
+			require.NoError(t, WithClient(buildHTTPClientForPEM(issuerServerCA))(&h))
+			require.NoError(t, withContextAndProvider(t, issuerServer.URL)(&h))
+
+			actualError := h.maybePerformPinnipedSupervisorIDPDiscovery()
+
+			if test.wantErr != "" {
+				require.EqualError(t, actualError, test.wantErr)
+				return
+			}
+
+			require.NoError(t, actualError)
+		})
+	}
+}
+
+func TestMaybePerformPinnipedSupervisorValidations(t *testing.T) {
+	withIDPDiscovery := func(idpDiscovery idpdiscoveryv1alpha1.IDPDiscoveryResponse) Option {
+		return func(h *handlerState) error {
+			h.idpDiscovery = &idpDiscovery
+			return nil
+		}
+	}
+
+	withIssuer := func(issuer string) Option {
+		return func(h *handlerState) error {
+			h.issuer = issuer
+			return nil
+		}
+	}
+
+	someIDPDiscoveryResponse := idpdiscoveryv1alpha1.IDPDiscoveryResponse{
+		PinnipedIDPs: []idpdiscoveryv1alpha1.PinnipedIDP{
+			{
+				Name: "some-upstream-name",
+				Type: "some-upstream-type",
+				Flows: []idpdiscoveryv1alpha1.IDPFlow{
+					idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+					idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+				},
+			},
+			{
+				Name: "idp-name-with-cli-password-only-flow",
+				Type: "idp-type-with-cli-password-only-flow",
+				Flows: []idpdiscoveryv1alpha1.IDPFlow{
+					idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+				},
+			},
+			{
+				Name: "idp-name-with-no-flows",
+				Type: "idp-type-with-no-flows",
+			},
+		},
+		PinnipedSupportedIDPTypes: []idpdiscoveryv1alpha1.PinnipedSupportedIDPType{
+			{Type: "some-upstream-type"},
+			{Type: "idp-type-with-cli-password-only-flow"},
+			{Type: "idp-type-with-no-flows"},
+			{Type: "other-supported-type-with-no-idp"},
+		},
+	}
+	stringVersionOfSomeIDPDiscoveryResponseIDPs := `[{"name":"some-upstream-name","type":"some-upstream-type","flows":["cli_password","browser_authcode"]},{"name":"idp-name-with-cli-password-only-flow","type":"idp-type-with-cli-password-only-flow","flows":["cli_password"]},{"name":"idp-name-with-no-flows","type":"idp-type-with-no-flows"}]`
+
+	tests := []struct {
+		name                string
+		options             []Option
+		wantAuthCodeOptions []oauth2.AuthCodeOption
+		wantLoginFlow       idpdiscoveryv1alpha1.IDPFlow
+		wantErr             string
+	}{
+		{
+			name: "without IDP name, return the specified login flow, nil options, and no error",
+			options: []Option{
+				WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowCLIPassword, "someSource"),
+			},
+			wantLoginFlow:       idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+			wantAuthCodeOptions: nil,
+		},
+		{
+			name: "with IDP name and IDP type, returns the right AuthCodeOptions and infers the loginFlow",
+			options: []Option{
+				WithUpstreamIdentityProvider("some-upstream-name", "some-upstream-type"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantAuthCodeOptions: []oauth2.AuthCodeOption{
+				oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPNameParamName, "some-upstream-name"),
+				oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPTypeParamName, "some-upstream-type"),
+			},
+			wantLoginFlow: idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+		},
+		{
+			name: "when the Supervisor lists pinniped_supported_identity_provider_types and the given upstreamType is not found, return a specific error",
+			options: []Option{
+				WithUpstreamIdentityProvider("some-upstream-name", "NOT_A_DISCOVERED_TYPE"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantErr: `unable to find upstream identity provider with type "NOT_A_DISCOVERED_TYPE", this Pinniped Supervisor supports IDP types ["idp-type-with-cli-password-only-flow", "idp-type-with-no-flows", "other-supported-type-with-no-idp", "some-upstream-type"]`,
+		},
+		{
+			name: "when the Supervisor does not list pinniped_supported_identity_provider_types (legacy behavior) and the given upstreamType is not found, return a generic error",
+			options: []Option{
+				WithUpstreamIdentityProvider("some-upstream-name", "NOT_A_DISCOVERED_TYPE"),
+				withIDPDiscovery(func() idpdiscoveryv1alpha1.IDPDiscoveryResponse {
+					temp := someIDPDiscoveryResponse
+					temp.PinnipedSupportedIDPTypes = nil
+					return temp
+				}()),
+			},
+			wantErr: `unable to find upstream identity provider with name "some-upstream-name" and type "NOT_A_DISCOVERED_TYPE". Found these providers: ` +
+				stringVersionOfSomeIDPDiscoveryResponseIDPs,
+		},
+		{
+			name: "when the Supervisor does not have an IDP that matches by name, return an error",
+			options: []Option{
+				WithUpstreamIdentityProvider("INVALID-upstream-name", "some-upstream-type"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantErr: `unable to find upstream identity provider with name "INVALID-upstream-name" and type "some-upstream-type". Found these providers: ` +
+				stringVersionOfSomeIDPDiscoveryResponseIDPs,
+		},
+		{
+			name: "when the Supervisor does not have an IDP that matches by type, return an error",
+			options: []Option{
+				WithUpstreamIdentityProvider("some-upstream-name", "other-supported-type-with-no-idp"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantErr: `unable to find upstream identity provider with name "some-upstream-name" and type "other-supported-type-with-no-idp". Found these providers: ` +
+				stringVersionOfSomeIDPDiscoveryResponseIDPs,
+		},
+		{
+			name: "when the Supervisor does not have an IDP that matches by flow, return an error",
+			options: []Option{
+				WithUpstreamIdentityProvider("idp-name-with-no-flows", "idp-type-with-no-flows"),
+				WithLoginFlow(idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, "flowSource"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantErr: `unable to find upstream identity provider with name "idp-name-with-no-flows" and type "idp-type-with-no-flows" and flow "browser_authcode". Found these providers: ` +
+				stringVersionOfSomeIDPDiscoveryResponseIDPs,
+		},
+		{
+			name: "with IDP name and type, without IDP flow, when the Supervisor says that IDP has no flows, return an error",
+			options: []Option{
+				WithUpstreamIdentityProvider("idp-name-with-no-flows", "idp-type-with-no-flows"),
+				withIDPDiscovery(someIDPDiscoveryResponse),
+			},
+			wantErr: `unable to infer flow for upstream identity provider with name "idp-name-with-no-flows" and type "idp-type-with-no-flows" because there were no flows discovered for that provider`,
+		},
+		{
+			name: "with IDP name, when issuer does not have Pinniped-style IDP discovery, return error",
+			options: []Option{
+				WithUpstreamIdentityProvider("some-upstream-name", "some-upstream-type"),
+				withIssuer("https://fake-issuer.com"),
+			},
+			wantErr: `upstream identity provider name "some-upstream-name" was specified, but OIDC issuer "https://fake-issuer.com" does not offer Pinniped-style IDP discovery, so it does not appear to be a Pinniped Supervisor; specifying an upstream identity provider name is only meant to be used with Pinniped Supervisors`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var h handlerState
+
+			for _, option := range test.options {
+				require.NoError(t, option(&h))
+			}
+
+			actualLoginFlow, actualAuthCodeOptions, actualError := h.maybePerformPinnipedSupervisorValidations()
+
+			if test.wantErr != "" {
+				require.EqualError(t, actualError, test.wantErr)
+				return
+			}
+
+			require.NoError(t, actualError)
+			require.Equal(t, test.wantAuthCodeOptions, actualAuthCodeOptions)
+			require.Equal(t, test.wantLoginFlow, actualLoginFlow)
+		})
+	}
 }

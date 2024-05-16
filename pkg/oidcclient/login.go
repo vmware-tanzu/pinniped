@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,8 +28,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/strings/slices"
 
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -88,8 +89,9 @@ type handlerState struct {
 
 	// Tracking the usage of some other functional options.
 	upstreamIdentityProviderName string
-	upstreamIdentityProviderType string
+	upstreamIdentityProviderType idpdiscoveryv1alpha1.IDPType
 	cliToSendCredentials         bool
+	loginFlow                    idpdiscoveryv1alpha1.IDPFlow
 	skipBrowser                  bool
 	skipPrintLoginURL            bool
 	requestedAudience            string
@@ -101,6 +103,7 @@ type handlerState struct {
 
 	// Generated parameters of a login flow.
 	provider     *coreosoidc.Provider
+	idpDiscovery *idpdiscoveryv1alpha1.IDPDiscoveryResponse
 	oauth2Config *oauth2.Config
 	useFormPost  bool
 	state        state.State
@@ -243,9 +246,44 @@ func WithRequestAudience(audience string) Option {
 // and by OIDCIdentityProviders which optionally enable the resource owner password credentials grant flow.
 // This should never be used with non-Supervisor issuers because it will send the user's password to the authorization
 // endpoint as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.
+//
+// Deprecated: this option will be removed in a future version of Pinniped. See the WithLoginFlow() option instead.
+// If this option is used along with the WithLoginFlow() option, it will cause an error.
 func WithCLISendingCredentials() Option {
 	return func(h *handlerState) error {
 		h.cliToSendCredentials = true
+		return nil
+	}
+}
+
+// WithLoginFlow chooses the login flow.
+// When the argument is equal to idpdiscoveryv1alpha1.IDPFlowCLIPassword, it causes the login flow to use CLI-based
+// prompts for username and password and causes the call to the Issuer's authorize endpoint to be made directly (no web
+// browser) with the username and password on custom HTTP headers. This is only intended to be used when the issuer is a
+// Pinniped Supervisor and the upstream identity provider type supports this style of authentication. Currently, this is
+// supported by LDAPIdentityProviders, ActiveDirectoryIdentityProviders, and by OIDCIdentityProviders which optionally
+// enable the resource owner password credentials grant flow. This should never be used with non-Supervisor issuers
+// because it will send the user's password to the authorization endpoint as a custom header, which would be ignored but
+// could potentially get logged somewhere by the issuer.
+// When the argument is equal to idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, it will attempt to open a web browser
+// and perform the OIDC authcode flow.
+// When not used, the default when the issuer is a Pinniped Supervisor will be determined automatically,
+// and the default for non-Supervisor issuers will be the browser authcode flow.
+func WithLoginFlow(loginFlow idpdiscoveryv1alpha1.IDPFlow, flowSource string) Option {
+	return func(h *handlerState) error {
+		switch loginFlow {
+		case idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+			idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
+		default:
+			return fmt.Errorf(
+				"WithLoginFlow error: loginFlow '%s' from '%s' must be '%s' or '%s'",
+				loginFlow,
+				flowSource,
+				idpdiscoveryv1alpha1.IDPFlowCLIPassword,
+				idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+			)
+		}
+		h.loginFlow = loginFlow
 		return nil
 	}
 }
@@ -257,7 +295,10 @@ func WithCLISendingCredentials() Option {
 func WithUpstreamIdentityProvider(upstreamName, upstreamType string) Option {
 	return func(h *handlerState) error {
 		h.upstreamIdentityProviderName = upstreamName
-		h.upstreamIdentityProviderType = upstreamType
+
+		// Do not perform validation on this cast.
+		// If possible, dynamic validation against a Pinniped Supervisor's supported IDP types will be performed.
+		h.upstreamIdentityProviderType = idpdiscoveryv1alpha1.IDPType(upstreamType)
 		return nil
 	}
 }
@@ -302,6 +343,13 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		if err := opt(&h); err != nil {
 			return nil, err
 		}
+	}
+
+	if h.cliToSendCredentials {
+		if h.loginFlow != "" {
+			return nil, fmt.Errorf("do not use deprecated option WithCLISendingCredentials when using option WithLoginFlow")
+		}
+		h.loginFlow = idpdiscoveryv1alpha1.IDPFlowCLIPassword
 	}
 
 	// Copy the configured HTTP client to set a request timeout (the Go default client has no timeout configured).
@@ -426,19 +474,24 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		h.pkce.Challenge(),
 		h.pkce.Method(),
 	}
-	if h.upstreamIdentityProviderName != "" {
-		authorizeOptions = append(authorizeOptions,
-			oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPNameParamName, h.upstreamIdentityProviderName),
-		)
-		authorizeOptions = append(authorizeOptions,
-			oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPTypeParamName, h.upstreamIdentityProviderType),
-		)
+
+	loginFlow, pinnipedSupervisorOptions, err := h.maybePerformPinnipedSupervisorValidations()
+	if err != nil {
+		return nil, err
 	}
+	h.loginFlow = loginFlow
+	authorizeOptions = append(authorizeOptions, pinnipedSupervisorOptions...)
+
+	// Preserve the legacy behavior where browser-based auth is preferred
+	authFunc := h.webBrowserBasedAuth
 
 	// Choose the appropriate authorization and authcode exchange strategy.
-	var authFunc = h.webBrowserBasedAuth
-	if h.cliToSendCredentials {
+	// Use a switch so that lint will make sure we have full coverage.
+	switch h.loginFlow {
+	case idpdiscoveryv1alpha1.IDPFlowCLIPassword:
 		authFunc = h.cliBasedAuth
+	case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
+		// NOOP
 	}
 
 	// Perform the authorize request and authcode exchange to get back OIDC tokens.
@@ -450,6 +503,108 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	}
 
 	return token, err
+}
+
+// maybePerformPinnipedSupervisorValidations will return the flow and some authorization options.
+// When the IDP name is unset, it will assume that the server is not a Pinniped Supervisor, and will return immediately.
+// Otherwise, when the flow is unset, it will infer the flow from the server, or when the flow is set, it will return that flow unchanged.
+// It will also perform additional validations if the issuer is a Pinniped Supervisor.
+func (h *handlerState) maybePerformPinnipedSupervisorValidations() (idpdiscoveryv1alpha1.IDPFlow, []oauth2.AuthCodeOption, error) {
+	loginFlow := h.loginFlow
+
+	if h.upstreamIdentityProviderName == "" {
+		return loginFlow, nil, nil
+	}
+
+	if h.idpDiscovery == nil {
+		return "", nil, fmt.Errorf("upstream identity provider name %q was specified, but OIDC issuer %q does not "+
+			"offer Pinniped-style IDP discovery, so it does not appear to be a Pinniped Supervisor; "+
+			"specifying an upstream identity provider name is only meant to be used with Pinniped Supervisors",
+			h.upstreamIdentityProviderName, h.issuer)
+	}
+
+	// Legacy Pinniped Supervisors do not provide this information. Only run this validation when the information was provided.
+	if len(h.idpDiscovery.PinnipedSupportedIDPTypes) > 0 {
+		var supportedIDPTypes []idpdiscoveryv1alpha1.IDPType
+		for _, idpType := range h.idpDiscovery.PinnipedSupportedIDPTypes {
+			supportedIDPTypes = append(supportedIDPTypes, idpType.Type)
+		}
+
+		// Sort by name for repeatability
+		slices.Sort(supportedIDPTypes)
+
+		if !slices.Contains(supportedIDPTypes, h.upstreamIdentityProviderType) {
+			convertIDPListToQuotedStringList := func() []string {
+				var temp []string
+				for _, idpType := range supportedIDPTypes {
+					temp = append(temp, fmt.Sprintf("%q", idpType))
+				}
+				return temp
+			}
+			return "", nil, fmt.Errorf("unable to find upstream identity provider with type %q, this Pinniped Supervisor supports IDP types [%s]",
+				h.upstreamIdentityProviderType,
+				strings.Join(convertIDPListToQuotedStringList(), ", "))
+		}
+	}
+
+	// Find the IDP from discovery by the specified name, type, and maybe flow.
+	foundIDPIndex := slices.IndexFunc(h.idpDiscovery.PinnipedIDPs, func(idp idpdiscoveryv1alpha1.PinnipedIDP) bool {
+		return idp.Name == h.upstreamIdentityProviderName &&
+			idp.Type == h.upstreamIdentityProviderType &&
+			(loginFlow == "" || slices.Contains(idp.Flows, loginFlow))
+	})
+
+	// If the IDP was not found...
+	if foundIDPIndex < 0 {
+		pinnipedIDPsString, err := json.Marshal(h.idpDiscovery.PinnipedIDPs)
+		if err != nil {
+			// This should never happen. Not unit tested.
+			return "", nil, fmt.Errorf("error marshalling IDP discovery response: %w", err)
+		}
+		if loginFlow == "" {
+			return "", nil, fmt.Errorf(
+				"unable to find upstream identity provider with name %q and type %q. Found these providers: %s",
+				h.upstreamIdentityProviderName,
+				h.upstreamIdentityProviderType,
+				pinnipedIDPsString,
+			)
+		}
+		return "", nil, fmt.Errorf(
+			"unable to find upstream identity provider with name %q and type %q and flow %q. Found these providers: %s",
+			h.upstreamIdentityProviderName,
+			h.upstreamIdentityProviderType,
+			loginFlow,
+			pinnipedIDPsString,
+		)
+	}
+
+	// If the caller has not requested a specific flow, but has requested a specific IDP, infer the authentication flow
+	// from the found IDP's discovery information.
+	if loginFlow == "" {
+		foundIDP := h.idpDiscovery.PinnipedIDPs[foundIDPIndex]
+		if len(foundIDP.Flows) == 0 {
+			// Note that this should not really happen because the Supervisor's IDP discovery endpoint has always listed flows.
+			return "", nil, fmt.Errorf("unable to infer flow for upstream identity provider with name %q and type %q "+
+				"because there were no flows discovered for that provider",
+				h.upstreamIdentityProviderName,
+				h.upstreamIdentityProviderType,
+			)
+		}
+		// The order of the flows returned by the server indicates the server's flow preference,
+		// so always use the first flow for that IDP from the discovery response.
+		loginFlow = foundIDP.Flows[0]
+	}
+
+	var authorizeOptions []oauth2.AuthCodeOption
+
+	authorizeOptions = append(authorizeOptions,
+		oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPNameParamName, h.upstreamIdentityProviderName),
+	)
+	authorizeOptions = append(authorizeOptions,
+		oauth2.SetAuthURLParam(oidcapi.AuthorizeUpstreamIDPTypeParamName, string(h.upstreamIdentityProviderType)),
+	)
+
+	return loginFlow, authorizeOptions, nil
 }
 
 // Make a direct call to the authorize endpoint, including the user's username and password on custom http headers,
@@ -759,7 +914,7 @@ func promptForSecret(promptLabel string, out io.Writer) (string, error) {
 }
 
 func (h *handlerState) initOIDCDiscovery() error {
-	// Make this method idempotent so it can be called in multiple cases with no extra network requests.
+	// Make this method idempotent, so it can be called in multiple cases with no extra network requests.
 	if h.provider != nil {
 		return nil
 	}
@@ -803,6 +958,60 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return fmt.Errorf("could not decode response_modes_supported in OIDC discovery from %q: %w", h.issuer, err)
 	}
 	h.useFormPost = slices.Contains(discoveryClaims.ResponseModesSupported, "form_post")
+
+	return h.maybePerformPinnipedSupervisorIDPDiscovery()
+}
+
+func (h *handlerState) maybePerformPinnipedSupervisorIDPDiscovery() error {
+	// If this OIDC IDP is a Pinniped Supervisor, it will have a reference to the IDP discovery document.
+	// Go to that document and retrieve the IDPs.
+	var pinnipedSupervisorClaims idpdiscoveryv1alpha1.OIDCDiscoveryResponse
+	if err := h.provider.Claims(&pinnipedSupervisorClaims); err != nil {
+		return fmt.Errorf("could not decode the Pinniped IDP discovery document URL in OIDC discovery from %q: %w", h.issuer, err)
+	}
+
+	// This is not an error - it just means that this issuer is not a Pinniped Supervisor.
+	// Note that this package can be used with OIDC IDPs other than Pinniped Supervisor.
+	if pinnipedSupervisorClaims.SupervisorDiscovery.PinnipedIDPsEndpoint == "" {
+		return nil
+	}
+	// This check confirms that the issuer is hosting the IDP discovery document, which would always be the case for
+	// Pinniped Supervisor. Since there are checks above to confirm that the issuer uses HTTPS, IDP discovery will
+	// always use HTTPS.
+	if !strings.HasPrefix(pinnipedSupervisorClaims.SupervisorDiscovery.PinnipedIDPsEndpoint, h.issuer) {
+		return fmt.Errorf("the Pinniped IDP discovery document must always be hosted by the issuer: %q", h.issuer)
+	}
+
+	idpDiscoveryCtx, idpDiscoveryCtxCancelFunc := context.WithTimeout(h.ctx, httpRequestTimeout)
+	defer idpDiscoveryCtxCancelFunc()
+	idpDiscoveryReq, err := http.NewRequestWithContext(idpDiscoveryCtx, http.MethodGet, pinnipedSupervisorClaims.SupervisorDiscovery.PinnipedIDPsEndpoint, nil)
+	if err != nil { // untested
+		return fmt.Errorf("could not build IDP Discovery request: %w", err)
+	}
+	idpDiscoveryRes, err := h.httpClient.Do(idpDiscoveryReq)
+	if err != nil {
+		return fmt.Errorf("IDP Discovery response error: %w", err)
+	}
+	defer func() {
+		_ = idpDiscoveryRes.Body.Close() // We can't do anything if this fails to close
+	}()
+
+	if idpDiscoveryRes.StatusCode != http.StatusOK {
+		return fmt.Errorf("unable to fetch IDP discovery data from issuer: unexpected http response status: %s", idpDiscoveryRes.Status)
+	}
+
+	rawBody, err := io.ReadAll(idpDiscoveryRes.Body)
+	if err != nil { // untested
+		return fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
+	}
+
+	var body idpdiscoveryv1alpha1.IDPDiscoveryResponse
+	err = json.Unmarshal(rawBody, &body)
+	if err != nil {
+		return fmt.Errorf("unable to fetch the Pinniped IDP discovery document: could not parse response JSON: %w", err)
+	}
+
+	h.idpDiscovery = &body
 	return nil
 }
 

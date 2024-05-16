@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -36,6 +37,7 @@ import (
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/here"
@@ -701,27 +703,15 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
-		// Wait for the subprocess to print the username prompt, then type the user's username.
-		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
-		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Username + "\n")
-		require.NoError(t, err)
-
-		// Wait for the subprocess to print the password prompt, then type the user's password.
-		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
-		_, err = ptyFile.WriteString(env.SupervisorUpstreamOIDC.Password + "\n")
-		require.NoError(t, err)
-
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
 		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
 		kubectlOutput := string(kubectlOutputBytes)
 
-		// The output should look like an authentication failure, because the OIDCIdentityProvider disallows password grants.
+		// The output should fail IDP discovery validation, because the OIDCIdentityProvider disallows password grants.
 		t.Log("kubectl command output (expecting a login failed error):\n", kubectlOutput)
 		require.Contains(t, kubectlOutput,
-			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
-				`The resource owner or authorization server denied the request. `+
-				`Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.`,
+			fmt.Sprintf(`could not complete Pinniped login: unable to find upstream identity provider with name "%[1]s" and type "oidc" and flow "cli_password". Found these providers: [{"name":"%[1]s","type":"oidc","flows":["browser_authcode"]}]`, oidcIdentityProvider.Name),
 		)
 	})
 
@@ -1293,6 +1283,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
+		t.Cleanup(func() {
+			removeFederationDomainIdentityProviders(t, federationDomainsClient, federationDomain.Name)
+		})
+
 		ldapIDPDisplayName := "My LDAP IDP 💾"
 		oidcIDPDisplayName := "My OIDC IDP 🚀"
 
@@ -1547,6 +1541,211 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				`Reason: configured identity policy rejected this authentication: only special LDAP users allowed.`)
 		require.Contains(t, string(kubectlOutputBytes), "pinniped failed with exit code 1")
 	})
+
+	t.Run("with OIDC and LDAP, verify that 'pinniped login oidc' will infer the login flow from IDP discovery", func(t *testing.T) {
+		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		browser := browsertest.OpenBrowser(t)
+
+		expectedDownstreamLDAPUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedDownstreamOIDCUsername := env.SupervisorUpstreamOIDC.Username
+		expectedDownstreamLDAPGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+		expectedDownstreamOIDCGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+
+		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
+
+		// Having one IDP should put the FederationDomain into a ready state.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedDownstreamOIDCUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedDownstreamOIDCUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream OIDC provider and wait for it to become ready.
+		createdOIDCProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes:   env.SupervisorUpstreamOIDC.AdditionalScopes,
+				AllowPasswordGrant: true, // We specifically want this OIDC to support both 'cli_password' and 'browser_authcode'
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+
+		// Update the FederationDomain to use the two IDPs.
+		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			removeFederationDomainIdentityProviders(t, federationDomainsClient, federationDomain.Name)
+		})
+
+		ldapIDPDisplayName := "My LDAP IDP 💾"
+		oidcIDPDisplayName := "My OIDC IDP 🚀"
+
+		gotFederationDomain.Spec.IdentityProviders = []configv1alpha1.FederationDomainIdentityProvider{
+			{
+				DisplayName: ldapIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "LDAPIdentityProvider",
+					Name:     createdLDAPProvider.Name,
+				},
+			},
+			{
+				DisplayName: oidcIDPDisplayName,
+				ObjectRef: corev1.TypedLocalObjectReference{
+					APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+					Kind:     "OIDCIdentityProvider",
+					Name:     createdOIDCProvider.Name,
+				},
+			},
+		}
+		_, err = federationDomainsClient.Update(testCtx, gotFederationDomain, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// The FederationDomain should be valid after the above update.
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
+
+		// We want to be sure that "pinniped login oidc" will infer "cli_password" when we override the flow type
+		// with PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW="". So we'll set this to be the non-default login flow.
+		nonDefaultLDAPLoginFlow := "browser_authcode"
+
+		ldapKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+			"--upstream-identity-provider-name", ldapIDPDisplayName,
+			"--upstream-identity-provider-flow", nonDefaultLDAPLoginFlow,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		// We want to be sure that "pinniped login oidc" will infer "browser_authcode" when we override the flow type
+		// with PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW="". So we'll set this to be the non-default login flow.
+		nonDefaultOIDCLoginFlow := "cli_password"
+
+		oidcKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+			"--upstream-identity-provider-name", oidcIDPDisplayName,
+			"--upstream-identity-provider-flow", nonDefaultOIDCLoginFlow,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
+		t.Log("starting LDAP auth via kubectl")
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv(), []string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW="})
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the username prompt, then type the user's username.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Username: ")
+		_, err = ptyFile.WriteString(expectedDownstreamLDAPUsername + "\n")
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the password prompt, then type the user's password.
+		readFromFileUntilStringIsSeen(t, ptyFile, "Password: ")
+		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
+		require.NoError(t, err)
+
+		// Read all output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := io.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
+		t.Log("starting OIDC auth via kubectl")
+		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv(), []string{"PINNIPED_UPSTREAM_IDENTITY_PROVIDER_FLOW="})
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
+
+		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamOIDC(t, browser, env.SupervisorUpstreamOIDC)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
+
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, browser)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		// The user is now logged in to the cluster as two different identities simultaneously, and can switch
+		// back and forth by switching kubeconfigs, without needing to auth again.
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, ldapIDPDisplayName, ldapKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamLDAPUsername, expectedDownstreamLDAPGroups, allScopes)
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
+	})
+}
+
+func removeFederationDomainIdentityProviders(t *testing.T, federationDomainsClient supervisorclient.FederationDomainInterface, federationDomainName string) {
+	t.Helper()
+
+	cleanupContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	gotFederationDomain, err := federationDomainsClient.Get(cleanupContext, federationDomainName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// remove the FederationDomain's identity providers
+	gotFederationDomain.Spec.IdentityProviders = nil
+	_, err = federationDomainsClient.Update(cleanupContext, gotFederationDomain, metav1.UpdateOptions{})
+	require.NoError(t, err)
 }
 
 func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, b *browsertest.Browser) chan string {

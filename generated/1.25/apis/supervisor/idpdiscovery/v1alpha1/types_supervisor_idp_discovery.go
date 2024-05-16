@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -54,7 +54,8 @@ type OIDCDiscoveryResponseIDPEndpoint struct {
 
 // IDPDiscoveryResponse is the response of a FederationDomain's identity provider discovery endpoint.
 type IDPDiscoveryResponse struct {
-	PinnipedIDPs []PinnipedIDP `json:"pinniped_identity_providers"`
+	PinnipedIDPs              []PinnipedIDP              `json:"pinniped_identity_providers"`
+	PinnipedSupportedIDPTypes []PinnipedSupportedIDPType `json:"pinniped_supported_identity_provider_types"`
 }
 
 // PinnipedIDP describes a single identity provider as included in the response of a FederationDomain's
@@ -63,4 +64,9 @@ type PinnipedIDP struct {
 	Name  string    `json:"name"`
 	Type  IDPType   `json:"type"`
 	Flows []IDPFlow `json:"flows,omitempty"`
+}
+
+// PinnipedSupportedIDPType describes a single identity provider type.
+type PinnipedSupportedIDPType struct {
+	Type IDPType `json:"type"`
 }

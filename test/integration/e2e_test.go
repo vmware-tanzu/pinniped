@@ -37,6 +37,7 @@ import (
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/here"
@@ -1282,6 +1283,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
+		t.Cleanup(func() {
+			removeFederationDomainIdentityProviders(t, federationDomainsClient, federationDomain.Name)
+		})
+
 		ldapIDPDisplayName := "My LDAP IDP 💾"
 		oidcIDPDisplayName := "My OIDC IDP 🚀"
 
@@ -1599,6 +1604,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
+		t.Cleanup(func() {
+			removeFederationDomainIdentityProviders(t, federationDomainsClient, federationDomain.Name)
+		})
+
 		ldapIDPDisplayName := "My LDAP IDP 💾"
 		oidcIDPDisplayName := "My OIDC IDP 🚀"
 
@@ -1722,6 +1731,21 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, oidcIDPDisplayName, oidcKubeconfigPath,
 			sessionCachePath, pinnipedExe, expectedDownstreamOIDCUsername, expectedDownstreamOIDCGroups, allScopes)
 	})
+}
+
+func removeFederationDomainIdentityProviders(t *testing.T, federationDomainsClient supervisorclient.FederationDomainInterface, federationDomainName string) {
+	t.Helper()
+
+	cleanupContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	gotFederationDomain, err := federationDomainsClient.Get(cleanupContext, federationDomainName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// remove the FederationDomain's identity providers
+	gotFederationDomain.Spec.IdentityProviders = nil
+	_, err = federationDomainsClient.Update(cleanupContext, gotFederationDomain, metav1.UpdateOptions{})
+	require.NoError(t, err)
 }
 
 func startKubectlAndOpenAuthorizationURLInBrowser(testCtx context.Context, t *testing.T, kubectlCmd *exec.Cmd, b *browsertest.Browser) chan string {

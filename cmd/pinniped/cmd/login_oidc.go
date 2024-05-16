@@ -141,7 +141,16 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", idpdiscoveryv1alpha1.IDPTypeOIDC.String(), fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory))
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType,
+		"upstream-identity-provider-type",
+		idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
+		fmt.Sprintf(
+			"The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s', '%s')",
+			idpdiscoveryv1alpha1.IDPTypeOIDC,
+			idpdiscoveryv1alpha1.IDPTypeLDAP,
+			idpdiscoveryv1alpha1.IDPTypeActiveDirectory,
+			idpdiscoveryv1alpha1.IDPTypeGitHub,
+		))
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, idpdiscoveryv1alpha1.IDPFlowCLIPassword))
 
 	// --skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.

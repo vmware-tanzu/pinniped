@@ -24,9 +24,9 @@ type TeamInfo struct {
 }
 
 type GitHubInterface interface {
-	GetUserInfo() (*UserInfo, error)
-	GetOrgMembership() ([]string, error)
-	GetTeamMembership(allowedOrganizations sets.Set[string]) ([]TeamInfo, error)
+	GetUserInfo(ctx context.Context) (*UserInfo, error)
+	GetOrgMembership(ctx context.Context) ([]string, error)
+	GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error)
 }
 
 type githubClient struct {
@@ -63,9 +63,9 @@ func NewGitHubClient(httpClient *http.Client, apiBaseURL, token string) (GitHubI
 }
 
 // GetUserInfo returns the "Login" and "ID" attributes of the logged-in user.
-// TODO: where should context come from?
-func (g *githubClient) GetUserInfo() (*UserInfo, error) {
-	user, response, err := g.client.Users.Get(context.Background(), emptyUserMeansTheAuthenticatedUser)
+// TODO: should we check ID and Login for nil?
+func (g *githubClient) GetUserInfo(ctx context.Context) (*UserInfo, error) {
+	user, response, err := g.client.Users.Get(ctx, emptyUserMeansTheAuthenticatedUser)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching authenticated user: %w", err)
 	}
@@ -89,16 +89,15 @@ func (g *githubClient) GetUserInfo() (*UserInfo, error) {
 }
 
 // GetOrgMembership returns an array of the "Login" attributes for all organizations to which the authenticated user belongs.
-// TODO: where should context come from?
 // TODO: what happens if login is nil?
 // TODO: what is a good page size?
-func (g *githubClient) GetOrgMembership() ([]string, error) {
+func (g *githubClient) GetOrgMembership(ctx context.Context) ([]string, error) {
 	organizationLoginStrings := make([]string, 0)
 
 	opt := &github.ListOptions{PerPage: 10}
 	// get all pages of results
 	for {
-		organizationResults, response, err := g.client.Organizations.List(context.Background(), emptyUserMeansTheAuthenticatedUser, opt)
+		organizationResults, response, err := g.client.Organizations.List(ctx, emptyUserMeansTheAuthenticatedUser, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching organizations for authenticated user: %w", err)
 		}
@@ -122,16 +121,15 @@ func isOrgAllowed(allowedOrganizations sets.Set[string], login string) bool {
 // GetTeamMembership returns a description of each team to which the authenticated user belongs.
 // If allowedOrganizations is not empty, will filter the results to only those teams which belong to the allowed organizations.
 // Parent teams will also be returned.
-// TODO: where should context come from?
 // TODO: what happens if org or login or id are nil?
 // TODO: what is a good page size?
-func (g *githubClient) GetTeamMembership(allowedOrganizations sets.Set[string]) ([]TeamInfo, error) {
+func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error) {
 	teamInfos := make([]TeamInfo, 0)
 
 	opt := &github.ListOptions{PerPage: 10}
 	// get all pages of results
 	for {
-		teamsResults, response, err := g.client.Teams.ListUserTeams(context.Background(), opt)
+		teamsResults, response, err := g.client.Teams.ListUserTeams(ctx, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching team membership for authenticated user: %w", err)
 		}

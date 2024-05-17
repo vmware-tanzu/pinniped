@@ -1,6 +1,7 @@
 package githubclient
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -126,6 +127,7 @@ func TestGetUser(t *testing.T) {
 		name         string
 		httpClient   *http.Client
 		token        string
+		ctx          context.Context
 		wantErr      string
 		wantUserInfo UserInfo
 	}{
@@ -192,6 +194,17 @@ func TestGetUser(t *testing.T) {
 			wantErr: `the "ID" attribute is missing for authenticated user`,
 		},
 		{
+			name:       "passes the context parameter into the API call",
+			token:      "some-token",
+			httpClient: mock.NewMockedHTTPClient(),
+			ctx: func() context.Context {
+				canceledCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return canceledCtx
+			}(),
+			wantErr: "error fetching authenticated user: context canceled",
+		},
+		{
 			name: "returns errors from the API",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(
@@ -216,7 +229,13 @@ func TestGetUser(t *testing.T) {
 			githubClient := &githubClient{
 				client: github.NewClient(test.httpClient).WithAuthToken(test.token),
 			}
-			actual, err := githubClient.GetUserInfo()
+
+			ctx := context.Background()
+			if test.ctx != nil {
+				ctx = test.ctx
+			}
+
+			actual, err := githubClient.GetUserInfo(ctx)
 			if test.wantErr != "" {
 				rt, ok := test.httpClient.Transport.(*mock.EnforceHostRoundTripper)
 				require.True(t, ok)
@@ -238,6 +257,7 @@ func TestGetOrgMembership(t *testing.T) {
 		name       string
 		httpClient *http.Client
 		token      string
+		ctx        context.Context
 		wantErr    string
 		wantOrgs   []string
 	}{
@@ -293,6 +313,17 @@ func TestGetOrgMembership(t *testing.T) {
 			wantOrgs: []string{"some-org-to-which-the-authenticated-user-belongs"},
 		},
 		{
+			name:       "passes the context parameter into the API call",
+			token:      "some-token",
+			httpClient: mock.NewMockedHTTPClient(),
+			ctx: func() context.Context {
+				canceledCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return canceledCtx
+			}(),
+			wantErr: "error fetching organizations for authenticated user: context canceled",
+		},
+		{
 			name: "returns errors from the API",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(
@@ -317,7 +348,13 @@ func TestGetOrgMembership(t *testing.T) {
 			githubClient := &githubClient{
 				client: github.NewClient(test.httpClient).WithAuthToken(test.token),
 			}
-			actual, err := githubClient.GetOrgMembership()
+
+			ctx := context.Background()
+			if test.ctx != nil {
+				ctx = test.ctx
+			}
+
+			actual, err := githubClient.GetOrgMembership(ctx)
 			if test.wantErr != "" {
 				rt, ok := test.httpClient.Transport.(*mock.EnforceHostRoundTripper)
 				require.True(t, ok)
@@ -339,6 +376,7 @@ func TestGetTeamMembership(t *testing.T) {
 		name                 string
 		httpClient           *http.Client
 		token                string
+		ctx                  context.Context
 		allowedOrganizations []string
 		wantErr              string
 		wantTeams            []TeamInfo
@@ -648,6 +686,17 @@ func TestGetTeamMembership(t *testing.T) {
 			},
 		},
 		{
+			name:       "passes the context parameter into the API call",
+			token:      "some-token",
+			httpClient: mock.NewMockedHTTPClient(),
+			ctx: func() context.Context {
+				canceledCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return canceledCtx
+			}(),
+			wantErr: "error fetching team membership for authenticated user: context canceled",
+		},
+		{
 			name: "returns errors from the API",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(
@@ -673,7 +722,12 @@ func TestGetTeamMembership(t *testing.T) {
 				client: github.NewClient(test.httpClient).WithAuthToken(test.token),
 			}
 
-			actual, err := githubClient.GetTeamMembership(sets.New[string](test.allowedOrganizations...))
+			ctx := context.Background()
+			if test.ctx != nil {
+				ctx = test.ctx
+			}
+
+			actual, err := githubClient.GetTeamMembership(ctx, sets.New[string](test.allowedOrganizations...))
 			if test.wantErr != "" {
 				rt, ok := test.httpClient.Transport.(*mock.EnforceHostRoundTripper)
 				require.True(t, ok)

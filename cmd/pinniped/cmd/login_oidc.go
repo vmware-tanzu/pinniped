@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -59,9 +58,10 @@ func init() {
 }
 
 type oidcLoginCommandDeps struct {
-	lookupEnv     func(string) (string, bool)
-	login         func(string, string, ...oidcclient.Option) (*oidctypes.Token, error)
-	exchangeToken func(context.Context, *conciergeclient.Client, string) (*clientauthv1beta1.ExecCredential, error)
+	lookupEnv      func(string) (string, bool)
+	login          func(string, string, ...oidcclient.Option) (*oidctypes.Token, error)
+	exchangeToken  func(context.Context, *conciergeclient.Client, string) (*clientauthv1beta1.ExecCredential, error)
+	optionsFactory OIDCClientOptions
 }
 
 func oidcLoginCommandRealDeps() oidcLoginCommandDeps {
@@ -71,6 +71,7 @@ func oidcLoginCommandRealDeps() oidcLoginCommandDeps {
 		exchangeToken: func(ctx context.Context, client *conciergeclient.Client, token string) (*clientauthv1beta1.ExecCredential, error) {
 			return client.ExchangeToken(ctx, token)
 		},
+		optionsFactory: &clientOptions{},
 	}
 }
 
@@ -140,7 +141,16 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", idpdiscoveryv1alpha1.IDPTypeOIDC.String(), fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory))
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType,
+		"upstream-identity-provider-type",
+		idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
+		fmt.Sprintf(
+			"The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s', '%s', '%s')",
+			idpdiscoveryv1alpha1.IDPTypeOIDC,
+			idpdiscoveryv1alpha1.IDPTypeLDAP,
+			idpdiscoveryv1alpha1.IDPTypeActiveDirectory,
+			idpdiscoveryv1alpha1.IDPTypeGitHub,
+		))
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, idpdiscoveryv1alpha1.IDPFlowCLIPassword))
 
 	// --skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
@@ -175,39 +185,37 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
-		oidcclient.WithContext(cmd.Context()),
-		oidcclient.WithLogger(plog.Logr()), //nolint:staticcheck // old code with lots of log statements
-		oidcclient.WithScopes(flags.scopes),
-		oidcclient.WithSessionCache(sessionCache),
+		deps.optionsFactory.WithContext(cmd.Context()),
+		deps.optionsFactory.WithLogger(plog.Logr()), //nolint:staticcheck // old code with lots of log statements
+		deps.optionsFactory.WithScopes(flags.scopes),
+		deps.optionsFactory.WithSessionCache(sessionCache),
 	}
 
 	skipPrintLoginURL, _ := deps.lookupEnv(skipPrintLoginURLEnvVarName)
 	if skipPrintLoginURL == envVarTruthyValue {
-		opts = append(opts, oidcclient.WithSkipPrintLoginURL())
+		opts = append(opts, deps.optionsFactory.WithSkipPrintLoginURL())
 	}
 
 	if flags.listenPort != 0 {
-		opts = append(opts, oidcclient.WithListenPort(flags.listenPort))
+		opts = append(opts, deps.optionsFactory.WithListenPort(flags.listenPort))
 	}
 
 	if flags.requestAudience != "" {
-		opts = append(opts, oidcclient.WithRequestAudience(flags.requestAudience))
+		opts = append(opts, deps.optionsFactory.WithRequestAudience(flags.requestAudience))
 	}
 
 	if flags.upstreamIdentityProviderName != "" {
-		opts = append(opts, oidcclient.WithUpstreamIdentityProvider(
+		opts = append(opts, deps.optionsFactory.WithUpstreamIdentityProvider(
 			flags.upstreamIdentityProviderName, flags.upstreamIdentityProviderType))
 	}
 
-	flowOpts, err := flowOptions(
-		idpdiscoveryv1alpha1.IDPType(flags.upstreamIdentityProviderType),
-		idpdiscoveryv1alpha1.IDPFlow(flags.upstreamIdentityProviderFlow),
-		deps,
-	)
-	if err != nil {
-		return err
+	requestedFlow, flowSource := idpdiscoveryv1alpha1.IDPFlow(flags.upstreamIdentityProviderFlow), "--upstream-identity-provider-flow"
+	if flowOverride, hasFlowOverride := deps.lookupEnv(upstreamIdentityProviderFlowEnvVarName); hasFlowOverride {
+		requestedFlow, flowSource = idpdiscoveryv1alpha1.IDPFlow(flowOverride), upstreamIdentityProviderFlowEnvVarName
 	}
-	opts = append(opts, flowOpts...)
+	if requestedFlow != "" {
+		opts = append(opts, deps.optionsFactory.WithLoginFlow(requestedFlow, flowSource))
+	}
 
 	var concierge *conciergeclient.Client
 	if flags.conciergeEnabled {
@@ -225,12 +233,12 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// --skip-browser skips opening the browser.
 	if flags.skipBrowser {
-		opts = append(opts, oidcclient.WithSkipBrowserOpen())
+		opts = append(opts, deps.optionsFactory.WithSkipBrowserOpen())
 	}
 
 	// --skip-listen skips starting the localhost callback listener.
 	if flags.skipListen {
-		opts = append(opts, oidcclient.WithSkipListen())
+		opts = append(opts, deps.optionsFactory.WithSkipListen())
 	}
 
 	if len(flags.caBundlePaths) > 0 || len(flags.caBundleData) > 0 {
@@ -238,7 +246,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return err
 		}
-		opts = append(opts, oidcclient.WithClient(client))
+		opts = append(opts, deps.optionsFactory.WithClient(client))
 	}
 	// Look up cached credentials based on a hash of all the CLI arguments and the cluster info.
 	cacheKey := struct {
@@ -286,61 +294,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		credCache.Put(cacheKey, cred)
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
-}
-
-func flowOptions(
-	requestedIDPType idpdiscoveryv1alpha1.IDPType,
-	requestedFlow idpdiscoveryv1alpha1.IDPFlow,
-	deps oidcLoginCommandDeps,
-) ([]oidcclient.Option, error) {
-	useCLIFlow := []oidcclient.Option{oidcclient.WithCLISendingCredentials()}
-
-	// If the env var is set to override the --upstream-identity-provider-type flag, then override it.
-	flowOverride, hasFlowOverride := deps.lookupEnv(upstreamIdentityProviderFlowEnvVarName)
-	flowSource := "--upstream-identity-provider-flow"
-	if hasFlowOverride {
-		requestedFlow = idpdiscoveryv1alpha1.IDPFlow(flowOverride)
-		flowSource = upstreamIdentityProviderFlowEnvVarName
-	}
-
-	switch requestedIDPType {
-	case idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeGitHub:
-		switch requestedFlow {
-		case idpdiscoveryv1alpha1.IDPFlowCLIPassword:
-			return useCLIFlow, nil
-		case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, "":
-			return nil, nil // browser authcode flow is the default Option, so don't need to return an Option here
-		default:
-			return nil, fmt.Errorf(
-				"%s value not recognized for identity provider type %q: %s (supported values: %s)",
-				flowSource, requestedIDPType, requestedFlow,
-				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String(), idpdiscoveryv1alpha1.IDPFlowCLIPassword.String()}, ", "))
-		}
-	case idpdiscoveryv1alpha1.IDPTypeLDAP, idpdiscoveryv1alpha1.IDPTypeActiveDirectory:
-		switch requestedFlow {
-		case idpdiscoveryv1alpha1.IDPFlowCLIPassword, "":
-			return useCLIFlow, nil
-		case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
-			return nil, nil // browser authcode flow is the default Option, so don't need to return an Option here
-		default:
-			return nil, fmt.Errorf(
-				"%s value not recognized for identity provider type %q: %s (supported values: %s)",
-				flowSource, requestedIDPType, requestedFlow,
-				strings.Join([]string{idpdiscoveryv1alpha1.IDPFlowCLIPassword.String(), idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode.String()}, ", "))
-		}
-	default:
-		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
-		return nil, fmt.Errorf(
-			"--upstream-identity-provider-type value not recognized: %s (supported values: %s)",
-			requestedIDPType,
-			strings.Join([]string{
-				idpdiscoveryv1alpha1.IDPTypeOIDC.String(),
-				idpdiscoveryv1alpha1.IDPTypeLDAP.String(),
-				idpdiscoveryv1alpha1.IDPTypeActiveDirectory.String(),
-				idpdiscoveryv1alpha1.IDPTypeGitHub.String(),
-			}, ", "),
-		)
-	}
 }
 
 func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, error) {
